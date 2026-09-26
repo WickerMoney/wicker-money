@@ -1,0 +1,148 @@
+/*
+ * Chart palette, scoped to this plugin.
+ *
+ * Values come from the validated reference palette. Light and dark are both
+ * *selected* steps of the same hues, not an automatic flip, and each set was
+ * checked with the palette validator against its own surface.
+ *
+ * Light mode: aqua, yellow and magenta fall below 3:1 against the light
+ * surface, so the relief rule applies — every segment carries a visible label
+ * and value in text ink. Identity is never colour alone.
+ */
+.viz {
+  --viz-surface:   #fcfcfb;
+  --viz-ink:       #16191d;
+  --viz-ink-muted: #5b6472;
+  --viz-grid:      #e3e6ea;
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  --viz-other: #8a93a0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz {
+    --viz-surface:   #1a1a19;
+    --viz-ink:       #e8eaed;
+    --viz-ink-muted: #9aa4b2;
+    --viz-grid:      #2b323c;
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
+    --viz-4: #c98500;
+    --viz-5: #d55181;
+    --viz-6: #008300;
+    --viz-other: #7b838f;
+  }
+}
+:root[data-theme="dark"] .viz {
+  --viz-surface:   #1a1a19;
+  --viz-ink:       #e8eaed;
+  --viz-ink-muted: #9aa4b2;
+  --viz-grid:      #2b323c;
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-other: #7b838f;
+}
+
+.viz { position: relative; min-width: 0; }
+.viz svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/*
+ * Cap each chart near its design width.
+ *
+ * An SVG at width:100% scales everything inside the viewBox, text included, so
+ * an uncapped chart in a wide surface renders its 10px axis labels at 20px and
+ * a 180px donut at 1100px. Capping keeps the scale factor near 1, which is the
+ * only way the type sizes above mean what they say.
+ */
+/* No max-width: this widget owns the full dashboard row, and a 640px cap left
+   the drawing in the left third of its card with the rest empty. The viewBox is
+   a wide, shallow band so stretching it does not make it tall. */
+.viz--trend { width: 100%; }
+.viz--donut { max-width: 320px; margin-inline: auto; }
+.viz__axis { fill: var(--viz-ink-muted); font-size: 10px; }
+.viz__grid { stroke: var(--viz-grid); stroke-width: 1; }
+.viz__bar { transition: opacity .12s ease; }
+.viz__bar:hover { opacity: .78; }
+@media (prefers-reduced-motion: reduce) { .viz__bar { transition: none; } }
+
+/* Legend doubles as the relief for low-contrast slots: swatch + name + value,
+   with name and value in text ink rather than the series colour. */
+.viz__legend { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.viz__legend-row {
+  display: grid; grid-template-columns: 10px 1fr auto; gap: 8px;
+  align-items: center; font-size: 12px; color: var(--viz-ink);
+}
+.viz__swatch { width: 10px; height: 10px; border-radius: 2px; }
+.viz__legend-value { font-variant-numeric: tabular-nums; color: var(--viz-ink-muted); }
+
+.viz__tip {
+  position: absolute; pointer-events: none; z-index: 2;
+  background: var(--viz-surface); color: var(--viz-ink);
+  border: 1px solid var(--viz-grid); border-radius: 6px;
+  padding: 6px 8px; font-size: 12px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+}
+.viz__center { text-anchor: middle; }
+.viz__center-value { fill: var(--viz-ink); font-size: 18px; font-weight: 600; }
+.viz__center-label { fill: var(--viz-ink-muted); font-size: 10px; }
+
+/* The hovered mark responds. Without it the reader cannot tell whether the
+   chart registered the pointer, and on a donut cannot tell which slice the
+   centre figure belongs to. */
+.viz__mark { outline: none; }
+.viz__mark .viz__bar,
+.viz__bar { transition: opacity 120ms ease, filter 120ms ease; }
+.viz__mark.is-active .viz__bar { filter: brightness(1.12); }
+.viz__mark:focus-visible .viz__bar { stroke: var(--fio-text); stroke-width: 2; }
+.viz__bar.is-active { filter: brightness(1.12); }
+.viz__bar:focus-visible { outline: none; stroke: var(--fio-text); stroke-width: 2; }
+
+/* The trend tooltip follows its bar, so it is translated back by half its own
+   width rather than being left-aligned to the mark. */
+.viz--trend .viz__tip {
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 1px; pointer-events: none;
+  white-space: nowrap;
+}
+.viz__tip-label { font-size: 11px; color: var(--fio-text-muted); }
+
+.viz__legend-row.is-active { background: var(--fio-surface-alt); border-radius: 4px; }
+
+/* The centre readout is a label, never a target. Without this the text box sits
+   over the middle of the donut and swallows the pointer, so a reader crossing
+   the hole loses the segment they were hovering — and the segment directly
+   under it cannot be hovered at all. */
+.viz__center, .viz__center-value, .viz__center-label { pointer-events: none; }
+
+/* The zero line of the diverging chart is structure, not a gridline: it is
+   where the two series meet, and the reader needs to find it instantly. */
+.viz__zero { stroke: var(--viz-ink-muted); stroke-width: 1.5; opacity: .5; }
+
+.viz__legend--inline {
+  display: flex; flex-wrap: wrap; gap: 18px; margin: 0 0 10px;
+}
+.viz__legend--inline .viz__legend-row { display: flex; align-items: center; gap: 6px; }
+.viz__legend-value.is-neg { color: var(--fio-negative); }
+
+/* Net has no mark of its own on the chart — it is the gap between the two bars —
+   so its legend key is a rule rather than a swatch. */
+.viz__net-key {
+  width: 12px; height: 2px; border-radius: 1px; background: var(--viz-ink-muted);
+}
+
+.viz--trend .viz__tip { min-width: 150px; }
+.viz__tip-row { display: flex; align-items: center; gap: 6px; }
+.viz__tip-net {
+  margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--fio-border);
+  color: var(--fio-positive);
+}
+.viz__tip-net.is-neg { color: var(--fio-negative); }

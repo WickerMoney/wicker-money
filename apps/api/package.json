@@ -1,0 +1,40 @@
+{
+  "name": "@wickermoney/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "node --env-file-if-exists=../../.env dist/index.js",
+    "migrate": "node --env-file-if-exists=../../.env dist/db/cli.js up",
+    "migrate:down": "node --env-file-if-exists=../../.env dist/db/cli.js down",
+    "reset-password": "node --env-file-if-exists=../../.env dist/auth/reset-cli.js"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.4",
+    "@wickermoney/plugin-budgets": "workspace:*",
+    "@wickermoney/plugin-import-csv": "workspace:*",
+    "@wickermoney/plugin-sdk": "workspace:*",
+    "@node-rs/argon2": "^2.2.1",
+    "decimal.js": "^10.6.0",
+    "fastify": "^5.12.4",
+    "jose": "^6.2.12",
+    "kysely": "^0.29.5",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.19.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.0"
+  }
+}

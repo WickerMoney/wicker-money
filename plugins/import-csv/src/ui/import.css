@@ -1,0 +1,92 @@
+/*
+ * Scoped under .imp, which the page owns.
+ *
+ * adoptPluginStyles injects into the host document rather than a shadow root,
+ * so scoping is the plugin's responsibility. Everything here is either under
+ * .imp or an .imp__ element class.
+ */
+.imp__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.imp__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px 16px;
+  align-items: start;
+}
+
+.imp__check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.imp__check input { margin-top: 2px; }
+
+.imp__subhead {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.imp__hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fio-ink-muted, #5b6472);
+}
+
+.imp__muted { color: var(--fio-ink-muted, #5b6472); }
+
+.imp__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.imp__table th,
+.imp__table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--fio-border, #e3e6ea);
+}
+.imp__table th {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fio-ink-muted, #5b6472);
+}
+.imp__table .num { text-align: right; }
+
+/* Direction of money, not a status: spending is the common case and stays
+   plain ink, income is the exception worth marking. */
+.imp__in { color: #1b7f57; font-weight: 600; }
+.imp__out { color: inherit; }
+
+.imp__reverted td { opacity: .55; text-decoration: line-through; }
+
+.imp__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-bottom: 6px;
+}
+
+.imp__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.imp__done { margin: 0 0 14px; font-size: 14px; }
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .imp__in { color: #4fbf8b; }
+}
+:root[data-theme="dark"] .imp__in { color: #4fbf8b; }

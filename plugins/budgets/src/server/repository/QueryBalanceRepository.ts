@@ -1,0 +1,65 @@
+import { monthKeyOf, monthPeriod, shiftMonth, type HistoryEntry } from '../../shared/index.js'
+import { CARRY_LOOKBACK_MONTHS } from '../constants.js'
+import type { BalanceRepository } from './BalanceRepository.js'
+import type { Query } from './Query.js'
+import type { SpendRepository } from './SpendRepository.js'
+
+/**
+ * {@link BalanceRepository} over a user-bound query runner.
+ *
+ * All categories are handled in one query rather than one per category, since a
+ * month with fifteen sinking funds would otherwise cost fifteen round trips
+ * before the page renders.
+ */
+export class QueryBalanceRepository implements BalanceRepository {
+  /**
+   * @param q - A query runner already bound to the current user.
+   * @param spend - Supplies what was spent in each historical month.
+   */
+  constructor(
+    private readonly q: Query,
+    private readonly spend: SpendRepository,
+  ) {}
+
+  /** @inheritdoc */
+  async historyThrough(
+    monthKey: string,
+    categoryIds: readonly string[],
+  ): Promise<Map<string, HistoryEntry[]>> {
+    if (categoryIds.length === 0) return new Map()
+
+    const from = monthPeriod(shiftMonth(monthKey, -CARRY_LOOKBACK_MONTHS)).start
+    const { end } = monthPeriod(monthKey)
+
+    const history = await this.q<{
+      category_id: string
+      period_start: string
+      planned: string
+      rollover: boolean
+    }>`
+      SELECT category_id, period_start::text, planned::text, rollover
+      FROM plugin_budgets.budget_lines
+      WHERE category_id = ANY(${categoryIds}::uuid[])
+        AND period_start >= ${from}::date
+        AND period_start <  ${end}::date
+      ORDER BY category_id, period_start
+    `
+
+    // Spend for every month in range, in one pass, rather than a query per month.
+    const spendByMonth = await this.spend.byCategoryAndMonth(from, end)
+
+    const byCategory = new Map<string, HistoryEntry[]>()
+    for (const row of history) {
+      const key = monthKeyOf(row.period_start)
+      const list = byCategory.get(row.category_id) ?? []
+      list.push({
+        monthKey: key,
+        planned: row.planned,
+        spent: spendByMonth.get(`${row.category_id}:${key}`) ?? '0.0000',
+        rollover: row.rollover,
+      })
+      byCategory.set(row.category_id, list)
+    }
+    return byCategory
+  }
+}

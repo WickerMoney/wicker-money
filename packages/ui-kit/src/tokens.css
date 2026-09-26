@@ -1,0 +1,75 @@
+/*
+ * Design tokens.
+ *
+ * Every colour is defined on bare :root first, then overridden for dark. A
+ * token defined only inside a media query has no value in the other theme,
+ * which is the usual cause of an unreadable dark mode.
+ */
+:root {
+  --fio-bg:            #f7f8fa;
+  --fio-surface:       #ffffff;
+  --fio-surface-alt:   #f1f3f6;
+  --fio-border:        #dfe3e9;
+  --fio-text:          #16191d;
+  --fio-text-muted:    #5b6472;
+  --fio-accent:        #2f6feb;
+  --fio-accent-text:   #ffffff;
+  --fio-positive:      #1a7f52;
+  --fio-negative:      #c0392b;
+  --fio-warning:       #b7791f;
+
+  --fio-radius:     10px;
+  --fio-radius-sm:  6px;
+  --fio-gap:        16px;
+  --fio-gap-sm:     8px;
+  --fio-shadow:     0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 4%);
+  --fio-font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --fio-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --fio-bg:          #0f1216;
+    --fio-surface:     #171b21;
+    --fio-surface-alt: #1e232b;
+    --fio-border:      #2b323c;
+    --fio-text:        #e8eaed;
+    --fio-text-muted:  #9aa4b2;
+    --fio-accent:      #5b8def;
+    --fio-positive:    #3fbf87;
+    --fio-negative:    #e5736a;
+    --fio-warning:     #e0a84a;
+    --fio-shadow:      0 1px 2px rgb(0 0 0 / 40%);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fio-bg:          #0f1216;
+  --fio-surface:     #171b21;
+  --fio-surface-alt: #1e232b;
+  --fio-border:      #2b323c;
+  --fio-text:        #e8eaed;
+  --fio-text-muted:  #9aa4b2;
+  --fio-accent:      #5b8def;
+  --fio-positive:    #3fbf87;
+  --fio-negative:    #e5736a;
+  --fio-warning:     #e0a84a;
+  --fio-shadow:      0 1px 2px rgb(0 0 0 / 40%);
+}
+
+body {
+  margin: 0;
+  background: var(--fio-bg);
+  color: var(--fio-text);
+  font-family: var(--fio-font);
+  font-size: 14px;
+  line-height: 1.5;
+}
+* { box-sizing: border-box; }

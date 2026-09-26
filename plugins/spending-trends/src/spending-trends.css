@@ -1,0 +1,110 @@
+/*
+ * Chart palette, scoped to this plugin.
+ *
+ * The same validated reference palette the insights plugin uses, under this
+ * plugin's own names. Light and dark are both *selected* steps of the same
+ * hues, not an automatic flip, and each set was checked against its own surface.
+ *
+ * Light mode: aqua, yellow and magenta fall below 3:1 against the light
+ * surface, so the relief rule applies — every category carries its name and
+ * value in text ink (the filter chips and the tooltip). Identity is never
+ * colour alone.
+ */
+.spt {
+  --spt-surface:   #fcfcfb;
+  --spt-ink:       #16191d;
+  --spt-ink-muted: #5b6472;
+  --spt-grid:      #e3e6ea;
+  --spt-1: #2a78d6;
+  --spt-2: #eb6834;
+  --spt-3: #1baf7a;
+  --spt-4: #eda100;
+  --spt-5: #e87ba4;
+  --spt-other: #8a93a0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .spt {
+    --spt-surface:   #1a1a19;
+    --spt-ink:       #e8eaed;
+    --spt-ink-muted: #9aa4b2;
+    --spt-grid:      #2b323c;
+    --spt-1: #3987e5;
+    --spt-2: #d95926;
+    --spt-3: #199e70;
+    --spt-4: #c98500;
+    --spt-5: #d55181;
+    --spt-other: #7b838f;
+  }
+}
+:root[data-theme="dark"] .spt {
+  --spt-surface:   #1a1a19;
+  --spt-ink:       #e8eaed;
+  --spt-ink-muted: #9aa4b2;
+  --spt-grid:      #2b323c;
+  --spt-1: #3987e5;
+  --spt-2: #d95926;
+  --spt-3: #199e70;
+  --spt-4: #c98500;
+  --spt-5: #d55181;
+  --spt-other: #7b838f;
+}
+
+.spt { position: relative; min-width: 0; width: 100%; }
+
+/* Filter chips: the legend and the filter in one. */
+.spt__filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.spt__chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border: 1px solid var(--spt-grid); border-radius: 999px;
+  background: transparent; color: var(--spt-ink);
+  font: inherit; font-size: 12px; line-height: 1.4; cursor: pointer;
+}
+.spt__chip:hover { background: var(--fio-surface-alt); }
+.spt__chip:focus-visible { outline: 2px solid var(--fio-text); outline-offset: 2px; }
+.spt__chip.is-off { color: var(--spt-ink-muted); }
+.spt__chip.is-off > span:nth-child(2) { text-decoration: line-through; }
+.spt__chip-value { font-variant-numeric: tabular-nums; color: var(--spt-ink-muted); }
+.spt__swatch {
+  width: 10px; height: 10px; flex: none; box-sizing: border-box;
+  border-radius: 2px; border: 1.5px solid transparent;
+}
+
+/* The plot is the tooltip's positioning context, so the tooltip sits over the
+   bars and never over the chips above them. */
+.spt__plot { position: relative; }
+.spt__plot svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.spt__axis { fill: var(--spt-ink-muted); font-size: 10px; }
+.spt__grid { stroke: var(--spt-grid); stroke-width: 1; stroke-dasharray: 3 3; }
+/* The zero line is structure, not a gridline: it is where every bar starts. */
+.spt__zero { stroke: var(--spt-ink-muted); stroke-width: 1.5; opacity: .5; }
+
+/* A hairline in the surface colour separates stacked segments without a gap
+   that would misstate their heights. */
+.spt__segment { stroke: var(--spt-surface); stroke-width: 1; transition: filter 120ms ease; }
+.spt__mark { outline: none; }
+.spt__mark.is-active .spt__segment { filter: brightness(1.12); }
+.spt__mark:focus-visible .spt__segment { stroke: var(--fio-text); stroke-width: 2; }
+@media (prefers-reduced-motion: reduce) { .spt__segment { transition: none; } }
+
+.spt__hint { margin: 32px 0; text-align: center; font-size: 14px; color: var(--fio-text-muted); }
+
+/* The tooltip sits beside its bar. On the right half of the chart it ends at
+   the anchor instead of starting there, so it stays inside the plot. */
+.spt__tip {
+  position: absolute; pointer-events: none; z-index: 2;
+  display: flex; flex-direction: column; gap: 2px; min-width: 200px;
+  padding: 8px 10px; white-space: nowrap; font-size: 12px;
+  background: var(--spt-surface); color: var(--spt-ink);
+  border: 1px solid var(--spt-grid); border-radius: 6px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+}
+.spt__tip--left { transform: translateX(-100%); }
+.spt__tip-label { margin-bottom: 2px; font-size: 11px; color: var(--fio-text-muted); }
+.spt__tip-empty { color: var(--spt-ink-muted); }
+.spt__tip-row, .spt__tip-total { display: flex; align-items: center; gap: 8px; }
+.spt__tip-name { flex: 1; color: var(--spt-ink-muted); }
+.spt__tip-row strong, .spt__tip-total strong { font-variant-numeric: tabular-nums; font-weight: 600; }
+.spt__tip-row strong.is-neg { color: var(--fio-negative); }
+.spt__tip-total { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--fio-border); }

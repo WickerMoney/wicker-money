@@ -1,0 +1,45 @@
+import { monthKeyOf, shiftMonth, type HistoryEntry } from '../../shared/index.js'
+import { CARRY_LOOKBACK_MONTHS } from '../constants.js'
+import type { BalanceRepository } from '../repository/BalanceRepository.js'
+import type { InMemoryBudgetStore } from './InMemoryBudgetStore.js'
+
+/** {@link BalanceRepository} over an {@link InMemoryBudgetStore}, narrowed to one user. */
+export class InMemoryBalanceRepository implements BalanceRepository {
+  /**
+   * @param store - The shared data.
+   * @param userId - The user whose history this repository can see.
+   */
+  constructor(
+    private readonly store: InMemoryBudgetStore,
+    private readonly userId: string,
+  ) {}
+
+  /** @inheritdoc */
+  async historyThrough(
+    monthKey: string,
+    categoryIds: readonly string[],
+  ): Promise<Map<string, HistoryEntry[]>> {
+    const out = new Map<string, HistoryEntry[]>()
+    const earliest = shiftMonth(monthKey, -CARRY_LOOKBACK_MONTHS)
+    const earlier = this.store.lines
+      .filter(
+        (l) =>
+          l.userId === this.userId &&
+          categoryIds.includes(l.category_id) &&
+          monthKeyOf(l.period_start) >= earliest &&
+          monthKeyOf(l.period_start) <= monthKey,
+      )
+      .sort((a, b) => a.period_start.localeCompare(b.period_start))
+    for (const l of earlier) {
+      const key = monthKeyOf(l.period_start)
+      const spent =
+        this.store.spend.find(
+          (s) => s.userId === this.userId && s.categoryId === l.category_id && s.monthKey === key,
+        )?.spent ?? '0.0000'
+      const list = out.get(l.category_id) ?? []
+      list.push({ monthKey: key, planned: l.planned, spent, rollover: l.rollover })
+      out.set(l.category_id, list)
+    }
+    return out
+  }
+}

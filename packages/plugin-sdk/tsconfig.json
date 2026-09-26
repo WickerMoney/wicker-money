@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // DOM is here for types only (RequestInit in the browser-side contracts).
+    // The manifest exports are plain data and pull in nothing browser-specific
+    // at runtime, so the API can import them in Node.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
+}

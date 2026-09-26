@@ -1,0 +1,81 @@
+import { EmptyState, Spinner, Table } from '@wickermoney/ui-kit'
+import type { ActionStatus } from '../../../hooks/useActionStatus.js'
+import type { Category, Transaction } from '../../../models/index.js'
+import { useTransactionEditing } from '../hooks/useTransactionEditing.js'
+import { TransactionActionsCell } from './TransactionActionsCell.js'
+import { TransactionAmountCell } from './TransactionAmountCell.js'
+import { TransactionCategoryCell } from './TransactionCategoryCell.js'
+import { TransactionDateCell } from './TransactionDateCell.js'
+import { TransactionMerchantCell } from './TransactionMerchantCell.js'
+
+/** Props for {@link TransactionTable}. */
+export interface TransactionTableProps {
+  /** `null` while the first page is loading. */
+  readonly items: readonly Transaction[] | null
+  /** Ids of the selected rows. */
+  readonly selected: ReadonlySet<string>
+  /** Whether the list is currently filtered to uncategorized transactions. */
+  readonly onlyUncategorized: boolean
+  /** Returns the categories to offer in one row's category cell. */
+  readonly categoryOptionsFor: (currentId: string | null) => readonly Category[]
+  /** Busy flag and error message shared with the page. */
+  readonly status: ActionStatus
+  /** Called to select or deselect one row. */
+  readonly onToggleSelected: (id: string) => void
+  /** Called to select or deselect every listed row. */
+  readonly onToggleAllSelected: () => void
+  /** Called after any change so the list can be re-read. */
+  readonly onChanged: () => Promise<void>
+}
+
+/**
+ * The transaction table, with a selection column, inline editing, inline
+ * category assignment and delete.
+ */
+export function TransactionTable({
+  items, selected, onlyUncategorized, categoryOptionsFor, status,
+  onToggleSelected, onToggleAllSelected, onChanged,
+}: TransactionTableProps) {
+  const row = useTransactionEditing(status, onChanged)
+  const busy = status.busy
+
+  if (items === null) return <Spinner />
+
+  const allSelected = items.length > 0 && items.every((t) => selected.has(t.id))
+
+  return (
+    <Table
+      columns={[
+        { key: 'sel',
+          header: (
+            <input type="checkbox" checked={allSelected} aria-label="Select all shown"
+                   onChange={onToggleAllSelected} />
+          ),
+          render: (t: Transaction) => (
+            <input type="checkbox" checked={selected.has(t.id)}
+                   aria-label={`Select ${t.merchant}`}
+                   onChange={() => onToggleSelected(t.id)} />
+          ) },
+        { key: 'date', header: 'Date',
+          render: (t: Transaction) => <TransactionDateCell transaction={t} row={row} /> },
+        { key: 'merchant', header: 'Merchant',
+          render: (t: Transaction) => <TransactionMerchantCell transaction={t} row={row} /> },
+        { key: 'cat', header: 'Category',
+          render: (t: Transaction) => (
+            <TransactionCategoryCell transaction={t} row={row} categoryOptionsFor={categoryOptionsFor} />
+          ) },
+        { key: 'amt', header: 'Amount', numeric: true,
+          render: (t: Transaction) => <TransactionAmountCell transaction={t} row={row} /> },
+        { key: 'actions', header: '',
+          render: (t: Transaction) => <TransactionActionsCell transaction={t} row={row} busy={busy} /> },
+      ]}
+      rows={items}
+      rowKey={(t) => t.id}
+      empty={
+        onlyUncategorized
+          ? <EmptyState title="Nothing uncategorized" hint="Every transaction has a category." />
+          : <EmptyState title="Nothing matches" hint="Widen the dates, clear the filters, or record a transaction." />
+      }
+    />
+  )
+}

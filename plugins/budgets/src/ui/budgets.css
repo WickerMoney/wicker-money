@@ -1,0 +1,83 @@
+/* Budgets.
+
+   Loaded as text and adopted into the host document — see styles.ts. Every
+   colour is a host token, so the plugin inherits light and dark mode rather
+   than shipping a second palette that drifts from the app around it. */
+
+.bud__month {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.bud__month-label { font-size: 15px; font-weight: 600; min-width: 148px; }
+.bud__badge {
+  padding: 2px 8px; border-radius: 999px; font-size: 11px;
+  border: 1px solid var(--fio-border); background: var(--fio-surface-alt);
+  color: var(--fio-text-muted);
+}
+
+.bud__totals {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 12px; margin-bottom: 14px;
+}
+.bud__total { display: flex; flex-direction: column; gap: 2px; }
+.bud__total-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+                    color: var(--fio-text-muted); }
+.bud__total-value { font-size: 17px; font-variant-numeric: tabular-nums; }
+
+/* The line table. Amounts are tabular so columns of money line up on the
+   decimal without a monospace face — figures should still read as text. */
+.bud__num { font-variant-numeric: tabular-nums; text-align: right; }
+.bud__plan {
+  width: 96px; padding: 3px 6px; font: inherit; font-size: 13px;
+  font-variant-numeric: tabular-nums; text-align: right;
+  color: var(--fio-text); background: var(--fio-surface);
+  border: 1px solid var(--fio-border); border-radius: 6px;
+}
+.bud__plan.is-dirty { border-color: var(--fio-accent); }
+
+/* A bar, not a chart: one value against one limit. The 2px surface gap keeps
+   the fill from touching the track's edge so the two never read as one block,
+   and the rounded end anchors to the baseline rather than floating. */
+.bud__bar {
+  position: relative; height: 8px; min-width: 88px; border-radius: 999px;
+  background: var(--fio-surface-alt); overflow: hidden;
+}
+.bud__bar-fill {
+  position: absolute; inset: 2px auto 2px 2px;
+  border-radius: 999px; background: var(--fio-accent);
+}
+.bud__bar-fill.is-over    { background: var(--fio-negative); }
+.bud__bar-fill.is-at-risk { background: var(--fio-warning); }
+.bud__bar-fill.is-ahead   { background: var(--fio-positive); }
+/* Where the month is today. A bar without this cannot say whether 80% spent is
+   early or late, which is the only question worth asking of it. */
+.bud__bar-pace {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: var(--fio-text-muted); opacity: .55;
+}
+
+.bud__health { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.bud__dot { width: 8px; height: 8px; border-radius: 999px; background: var(--fio-text-muted); }
+.bud__dot.is-over    { background: var(--fio-negative); }
+.bud__dot.is-at-risk { background: var(--fio-warning); }
+.bud__dot.is-ahead   { background: var(--fio-positive); }
+.bud__dot.is-on-track{ background: var(--fio-accent); }
+
+.bud__carry { font-size: 11px; color: var(--fio-text-muted); }
+.bud__carry.is-negative { color: var(--fio-negative); }
+
+.bud__actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+.bud__note { font-size: 12px; color: var(--fio-text-muted); line-height: 1.5; margin: 0; }
+
+.bud__add { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+
+/* The dashboard widget. Deliberately not a table — four rows, each one thing
+   that needs attention, sized to sit beside a chart. */
+.budw { display: flex; flex-direction: column; gap: 10px; }
+.budw__row { display: flex; flex-direction: column; gap: 4px; }
+.budw__head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.budw__name { font-weight: 500; }
+.budw__amount { font-variant-numeric: tabular-nums; color: var(--fio-text-muted); }
+.budw__amount.is-over { color: var(--fio-negative); }
+.budw__foot { font-size: 12px; color: var(--fio-text-muted); margin: 2px 0 0; }
+.budw__ok { font-size: 13px; line-height: 1.5; margin: 0; }

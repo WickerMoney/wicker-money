@@ -1,0 +1,33 @@
+services:
+ wickermoney:
+    image: ${REGISTRY_HOST:?REGISTRY_HOST is required}/wickermoney:latest
+    ports:
+      - "${HOST_PORT:-8180}:8080"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - DATABASE_OWNER_URL=${DATABASE_OWNER_URL:?DATABASE_OWNER_URL is required}
+      - APP_DB_PASSWORD=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      - AUTH_SECRET=${AUTH_SECRET:?AUTH_SECRET is required}
+      - AUTH_ACCESS_TTL_SECONDS=${AUTH_ACCESS_TTL_SECONDS:-900}
+      - AUTH_REFRESH_TTL_SECONDS=${AUTH_REFRESH_TTL_SECONDS:-2592000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    networks:
+      - wickermoney_default
+    volumes:
+      - wickermoney-data:/app/data
+    restart: unless-stopped
+
+networks:
+  # Shared external network (reverse proxy etc.). Create it once:
+  #   docker network create wickermoney_default
+  wickermoney_default:
+    external: true
+    name: wickermoney_default
+    
+volumes:
+  wickermoney-data:
+    external: true
+    # Create it once: docker volume create wickermoney_data
+    name: wickermoney_data
