@@ -1,6 +1,17 @@
 {
   "name": "@wickermoney/plugin-spending-trends",
   "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wickermoney/wicker-money.git",
+    "directory": "plugins/spending-trends"
+  },
+  "homepage": "https://github.com/wickermoney/wicker-money#readme",
+  "bugs": {
+    "url": "https://github.com/wickermoney/wicker-money/issues"
+  },
   "type": "module",
   "scripts": {
     "build": "vite build",

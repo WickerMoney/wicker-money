@@ -1,6 +1,16 @@
 {
   "name": "@wickermoney/ui-kit",
   "version": "0.0.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wickermoney/wicker-money.git",
+    "directory": "packages/ui-kit"
+  },
+  "homepage": "https://github.com/wickermoney/wicker-money#readme",
+  "bugs": {
+    "url": "https://github.com/wickermoney/wicker-money/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -31,5 +41,8 @@
     "react-dom": "^19.3.0",
     "typescript": "^6.0.3",
     "vitest": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

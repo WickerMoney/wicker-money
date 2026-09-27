@@ -1,6 +1,16 @@
 {
   "name": "@wickermoney/plugin-sdk",
   "version": "0.0.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wickermoney/wicker-money.git",
+    "directory": "packages/plugin-sdk"
+  },
+  "homepage": "https://github.com/wickermoney/wicker-money#readme",
+  "bugs": {
+    "url": "https://github.com/wickermoney/wicker-money/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,5 +40,8 @@
   },
   "dependencies": {
     "zod": "^4.6.5"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

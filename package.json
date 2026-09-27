@@ -1,6 +1,15 @@
 {
   "name": "wickermoney",
   "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wickermoney/wicker-money.git"
+  },
+  "homepage": "https://github.com/wickermoney/wicker-money#readme",
+  "bugs": {
+    "url": "https://github.com/wickermoney/wicker-money/issues"
+  },
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.33.0",
