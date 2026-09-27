@@ -4,12 +4,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wickermoney/wicker-money.git",
+    "url": "git+https://github.com/WickerMoney/wicker-money.git",
     "directory": "packages/plugin-sdk"
   },
-  "homepage": "https://github.com/wickermoney/wicker-money#readme",
+  "homepage": "https://github.com/WickerMoney/wicker-money#readme",
   "bugs": {
-    "url": "https://github.com/wickermoney/wicker-money/issues"
+    "url": "https://github.com/WickerMoney/wicker-money/issues"
   },
   "type": "module",
   "main": "./dist/index.js",

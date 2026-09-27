@@ -5,12 +5,12 @@
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wickermoney/wicker-money.git",
+    "url": "git+https://github.com/WickerMoney/wicker-money.git",
     "directory": "plugins/insights"
   },
-  "homepage": "https://github.com/wickermoney/wicker-money#readme",
+  "homepage": "https://github.com/WickerMoney/wicker-money#readme",
   "bugs": {
-    "url": "https://github.com/wickermoney/wicker-money/issues"
+    "url": "https://github.com/WickerMoney/wicker-money/issues"
   },
   "type": "module",
   "scripts": {
