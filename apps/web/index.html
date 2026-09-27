@@ -7,6 +7,17 @@
          every page load is how people learn to stop reading the console. -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 10l4.5 12L16 13l4.5 9L25 10' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
     <title>Wicker Money</title>
+    <!-- Applies the remembered theme before first paint; otherwise a dark-mode
+         user gets a white flash while the bundle loads. The key must match
+         THEME_STORAGE_KEY in src/theme/themeStorage.ts (a test checks). -->
+    <script>
+      try {
+        var theme = localStorage.getItem('wickermoney.theme');
+        if (theme === 'light' || theme === 'dark') {
+          document.documentElement.setAttribute('data-theme', theme);
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

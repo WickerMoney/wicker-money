@@ -8,11 +8,13 @@
 .shell {
   display: grid; min-height: 100dvh;
   grid-template-columns: 208px 1fr;
-  grid-template-rows: 52px 1fr;
-  grid-template-areas: "nav top" "nav main";
+  grid-template-areas: "nav main";
 }
+/* Sticky at viewport height, so the foot stays visible while the page scrolls
+   and only the navigation between the brand and the foot scrolls on its own. */
 .shell__nav {
-  grid-area: nav; border-right: 1px solid var(--wm-border);
+  grid-area: nav; position: sticky; top: 0; align-self: start; height: 100dvh;
+  border-right: 1px solid var(--wm-border);
   background: var(--wm-surface); padding: 14px 10px; display: flex; flex-direction: column; gap: 4px;
 }
 .shell__brand { font-weight: 700; padding: 4px 8px 12px; letter-spacing: -0.01em; }
@@ -23,11 +25,59 @@
 .shell__link:hover { background: var(--wm-surface-alt); }
 .shell__link.is-active { background: var(--wm-accent); color: var(--wm-accent-text); }
 .shell__nav-divider { height: 1px; background: var(--wm-border); margin: 10px 8px; }
-.shell__top {
-  grid-area: top; display: flex; align-items: center; justify-content: flex-end; gap: 12px;
-  padding: 0 18px; border-bottom: 1px solid var(--wm-border); background: var(--wm-surface);
+.shell__nav-main { flex: 1; min-height: 0; overflow-y: auto; }
+.shell__nav-foot { border-top: 1px solid var(--wm-border); padding-top: 8px; }
+.shell__account-row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.shell__gear {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px;
+  color: var(--wm-text-muted); text-decoration: none; border-radius: var(--wm-radius-sm);
 }
-.shell__user { color: var(--wm-text-muted); font-size: 13px; }
+.shell__gear:hover { background: var(--wm-surface-alt); color: var(--wm-text); }
+.shell__gear.is-active { background: var(--wm-accent); color: var(--wm-accent-text); }
+
+.account { position: relative; flex: 1; min-width: 0; }
+.account__trigger {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;
+  font: inherit; text-align: left; color: var(--wm-text); cursor: pointer;
+  background: transparent; border: 0; border-radius: var(--wm-radius-sm);
+}
+.account__trigger:hover,
+.account__trigger[aria-expanded="true"] { background: var(--wm-surface-alt); }
+.account__avatar {
+  flex: none; display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: 50%; font-size: 12px; font-weight: 600;
+  background: var(--wm-accent); color: var(--wm-accent-text);
+}
+.account__email {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; color: var(--wm-text-muted);
+}
+/* Opens upward: the trigger is pinned to the bottom edge of the sidebar. */
+.account__menu {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 10; padding: 4px;
+  background: var(--wm-surface); border: 1px solid var(--wm-border);
+  border-radius: var(--wm-radius); box-shadow: var(--wm-shadow);
+}
+.account__theme { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 2px 8px; }
+.account__menu-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--wm-text-muted);
+}
+.account__segments { display: flex; gap: 2px; padding: 2px; background: var(--wm-surface-alt); border-radius: var(--wm-radius-sm); }
+.account__segment {
+  display: grid; place-items: center; width: 26px; height: 24px; padding: 0; cursor: pointer;
+  color: var(--wm-text-muted); background: transparent; border: 0; border-radius: 4px;
+}
+.account__segment:hover { color: var(--wm-text); }
+.account__segment[aria-checked="true"] { background: var(--wm-surface); color: var(--wm-accent); box-shadow: var(--wm-shadow); }
+.account__menu-divider { height: 1px; margin: 4px 0; background: var(--wm-border); }
+.account__item {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;
+  font: inherit; font-size: 13px; text-align: left; color: var(--wm-text); cursor: pointer;
+  background: transparent; border: 0; border-radius: var(--wm-radius-sm);
+}
+.account__item:hover,
+.account__item:focus-visible { background: var(--wm-surface-alt); }
 .shell__main { grid-area: main; padding: 18px; min-width: 0; }
 .shell__failures { position: fixed; bottom: 12px; right: 12px; max-width: 420px; z-index: 5; }
 

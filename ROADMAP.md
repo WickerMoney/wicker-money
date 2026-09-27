@@ -23,7 +23,6 @@ optional, and nothing outside it blocks the tag.
 - Add a `semimonthly` recurrence frequency (twice a month, such as the 1st and
   15th). It is a core database enum, so it is cheaper to add before the first
   tag than after.
-- A light / dark / system theme switcher in the shell, remembered per user.
 - Fill the gaps in the design tokens, such as a chart palette, before plugins
   depend on them. Tokens and `ui-kit` classes now use the `--wm-` / `wm-`
   prefix; renaming a public token later is a breaking change.

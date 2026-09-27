@@ -1,7 +1,7 @@
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { NavLink, Outlet } from 'react-router'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
-import { Button } from '@wickermoney/ui-kit'
-import { useAuth } from '../auth/index.js'
+import { AccountMenu } from './AccountMenu.js'
+import { GearIcon } from './icons/GearIcon.js'
 import { CORE_NAV } from './coreNav.js'
 import { NavLinks } from './NavLinks.js'
 import { navEntriesFor } from './navEntriesFor.js'
@@ -13,18 +13,19 @@ export interface AppShellProps {
 }
 
 /**
- * The application chrome: sidebar navigation, top bar and the routed page.
+ * The application chrome: sidebar navigation and the routed page.
  *
  * Plugin links are derived from manifests, never hardcoded, so installing a
  * plugin that contributes a page makes it appear here with no change to the
  * host. They are grouped by each page's declared `nav.section` (`main`,
  * `reports` or `settings`); a plugin's settings page belongs beside core's own
  * Settings entry rather than in the same list as its other pages.
+ *
+ * The account menu and a Settings gear are pinned to the bottom of the sidebar,
+ * so they stay put however long the plugin navigation above them grows. Any
+ * plugin settings pages are listed just above them.
  */
 export function AppShell({ plugins }: AppShellProps) {
-  const { user, signOut } = useAuth()
-  const navigate = useNavigate()
-
   const mainNav = navEntriesFor(plugins, 'main')
   const reportsNav = navEntriesFor(plugins, 'reports')
   const settingsNav = navEntriesFor(plugins, 'settings')
@@ -33,7 +34,7 @@ export function AppShell({ plugins }: AppShellProps) {
     <div className="shell">
       <aside className="shell__nav">
         <div className="shell__brand">Wicker Money</div>
-        <nav>
+        <nav className="shell__nav-main" aria-label="Primary">
           {CORE_NAV.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}
                      className={({ isActive }) => `shell__link${isActive ? ' is-active' : ''}`}>
@@ -50,22 +51,26 @@ export function AppShell({ plugins }: AppShellProps) {
               <NavLinks items={reportsNav} />
             </>
           ) : null}
-
-          {/* Settings is always present, being a core page, with any
-              plugin-contributed settings page grouped alongside it. */}
-          <div className="shell__nav-divider" />
-          <NavLink to="/settings"
-                   className={({ isActive }) => `shell__link${isActive ? ' is-active' : ''}`}>
-            Settings
-          </NavLink>
-          <NavLinks items={settingsNav} />
         </nav>
-      </aside>
 
-      <header className="shell__top">
-        <span className="shell__user">{user?.email}</span>
-        <Button onClick={() => { void signOut().then(() => navigate('/')) }}>Sign out</Button>
-      </header>
+        <div className="shell__nav-foot">
+          {/* Plugin settings pages have no gear of their own, so they keep a
+              text link here, beside the core Settings gear below. */}
+          {settingsNav.length > 0 ? (
+            <nav aria-label="Plugin settings">
+              <NavLinks items={settingsNav} />
+            </nav>
+          ) : null}
+          <div className="shell__account-row">
+            <AccountMenu />
+            {/* Always present, Settings being a core page. */}
+            <NavLink to="/settings" aria-label="Settings" title="Settings"
+                     className={({ isActive }) => `shell__gear${isActive ? ' is-active' : ''}`}>
+              <GearIcon />
+            </NavLink>
+          </div>
+        </div>
+      </aside>
 
       <main className="shell__main">
         <Outlet />
