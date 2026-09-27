@@ -22,7 +22,9 @@
     "start": "node --env-file-if-exists=../../.env dist/index.js",
     "migrate": "node --env-file-if-exists=../../.env dist/db/cli.js up",
     "migrate:down": "node --env-file-if-exists=../../.env dist/db/cli.js down",
-    "reset-password": "node --env-file-if-exists=../../.env dist/auth/reset-cli.js"
+    "reset-password": "node --env-file-if-exists=../../.env dist/auth/reset-cli.js",
+    "seed": "tsx --env-file-if-exists=../../.env src/db/seed/seedCli.ts",
+    "seed:reset": "tsx --env-file-if-exists=../../.env src/db/seed/seedCli.ts --reset"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
