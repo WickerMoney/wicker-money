@@ -1,0 +1,9 @@
+*                          @JR33D
+
+# Files where a stray edit is expensive; listed explicitly so they stay owned
+# if the catch-all above is ever loosened.
+/.github/                  @JR33D
+/LICENSE                   @JR33D
+/TRADEMARK.md              @JR33D
+/packages/plugin-sdk/      @JR33D
+/apps/api/src/db/          @JR33D

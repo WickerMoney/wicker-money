@@ -1,0 +1,181 @@
+name: Release
+
+# Push a version tag to release:
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# Outputs:
+#   - @wickermoney/plugin-sdk and @wickermoney/ui-kit on npm (the only published packages)
+#   - a multi-arch image (amd64 + arm64) at ghcr.io/wickermoney/wicker-money
+#   - a GitHub release with generated notes
+#
+# A tag with a hyphen (v0.1.0-rc.1) is a prerelease: npm dist-tag `next`, no
+# `:latest` image tag, release marked as prerelease.
+#
+# Every job is guarded by the repository check below, so a tag mirrored to the
+# mirror of this repo or a fork can never publish anything.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/wickermoney/wicker-money
+
+jobs:
+  meta:
+    if: github.repository == 'wickermoney/wicker-money'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      npm_tag: ${{ steps.v.outputs.npm_tag }}
+    steps:
+      - id: v
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "$version" == *-* ]]; then pre=true; tag=next; else pre=false; tag=latest; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$pre" >> "$GITHUB_OUTPUT"
+          echo "npm_tag=$tag" >> "$GITHUB_OUTPUT"
+
+  verify:
+    if: github.repository == 'wickermoney/wicker-money'
+    needs: meta
+    uses: ./.github/workflows/ci.yml
+
+  packages:
+    name: Publish npm packages
+    if: github.repository == 'wickermoney/wicker-money'
+    needs: [meta, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: Set package versions from tag
+        run: node docker/stamp-version.mjs "${{ needs.meta.outputs.version }}" packages/plugin-sdk/package.json packages/ui-kit/package.json
+      - run: pnpm turbo run build --filter=@wickermoney/plugin-sdk --filter=@wickermoney/ui-kit
+      # Recursive publish skips a version the registry already has, so re-running
+      # after a partial failure is safe. Private packages are never published.
+      - name: Publish
+        run: >
+          pnpm --filter @wickermoney/plugin-sdk --filter @wickermoney/ui-kit
+          publish --no-git-checks --access public
+          --tag "${{ needs.meta.outputs.npm_tag }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+
+  image:
+    name: Image (${{ matrix.platform }})
+    if: github.repository == 'wickermoney/wicker-money'
+    needs: [meta, verify]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            slug: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            slug: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.slug }}
+          cache-to: type=gha,scope=${{ matrix.slug }},mode=max
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge multi-arch manifest
+    if: github.repository == 'wickermoney/wicker-money'
+    needs: [meta, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create manifest list
+        working-directory: /tmp/digests
+        run: |
+          tags=(-t "$IMAGE:${{ needs.meta.outputs.version }}")
+          if [ "${{ needs.meta.outputs.prerelease }}" != "true" ]; then
+            tags+=(-t "$IMAGE:latest")
+          fi
+          docker buildx imagetools create "${tags[@]}" $(printf "$IMAGE@sha256:%s " *)
+      - name: Inspect
+        run: docker buildx imagetools inspect "$IMAGE:${{ needs.meta.outputs.version }}"
+
+  release:
+    name: GitHub release
+    if: github.repository == 'wickermoney/wicker-money'
+    needs: [meta, packages, merge]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flags=(--generate-notes --verify-tag)
+          if [ "${{ needs.meta.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}"

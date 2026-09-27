@@ -1,0 +1,71 @@
+name: CI
+
+# Uses only the ubuntu-latest and ubuntu-24.04-arm runner labels, so it also runs
+# on self-hosted runners that map those two labels.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Lint, typecheck, build, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version comes from the `packageManager` field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test
+
+  # Builds the image without pushing it, natively on both architectures, so a
+  # broken Dockerfile (or an argon2 native-module problem on arm64) fails
+  # before a tag does.
+  image:
+    name: Image build (${{ matrix.platform }})
+    # Skipped on tag pushes: release.yml calls this workflow for the checks and
+    # builds (and pushes) the image itself.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          build-args: |
+            VERSION=0.0.0
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,scope=${{ matrix.platform }},mode=max
