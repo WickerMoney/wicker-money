@@ -3,7 +3,6 @@
 
 # Version control and CI
 .git
-.gitea
 .github
 
 # Never ship local secrets. `.env.example` is documentation, not build input.

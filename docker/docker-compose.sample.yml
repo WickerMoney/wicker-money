@@ -1,6 +1,7 @@
 services:
  wickermoney:
-    image: ${REGISTRY_HOST:?REGISTRY_HOST is required}/wickermoney:latest
+    # Pin a released version (for example :0.1.0) instead of :latest for repeatable deploys.
+    image: ghcr.io/wickermoney/wicker-money:latest
     ports:
       - "${HOST_PORT:-8180}:8080"
     environment:

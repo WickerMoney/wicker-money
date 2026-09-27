@@ -3,7 +3,7 @@
 //
 // Used by docker/Dockerfile's build stage to give apps/api and apps/web the
 // same version the release workflow stamps into every published package (see
-// .gitea/workflows/release.yml, "Set package versions from tag"). Those two
+// .github/workflows/release.yml, "Set package versions from tag"). Those two
 // apps stay `private` so that step never reaches them -- they are built into
 // the image, not published -- which is what this closes the gap on: it lets
 // the API read its own version back from package.json at boot

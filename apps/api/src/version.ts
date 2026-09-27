@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
  * The API's own version and the commit it was built from.
  *
  * The release workflow passes the tag's version and the commit SHA into the
- * Docker build as `VERSION`/`GIT_SHA` build-args (`.gitea/workflows/release.yml`).
+ * Docker build as `VERSION`/`GIT_SHA` build-args (`.github/workflows/release.yml`).
  * `docker/stamp-version.mjs` writes `VERSION` into `apps/api/package.json`
  * before `pnpm build` runs, so reading it back here — rather than threading an
  * env var through the whole app — means there is exactly one place the number
