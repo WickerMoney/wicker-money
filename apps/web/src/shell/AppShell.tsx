@@ -33,7 +33,10 @@ export function AppShell({ plugins }: AppShellProps) {
   return (
     <div className="shell">
       <aside className="shell__nav">
-        <div className="shell__brand">Wicker Money</div>
+        <div className="shell__brand">
+          <img className="shell__brand-logo shell__brand-logo--light" src="/brand/wordmark-light.png" alt="Wicker Money" />
+          <img className="shell__brand-logo shell__brand-logo--dark" src="/brand/wordmark-dark.png" alt="Wicker Money" />
+        </div>
         <nav className="shell__nav-main" aria-label="Primary">
           {CORE_NAV.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}

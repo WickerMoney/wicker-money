@@ -17,7 +17,17 @@
   border-right: 1px solid var(--wm-border);
   background: var(--wm-surface); padding: 14px 10px; display: flex; flex-direction: column; gap: 4px;
 }
-.shell__brand { font-weight: 700; padding: 4px 8px 12px; letter-spacing: -0.01em; }
+.shell__brand { padding: 4px 8px 12px; }
+.shell__brand-logo { display: block; height: 28px; width: auto; }
+.shell__brand-logo--dark { display: none; }
+/* Explicit dark, and system dark unless explicitly overridden to light -- same
+   condition tokens.css uses for its own dark-mode block. */
+:root[data-theme="dark"] .shell__brand-logo--light { display: none; }
+:root[data-theme="dark"] .shell__brand-logo--dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .shell__brand-logo--light { display: none; }
+  :root:not([data-theme="light"]) .shell__brand-logo--dark { display: block; }
+}
 .shell__link {
   display: block; padding: 7px 10px; border-radius: var(--wm-radius-sm);
   color: var(--wm-text); text-decoration: none;
