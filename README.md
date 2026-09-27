@@ -427,12 +427,15 @@ A tag such as `v0.1.0-rc.1` is a prerelease: the packages go out under the npm
 prerelease. Re-running the packages job after a partial failure is safe; a version
 the registry already has is skipped.
 
-The workflow needs one repository secret, `NPM_TOKEN` (an npm automation token for
-the `@wickermoney` scope). The image push uses the built-in `GITHUB_TOKEN`. New
-ghcr packages are private by default, so after the first image push set the
-`wicker-money` package to public in the organization's package settings. Every job
-is guarded by a repository check, so a tag pushed to a fork or mirror publishes
-nothing.
+The npm packages publish via [trusted publishing](https://docs.npmjs.com/trusted-publishers)
+(OIDC) rather than a stored token: no `NPM_TOKEN` secret exists or is needed.
+Each package has a trusted publisher configured on npmjs.com pointing at this
+repository and `release.yml`, and the `packages` job's `id-token: write`
+permission lets it exchange a short-lived credential for the actual publish.
+The image push uses the built-in `GITHUB_TOKEN`. New ghcr packages are private
+by default, so after the first image push set the `wicker-money` package to
+public in the organization's package settings. Every job is guarded by a
+repository check, so a tag pushed to a fork or mirror publishes nothing.
 
 Pull requests also build the image (without pushing it), so a broken Dockerfile
 fails before a tag does.

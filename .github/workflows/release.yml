@@ -66,16 +66,30 @@ jobs:
       - name: Set package versions from tag
         run: node docker/stamp-version.mjs "${{ needs.meta.outputs.version }}" packages/plugin-sdk/package.json packages/ui-kit/package.json
       - run: pnpm turbo run build --filter=@wickermoney/plugin-sdk --filter=@wickermoney/ui-kit
-      # Recursive publish skips a version the registry already has, so re-running
-      # after a partial failure is safe. Private packages are never published.
+      # Published via npm's OIDC trusted publishing (id-token: write above), not a
+      # stored NPM_TOKEN: npm exchanges this job's OIDC token for a short-lived
+      # publish credential, configured per-package on npmjs.com (org wickermoney,
+      # repo wicker-money, workflow release.yml). Requires npm CLI >=11.5.1, hence
+      # the explicit upgrade -- the version bundled with Node can lag behind that.
+      # pnpm 10 (pinned here for install/build) never supported publish-side OIDC,
+      # so this step uses npm directly rather than `pnpm publish`.
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
+      # `npm publish` errors on a version the registry already has, unlike pnpm's
+      # recursive publish which skips it -- checked explicitly so re-running after
+      # a partial failure is still safe. Private packages are never in this loop.
       - name: Publish
-        run: >
-          pnpm --filter @wickermoney/plugin-sdk --filter @wickermoney/ui-kit
-          publish --no-git-checks --access public
-          --tag "${{ needs.meta.outputs.npm_tag }}"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          set -euo pipefail
+          for pkg in packages/plugin-sdk packages/ui-kit; do
+            name=$(node -p "require('./$pkg/package.json').name")
+            version=$(node -p "require('./$pkg/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version already published, skipping"
+              continue
+            fi
+            npm publish "$pkg" --access public --tag "${{ needs.meta.outputs.npm_tag }}"
+          done
 
   image:
     name: Image (${{ matrix.platform }})
