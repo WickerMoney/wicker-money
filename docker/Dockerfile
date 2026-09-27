@@ -13,6 +13,10 @@
 #
 #   docker run --rm --env-file .env wickermoney node dist/db/cli.js up
 #
+# docker/docker-compose.sample.yml automates this as a one-shot `migrate`
+# service (depends_on: service_completed_successfully) rather than a manual
+# step, but the image itself still never migrates on its own.
+#
 # Debian rather than Alpine on purpose: argon2 hashing is a native module, and
 # the glibc build is the one exercised everywhere else this code runs.
 

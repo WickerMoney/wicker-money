@@ -1,5 +1,50 @@
 services:
- wickermoney:
+  # Remove this whole block if you're bringing your own PostgreSQL 16+ server
+  # (see "Using an existing PostgreSQL server" in the self-hosting docs), and
+  # point DATABASE_URL / DATABASE_OWNER_URL below at it directly instead.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=wickermoney
+      - POSTGRES_USER=wickermoney
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    networks:
+      - wickermoney_default
+    volumes:
+      - wickermoney_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wickermoney -d wickermoney"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot: creates/updates the schema, the wickermoney_app role, and every
+  # bundled plugin's role, then exits. This container showing Exited (0) in
+  # `docker compose ps` after `up` is expected — it isn't a long-running
+  # process, and it is safe to re-run on every start.
+  migrate:
+    image: ghcr.io/wickermoney/wicker-money:latest
+    command: ["node", "dist/db/cli.js", "up"]
+    environment:
+      # loadConfig() requires DATABASE_URL at every entry point, cli.ts
+      # included, even though migrations connect with DATABASE_OWNER_URL only
+      # -- this value is never actually used, just required to be present.
+      - DATABASE_URL=postgresql://wickermoney_app:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@postgres:5432/wickermoney
+      - DATABASE_OWNER_URL=postgresql://wickermoney:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/wickermoney
+      - APP_DB_PASSWORD=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      - AUTH_SECRET=${AUTH_SECRET:?AUTH_SECRET is required}
+    networks:
+      - wickermoney_default
+    depends_on:
+      # Bundled Postgres only. Deleting the postgres: service above? Delete
+      # this whole depends_on block too -- Compose refuses to start if
+      # anything still depends on a service that no longer exists.
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  wickermoney:
     # Pin a released version (for example :0.1.0) instead of :latest for repeatable deploys.
     image: ghcr.io/wickermoney/wicker-money:latest
     ports:
@@ -7,9 +52,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
-      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
-      - DATABASE_OWNER_URL=${DATABASE_OWNER_URL:?DATABASE_OWNER_URL is required}
-      - APP_DB_PASSWORD=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      - DATABASE_URL=postgresql://wickermoney_app:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@postgres:5432/wickermoney
       - AUTH_SECRET=${AUTH_SECRET:?AUTH_SECRET is required}
       - AUTH_ACCESS_TTL_SECONDS=${AUTH_ACCESS_TTL_SECONDS:-900}
       - AUTH_REFRESH_TTL_SECONDS=${AUTH_REFRESH_TTL_SECONDS:-2592000}
@@ -17,7 +60,14 @@ services:
     networks:
       - wickermoney_default
     volumes:
-      - wickermoney-data:/app/data
+      - wickermoney_data:/app/data
+    depends_on:
+      # Bundled Postgres only -- remove just this "postgres:" key (keep
+      # "migrate:" below) if you delete the postgres: service above.
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 networks:
@@ -26,9 +76,15 @@ networks:
   wickermoney_default:
     external: true
     name: wickermoney_default
-    
+
 volumes:
-  wickermoney-data:
+  wickermoney_data:
     external: true
     # Create it once: docker volume create wickermoney_data
     name: wickermoney_data
+  wickermoney_pg_data:
+    external: true
+    # Create it once: docker volume create wickermoney_pg_data
+    # External (like wickermoney_data above) so `docker compose down --volumes`
+    # can't take your actual financial data with it by accident.
+    name: wickermoney_pg_data
