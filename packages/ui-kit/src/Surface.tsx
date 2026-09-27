@@ -14,14 +14,14 @@ export interface SurfaceProps {
 export function Surface({ title, action, children }: SurfaceProps) {
   const hasHeader = title !== undefined || action !== undefined
   return (
-    <section className="fio-surface">
+    <section className="wm-surface">
       {hasHeader ? (
-        <div className="fio-surface__header">
-          {title === undefined ? <span /> : <h2 className="fio-surface__title">{title}</h2>}
+        <div className="wm-surface__header">
+          {title === undefined ? <span /> : <h2 className="wm-surface__title">{title}</h2>}
           {action}
         </div>
       ) : null}
-      <div className="fio-surface__body">{children}</div>
+      <div className="wm-surface__body">{children}</div>
     </section>
   )
 }

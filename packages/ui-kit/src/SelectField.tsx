@@ -12,12 +12,12 @@ export type SelectFieldProps = FieldCommon &
 export function SelectField({ label, error, children, ...rest }: SelectFieldProps) {
   const id = useId()
   return (
-    <div className="fio-field">
-      <label className="fio-field__label" htmlFor={id}>{label}</label>
-      <select id={id} className="fio-field__control" aria-invalid={error !== undefined} {...rest}>
+    <div className="wm-field">
+      <label className="wm-field__label" htmlFor={id}>{label}</label>
+      <select id={id} className="wm-field__control" aria-invalid={error !== undefined} {...rest}>
         {children}
       </select>
-      {error !== undefined ? <span className="fio-field__error">{error}</span> : null}
+      {error !== undefined ? <span className="wm-field__error">{error}</span> : null}
     </div>
   )
 }

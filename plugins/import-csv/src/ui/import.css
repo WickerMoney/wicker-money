@@ -39,10 +39,10 @@
   margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--fio-ink-muted, #5b6472);
+  color: var(--wm-text-muted);
 }
 
-.imp__muted { color: var(--fio-ink-muted, #5b6472); }
+.imp__muted { color: var(--wm-text-muted); }
 
 .imp__table {
   width: 100%;
@@ -54,12 +54,12 @@
 .imp__table td {
   padding: 6px 10px;
   text-align: left;
-  border-bottom: 1px solid var(--fio-border, #e3e6ea);
+  border-bottom: 1px solid var(--wm-border, #e3e6ea);
 }
 .imp__table th {
   font-weight: 600;
   font-size: 12px;
-  color: var(--fio-ink-muted, #5b6472);
+  color: var(--wm-text-muted);
 }
 .imp__table .num { text-align: right; }
 

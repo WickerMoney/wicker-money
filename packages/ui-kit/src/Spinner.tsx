@@ -6,5 +6,5 @@ export interface SpinnerProps {
 
 /** An inline loading indicator with `role="status"`. */
 export function Spinner({ label = 'Loading' }: SpinnerProps) {
-  return <span className="fio-spinner" role="status" aria-label={label} />
+  return <span className="wm-spinner" role="status" aria-label={label} />
 }

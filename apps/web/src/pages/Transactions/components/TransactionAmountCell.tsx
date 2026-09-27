@@ -15,7 +15,7 @@ export function TransactionAmountCell({ transaction: t, row }: TransactionAmount
   const { editing } = row
   if (editing?.id !== t.id) {
     return (
-      <span className={Number(t.amount) < 0 ? 'fio-neg' : 'fio-pos'}>
+      <span className={Number(t.amount) < 0 ? 'wm-neg' : 'wm-pos'}>
         {formatMoney(t.amount)}
       </span>
     )
@@ -29,7 +29,7 @@ export function TransactionAmountCell({ transaction: t, row }: TransactionAmount
         onChange={(e) => row.change({ ...editing, amount: e.target.value })}
         onKeyDown={(e) => { if (e.key === 'Escape') row.cancel() }}
       />
-      {editing.isTransfer ? <span className="fio-muted">Syncs the other leg</span> : null}
+      {editing.isTransfer ? <span className="wm-muted">Syncs the other leg</span> : null}
     </div>
   )
 }

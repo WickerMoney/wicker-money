@@ -60,8 +60,8 @@
   background: transparent; color: var(--spt-ink);
   font: inherit; font-size: 12px; line-height: 1.4; cursor: pointer;
 }
-.spt__chip:hover { background: var(--fio-surface-alt); }
-.spt__chip:focus-visible { outline: 2px solid var(--fio-text); outline-offset: 2px; }
+.spt__chip:hover { background: var(--wm-surface-alt); }
+.spt__chip:focus-visible { outline: 2px solid var(--wm-text); outline-offset: 2px; }
 .spt__chip.is-off { color: var(--spt-ink-muted); }
 .spt__chip.is-off > span:nth-child(2) { text-decoration: line-through; }
 .spt__chip-value { font-variant-numeric: tabular-nums; color: var(--spt-ink-muted); }
@@ -85,10 +85,10 @@
 .spt__segment { stroke: var(--spt-surface); stroke-width: 1; transition: filter 120ms ease; }
 .spt__mark { outline: none; }
 .spt__mark.is-active .spt__segment { filter: brightness(1.12); }
-.spt__mark:focus-visible .spt__segment { stroke: var(--fio-text); stroke-width: 2; }
+.spt__mark:focus-visible .spt__segment { stroke: var(--wm-text); stroke-width: 2; }
 @media (prefers-reduced-motion: reduce) { .spt__segment { transition: none; } }
 
-.spt__hint { margin: 32px 0; text-align: center; font-size: 14px; color: var(--fio-text-muted); }
+.spt__hint { margin: 32px 0; text-align: center; font-size: 14px; color: var(--wm-text-muted); }
 
 /* The tooltip sits beside its bar. On the right half of the chart it ends at
    the anchor instead of starting there, so it stays inside the plot. */
@@ -101,10 +101,10 @@
   box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
 }
 .spt__tip--left { transform: translateX(-100%); }
-.spt__tip-label { margin-bottom: 2px; font-size: 11px; color: var(--fio-text-muted); }
+.spt__tip-label { margin-bottom: 2px; font-size: 11px; color: var(--wm-text-muted); }
 .spt__tip-empty { color: var(--spt-ink-muted); }
 .spt__tip-row, .spt__tip-total { display: flex; align-items: center; gap: 8px; }
 .spt__tip-name { flex: 1; color: var(--spt-ink-muted); }
 .spt__tip-row strong, .spt__tip-total strong { font-variant-numeric: tabular-nums; font-weight: 600; }
-.spt__tip-row strong.is-neg { color: var(--fio-negative); }
-.spt__tip-total { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--fio-border); }
+.spt__tip-row strong.is-neg { color: var(--wm-negative); }
+.spt__tip-total { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--wm-border); }

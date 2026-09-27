@@ -15,7 +15,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * surprises people inside a form. Pass `type="submit"` to opt in.
  */
 export function Button({ variant = 'default', className, children, ...rest }: ButtonProps) {
-  const classes = ['fio-btn', variant !== 'default' ? `fio-btn--${variant}` : '', className ?? '']
+  const classes = ['wm-btn', variant !== 'default' ? `wm-btn--${variant}` : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (

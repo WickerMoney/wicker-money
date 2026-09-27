@@ -8,5 +8,5 @@ export interface AlertProps {
 
 /** A message banner with `role="alert"`, used for errors and notices. */
 export function Alert({ children }: AlertProps) {
-  return <div className="fio-alert" role="alert">{children}</div>
+  return <div className="wm-alert" role="alert">{children}</div>
 }

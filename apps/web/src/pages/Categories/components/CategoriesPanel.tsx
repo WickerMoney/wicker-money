@@ -64,7 +64,7 @@ export function CategoriesPanel({ categories, parents, status, onChanged }: Cate
               { key: 'kind', header: 'Counts as',
                 render: (c: Category) => <CategoryKindCell category={c} row={row} /> },
               { key: 'slug', header: 'Slug',
-                render: (c: Category) => <span className="fio-muted">{c.slug}</span> },
+                render: (c: Category) => <span className="wm-muted">{c.slug}</span> },
               { key: 'actions', header: '',
                 render: (c: Category) => <CategoryActionsCell category={c} row={row} busy={busy} /> },
             ]}

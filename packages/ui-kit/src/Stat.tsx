@@ -11,11 +11,11 @@ export interface StatProps {
 /** A labelled figure, such as a balance or a total. */
 export function Stat({ label, value, tone = 'neutral' }: StatProps) {
   const resolved = tone === 'auto' ? (value.trimStart().startsWith('-') ? 'negative' : 'positive') : tone
-  const cls = resolved === 'positive' ? 'fio-pos' : resolved === 'negative' ? 'fio-neg' : undefined
+  const cls = resolved === 'positive' ? 'wm-pos' : resolved === 'negative' ? 'wm-neg' : undefined
   return (
     <div>
-      <div className="fio-stat__label">{label}</div>
-      <div className={['fio-stat__value', cls].filter(Boolean).join(' ')}>{value}</div>
+      <div className="wm-stat__label">{label}</div>
+      <div className={['wm-stat__value', cls].filter(Boolean).join(' ')}>{value}</div>
     </div>
   )
 }

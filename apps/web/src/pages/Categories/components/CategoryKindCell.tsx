@@ -26,6 +26,6 @@ export function CategoryKindCell({ category: c, row }: CategoryKindCellProps) {
       </select>
     )
   }
-  if (c.kind === 'expense') return <span className="fio-muted">Spending</span>
+  if (c.kind === 'expense') return <span className="wm-muted">Spending</span>
   return <span className="tag">{c.kind === 'income' ? 'income' : 'transfer'}</span>
 }

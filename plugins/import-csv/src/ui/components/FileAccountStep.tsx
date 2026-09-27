@@ -37,11 +37,11 @@ export function FileAccountStep({
             ))}
           </SelectField>
 
-          <div className="fio-field">
-            <label className="fio-field__label" htmlFor="imp-file">CSV file</label>
+          <div className="wm-field">
+            <label className="wm-field__label" htmlFor="imp-file">CSV file</label>
             <input
               id="imp-file"
-              className="fio-field__control"
+              className="wm-field__control"
               type="file"
               accept=".csv,text/csv"
               onChange={(e) => {

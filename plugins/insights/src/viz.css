@@ -102,9 +102,9 @@
 .viz__mark .viz__bar,
 .viz__bar { transition: opacity 120ms ease, filter 120ms ease; }
 .viz__mark.is-active .viz__bar { filter: brightness(1.12); }
-.viz__mark:focus-visible .viz__bar { stroke: var(--fio-text); stroke-width: 2; }
+.viz__mark:focus-visible .viz__bar { stroke: var(--wm-text); stroke-width: 2; }
 .viz__bar.is-active { filter: brightness(1.12); }
-.viz__bar:focus-visible { outline: none; stroke: var(--fio-text); stroke-width: 2; }
+.viz__bar:focus-visible { outline: none; stroke: var(--wm-text); stroke-width: 2; }
 
 /* The trend tooltip follows its bar, so it is translated back by half its own
    width rather than being left-aligned to the mark. */
@@ -113,9 +113,9 @@
   display: flex; flex-direction: column; gap: 1px; pointer-events: none;
   white-space: nowrap;
 }
-.viz__tip-label { font-size: 11px; color: var(--fio-text-muted); }
+.viz__tip-label { font-size: 11px; color: var(--wm-text-muted); }
 
-.viz__legend-row.is-active { background: var(--fio-surface-alt); border-radius: 4px; }
+.viz__legend-row.is-active { background: var(--wm-surface-alt); border-radius: 4px; }
 
 /* The centre readout is a label, never a target. Without this the text box sits
    over the middle of the donut and swallows the pointer, so a reader crossing
@@ -131,7 +131,7 @@
   display: flex; flex-wrap: wrap; gap: 18px; margin: 0 0 10px;
 }
 .viz__legend--inline .viz__legend-row { display: flex; align-items: center; gap: 6px; }
-.viz__legend-value.is-neg { color: var(--fio-negative); }
+.viz__legend-value.is-neg { color: var(--wm-negative); }
 
 /* Net has no mark of its own on the chart — it is the gap between the two bars —
    so its legend key is a rule rather than a swatch. */
@@ -142,7 +142,7 @@
 .viz--trend .viz__tip { min-width: 150px; }
 .viz__tip-row { display: flex; align-items: center; gap: 6px; }
 .viz__tip-net {
-  margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--fio-border);
-  color: var(--fio-positive);
+  margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--wm-border);
+  color: var(--wm-positive);
 }
-.viz__tip-net.is-neg { color: var(--fio-negative); }
+.viz__tip-net.is-neg { color: var(--wm-negative); }

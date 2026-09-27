@@ -13,8 +13,8 @@ export interface EmptyStateProps {
 /** A placeholder for a list or panel that has nothing to show yet. */
 export function EmptyState({ title, hint, action }: EmptyStateProps) {
   return (
-    <div className="fio-empty">
-      <div className="fio-empty__title">{title}</div>
+    <div className="wm-empty">
+      <div className="wm-empty__title">{title}</div>
       {hint !== undefined ? <div>{hint}</div> : null}
       {action !== undefined ? <div style={{ marginTop: 12 }}>{action}</div> : null}
     </div>

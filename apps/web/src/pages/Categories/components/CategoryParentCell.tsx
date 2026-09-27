@@ -33,7 +33,7 @@ export function CategoryParentCell({ category: c, row, categories, parents }: Ca
     )
   }
   return (
-    <span className="fio-muted">
+    <span className="wm-muted">
       {c.parent_id === null ? '—' : categoryName(categories, c.parent_id)}
     </span>
   )

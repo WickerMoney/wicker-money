@@ -45,11 +45,11 @@ describe('Field', () => {
 describe('Stat', () => {
   it('derives a negative tone from the value', () => {
     const { container } = render(<Stat label="Balance" value="-42.00" tone="auto" />)
-    expect(container.querySelector('.fio-neg')).not.toBeNull()
+    expect(container.querySelector('.wm-neg')).not.toBeNull()
   })
   it('derives a positive tone from the value', () => {
     const { container } = render(<Stat label="Balance" value="42.00" tone="auto" />)
-    expect(container.querySelector('.fio-pos')).not.toBeNull()
+    expect(container.querySelector('.wm-pos')).not.toBeNull()
   })
 })
 

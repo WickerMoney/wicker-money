@@ -8,17 +8,17 @@ export type FieldProps = FieldCommon & InputHTMLAttributes<HTMLInputElement>
 export function Field({ label, error, ...rest }: FieldProps) {
   const id = useId()
   return (
-    <div className="fio-field">
-      <label className="fio-field__label" htmlFor={id}>{label}</label>
+    <div className="wm-field">
+      <label className="wm-field__label" htmlFor={id}>{label}</label>
       <input
         id={id}
-        className="fio-field__control"
+        className="wm-field__control"
         aria-invalid={error !== undefined}
         aria-describedby={error !== undefined ? `${id}-error` : undefined}
         {...rest}
       />
       {error !== undefined ? (
-        <span className="fio-field__error" id={`${id}-error`}>{error}</span>
+        <span className="wm-field__error" id={`${id}-error`}>{error}</span>
       ) : null}
     </div>
   )

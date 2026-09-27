@@ -36,12 +36,12 @@ export interface TableProps<T> {
 export function Table<T>({ columns, rows, rowKey, empty }: TableProps<T>) {
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>
   return (
-    <div className="fio-table__scroll">
-      <table className="fio-table">
+    <div className="wm-table__scroll">
+      <table className="wm-table">
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={c.numeric === true ? 'fio-num' : undefined}>{c.header}</th>
+              <th key={c.key} className={c.numeric === true ? 'wm-num' : undefined}>{c.header}</th>
             ))}
           </tr>
         </thead>
@@ -49,7 +49,7 @@ export function Table<T>({ columns, rows, rowKey, empty }: TableProps<T>) {
           {rows.map((row) => (
             <tr key={rowKey(row)}>
               {columns.map((c) => (
-                <td key={c.key} className={c.numeric === true ? 'fio-num' : undefined}>
+                <td key={c.key} className={c.numeric === true ? 'wm-num' : undefined}>
                   {c.render(row)}
                 </td>
               ))}

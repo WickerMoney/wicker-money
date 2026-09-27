@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
       <div className="plugin-error" role="alert">
         <strong>{this.props.label} failed to render.</strong>
         <div className="plugin-error__detail">{error.message}</div>
-        <button type="button" className="fio-btn" onClick={() => this.setState({ error: null })}>
+        <button type="button" className="wm-btn" onClick={() => this.setState({ error: null })}>
           Try again
         </button>
       </div>
