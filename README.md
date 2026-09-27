@@ -1,4 +1,4 @@
-# WickerMoney
+# Wicker Money
 
 Self-hostable personal finance, rebuilt as a thin core plus installable plugins.
 
@@ -8,9 +8,8 @@ plugin built against `@wickermoney/plugin-sdk`. A fresh install is useful on its
 own; bundled plugins ship enabled but hold no privileges a third-party plugin
 couldn't request.
 
-See `../BUILD_PLAN.md` for the architecture and milestones, `../DISCOVERY.md`
-for what the previous C# implementation did, and `../OPEN_QUESTIONS.md` for the
-design decisions and their reasoning.
+See [ROADMAP.md](ROADMAP.md) for what is built and what is planned, and
+[CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Layout
 
@@ -218,7 +217,7 @@ a month against whole ones.
 A budget is one row per category **per calendar month**, not a template that
 gets mutated forever. That single choice is what makes budget-vs-actual history
 survive a period boundary, and it retires two defects from the previous version
-outright (see `OPEN_QUESTIONS.md` Q15 and Q16).
+outright.
 
 Nothing about a month is stored except the plan:
 
@@ -322,7 +321,7 @@ process on one port (8080) and one origin, which the refresh cookie and
 same-origin plugin loading depend on.
 
 ```bash
-# Build it, or pull a released one: git.jreed.me/wickermoney/wickermoney:<version>
+# Build it, or pull a released one: ghcr.io/wickermoney/wicker-money:<version>
 docker build -f docker/Dockerfile -t wickermoney .
 
 # 1. Migrate, as the database owner. The image does not migrate on start.
@@ -354,7 +353,6 @@ means the container itself, not your machine.
 > - The `Cross-Origin-Opener-Policy` and `Origin-Agent-Cluster` console warnings
 >   are this same cause. They are harmless and disappear over HTTPS.
 >
-> Decision record: `OPEN_QUESTIONS.md` Q39.
 
 ### Behind an HTTPS reverse proxy (recommended)
 
@@ -403,7 +401,7 @@ one row per boot with the same information, for after the fact.
 
 ## Releasing
 
-Push a version tag; `.gitea/workflows/release.yml` does the rest.
+Push a version tag; `.github/workflows/release.yml` does the rest.
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
@@ -413,9 +411,9 @@ It re-runs lint, typecheck, build and the unit tests on the tagged commit, then:
 
 | Output | Where |
 |---|---|
-| Every non-private package (`plugin-sdk`, `ui-kit`, and the four `plugins/*`) at the tag's version | Gitea npm registry, `git.jreed.me/api/packages/wickermoney/npm/` |
-| Multi-arch image (amd64 + arm64), `:<version>` and `:latest` | `git.jreed.me/wickermoney/wickermoney` |
-| A release with the commit subjects since the previous tag | Gitea releases |
+| `@wickermoney/plugin-sdk` and `@wickermoney/ui-kit` at the tag's version, with npm provenance. These are the only published packages; the bundled plugins, `apps/api` and `apps/web` are private. | npm |
+| Multi-arch image (amd64 + arm64), `:<version>` and `:latest` | `ghcr.io/wickermoney/wicker-money` |
+| A release with generated notes from the commit subjects since the previous tag | GitHub releases |
 
 The same version, and the exact commit, also go into the image as build-args
 (`VERSION`, `GIT_SHA`). `apps/api` and `apps/web` stay private and are never
@@ -429,14 +427,12 @@ A tag such as `v0.1.0-rc.1` is a prerelease: the packages go out under the npm
 prerelease. Re-running the packages job after a partial failure is safe; a version
 the registry already has is skipped.
 
-The workflow needs the repository secrets `REGISTRY_USER` and `REGISTRY_TOKEN`,
-the same ones the other Wicker Money repositories use for both the npm and container
-registries. To consume the
-packages, map the scope in your `.npmrc`:
-
-```ini
-@wickermoney:registry=https://git.jreed.me/api/packages/wickermoney/npm/
-```
+The workflow needs one repository secret, `NPM_TOKEN` (an npm automation token for
+the `@wickermoney` scope). The image push uses the built-in `GITHUB_TOKEN`. New
+ghcr packages are private by default, so after the first image push set the
+`wicker-money` package to public in the organization's package settings. Every job
+is guarded by a repository check, so a tag pushed to a fork or mirror publishes
+nothing.
 
 Pull requests also build the image (without pushing it), so a broken Dockerfile
 fails before a tag does.
