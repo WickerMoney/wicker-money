@@ -8,8 +8,8 @@ name: Release
 #   - a multi-arch image (amd64 + arm64) at ghcr.io/wickermoney/wicker-money
 #   - a GitHub release with generated notes
 #
-# A tag with a hyphen (v0.1.0-rc.1) is a prerelease: npm dist-tag `next`, no
-# `:latest` image tag, release marked as prerelease.
+# A tag with a hyphen (v0.1.0-rc.1) is a prerelease: npm dist-tag `next`,
+# image tag `:next` instead of `:latest`, release marked as prerelease.
 #
 # Every job is guarded by the repository check below, so a tag mirrored to the
 # mirror of this repo or a fork can never publish anything.
@@ -170,7 +170,9 @@ jobs:
         working-directory: /tmp/digests
         run: |
           tags=(-t "$IMAGE:${{ needs.meta.outputs.version }}")
-          if [ "${{ needs.meta.outputs.prerelease }}" != "true" ]; then
+          if [ "${{ needs.meta.outputs.prerelease }}" = "true" ]; then
+            tags+=(-t "$IMAGE:next")
+          else
             tags+=(-t "$IMAGE:latest")
           fi
           docker buildx imagetools create "${tags[@]}" $(printf "$IMAGE@sha256:%s " *)
