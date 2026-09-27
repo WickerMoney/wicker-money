@@ -70,7 +70,22 @@ Contributions are licensed under the license of the component you change
 licensed under Apache-2.0, and a change to the app or a bundled plugin is
 licensed under AGPL-3.0.
 
-<!-- TODO(D2): CLA vs DCO undecided; decide before the first outside PR because DCO alone does not permit relicensing -->
+This project uses the [Developer Certificate of Origin](https://developercertificate.org/)
+(DCO) instead of a CLA. Sign every commit with `git commit -s`, which adds a
+`Signed-off-by: Your Name <you@example.com>` trailer. It's a statement that you
+wrote the change or otherwise have the right to submit it under the project's
+license, not a copyright transfer, so it stays out of your way and does not
+grant relicensing rights over your contribution.
+
+There's no automated check for this yet -- it's a manual review step for now,
+added to CI once outside contributions are more than occasional. If a sign-off
+is missing, add it to past commits with `git commit --amend -s` (or
+`git rebase --signoff` for several) and force-push the branch.
+
+A plugin built against `plugin-sdk` and `ui-kit` only (no import from `apps/*`,
+no copying of AGPL code) may, per an internal architecture decision, be
+licensed on its own by Jeremy -- that only concerns code he writes, so it does
+not change how contributions to this repository are licensed.
 
 ## Code of Conduct
 
