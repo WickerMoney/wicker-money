@@ -50,6 +50,17 @@ optional, and nothing outside it blocks the tag.
 - A debt payoff plugin with snowball and avalanche strategies. It keeps its own
   per-debt balance, rate and minimum payment.
 
+- A settings danger zone: "erase my data" (delete the calling user's own rows
+  across core and every plugin schema) and "erase this entire instance" (drop
+  every user and reset every plugin schema to empty), as two distinct,
+  separately-confirmed actions. Decided in an earlier session but never built;
+  Settings today only has About, Config and Export.
+- A per-plugin theme contribution point (`contributes.themes` on the plugin
+  manifest), so a plugin can ship an additional theme alongside the built-in
+  light/dark/system switcher. Also decided, not yet built — do not confuse
+  with the global theme switcher already shipped, which is a different,
+  simpler thing.
+
 ## Later
 
 - Cross-plugin data access: a plugin reading data another plugin owns, for
