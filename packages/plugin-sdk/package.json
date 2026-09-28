@@ -7,7 +7,7 @@
     "url": "git+https://github.com/WickerMoney/wicker-money.git",
     "directory": "packages/plugin-sdk"
   },
-  "homepage": "https://github.com/WickerMoney/wicker-money#readme",
+  "homepage": "https://github.com/WickerMoney/wicker-money/tree/main/packages/plugin-sdk#readme",
   "bugs": {
     "url": "https://github.com/WickerMoney/wicker-money/issues"
   },
