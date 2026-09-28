@@ -20,12 +20,12 @@ export function TrendLegend({ totals, formatMoney }: TrendLegendProps) {
   return (
     <div className="viz__legend viz__legend--inline">
       <div className="viz__legend-row">
-        <span className="viz__swatch" style={{ background: 'var(--viz-3)' }} />
+        <span className="viz__swatch" style={{ background: 'var(--viz-1)' }} />
         <span>Income</span>
         <span className="viz__legend-value">{formatMoney(totals.income)}</span>
       </div>
       <div className="viz__legend-row">
-        <span className="viz__swatch" style={{ background: 'var(--viz-4)' }} />
+        <span className="viz__swatch" style={{ background: 'var(--viz-2)' }} />
         <span>Spending</span>
         <span className="viz__legend-value">{formatMoney(totals.expense)}</span>
       </div>

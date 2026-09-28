@@ -60,11 +60,11 @@ export function TrendMonthMark({
       <rect x={x} y={pad.top} width={barWidth} height={plotHeight} fill="transparent" />
       <rect
         className="viz__bar" x={x} y={income.y} width={barWidth} height={income.h}
-        rx={r} fill="var(--viz-3)"
+        rx={r} fill="var(--viz-1)"
       />
       <rect
         className="viz__bar" x={x} y={expense.y} width={barWidth} height={expense.h}
-        rx={r} fill="var(--viz-4)"
+        rx={r} fill="var(--viz-2)"
       />
       {labelled ? (
         <text className="viz__axis" x={x + barWidth / 2} y={height - 8} textAnchor="middle">

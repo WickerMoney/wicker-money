@@ -26,7 +26,8 @@ const { width: W, height: H, pad: PAD, barGap: BAR_GAP } = TREND_LAYOUT
  * grouped pairs, which matters at 24 months where grouping means 48 bars in one
  * band.
  *
- * The colours are the palette's `--viz-3` and `--viz-4` slots (green and amber).
+ * The colours are the palette's `--viz-1` and `--viz-2` slots (brand green and
+ * amber); the shared palette puts that pair first for exactly this chart.
  * Green against red is the obvious choice and the wrong one: it collides for
  * deuteranopes on the dark surface. Position carries the meaning regardless,
  * since above the line is money in, so colour is reinforcement rather than the

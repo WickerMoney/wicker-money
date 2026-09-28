@@ -1,55 +1,35 @@
 /*
  * Chart palette, scoped to this plugin.
  *
- * Values come from the validated reference palette. Light and dark are both
- * *selected* steps of the same hues, not an automatic flip, and each set was
- * checked with the palette validator against its own surface.
+ * Every value is an alias to the shared chart tokens in
+ * packages/ui-kit/src/tokens.css (--wm-chart-*), which hold the validated,
+ * brand-derived palette and its light and dark steps. The host shell imports
+ * ui-kit, so those tokens sit on :root of the document this CSS is injected
+ * into; custom properties resolve when styles are computed, not when this
+ * <style> lands, so injection order does not matter. Dark mode needs no block
+ * here: the --wm-chart-* values switch at :root and these aliases follow.
  *
- * Light mode: aqua, yellow and magenta fall below 3:1 against the light
- * surface, so the relief rule applies — every segment carries a visible label
+ * The --viz-* names stay rather than using --wm-chart-* directly in the rules
+ * below: spending-trends' CSS lands in the same host document, and keeping
+ * each plugin's names under its own prefix and class keeps either plugin from
+ * restyling the other.
+ *
+ * Relief rule: slot 2 (amber) falls below 3:1 against the light surface and
+ * "Other" is recessive in both modes, so every segment carries a visible label
  * and value in text ink. Identity is never colour alone.
  */
 .viz {
-  --viz-surface:   #fcfcfb;
-  --viz-ink:       #16191d;
-  --viz-ink-muted: #5b6472;
-  --viz-grid:      #e3e6ea;
-  --viz-1: #2a78d6;
-  --viz-2: #eb6834;
-  --viz-3: #1baf7a;
-  --viz-4: #eda100;
-  --viz-5: #e87ba4;
-  --viz-6: #008300;
-  --viz-other: #8a93a0;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .viz {
-    --viz-surface:   #1a1a19;
-    --viz-ink:       #e8eaed;
-    --viz-ink-muted: #9aa4b2;
-    --viz-grid:      #2b323c;
-    --viz-1: #3987e5;
-    --viz-2: #d95926;
-    --viz-3: #199e70;
-    --viz-4: #c98500;
-    --viz-5: #d55181;
-    --viz-6: #008300;
-    --viz-other: #7b838f;
-  }
-}
-:root[data-theme="dark"] .viz {
-  --viz-surface:   #1a1a19;
-  --viz-ink:       #e8eaed;
-  --viz-ink-muted: #9aa4b2;
-  --viz-grid:      #2b323c;
-  --viz-1: #3987e5;
-  --viz-2: #d95926;
-  --viz-3: #199e70;
-  --viz-4: #c98500;
-  --viz-5: #d55181;
-  --viz-6: #008300;
-  --viz-other: #7b838f;
+  --viz-surface:   var(--wm-chart-surface);
+  --viz-ink:       var(--wm-chart-ink);
+  --viz-ink-muted: var(--wm-chart-ink-muted);
+  --viz-grid:      var(--wm-chart-grid);
+  --viz-1:         var(--wm-chart-1);
+  --viz-2:         var(--wm-chart-2);
+  --viz-3:         var(--wm-chart-3);
+  --viz-4:         var(--wm-chart-4);
+  --viz-5:         var(--wm-chart-5);
+  --viz-6:         var(--wm-chart-6);
+  --viz-other:     var(--wm-chart-other);
 }
 
 .viz { position: relative; min-width: 0; }
