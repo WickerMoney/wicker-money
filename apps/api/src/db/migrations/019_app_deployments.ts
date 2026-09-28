@@ -1,4 +1,5 @@
 import { sql, type Kysely } from 'kysely'
+import { createIndexIfMissing } from './support/index.js'
 
 /**
  * @module
@@ -31,11 +32,17 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   `.execute(db)
 
   // Newest-first is the only access pattern today (the About page, and any
-  // future "recent deploys" view).
-  await sql`
-    CREATE INDEX IF NOT EXISTS ix_app_deployments_started_at
-      ON core.app_deployments (started_at DESC)
-  `.execute(db)
+  // future "recent deploys" view). Uses createIndexIfMissing rather than a
+  // raw `CREATE INDEX IF NOT EXISTS`: that raw form takes a blocking SHARE
+  // lock on the table before it notices the index already exists, which
+  // failed migrations.idempotent.integration.test.ts's lock check on
+  // reapply (see that helper's docstring for why it checks the catalog
+  // first instead).
+  await createIndexIfMissing(
+    db,
+    'core.ix_app_deployments_started_at',
+    'ON core.app_deployments (started_at DESC)',
+  )
 }
 
 /**
