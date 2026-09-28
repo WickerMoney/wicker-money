@@ -13,13 +13,13 @@ optional, and nothing outside it blocks the tag.
 | M1 | Auth and ledger: users, accounts, categories, rules, transactions, splits, all under row-level security |
 | M2 | The shell and the first plugin: Module Federation host, dashboard widgets from plugins, scoped plugin client |
 | M3 | Import and categorization: CSV import, category rules with preview, triage tools |
+| M4 | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
 
 ## Now
 
-- Get to a first tagged release (`v0.1.0`): self-hosting quickstart, published
-  container image, published `plugin-sdk` and `ui-kit`.
-- Hardening the first-run and deployment story (registration policy, secure
-  cookie guidance).
+Nothing outstanding. Everything that was here shipped as M4, above — the
+codebase is ready for the `v0.1.0` tag (still `rc.4` as of this writing; the
+tag itself hasn't been cut).
 
 ## Next
 

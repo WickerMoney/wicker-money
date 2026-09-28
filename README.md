@@ -9,7 +9,8 @@ own; bundled plugins ship enabled but hold no privileges a third-party plugin
 couldn't request.
 
 See [ROADMAP.md](ROADMAP.md) for what is built and what is planned, and
-[CHANGELOG.md](CHANGELOG.md) for what changed.
+[CHANGELOG.md](CHANGELOG.md) for what changed. Full documentation lives at
+[wickermoney.dev](https://wickermoney.dev).
 
 ## Layout
 
@@ -331,6 +332,11 @@ docker run --rm --env-file .env wickermoney node dist/db/cli.js up
 docker run -d --name wickermoney --env-file .env -p 8080:8080 wickermoney
 ```
 
+For a full stack with its own PostgreSQL container instead of running
+`docker run` by hand, see [`docker/docker-compose.sample.yml`](docker/docker-compose.sample.yml) —
+copy it to `docker-compose.yml`, review it top to bottom (role names
+especially, per `.env.example`), and `docker compose up -d`.
+
 It takes the same variables as `.env.example`. The image sets `NODE_ENV=production`,
 so the API refuses the development credentials, and `localhost` in `DATABASE_URL`
 means the container itself, not your machine.
@@ -511,6 +517,19 @@ for the API.
 
 ## Status
 
+**M4 — release readiness and brand identity.** Everything needed to cut the
+first public tag, `v0.1.0`: a self-hosting quickstart (`docker/docker-compose.sample.yml`
+alongside the plain `docker run` walkthrough above), a published multi-arch
+container image and published `@wickermoney/plugin-sdk` / `@wickermoney/ui-kit`
+packages (npm's OIDC trusted publishing, no stored token), and first-run
+hardening (`REGISTRATION_ENABLED`, `COOKIE_SECURE` defaulting to `true` in
+production). Also: the `semimonthly` recurrence frequency; the design-token
+rename from the pre-launch `--fio-`/`fio-` prefixes to `--wm-`/`wm-`; the
+light/dark/system theme switcher; and the real brand identity — logo,
+favicon, and an accent and chart palette derived from the actual logo colors
+(the shipped blue and an earlier ported guide's indigo both predated the real
+assets and matched neither). Full color/token record in `packages/ui-kit/src/tokens.css`.
+
 **M3 — import, and categorization.** `plugins/import-csv` imports bank and card
 statements: a column mapping saved per source, an explicit date format with a
 live parse preview, duplicate detection that prefers the source's own
@@ -545,7 +564,10 @@ request; the server checks that id against the manifest's `requiredTables` and
 answers `grant_denied` for anything the plugin never asked for. That check is
 the authoritative one — the matching client-side guard is developer ergonomics,
 since plugin code shares the host's realm. The enforceable second layer, a
-database role per plugin, arrives at M4.
+database role per plugin, arrived with M3 above (`plugin-roles.ts`'s
+`pluginRoleName`/`asPlugin`, used by every bundled plugin, not just
+import-csv) — this paragraph originally said that arrives at M4; it shipped
+earlier than planned.
 
 **M1 — auth and ledger.** Users, sessions, accounts, categories, category
 rules, transactions and splits, all under row-level security. Account balances
