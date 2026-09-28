@@ -1,53 +1,28 @@
 /*
  * Chart palette, scoped to this plugin.
  *
- * The same validated reference palette the insights plugin uses, under this
- * plugin's own names. Light and dark are both *selected* steps of the same
- * hues, not an automatic flip, and each set was checked against its own surface.
+ * Every value is an alias to the shared chart tokens in
+ * packages/ui-kit/src/tokens.css (--wm-chart-*) — the same source the
+ * insights plugin reads, under this plugin's own names. The host shell imports
+ * ui-kit, so those tokens sit on :root of the document this CSS is injected
+ * into, and the aliases follow the tokens' light and dark values.
  *
- * Light mode: aqua, yellow and magenta fall below 3:1 against the light
- * surface, so the relief rule applies — every category carries its name and
+ * Relief rule: slot 2 (amber) falls below 3:1 against the light surface and
+ * "Other" is recessive in both modes, so every category carries its name and
  * value in text ink (the filter chips and the tooltip). Identity is never
  * colour alone.
  */
 .spt {
-  --spt-surface:   #fcfcfb;
-  --spt-ink:       #16191d;
-  --spt-ink-muted: #5b6472;
-  --spt-grid:      #e3e6ea;
-  --spt-1: #2a78d6;
-  --spt-2: #eb6834;
-  --spt-3: #1baf7a;
-  --spt-4: #eda100;
-  --spt-5: #e87ba4;
-  --spt-other: #8a93a0;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .spt {
-    --spt-surface:   #1a1a19;
-    --spt-ink:       #e8eaed;
-    --spt-ink-muted: #9aa4b2;
-    --spt-grid:      #2b323c;
-    --spt-1: #3987e5;
-    --spt-2: #d95926;
-    --spt-3: #199e70;
-    --spt-4: #c98500;
-    --spt-5: #d55181;
-    --spt-other: #7b838f;
-  }
-}
-:root[data-theme="dark"] .spt {
-  --spt-surface:   #1a1a19;
-  --spt-ink:       #e8eaed;
-  --spt-ink-muted: #9aa4b2;
-  --spt-grid:      #2b323c;
-  --spt-1: #3987e5;
-  --spt-2: #d95926;
-  --spt-3: #199e70;
-  --spt-4: #c98500;
-  --spt-5: #d55181;
-  --spt-other: #7b838f;
+  --spt-surface:   var(--wm-chart-surface);
+  --spt-ink:       var(--wm-chart-ink);
+  --spt-ink-muted: var(--wm-chart-ink-muted);
+  --spt-grid:      var(--wm-chart-grid);
+  --spt-1:         var(--wm-chart-1);
+  --spt-2:         var(--wm-chart-2);
+  --spt-3:         var(--wm-chart-3);
+  --spt-4:         var(--wm-chart-4);
+  --spt-5:         var(--wm-chart-5);
+  --spt-other:     var(--wm-chart-other);
 }
 
 .spt { position: relative; min-width: 0; width: 100%; }
