@@ -2,6 +2,11 @@ services:
   # Remove this whole block if you're bringing your own PostgreSQL 16+ server
   # (see "Using an existing PostgreSQL server" in the self-hosting docs), and
   # point DATABASE_URL / DATABASE_OWNER_URL below at it directly instead.
+  # Customizing anything else about that server -- role names especially --
+  # review .env.example top to bottom first: it documents every variable this
+  # image reads, including ones (APP_DB_ROLE) that must be set identically on
+  # both `migrate` and `wickermoney` below, or the two disagree at runtime on
+  # what a plugin's own database role is called.
   postgres:
     image: postgres:16-alpine
     environment:
@@ -30,6 +35,11 @@ services:
       # loadConfig() requires DATABASE_URL at every entry point, cli.ts
       # included, even though migrations connect with DATABASE_OWNER_URL only
       # -- this value is never actually used, just required to be present.
+      #
+      # These three assume the bundled wickermoney_app/wickermoney role names
+      # from the postgres: service above. Using different role names (bring-
+      # your-own Postgres)? Add APP_DB_ROLE here too, set to the exact same
+      # value as in `wickermoney:` below -- see .env.example for what it does.
       - DATABASE_URL=postgresql://wickermoney_app:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@postgres:5432/wickermoney
       - DATABASE_OWNER_URL=postgresql://wickermoney:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/wickermoney
       - APP_DB_PASSWORD=${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
@@ -52,6 +62,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      # Same role-name caveat as `migrate:` above: if you added APP_DB_ROLE
+      # there, add it here too with the identical value.
       - DATABASE_URL=postgresql://wickermoney_app:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@postgres:5432/wickermoney
       - AUTH_SECRET=${AUTH_SECRET:?AUTH_SECRET is required}
       - AUTH_ACCESS_TTL_SECONDS=${AUTH_ACCESS_TTL_SECONDS:-900}
