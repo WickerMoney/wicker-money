@@ -20,11 +20,11 @@ export function TrendTooltip({ month, leftPercent, formatMoney }: TrendTooltipPr
     <div className="viz__tip" style={{ left: `${leftPercent}%`, top: 0 }}>
       <span className="viz__tip-label">{monthLabelLong(month.month)}</span>
       <span className="viz__tip-row">
-        <span className="viz__swatch" style={{ background: 'var(--viz-3)' }} />
+        <span className="viz__swatch" style={{ background: 'var(--viz-1)' }} />
         <strong>{formatMoney(month.income)}</strong> in
       </span>
       <span className="viz__tip-row">
-        <span className="viz__swatch" style={{ background: 'var(--viz-4)' }} />
+        <span className="viz__swatch" style={{ background: 'var(--viz-2)' }} />
         <strong>{formatMoney(month.expense)}</strong> out
       </span>
       <span className={`viz__tip-net${down ? ' is-neg' : ''}`}>

@@ -86,10 +86,10 @@ export async function seedMonthlyHistory(
   for (let monthsAgo = monthsBack - 1; monthsAgo >= 0; monthsAgo--) {
     const monthFirst = firstDayOfMonth(addMonthsClamped(today, -monthsAgo))
 
-    // Two paychecks, semi-monthly. `semimonthly` is not yet a recurrence
-    // frequency in `core.recurrence_frequency` (it is on the `Now` roadmap for
-    // recurring items, not shipped) — these are ordinary transactions, so
-    // nothing here waits on that migration.
+    // Two paychecks, semi-monthly. These are ordinary ledger transactions,
+    // not `core.recurring_items` rows, so they don't depend on the
+    // `semimonthly` recurrence frequency (see seedRecurringItems.ts, which
+    // does use it now).
     for (const dayOffset of [0, 14]) {
       const id = await create(service, userId, {
         accountId: accountIds.get('checking')!,

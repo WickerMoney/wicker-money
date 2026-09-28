@@ -12,11 +12,43 @@
   --wm-border:         #dfe3e9;
   --wm-text:           #16191d;
   --wm-text-muted:     #5b6472;
-  --wm-accent:         #2f6feb;
+  --wm-accent:         #2e500d;
   --wm-accent-text:    #ffffff;
-  --wm-positive:       #1a7f52;
+  --wm-positive:       #0c7e65;
   --wm-negative:       #c0392b;
   --wm-warning:        #b7791f;
+
+  /*
+   * Chart palette. Categorical slots are assigned in this fixed order and
+   * never cycled; a series past the last slot folds into --wm-chart-other.
+   * Slot 1 is the brand green (the logo's olive, one step brighter so it
+   * clears the chroma floor); slots 1 and 2 are green and amber so a
+   * two-series chart gets the pair that separates under colour-blindness.
+   *
+   * Validated with the dataviz skill's palette validator against
+   * --wm-chart-surface in each mode (adjacent pairs, OKLab ΔE×100): worst
+   * CVD 12.0 light / 10.2 dark (target 8), worst normal-vision 20.8 / 19.8
+   * (floor 15). The first three slots also pass all-pairs.
+   *
+   * Relief rule: slot 2 (amber) sits below 3:1 against the light surface,
+   * and --wm-chart-other is deliberately recessive (below 3:1 in both
+   * modes). Every chart using them must carry a visible label and value in
+   * text ink (legend row, filter chip or direct label) — identity is never
+   * colour alone. See documents/brand/brand-guide.md.
+   */
+  --wm-chart-1:         #40731a;  /* green  */
+  --wm-chart-2:         #d49824;  /* amber  */
+  --wm-chart-3:         #8166c3;  /* violet */
+  --wm-chart-4:         #d97c50;  /* clay   */
+  --wm-chart-5:         #2971c6;  /* blue   */
+  --wm-chart-6:         #98397e;  /* plum   */
+  --wm-chart-other:     #bcbab6;  /* warm grey, from the cream mark */
+  --wm-chart-grid:      #e3e6ea;
+  /* Chart chrome follows the app's own surface and text tokens, so it
+     switches with them and cannot drift. */
+  --wm-chart-surface:   var(--wm-surface);
+  --wm-chart-ink:       var(--wm-text);
+  --wm-chart-ink-muted: var(--wm-text-muted);
 
   --wm-radius:      10px;
   --wm-radius-sm:   6px;
@@ -41,10 +73,19 @@
     --wm-border:       #2b323c;
     --wm-text:         #e8eaed;
     --wm-text-muted:   #9aa4b2;
-    --wm-accent:       #5b8def;
-    --wm-positive:     #3fbf87;
+    --wm-accent:       #a9d173;
+    --wm-accent-text:  #0c301c;
+    --wm-positive:     #29a987;
     --wm-negative:     #e5736a;
     --wm-warning:      #e0a84a;
+    --wm-chart-1:      #43761e;
+    --wm-chart-2:      #bf881e;
+    --wm-chart-3:      #927ad2;
+    --wm-chart-4:      #d4774c;
+    --wm-chart-5:      #4081d2;
+    --wm-chart-6:      #b54d98;
+    --wm-chart-other:  #4e4d49;
+    --wm-chart-grid:   #2b323c;
     --wm-shadow:       0 1px 2px rgb(0 0 0 / 40%);
   }
 }
@@ -57,10 +98,19 @@
   --wm-border:       #2b323c;
   --wm-text:         #e8eaed;
   --wm-text-muted:   #9aa4b2;
-  --wm-accent:       #5b8def;
-  --wm-positive:     #3fbf87;
+  --wm-accent:       #a9d173;
+  --wm-accent-text:  #0c301c;
+  --wm-positive:     #29a987;
   --wm-negative:     #e5736a;
   --wm-warning:      #e0a84a;
+  --wm-chart-1:      #43761e;
+  --wm-chart-2:      #bf881e;
+  --wm-chart-3:      #927ad2;
+  --wm-chart-4:      #d4774c;
+  --wm-chart-5:      #4081d2;
+  --wm-chart-6:      #b54d98;
+  --wm-chart-other:  #4e4d49;
+  --wm-chart-grid:   #2b323c;
   --wm-shadow:       0 1px 2px rgb(0 0 0 / 40%);
 }
 

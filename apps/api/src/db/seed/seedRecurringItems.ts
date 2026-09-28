@@ -27,13 +27,11 @@ export interface RecurringItemDef {
  * database query — that is expected, not a seed bug.
  *
  * `hero`'s set covers every {@link RecurrenceFrequency} value that exists
- * today (`semimonthly` is on the roadmap but not yet a database enum value, so
- * it is not here), an ended series, a transfer-type item for each of the
- * `loan` and `credit_card` accounts (the shape `ROADMAP.md` describes for
- * "payments to credit_card/loan accounts count as bills"), and one monthly
- * item anchored on the 31st — the clamp-to-last-day case called out in the
- * roadmap decisions doc, which only a series literally started on a 31st
- * exercises.
+ * today, an ended series, a transfer-type item for each of the `loan` and
+ * `credit_card` accounts (the shape `ROADMAP.md` describes for "payments to
+ * credit_card/loan accounts count as bills"), and one monthly item anchored
+ * on the 31st — the clamp-to-last-day case called out in the roadmap
+ * decisions doc, which only a series literally started on a 31st exercises.
  */
 export function recurringItemDefsFor(personaKey: 'hero' | 'second' | 'fresh'): readonly RecurringItemDef[] {
   const today = todayIso()
@@ -60,6 +58,7 @@ export function recurringItemDefsFor(personaKey: 'hero' | 'second' | 'fresh'): r
       // buffer_amount. Best-effort — nothing here computes the derived
       // balance to guarantee it, since nothing can read this table yet.
       { accountKey: 'checking', name: 'Homeowners/Renters Insurance Installment', amount: '-900.0000', frequency: 'quarterly', seriesStartDate: addDays(today, -75) },
+      { accountKey: 'checking', name: 'Freelance Retainer', amount: '450.0000', frequency: 'semimonthly', seriesStartDate: addDays(today, -300), categorySlug: 'salary', isIncome: true },
     ]
   }
   if (personaKey === 'second') {

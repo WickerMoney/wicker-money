@@ -54,7 +54,7 @@
 .imp__table td {
   padding: 6px 10px;
   text-align: left;
-  border-bottom: 1px solid var(--wm-border, #e3e6ea);
+  border-bottom: 1px solid var(--wm-border);
 }
 .imp__table th {
   font-weight: 600;
@@ -65,7 +65,7 @@
 
 /* Direction of money, not a status: spending is the common case and stays
    plain ink, income is the exception worth marking. */
-.imp__in { color: #1b7f57; font-weight: 600; }
+.imp__in { color: var(--wm-positive); font-weight: 600; }
 .imp__out { color: inherit; }
 
 .imp__reverted td { opacity: .55; text-decoration: line-through; }
@@ -85,8 +85,3 @@
 }
 
 .imp__done { margin: 0 0 14px; font-size: 14px; }
-
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .imp__in { color: #4fbf8b; }
-}
-:root[data-theme="dark"] .imp__in { color: #4fbf8b; }
