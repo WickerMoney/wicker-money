@@ -23,6 +23,17 @@ curated, human-readable version.
   derived from the ledger, never stored.
 - Budgets plugin with per-category budgets and per-line rollover.
 - Container image (amd64 and arm64) served by the API on a single port.
+- `ui-kit`: a shared, validated chart palette (`--wm-chart-1` … `-6`,
+  `--wm-chart-other`, plus chart surface, ink and grid tokens). The bundled
+  chart plugins alias it instead of carrying their own copies.
+
+### Changed
+
+- `ui-kit`: `--wm-accent` is now the brand green from the logo (`#2e500d`
+  light, `#a9d173` dark) instead of blue, with dark-mode `--wm-accent-text`
+  switched to a dark ink so text on the accent stays readable.
+  `--wm-positive` shifts toward teal (`#0c7e65` / `#29a987`) so a link and a
+  gain no longer look alike.
 
 ### Security
 
