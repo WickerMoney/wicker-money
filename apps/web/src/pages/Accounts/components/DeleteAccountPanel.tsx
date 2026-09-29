@@ -2,6 +2,7 @@ import { Button, SelectField, Surface } from '@wickermoney/ui-kit'
 import type { AccountDeletion } from '../hooks/useAccountDeletion.js'
 import { describeUsage } from '../helpers/describeUsage.js'
 import { MigrationPreviewNote } from './MigrationPreviewNote.js'
+import { RecurringAffectedNote } from './RecurringAffectedNote.js'
 
 /** Props for {@link DeleteAccountPanel}. */
 export interface DeleteAccountPanelProps {
@@ -21,12 +22,20 @@ export interface DeleteAccountPanelProps {
 export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) {
   const { resolving, migrateTargets, migrateTargetId, migratePlan } = deletion
   if (resolving === null) return null
+  const target = migrateTargets.find((t) => t.id === migrateTargetId)
+  const moveTarget = target === undefined ? null : { id: target.id, name: target.name }
 
   return (
     <Surface title={`Delete '${resolving.account.name}'`}>
       <p className="form-hint">
         '{resolving.account.name}' still has {describeUsage(resolving.usage)}. Pick one:
       </p>
+
+      <RecurringAffectedNote
+        accountName={resolving.account.name}
+        items={resolving.recurringItems}
+        moveTo={migratePlan === null ? null : moveTarget}
+      />
 
       <div className="page__row">
         <div>

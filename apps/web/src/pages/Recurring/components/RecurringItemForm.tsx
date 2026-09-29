@@ -1,5 +1,6 @@
 import type { FormEvent } from 'react'
 import { Button, CategoryOptions, Field, SelectField, Surface, orderByParent } from '@wickermoney/ui-kit'
+import { formatDate } from '../../../lib/formatDate.js'
 import type { Account, Category, RecurringItem } from '../../../models/index.js'
 import { FREQUENCIES, FREQUENCY_LABELS, KINDS, KIND_LABELS } from '../helpers/labels.js'
 import { dayLabel } from '../helpers/ordinal.js'
@@ -137,7 +138,7 @@ export function RecurringItemForm({
           ) : preview.length === 0 ? (
             <p className="form-hint">Nothing from today on.</p>
           ) : (
-            <ul className="recur-preview__list">{preview.map((d) => <li key={d}>{d}</li>)}</ul>
+            <ul className="recur-preview__list">{preview.map((d) => <li key={d}>{formatDate(d)}</li>)}</ul>
           )}
         </div>
 

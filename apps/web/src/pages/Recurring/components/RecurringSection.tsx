@@ -1,4 +1,5 @@
 import { Button, Surface, Table } from '@wickermoney/ui-kit'
+import { formatDate } from '../../../lib/formatDate.js'
 import type { RecurringItem } from '../../../models/index.js'
 import { describeSchedule } from '../helpers/describeSchedule.js'
 import { KIND_LABELS } from '../helpers/labels.js'
@@ -41,9 +42,14 @@ export function RecurringSection({
               </div>
             </div>
           ) },
-          { key: 'due', header: 'Next due', render: (i: RecurringItem) =>
-            i.nextDue ?? <span className="wm-muted">Ended</span> },
-          { key: 'when', header: 'Schedule', render: (i: RecurringItem) => describeSchedule(i) },
+          { key: 'due', header: 'Next due', render: (i: RecurringItem) => (
+            <div>
+              {i.nextDue === null
+                ? <span className="wm-muted">Ended</span>
+                : <span className="recur-date">{formatDate(i.nextDue)}</span>}
+              <div className="wm-muted recur-sub">{describeSchedule(i)}</div>
+            </div>
+          ) },
           { key: 'where', header: 'Account', render: (i: RecurringItem) => <LegsCell item={i} accountName={accountName} /> },
           { key: 'amount', header: 'Amount', numeric: true,
             render: (i: RecurringItem) => <AmountCell value={i.amount} kind={i.kind} currency={currency} /> },

@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
-import type { AccountUsage, MigrationPlan } from '../../../models/index.js'
+import type { AccountUsage, MigrationPlan, RecurringItem } from '../../../models/index.js'
 import { deferred } from '../../../testing/deferred.js'
 import { makeAccount } from '../../../testing/makeAccount.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
@@ -14,11 +14,19 @@ const archived = makeAccount({ id: 'acc-3', name: 'Old', archivedAt: '2025-01-01
 const noUsage: AccountUsage = { total: 0, by: [], unreadable: [] }
 const usage: AccountUsage = {
   total: 45, unreadable: [],
-  by: [{ table: 'core.transactions', count: 42 }, { table: 'core.recurring_items', count: 3 }],
+  by: [{ table: 'core.transactions', count: 42 }, { table: 'core.recurring_item_legs', count: 3 }],
 }
 const plan: MigrationPlan = {
   removedTransferTransactions: 0, removedTransferRecurringItems: 0,
   movedTransactions: 42, movedRecurringItems: 3, totalAffected: 45,
+}
+
+const rent = { id: 'r1', name: 'Rent' } as RecurringItem
+
+/** Answers the usage check, and the recurring-items lookup it triggers. */
+function serveUsage(u: AccountUsage) {
+  return vi.spyOn(api, 'get').mockImplementation(async (path: string) =>
+    (path.startsWith('/recurring-items') ? { today: '2026-09-28', items: [rent], summary: {} } : u) as never)
 }
 
 function setup() {
@@ -63,16 +71,28 @@ describe('starting a delete', () => {
   })
 
   it('opens the resolution panel instead of deleting when the account has history', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue(usage)
+    const get = serveUsage(usage)
     const del = vi.spyOn(api, 'del')
     const { result } = setup()
 
     await act(async () => { await result.current.startDelete(doomed) })
 
     expect(del).not.toHaveBeenCalled()
-    expect(result.current.resolving).toEqual({ account: doomed, usage })
+    // The recurring items on the account are looked up so the panel can name them.
+    expect(get).toHaveBeenCalledWith('/recurring-items?accountId=acc-1&includeEnded=true')
+    expect(result.current.resolving).toEqual({ account: doomed, usage, recurringItems: [rent] })
     // The account itself and archived accounts are not offered as move targets.
     expect(result.current.migrateTargets.map((a) => a.id)).toEqual(['acc-2'])
+  })
+
+  it('skips the recurring lookup when nothing recurring uses the account', async () => {
+    const get = serveUsage({ total: 2, by: [{ table: 'core.transactions', count: 2 }], unreadable: [] })
+    const { result } = setup()
+
+    await act(async () => { await result.current.startDelete(doomed) })
+
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(result.current.resolving?.recurringItems).toEqual([])
   })
 
   it('reports a failed usage check through the status', async () => {
@@ -88,7 +108,7 @@ describe('starting a delete', () => {
 
 describe('resolving a delete that has history', () => {
   async function resolving() {
-    vi.spyOn(api, 'get').mockResolvedValue(usage)
+    serveUsage(usage)
     const ctx = setup()
     await act(async () => { await ctx.result.current.startDelete(doomed) })
     return ctx

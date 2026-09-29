@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../api/client.js'
+import { formatDate } from '../../lib/formatDate.js'
 import type { RecurringItem, RecurringItemList } from '../../models/index.js'
 import { makeAccount } from '../../testing/makeAccount.js'
 import { makeCategory } from '../../testing/makeCategory.js'
@@ -65,8 +66,8 @@ describe('the list', () => {
     expect(screen.getByRole('heading', { name: 'Transfers' })).toBeTruthy()
 
     const mortgageRow = screen.getByText('Mortgage').closest('tr') as HTMLElement
-    expect(within(mortgageRow).getByText('2026-09-30')).toBeTruthy()
-    expect(within(mortgageRow).queryByText('2025-01-31')).toBeNull()
+    expect(within(mortgageRow).getByText(formatDate('2026-09-30'))).toBeTruthy()
+    expect(within(mortgageRow).queryByText(formatDate('2025-01-31'))).toBeNull()
 
     const splitRow = screen.getByText('Alex Paycheck').closest('tr') as HTMLElement
     expect(within(splitRow).getByText('Monthly Expenses + Sinking Funds')).toBeTruthy()
@@ -143,7 +144,7 @@ describe('the form', () => {
     await user.type(start, '2025-01-31')
     const preview = screen.getByText('Next dates').parentElement as HTMLElement
     expect(within(preview).getAllByRole('listitem').map((li) => li.textContent).slice(0, 3))
-      .toEqual(['2026-09-30', '2026-10-31', '2026-11-30'])
+      .toEqual(['2026-09-30', '2026-10-31', '2026-11-30'].map(formatDate))
   })
 
   it('edits an existing transfer with PUT and shows the API\'s message when it refuses', async () => {

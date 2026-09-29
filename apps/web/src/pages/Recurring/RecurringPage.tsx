@@ -59,7 +59,9 @@ interface WorkspaceProps {
 /** The loaded page: summary, grouped lists and the form. Mounted once the server's today is known. */
 function Workspace({ list, accounts, categories, status, reload, showNotice }: WorkspaceProps) {
   const active = useMemo(() => accounts.filter((a) => a.archivedAt === null), [accounts])
-  const editing = useRecurringEditing(status, reload, list.today, active[0]?.id ?? '', showNotice)
+  // New bills default to paying from a checking account, not whichever account sorts first.
+  const payer = active.find((a) => a.accountType === 'checking') ?? active[0]
+  const editing = useRecurringEditing(status, reload, list.today, payer?.id ?? '', showNotice)
   const groups = groupItems(list.items)
   // Single currency for now: every account shares the first one's.
   const currency = accounts[0]?.currencyCode ?? 'USD'
@@ -80,7 +82,7 @@ function Workspace({ list, accounts, categories, status, reload, showNotice }: W
   return (
     <>
       <RecurringSummary summary={list.summary} currency={currency} />
-      <div className="page__split">
+      <div className="page__split recur-split">
         <div className="page">
           {list.items.length === 0 ? (
             <Surface>

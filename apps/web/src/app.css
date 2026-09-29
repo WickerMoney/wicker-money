@@ -321,11 +321,15 @@
 .settings-facts dd { margin: 0; font-size: 13px; }
 
 /* Recurring items */
+.recur-split { grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); }
+@media (max-width: 1100px) { .recur-split { grid-template-columns: minmax(0, 1fr); } }
 .recur-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--wm-gap); }
 .recur-tiles__hint { margin: 8px 0 0; }
 .recur-sub { font-size: 12px; }
 .recur-arrow { color: var(--wm-text-muted); }
-.recur-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.recur-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+.recur-actions .wm-btn { padding: 4px 10px; font-size: 13px; }
+.recur-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .recur-legs { border: 0; padding: 0; margin: 0 0 var(--wm-gap-sm); display: flex; flex-direction: column; gap: 4px; }
 .recur-legs__row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; }
 .recur-legs__row .wm-btn { margin-bottom: var(--wm-gap-sm); }
