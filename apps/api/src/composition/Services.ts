@@ -4,6 +4,7 @@ import type { CategoryRuleService } from '../categories/service/CategoryRuleServ
 import type { CategoryService } from '../categories/service/CategoryService.js'
 import type { OnboardingService } from '../onboarding/service/OnboardingService.js'
 import type { PluginService } from '../plugins/service/PluginService.js'
+import type { RecurringItemService } from '../recurring/service/RecurringItemService.js'
 import type { ReportService } from '../core/service/ReportService.js'
 import type { SettingsService } from '../settings/service/SettingsService.js'
 import type { TransactionService } from '../transactions/service/TransactionService.js'
@@ -28,4 +29,5 @@ export interface Services {
   readonly plugins: PluginService
   /** Read-side aggregations for dashboards and plugins. */
   readonly reports: ReportService
+  readonly recurringItems: RecurringItemService
 }

@@ -7,6 +7,7 @@ import type { ReportRepository } from '../core/repository/ReportRepository.js'
 import type { UsageRepository } from '../db/repository/UsageRepository.js'
 import type { OnboardingRepository } from '../onboarding/repository/OnboardingRepository.js'
 import type { PluginRegistryRepository } from '../plugins/repository/PluginRegistryRepository.js'
+import type { RecurringItemRepository } from '../recurring/repository/RecurringItemRepository.js'
 import type { ExportRepository } from '../settings/repository/ExportRepository.js'
 import type { SplitRepository } from '../transactions/repository/SplitRepository.js'
 import type { TransactionRepository } from '../transactions/repository/TransactionRepository.js'
@@ -44,4 +45,5 @@ export interface Repositories {
   readonly reports: ReportRepository
   /** Whole-account data reads for export. */
   readonly exports: ExportRepository
+  readonly recurringItems: RecurringItemRepository
 }

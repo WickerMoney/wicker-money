@@ -63,6 +63,8 @@ const PROTECTED_ROUTES: readonly string[] = [
   'GET /api/v1/core/accounts/list',
   'GET /api/v1/core/accounts/summary',
   'GET /api/v1/core/categories/list',
+  'GET /api/v1/core/recurring-items/list',
+  'GET /api/v1/core/recurring-items/occurrences',
 
   'GET /api/v1/onboarding',
   'POST /api/v1/onboarding/preview',
@@ -78,6 +80,14 @@ const PROTECTED_ROUTES: readonly string[] = [
   'PUT /api/v1/transactions/:id/splits',
   'GET /api/v1/transactions/:id/splits',
   'DELETE /api/v1/transactions/:id/splits',
+
+  'GET /api/v1/recurring-items',
+  'POST /api/v1/recurring-items',
+  'GET /api/v1/recurring-items/occurrences',
+  'GET /api/v1/recurring-items/:id',
+  'PUT /api/v1/recurring-items/:id',
+  'DELETE /api/v1/recurring-items/:id',
+  'POST /api/v1/recurring-items/:id/end',
 
   'GET /api/v1/plugins',
 

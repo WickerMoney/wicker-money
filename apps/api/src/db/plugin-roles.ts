@@ -1,6 +1,6 @@
 import { sql } from 'kysely'
 import type { Db } from './client.js'
-import type { PluginManifest, TableGrant } from '@wickermoney/plugin-sdk'
+import type { CoreTableName, PluginManifest, TableGrant } from '@wickermoney/plugin-sdk'
 import { appRole } from './migrations/005_app_role.js'
 
 /**
@@ -101,6 +101,18 @@ function privilegesFor(grant: TableGrant): string {
   return grant.access === 'write' ? 'SELECT, INSERT, UPDATE, DELETE' : 'SELECT'
 }
 
+/**
+ * Core tables that come with a granted table, at the same access level.
+ *
+ * A recurring item is its schedule (`recurring_items`) plus where the money
+ * lands (`recurring_item_legs`). Neither is usable alone — the legs trigger
+ * rejects an item with no legs — so a manifest names one table and gets both,
+ * rather than being able to ask for half of an item and fail at runtime.
+ */
+export const COMPANION_TABLES: Readonly<Partial<Record<CoreTableName, readonly string[]>>> = {
+  recurring_items: ['recurring_item_legs'],
+}
+
 /** What {@link provisionPluginRole} did for one plugin. */
 export interface ProvisionResult {
   /** Plugin manifest id. */
@@ -156,10 +168,12 @@ export async function provisionPluginRole(
 
   const grants: string[] = []
   for (const grant of manifest.requiredTables) {
-    const table = checkedIdentifier(grant.table, 'Granted table')
     const privileges = privilegesFor(grant)
-    await sql`GRANT ${sql.raw(privileges)} ON ${sql.raw(`core.${table}`)} TO ${r}`.execute(db)
-    grants.push(`core.${table}: ${privileges}`)
+    for (const name of [grant.table, ...(COMPANION_TABLES[grant.table] ?? [])]) {
+      const table = checkedIdentifier(name, 'Granted table')
+      await sql`GRANT ${sql.raw(privileges)} ON ${sql.raw(`core.${table}`)} TO ${r}`.execute(db)
+      grants.push(`core.${table}: ${privileges}`)
+    }
   }
 
   // A plugin's own schema, when the migrations created one for it.

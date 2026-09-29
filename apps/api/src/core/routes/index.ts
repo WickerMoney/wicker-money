@@ -4,6 +4,8 @@ import { registerGetAccountsSummary } from './handlers/getAccountsSummary.js'
 import { registerGetMonthlySummary } from './handlers/getMonthlySummary.js'
 import { registerListAccounts } from './handlers/listAccounts.js'
 import { registerListCategoryPicker } from './handlers/listCategoryPicker.js'
+import { registerListRecurringItemsForPlugins } from './handlers/listRecurringItems.js'
+import { registerListRecurringOccurrencesForPlugins } from './handlers/listRecurringOccurrences.js'
 import { requireTableGrant } from './helpers/requireTableGrant.js'
 
 /**
@@ -17,13 +19,16 @@ import { requireTableGrant } from './helpers/requireTableGrant.js'
  * @param app - The Fastify instance to register routes on.
  * @param services - The application services.
  */
-export function registerCoreDataRoutes(app: FastifyInstance, { plugins, reports }: Services): void {
+export function registerCoreDataRoutes(app: FastifyInstance, { plugins, reports, recurringItems }: Services): void {
   const needTransactions = requireTableGrant(app, plugins, 'transactions')
   const needAccounts = requireTableGrant(app, plugins, 'accounts')
   const needCategories = requireTableGrant(app, plugins, 'categories')
+  const needRecurring = requireTableGrant(app, plugins, 'recurring_items')
 
   registerGetMonthlySummary(app, reports, needTransactions)
   registerListAccounts(app, reports, needAccounts)
   registerListCategoryPicker(app, reports, needCategories)
   registerGetAccountsSummary(app, reports, needAccounts)
+  registerListRecurringItemsForPlugins(app, recurringItems, needRecurring)
+  registerListRecurringOccurrencesForPlugins(app, recurringItems, needRecurring)
 }
