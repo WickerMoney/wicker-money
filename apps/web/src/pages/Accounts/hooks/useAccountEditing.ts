@@ -34,7 +34,8 @@ export function useAccountEditing(
         name: editing.name.trim(),
         accountType: editing.accountType,
         currencyCode: editing.currencyCode,
-        bufferAmount: editing.bufferAmount,
+        // An emptied field means no buffer, not an invalid amount.
+        bufferAmount: editing.bufferAmount.trim() === '' ? '0' : editing.bufferAmount.trim(),
       })
       setEditing(null)
       await onChanged()

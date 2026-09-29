@@ -7,7 +7,7 @@ export interface AccountEditing {
   readonly editing: AccountEdit | null
   /** Replaces the unsaved values of the row being edited. */
   readonly change: (next: AccountEdit) => void
-  /** Opens a row for editing its name, type and currency. */
+  /** Opens a row for editing its name, type, currency and buffer. */
   readonly start: (account: Account) => void
   /** Closes the editor without saving. */
   readonly cancel: () => void

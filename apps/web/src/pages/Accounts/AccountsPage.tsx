@@ -30,7 +30,7 @@ export function AccountsPage() {
       {status.message !== null ? <Alert>{status.message}</Alert> : null}
       {notice !== null ? <Alert>{notice}</Alert> : null}
 
-      <div className="page__split">
+      <div className="page__split acct-split">
         <AccountsPanel
           accounts={accounts}
           includeArchived={includeArchived}

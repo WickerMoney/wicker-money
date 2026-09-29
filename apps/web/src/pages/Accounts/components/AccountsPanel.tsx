@@ -4,6 +4,7 @@ import { formatMoney } from '../../../lib/formatMoney.js'
 import type { Account } from '../../../models/index.js'
 import { useAccountEditing } from '../hooks/useAccountEditing.js'
 import { AccountActionsCell } from './AccountActionsCell.js'
+import { AccountBufferCell } from './AccountBufferCell.js'
 import { AccountCurrencyCell } from './AccountCurrencyCell.js'
 import { AccountNameCell } from './AccountNameCell.js'
 import { AccountSpendableCell } from './AccountSpendableCell.js'
@@ -30,8 +31,8 @@ export interface AccountsPanelProps {
 }
 
 /**
- * The accounts table, with inline rename, re-type and re-currency, a
- * "counts toward safe to spend" checkbox, plus per-row actions.
+ * The accounts table, with inline rename, re-type, re-currency and buffer,
+ * a "counts toward safe to spend" checkbox, plus per-row actions.
  */
 export function AccountsPanel({
   accounts, includeArchived, onIncludeArchivedChange, status, onChanged,
@@ -59,6 +60,8 @@ export function AccountsPanel({
               render: (a: Account) => <AccountCurrencyCell account={a} row={row} /> },
             { key: 'bal', header: 'Balance', numeric: true,
               render: (a: Account) => formatMoney(a.balance, a.currencyCode) },
+            { key: 'buffer', header: 'Buffer', numeric: true,
+              render: (a: Account) => <AccountBufferCell account={a} row={row} /> },
             { key: 'spendable', header: 'Safe to spend',
               render: (a: Account) => <AccountSpendableCell account={a} row={row} busy={busy} /> },
             { key: 'actions', header: '',

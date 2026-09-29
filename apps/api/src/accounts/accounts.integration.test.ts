@@ -557,6 +557,9 @@ describe('PATCH /accounts/:id', () => {
     expect((await patch(account.id, { accountType: 'crypto' })).statusCode).toBe(400)
     expect((await patch(account.id, { currencyCode: 'EURO' })).statusCode).toBe(400)
     expect((await patch(account.id, { bufferAmount: '1.23456' })).statusCode).toBe(400)
+    const negative = await patch(account.id, { bufferAmount: '-5' })
+    expect(negative.statusCode).toBe(400)
+    expect(negative.json().message).toMatch(/Buffer cannot be negative/)
   })
 
   it('answers 400 rather than 500 for an id that is not a UUID', async () => {

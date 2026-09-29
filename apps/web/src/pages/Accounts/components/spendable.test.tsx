@@ -39,6 +39,36 @@ describe('the "Safe to spend" column', () => {
   })
 })
 
+describe('the "Buffer" column', () => {
+  it('shows the buffer, edits it with the row, and sends a cleared field as zero', async () => {
+    const patch = vi.spyOn(api, 'patch').mockResolvedValue({})
+    const user = userEvent.setup()
+    panel([makeAccount({ id: 'm', name: 'Monthly', bufferAmount: '500.00' })])
+    expect(screen.getByText('$500.00')).toBeDefined()
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const input = screen.getByLabelText('Buffer for Monthly')
+    await user.clear(input)
+    await user.type(input, '750')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(patch).toHaveBeenLastCalledWith('/accounts/m', expect.objectContaining({ bufferAmount: '750' }))
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.clear(screen.getByLabelText('Buffer for Monthly'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(patch).toHaveBeenLastCalledWith('/accounts/m', expect.objectContaining({ bufferAmount: '0' }))
+  })
+
+  it('has no buffer for a card, and drops the input when the type is changed to one', async () => {
+    const user = userEvent.setup()
+    panel([makeAccount({ id: 'm', name: 'Monthly' })])
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByLabelText('Buffer for Monthly')).toBeDefined()
+    await user.selectOptions(screen.getByLabelText('Type of Monthly'), 'credit_card')
+    expect(screen.queryByLabelText('Buffer for Monthly')).toBeNull()
+  })
+})
+
 describe('adding an account', () => {
   it('counts checking by default, not savings, and offers nothing for a card', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({})
