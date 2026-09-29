@@ -91,7 +91,8 @@ export function nextPayday(items: readonly RecurringItem[], today: string): stri
  * accounts not listed are ignored. Balances may go negative.
  *
  * Every day in the range is present for every account, including days with
- * no activity, so a chart can plot the series directly.
+ * no activity, so a chart can plot the series directly. Each day also carries
+ * its `low`: the balance after that day's outflows but before its inflows.
  *
  * @param items - Recurring items to apply.
  * @param startingBalances - Balance per account id at the end of the day
@@ -116,15 +117,20 @@ export function dailyBalances(
     accounts.set(accountId, parseMoney(balance, `starting balance for ${accountId}`))
   }
 
-  // Per account, the change on each day offset from `first`.
-  const deltas = new Map<string, bigint[]>()
-  for (const accountId of accounts.keys()) deltas.set(accountId, new Array<bigint>(last - first).fill(0n))
+  // Per account, the money out and the money in on each day offset from
+  // `first`, kept apart so a day's low point can apply outflows first.
+  const outs = new Map<string, bigint[]>()
+  const ins = new Map<string, bigint[]>()
+  for (const accountId of accounts.keys()) {
+    outs.set(accountId, new Array<bigint>(last - first).fill(0n))
+    ins.set(accountId, new Array<bigint>(last - first).fill(0n))
+  }
 
   for (const item of items) {
     const dates = occurrences(item, from, to)
     for (const leg of item.legs) {
       const amount = parseMoney(leg.amount, 'leg amount')
-      const series = deltas.get(leg.accountId)
+      const series = (amount < 0n ? outs : ins).get(leg.accountId)
       if (!series) continue
       for (const date of dates) {
         const offset = toDayNumber(date) - first
@@ -133,18 +139,20 @@ export function dailyBalances(
     }
   }
 
-  const out: [string, DailyBalance[]][] = []
+  const result: [string, DailyBalance[]][] = []
   for (const [accountId, start] of accounts) {
     let running = start
     const days: DailyBalance[] = []
-    const series = deltas.get(accountId) ?? []
+    const out = outs.get(accountId) ?? []
+    const into = ins.get(accountId) ?? []
     for (let offset = 0; offset < last - first; offset += 1) {
-      running += series[offset] ?? 0n
-      days.push({ date: fromDayNumber(first + offset), balance: formatMoney(running) })
+      const low = running + (out[offset] ?? 0n)
+      running = low + (into[offset] ?? 0n)
+      days.push({ date: fromDayNumber(first + offset), balance: formatMoney(running), low: formatMoney(low) })
     }
-    out.push([accountId, days])
+    result.push([accountId, days])
   }
-  return Object.fromEntries(out)
+  return Object.fromEntries(result)
 }
 
 /**

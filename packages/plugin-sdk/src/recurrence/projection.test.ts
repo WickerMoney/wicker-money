@@ -122,10 +122,36 @@ describe('dailyBalances', () => {
     const phone = item('monthly', '2026-01-29', 'checking', '-80')         // due tomorrow
     const series = dailyBalances([rentToday, phone], { checking: '1000.0000' }, '2026-09-29', '2026-10-02')
     expect(series.checking).toEqual([
-      { date: '2026-09-29', balance: '920.0000' },
-      { date: '2026-09-30', balance: '920.0000' },
-      { date: '2026-10-01', balance: '920.0000' },
+      { date: '2026-09-29', balance: '920.0000', low: '920.0000' },
+      { date: '2026-09-30', balance: '920.0000', low: '920.0000' },
+      { date: '2026-10-01', balance: '920.0000', low: '920.0000' },
     ])
+  })
+
+  it('reports a day\'s low point with its outflows cleared before its inflows land', () => {
+    // Rent and the paycheck on the same day: the end of the day looks fine,
+    // the middle of it does not.
+    const rent = item('monthly', '2026-01-01', 'checking', '-1550')
+    const pay = item('monthly', '2026-01-01', 'checking', '2000')
+    const series = dailyBalances([rent, pay], { checking: '400' }, '2026-10-01', '2026-10-02')
+    expect(series.checking?.[0]).toEqual({ date: '2026-10-01', balance: '850.0000', low: '-1150.0000' })
+  })
+
+  it('carries the previous end-of-day balance into the next day\'s low', () => {
+    const pay = item('monthly', '2026-01-01', 'checking', '1000')
+    const phone = item('monthly', '2026-01-02', 'checking', '-80')
+    const series = dailyBalances([pay, phone], { checking: '0' }, '2026-10-01', '2026-10-03')
+    expect(series.checking).toEqual([
+      { date: '2026-10-01', balance: '1000.0000', low: '0.0000' },
+      { date: '2026-10-02', balance: '920.0000', low: '920.0000' },
+    ])
+  })
+
+  it('applies a transfer\'s outgoing leg to the low and its incoming leg after it', () => {
+    const toSavings = transfer('monthly', '2026-01-01', 'checking', 'savings', '200')
+    const series = dailyBalances([toSavings], { checking: '100', savings: '0' }, '2026-10-01', '2026-10-02')
+    expect(series.checking?.[0]).toMatchObject({ balance: '-100.0000', low: '-100.0000' })
+    expect(series.savings?.[0]).toMatchObject({ balance: '200.0000', low: '0.0000' })
   })
 
   it('fills every day, including days with no activity', () => {

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { Services } from '../../composition/Services.js'
 import { registerGetAccountsSummary } from './handlers/getAccountsSummary.js'
 import { registerGetMonthlySummary } from './handlers/getMonthlySummary.js'
+import { registerGetRecurringUpcoming } from './handlers/getRecurringUpcoming.js'
 import { registerListAccounts } from './handlers/listAccounts.js'
 import { registerListCategoryPicker } from './handlers/listCategoryPicker.js'
 import { registerListRecurringItemsForPlugins } from './handlers/listRecurringItems.js'
@@ -31,4 +32,5 @@ export function registerCoreDataRoutes(app: FastifyInstance, { plugins, reports,
   registerGetAccountsSummary(app, reports, needAccounts)
   registerListRecurringItemsForPlugins(app, recurringItems, needRecurring)
   registerListRecurringOccurrencesForPlugins(app, recurringItems, needRecurring)
+  registerGetRecurringUpcoming(app, recurringItems, needRecurring, needAccounts)
 }

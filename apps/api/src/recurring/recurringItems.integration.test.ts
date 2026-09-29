@@ -305,6 +305,37 @@ describe('plugin access', () => {
     }
   })
 
+  it('computes the upcoming outlook on the server, per checking account', async () => {
+    const u = await createUser(h)
+    const res0 = await h.app.inject({
+      method: 'POST', url: '/api/v1/accounts', headers: auth(u),
+      payload: { name: 'Monthly Expenses', accountType: 'checking', initialBalance: '300.00', bufferAmount: '100.00' },
+    })
+    const monthly = (res0.json() as { id: string }).id
+    const { today } = await list('', u)
+    const plus = (days: number) => new Date(Date.parse(`${today}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+    await created({ name: 'Rent', kind: 'bill', frequency: 'once', seriesStartDate: plus(2), legs: [{ accountId: monthly, amount: '-250' }] }, u)
+    await created({ name: 'Pay', kind: 'income', frequency: 'once', seriesStartDate: plus(4), legs: [{ accountId: monthly, amount: '1000' }] }, u)
+
+    const res = await h.app.inject({ method: 'GET', url: '/api/v1/core/recurring-items/upcoming', headers: auth(u) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({
+      today,
+      window: { from: plus(1), through: plus(4), payday: plus(4) },
+      safeToSpend: '0.0000',
+      accounts: [{ accountId: monthly, lowest: { date: plus(2), balance: '50.0000' }, headroom: '-50.0000', short: true }],
+      hasItems: true,
+    })
+    expect((res.json() as { occurrences: { name: string }[] }).occurrences.map((o) => o.name)).toEqual(['Rent', 'Pay'])
+  })
+
+  it('refuses the upcoming outlook to a plugin without both grants', async () => {
+    const res = await h.app.inject({
+      method: 'GET', url: '/api/v1/core/recurring-items/upcoming', headers: asPlugin(alice, 'wickermoney.insights'),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
   it('refuses a plugin without a recurring_items grant', async () => {
     const res = await h.app.inject({
       method: 'GET', url: '/api/v1/core/recurring-items/list', headers: asPlugin(alice, 'wickermoney.insights'),

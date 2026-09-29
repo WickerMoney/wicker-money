@@ -29,7 +29,12 @@ function row(over: Partial<RecurringItemRow>): RecurringItemRow {
  * Only the reads the derived fields need exist; the database behaviour is the
  * integration suite's job.
  */
-function serviceOver(rows: readonly RecurringItemRow[], timezone: string, now: string): RecurringItemService {
+function serviceOver(
+  rows: readonly RecurringItemRow[],
+  timezone: string,
+  now: string,
+  accounts: readonly { id: string; name: string; account_type: string; balance: string; buffer_amount: string }[] = [],
+): RecurringItemService {
   const recurringItems = {
     list: async () => [...rows],
     find: async (id: string) => rows.find((r) => r.id === id),
@@ -37,6 +42,7 @@ function serviceOver(rows: readonly RecurringItemRow[], timezone: string, now: s
   const repos = {
     recurringItems,
     reports: { findTimezone: async () => timezone },
+    accounts: { listWithBalances: async () => [...accounts] },
   } as unknown as Repositories
   const uow: UnitOfWork = {
     forUser: (_userId, work) => work(repos),
@@ -169,5 +175,87 @@ describe('RecurringItemService: occurrences', () => {
     const service = serviceOver([], 'UTC', now)
     await expect(service.occurrences('u', { from: '2026-10-02', to: '2026-10-01' })).rejects.toThrow(/on or after from/)
     await expect(service.occurrences('u', { from: '2026-01-01', to: '2027-12-31' })).rejects.toThrow(/at most 400 days/)
+  })
+})
+
+describe('RecurringItemService: upcoming', () => {
+  // Monday 2026-09-28, noon UTC. Tomorrow is the 29th.
+  const now = '2026-09-28T12:00:00Z'
+  const checking = (id: string, name: string, balance: string, buffer: string) =>
+    ({ id, name, account_type: 'checking', balance, buffer_amount: buffer })
+
+  it('runs from tomorrow through the next payday inclusive, into any account', async () => {
+    const rows = [
+      row({ id: 'a', kind: 'income', frequency: 'biweekly', series_start_date: '2026-09-18', legs: [{ account_id: 'm', amount: '2100.0000' }] }), // Oct 2
+      row({ id: 'b', kind: 'income', frequency: 'biweekly', series_start_date: '2026-09-25', legs: [{ account_id: 'y', amount: '1900.0000' }] }), // Oct 9
+    ]
+    const r = await serviceOver(rows, 'UTC', now, [checking('m', 'Monthly', '0', '0')]).upcoming('u')
+    expect(r.window).toEqual({ from: '2026-09-29', through: '2026-10-02', payday: '2026-10-02' })
+  })
+
+  it('falls back to 14 days when no income is expected', async () => {
+    const r = await serviceOver([row({})], 'UTC', now, []).upcoming('u')
+    expect(r.window).toEqual({ from: '2026-09-29', through: '2026-10-12', payday: null })
+  })
+
+  it('does not count today twice: something due today is already in the balance', async () => {
+    const rows = [row({ id: 'rent', series_start_date: '2026-01-28', legs: [{ account_id: 'm', amount: '-1550.0000' }] })]
+    const r = await serviceOver(rows, 'UTC', now, [checking('m', 'Monthly', '1000', '0')]).upcoming('u')
+    expect(r.occurrences).toEqual([])
+    expect(r.accounts[0]?.lowest).toEqual({ date: '2026-09-28', balance: '1000.0000' })
+  })
+
+  it('catches a bill due on payday itself, applying outflows before the paycheck', async () => {
+    const rows = [
+      row({ id: 'pay', kind: 'income', series_start_date: '2026-01-01', legs: [{ account_id: 'm', amount: '2000.0000' }] }),
+      row({ id: 'rent', kind: 'bill', series_start_date: '2026-01-01', legs: [{ account_id: 'm', amount: '-1550.0000' }] }),
+    ]
+    const r = await serviceOver(rows, 'UTC', now, [checking('m', 'Monthly', '400', '100')]).upcoming('u')
+    expect(r.window.payday).toBe('2026-10-01')
+    expect(r.accounts[0]).toMatchObject({
+      lowest: { date: '2026-10-01', balance: '-1150.0000' }, headroom: '-1250.0000', short: true,
+    })
+    expect(r.safeToSpend).toBe('0.0000')
+  })
+
+  it('keeps each checking account on its own and never nets a shortfall away', async () => {
+    const rows = [
+      row({ id: 'pay', kind: 'income', series_start_date: '2026-01-05', legs: [{ account_id: 'm', amount: '3000.0000' }] }),
+      row({ id: 'rent', kind: 'bill', series_start_date: '2026-01-01', legs: [{ account_id: 'm', amount: '-1500.0000' }] }),
+    ]
+    const r = await serviceOver(rows, 'UTC', now, [
+      checking('m', 'Monthly Expenses', '1300', '100'),
+      checking('y', 'Yearly Expenses', '5000', '250'),
+    ]).upcoming('u')
+    const by = Object.fromEntries(r.accounts.map((a) => [a.name, a]))
+    expect(by['Monthly Expenses']).toMatchObject({ lowest: { date: '2026-10-01', balance: '-200.0000' }, headroom: '-300.0000', short: true })
+    expect(by['Yearly Expenses']).toMatchObject({ headroom: '4750.0000', short: false })
+    // 4750, not 4750 − 300: Yearly does not cover Monthly.
+    expect(r.safeToSpend).toBe('4750.0000')
+  })
+
+  it('applies an own-account transfer to both sides', async () => {
+    const rows = [
+      row({ id: 'pay', kind: 'income', series_start_date: '2026-01-10', legs: [{ account_id: 'y', amount: '10.0000' }] }),
+      row({
+        id: 'topup', kind: 'transfer', series_start_date: '2026-01-01',
+        legs: [{ account_id: 'y', amount: '-500.0000' }, { account_id: 'm', amount: '500.0000' }],
+      }),
+    ]
+    const r = await serviceOver(rows, 'UTC', now, [
+      checking('m', 'Monthly', '0', '0'), checking('y', 'Yearly', '600', '0'),
+    ]).upcoming('u')
+    const by = Object.fromEntries(r.accounts.map((a) => [a.accountId, a]))
+    expect(by['y']?.lowest.balance).toBe('100.0000')
+    expect(by['m']?.lowest.balance).toBe('0.0000')
+    expect(r.occurrences.map((o) => o.itemId)).toContain('topup')
+  })
+
+  it('ignores accounts that are not checking', async () => {
+    const r = await serviceOver([], 'UTC', now, [
+      { id: 's', name: 'Savings', account_type: 'savings', balance: '10', buffer_amount: '0' },
+    ]).upcoming('u')
+    expect(r.accounts).toEqual([])
+    expect(r.hasItems).toBe(false)
   })
 })

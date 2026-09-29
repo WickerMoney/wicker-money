@@ -76,6 +76,15 @@ export interface DailyBalance {
   readonly date: string
   /** Balance at the end of that day, as a four-decimal string. May be negative. */
   readonly balance: string
+  /**
+   * The lowest the balance gets that day, assuming the day's outflows clear
+   * before its inflows land: the previous day's balance plus every negative
+   * amount due that day. Equal to `balance` on a day with no inflow.
+   *
+   * Conservative on purpose. Rent due on payday is a real risk if the
+   * paycheck lands late in the day, and an end-of-day figure would hide it.
+   */
+  readonly low: string
 }
 
 /** Money coming into and going out of a set of accounts over a period. */

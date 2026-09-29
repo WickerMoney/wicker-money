@@ -8,5 +8,7 @@ export interface OccurrenceView {
   readonly name: string
   readonly kind: RecurringKind
   readonly categoryId: string | null
+  /** The item's headline amount: income total, a bill's (negative) amount, or what a transfer moves. */
+  readonly amount: string
   readonly legs: readonly { readonly accountId: string; readonly amount: string }[]
 }

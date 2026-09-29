@@ -1,19 +1,24 @@
-import { monthlyEquivalent, nextOccurrence, occurrences } from '@wickermoney/plugin-sdk/recurrence'
+import {
+  dailyBalances, monthlyEquivalent, nextOccurrence, nextPayday, occurrences,
+} from '@wickermoney/plugin-sdk/recurrence'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import type { Repositories } from '../../data/Repositories.js'
 import { todayIn } from '../../core/service/todayIn.js'
 import { NotFoundError, ValidationError } from '../../errors.js'
-import { addMoney, negate } from '../../money.js'
+import { addMoney, money, negate, toMoney } from '../../money.js'
 import type { RecurringItemRow } from '../repository/RecurringItemRow.js'
 import { addDays } from './addDays.js'
 import type { OccurrenceView } from './OccurrenceView.js'
 import type { RecurringItemInput } from './RecurringItemInput.js'
 import type { RecurringItemView } from './RecurringItemView.js'
+import type { UpcomingAccount, UpcomingView } from './UpcomingView.js'
 import { toSchedule } from './toSchedule.js'
 import { validateRecurringItem } from './validateRecurringItem.js'
 
 /** Days an occurrences request covers when the caller gives no `to`. */
 export const DEFAULT_WINDOW_DAYS = 31
+/** How far the upcoming window reaches when no income is expected: two weeks, inclusive of the last day. */
+export const FALLBACK_WINDOW_DAYS = 14
 /** The widest occurrences range allowed: a little over a year keeps a daily item's response bounded. */
 export const MAX_WINDOW_DAYS = 400
 
@@ -208,12 +213,90 @@ export class RecurringItemService {
         const found: OccurrenceView[] = []
         for (const row of await repos.recurringItems.list()) {
           const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
+          const amount = headlineAmount(row)
           for (const date of occurrences(toSchedule(row), from, to)) {
-            found.push({ itemId: row.id, date, name: row.name, kind: row.kind, categoryId: row.category_id, legs })
+            found.push({ itemId: row.id, date, name: row.name, kind: row.kind, categoryId: row.category_id, amount, legs })
           }
         }
         found.sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1))
         return { today, from, to, occurrences: found }
+      },
+      { readOnly: true },
+    )
+  }
+
+  /**
+   * What is coming up before the next payday, and whether each checking
+   * account makes it there above its buffer.
+   *
+   * The rules (decided in the recurring-items decisions record):
+   * - The window runs from tomorrow — today's actual balance is the starting
+   *   point, so nothing that already posted is counted twice — through the
+   *   household's next payday, inclusive: the earliest income into any
+   *   account. With no income expected, it runs 14 days.
+   * - Each checking account is projected on its own; Yearly Expenses never
+   *   covers Monthly Expenses. Transfers apply to both accounts they touch.
+   * - The low point of each day assumes its outflows clear before its
+   *   inflows, so rent due on payday is caught if the paycheck lands late.
+   * - Headroom is the lowest point minus the account's buffer. Safe to spend
+   *   is the sum of positive headrooms; a short account is reported on its
+   *   own and never netted away.
+   *
+   * @param userId - The signed-in user.
+   * @returns The window, per-account outlook, safe-to-spend and the occurrences in the window.
+   */
+  upcoming(userId: string): Promise<UpcomingView> {
+    return this.uow.forUser(
+      userId,
+      async (repos) => {
+        const today = await this.today(repos, userId)
+        const rows = await repos.recurringItems.list()
+        const items = rows.map((row) => ({
+          ...toSchedule(row),
+          legs: row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount })),
+        }))
+
+        const from = addDays(today, 1)
+        const payday = nextPayday(items, today)
+        const through = payday ?? addDays(today, FALLBACK_WINDOW_DAYS)
+        const to = addDays(through, 1)
+
+        const checking = (await repos.accounts.listWithBalances(false))
+          .filter((a) => a.account_type === 'checking')
+          .sort((a, b) => a.name.localeCompare(b.name))
+        const series = dailyBalances(items, Object.fromEntries(checking.map((a) => [a.id, a.balance])), from, to)
+
+        const accounts: UpcomingAccount[] = checking.map((a) => {
+          let lowest = { date: today, balance: toMoney(a.balance) }
+          for (const day of series[a.id] ?? []) {
+            if (money(day.low).lessThan(lowest.balance)) lowest = { date: day.date, balance: day.low }
+          }
+          const headroom = toMoney(money(lowest.balance).minus(a.buffer_amount))
+          return {
+            accountId: a.id, name: a.name, balance: toMoney(a.balance), buffer: toMoney(a.buffer_amount),
+            lowest, headroom, short: money(headroom).isNegative() && !money(headroom).isZero(),
+          }
+        })
+        const safeToSpend = addMoney('0', ...accounts.filter((a) => !a.short).map((a) => a.headroom))
+
+        const found: UpcomingView['occurrences'][number][] = []
+        for (const row of rows) {
+          const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
+          const amount = headlineAmount(row)
+          for (const date of occurrences(toSchedule(row), from, to)) {
+            found.push({ itemId: row.id, date, name: row.name, kind: row.kind, categoryId: row.category_id, amount, legs })
+          }
+        }
+        found.sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1))
+
+        return {
+          today,
+          window: { from, through, payday },
+          safeToSpend,
+          accounts,
+          occurrences: found,
+          hasItems: rows.length > 0,
+        }
       },
       { readOnly: true },
     )
