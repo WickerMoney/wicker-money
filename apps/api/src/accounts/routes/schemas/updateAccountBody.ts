@@ -19,4 +19,5 @@ export const updateAccountBody = z.object({
   accountType: z.enum(ACCOUNT_TYPES).optional(),
   currencyCode: z.string().length(3).toUpperCase().optional(),
   bufferAmount: moneyString.optional(),
+  spendable: z.boolean().optional(),
 })

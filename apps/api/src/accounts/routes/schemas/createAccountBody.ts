@@ -9,4 +9,6 @@ export const createAccountBody = z.object({
   initialBalance: moneyString.default('0'),
   currencyCode: z.string().length(3).toUpperCase().default('USD'),
   bufferAmount: moneyString.default('0'),
+  // No default here: the service picks one from the account type.
+  spendable: z.boolean().optional(),
 })

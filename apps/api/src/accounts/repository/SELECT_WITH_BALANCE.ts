@@ -17,7 +17,7 @@ import { sql } from 'kysely'
 export const SELECT_WITH_BALANCE = sql`
   SELECT
     a.id, a.name, a.account_type, a.initial_balance, a.currency_code,
-    a.buffer_amount, a.archived_at, a.created_at, a.updated_at,
+    a.buffer_amount, a.spendable, a.archived_at, a.created_at, a.updated_at,
     (a.initial_balance + COALESCE(t.total, 0))::text AS balance
   FROM core.accounts a
   LEFT JOIN LATERAL (

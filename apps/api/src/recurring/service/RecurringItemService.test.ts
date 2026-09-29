@@ -33,7 +33,7 @@ function serviceOver(
   rows: readonly RecurringItemRow[],
   timezone: string,
   now: string,
-  accounts: readonly { id: string; name: string; account_type: string; balance: string; buffer_amount: string }[] = [],
+  accounts: readonly { id: string; name: string; account_type: string; balance: string; buffer_amount: string; spendable: boolean }[] = [],
 ): RecurringItemService {
   const recurringItems = {
     list: async () => [...rows],
@@ -181,8 +181,10 @@ describe('RecurringItemService: occurrences', () => {
 describe('RecurringItemService: upcoming', () => {
   // Monday 2026-09-28, noon UTC. Tomorrow is the 29th.
   const now = '2026-09-28T12:00:00Z'
-  const checking = (id: string, name: string, balance: string, buffer: string) =>
-    ({ id, name, account_type: 'checking', balance, buffer_amount: buffer })
+  const checking = (id: string, name: string, balance: string, buffer: string, spendable = true) =>
+    ({ id, name, account_type: 'checking', balance, buffer_amount: buffer, spendable })
+  const savings = (id: string, name: string, balance: string, spendable: boolean) =>
+    ({ id, name, account_type: 'savings', balance, buffer_amount: '0', spendable })
 
   it('runs from tomorrow through the next payday inclusive, into any account', async () => {
     const rows = [
@@ -251,11 +253,42 @@ describe('RecurringItemService: upcoming', () => {
     expect(r.occurrences.map((o) => o.itemId)).toContain('topup')
   })
 
-  it('ignores accounts that are not checking', async () => {
-    const r = await serviceOver([], 'UTC', now, [
-      { id: 's', name: 'Savings', account_type: 'savings', balance: '10', buffer_amount: '0' },
-    ]).upcoming('u')
+  it('leaves savings out unless it is marked spendable', async () => {
+    const r = await serviceOver([], 'UTC', now, [savings('s', 'Savings', '10', false)]).upcoming('u')
     expect(r.accounts).toEqual([])
     expect(r.hasItems).toBe(false)
+  })
+
+  it('counts a spendable savings account toward safe to spend', async () => {
+    const r = await serviceOver([], 'UTC', now, [
+      checking('m', 'Monthly', '1000', '100'), savings('s', 'High Yield', '5000', true),
+    ]).upcoming('u')
+    expect(r.accounts.map((a) => [a.name, a.counted])).toEqual([['High Yield', true], ['Monthly', true]])
+    expect(r.safeToSpend).toBe('5900.0000')
+  })
+
+  it('shows a checking account that is not spendable, warns when it runs short, but never counts it', async () => {
+    const rows = [
+      row({ id: 'pay', kind: 'income', series_start_date: '2026-01-05', legs: [{ account_id: 'm', amount: '3000.0000' }] }),
+      row({ id: 'insurance', kind: 'bill', series_start_date: '2026-01-01', legs: [{ account_id: 'y', amount: '-900.0000' }] }),
+    ]
+    const r = await serviceOver(rows, 'UTC', now, [
+      checking('y', 'Yearly Expenses', '800', '250', false),
+      checking('m', 'Monthly Expenses', '1300', '100'),
+      checking('z', 'Big Balance', '40000', '0', false),
+    ]).upcoming('u')
+    // Counted first, then by name.
+    expect(r.accounts.map((a) => a.name)).toEqual(['Monthly Expenses', 'Big Balance', 'Yearly Expenses'])
+    const by = Object.fromEntries(r.accounts.map((a) => [a.name, a]))
+    expect(by['Yearly Expenses']).toMatchObject({ counted: false, short: true, headroom: '-350.0000' })
+    expect(by['Big Balance']).toMatchObject({ counted: false, short: false, headroom: '40000.0000' })
+    // Only Monthly's 1200: neither the 40,000 nor Yearly's shortfall touch it.
+    expect(r.safeToSpend).toBe('1200.0000')
+  })
+
+  it('is zero, not an error, when nothing is spendable', async () => {
+    const r = await serviceOver([], 'UTC', now, [checking('m', 'Monthly', '1000', '0', false)]).upcoming('u')
+    expect(r.accounts).toHaveLength(1)
+    expect(r.safeToSpend).toBe('0.0000')
   })
 })

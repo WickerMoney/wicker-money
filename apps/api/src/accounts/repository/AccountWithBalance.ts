@@ -6,6 +6,8 @@ export interface AccountWithBalance {
   initial_balance: string
   currency_code: string
   buffer_amount: string
+  /** Whether the account counts toward safe to spend. */
+  spendable: boolean
   archived_at: Date | null
   created_at: Date
   updated_at: Date

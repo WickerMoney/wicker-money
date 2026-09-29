@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { PluginWidgetProps } from '@wickermoney/plugin-sdk/runtime'
 import { Alert, Button, EmptyState, Spinner } from '@wickermoney/ui-kit'
 import { AccountOutlook } from './components/AccountOutlook.js'
+import { isCounted } from './helpers/isCounted.js'
 import { UpcomingList } from './components/UpcomingList.js'
 import { shortfallText } from './helpers/shortfallText.js'
 import { useUpcoming } from './hooks/useUpcoming.js'
@@ -11,8 +12,11 @@ import './styles.js'
  * "Will I make it to payday?"
  *
  * Shows what is safe to spend until the household's next payday, which
- * checking account (if any) dips below its buffer and when, and what lands in
- * between. Every number is computed on the server against the user's today
+ * account (if any) dips below its buffer and when, and what lands in between.
+ * Which accounts count toward the headline is the user's choice, made per
+ * account on the Accounts page (`spendable`): a second checking account kept
+ * for yearly bills, or a large savings balance, can be listed without being
+ * offered as spending money. Every number is computed on the server against the user's today
  * (see `GET /core/recurring-items/upcoming`); this widget only renders.
  *
  * The window is payday-driven, not the dashboard's range: the question is
@@ -49,6 +53,10 @@ export default function UpcomingWidget({ ctx }: PluginWidgetProps) {
   }
 
   const short = data.accounts.filter((a) => a.short)
+  const counted = data.accounts.filter(isCounted)
+  const chooseAccounts = (
+    <button type="button" className="upc-link" onClick={() => ctx.navigate('/accounts')}>Choose accounts</button>
+  )
   const listed = showTransfers ? data.occurrences : data.occurrences.filter((o) => o.kind !== 'transfer')
   const until = data.window.payday === null
     ? `through ${date(data.window.through)}`
@@ -61,6 +69,14 @@ export default function UpcomingWidget({ ctx }: PluginWidgetProps) {
         <div className={`upc-head__value ${short.length > 0 ? 'upc-warn' : ''}`}>{money(data.safeToSpend)}</div>
         {data.window.payday === null ? (
           <p className="upc-note">No income expected soon, so this looks two weeks ahead.</p>
+        ) : null}
+        {data.accounts.length > 0 ? (
+          <p className="upc-note">
+            {counted.length === 0
+              ? 'No account counts toward safe to spend yet. '
+              : `Counting ${counted.map((a) => a.name).join(', ')}. `}
+            {chooseAccounts}
+          </p>
         ) : null}
       </div>
 
@@ -76,7 +92,7 @@ export default function UpcomingWidget({ ctx }: PluginWidgetProps) {
       {data.accounts.length > 0 ? (
         <AccountOutlook accounts={data.accounts} formatMoney={money} formatDate={date} />
       ) : (
-        <p className="upc-note">Add a checking account to see what is safe to spend.</p>
+        <p className="upc-note">Add a checking account, or mark a savings account as spendable, to see what is safe to spend. {chooseAccounts}</p>
       )}
 
       <div className="upc-section">

@@ -6,6 +6,7 @@ import { useAccountEditing } from '../hooks/useAccountEditing.js'
 import { AccountActionsCell } from './AccountActionsCell.js'
 import { AccountCurrencyCell } from './AccountCurrencyCell.js'
 import { AccountNameCell } from './AccountNameCell.js'
+import { AccountSpendableCell } from './AccountSpendableCell.js'
 import { AccountTypeCell } from './AccountTypeCell.js'
 
 /** Props for {@link AccountsPanel}. */
@@ -28,7 +29,10 @@ export interface AccountsPanelProps {
   readonly onDelete: (account: Account) => void
 }
 
-/** The accounts table, with inline rename, re-type and re-currency, plus per-row actions. */
+/**
+ * The accounts table, with inline rename, re-type and re-currency, a
+ * "counts toward safe to spend" checkbox, plus per-row actions.
+ */
 export function AccountsPanel({
   accounts, includeArchived, onIncludeArchivedChange, status, onChanged,
   onFixOpeningBalance, onArchive, onDelete,
@@ -55,6 +59,8 @@ export function AccountsPanel({
               render: (a: Account) => <AccountCurrencyCell account={a} row={row} /> },
             { key: 'bal', header: 'Balance', numeric: true,
               render: (a: Account) => formatMoney(a.balance, a.currencyCode) },
+            { key: 'spendable', header: 'Safe to spend',
+              render: (a: Account) => <AccountSpendableCell account={a} row={row} busy={busy} /> },
             { key: 'actions', header: '',
               render: (a: Account) => (
                 <AccountActionsCell

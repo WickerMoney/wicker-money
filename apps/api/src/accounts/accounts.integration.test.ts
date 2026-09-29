@@ -498,6 +498,35 @@ describe('PATCH /accounts/:id', () => {
     expect(res.json().currencyCode).toBe('EUR')
   })
 
+  it('defaults spendable by type, reports it, and lets it be turned off and on', async () => {
+    const checking = await makeAccount(user, { name: 'SpendChecking' })
+    const savings = await makeAccount(user, { name: 'SpendSavings', accountType: 'savings' })
+    expect(checking.spendable).toBe(true)
+    expect(savings.spendable).toBe(false)
+
+    expect((await patch(checking.id, { spendable: false })).json().spendable).toBe(false)
+    expect((await patch(savings.id, { spendable: true })).json().spendable).toBe(true)
+  })
+
+  it('refuses a spendable card with 400 and names the rule', async () => {
+    const created = await h.app.inject({
+      method: 'POST', url: '/api/v1/accounts', headers: auth(user),
+      payload: { name: 'SpendCard', accountType: 'credit_card', spendable: true },
+    })
+    expect(created.statusCode).toBe(400)
+    expect(created.json().message).toMatch(/only checking and savings/)
+
+    const card = await makeAccount(user, { name: 'SpendCard2', accountType: 'credit_card' })
+    expect((await patch(card.id, { spendable: true })).statusCode).toBe(400)
+  })
+
+  it('clears spendable when a spendable account becomes a loan', async () => {
+    const account = await makeAccount(user, { name: 'SpendToLoan' })
+    const res = await patch(account.id, { accountType: 'loan' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ accountType: 'loan', spendable: false })
+  })
+
   it('changes the buffer amount at the storage scale', async () => {
     const account = await makeAccount(user, { name: 'BufferChange' })
     const res = await patch(account.id, { bufferAmount: '250.5' })

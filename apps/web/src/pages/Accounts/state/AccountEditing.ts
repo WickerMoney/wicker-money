@@ -13,4 +13,6 @@ export interface AccountEditing {
   readonly cancel: () => void
   /** Saves the row being edited, then asks the page to re-read its list. */
   readonly save: () => Promise<void>
+  /** Saves whether an account counts toward safe to spend, straight away, then re-reads the list. */
+  readonly setSpendable: (account: Account, spendable: boolean) => Promise<void>
 }

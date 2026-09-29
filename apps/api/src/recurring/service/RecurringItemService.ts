@@ -226,21 +226,26 @@ export class RecurringItemService {
   }
 
   /**
-   * What is coming up before the next payday, and whether each checking
-   * account makes it there above its buffer.
+   * What is coming up before the next payday, and whether each account the
+   * user spends from makes it there above its buffer.
    *
    * The rules (decided in the recurring-items decisions record):
    * - The window runs from tomorrow — today's actual balance is the starting
    *   point, so nothing that already posted is counted twice — through the
    *   household's next payday, inclusive: the earliest income into any
    *   account. With no income expected, it runs 14 days.
-   * - Each checking account is projected on its own; Yearly Expenses never
-   *   covers Monthly Expenses. Transfers apply to both accounts they touch.
+   * - Accounts shown: every checking account, plus any savings account the
+   *   user marked spendable. Only spendable ones count toward safe to spend;
+   *   a checking account that is not spendable (money set aside for yearly
+   *   bills, say) is still projected and still reported short, because a
+   *   bill bouncing there matters whether or not it is spending money.
+   * - Each account is projected on its own; Yearly Expenses never covers
+   *   Monthly Expenses. Transfers apply to both accounts they touch.
    * - The low point of each day assumes its outflows clear before its
    *   inflows, so rent due on payday is caught if the paycheck lands late.
    * - Headroom is the lowest point minus the account's buffer. Safe to spend
-   *   is the sum of positive headrooms; a short account is reported on its
-   *   own and never netted away.
+   *   is the sum of positive headrooms of counted accounts; a short account
+   *   is reported on its own and never netted away.
    *
    * @param userId - The signed-in user.
    * @returns The window, per-account outlook, safe-to-spend and the occurrences in the window.
@@ -261,12 +266,13 @@ export class RecurringItemService {
         const through = payday ?? addDays(today, FALLBACK_WINDOW_DAYS)
         const to = addDays(through, 1)
 
-        const checking = (await repos.accounts.listWithBalances(false))
-          .filter((a) => a.account_type === 'checking')
-          .sort((a, b) => a.name.localeCompare(b.name))
-        const series = dailyBalances(items, Object.fromEntries(checking.map((a) => [a.id, a.balance])), from, to)
+        const shown = (await repos.accounts.listWithBalances(false))
+          .filter((a) => a.account_type === 'checking' || a.spendable)
+          // Counted accounts first: they make up the headline number.
+          .sort((a, b) => Number(b.spendable) - Number(a.spendable) || a.name.localeCompare(b.name))
+        const series = dailyBalances(items, Object.fromEntries(shown.map((a) => [a.id, a.balance])), from, to)
 
-        const accounts: UpcomingAccount[] = checking.map((a) => {
+        const accounts: UpcomingAccount[] = shown.map((a) => {
           let lowest = { date: today, balance: toMoney(a.balance) }
           for (const day of series[a.id] ?? []) {
             if (money(day.low).lessThan(lowest.balance)) lowest = { date: day.date, balance: day.low }
@@ -275,9 +281,10 @@ export class RecurringItemService {
           return {
             accountId: a.id, name: a.name, balance: toMoney(a.balance), buffer: toMoney(a.buffer_amount),
             lowest, headroom, short: money(headroom).isNegative() && !money(headroom).isZero(),
+            counted: a.spendable,
           }
         })
-        const safeToSpend = addMoney('0', ...accounts.filter((a) => !a.short).map((a) => a.headroom))
+        const safeToSpend = addMoney('0', ...accounts.filter((a) => a.counted && !a.short).map((a) => a.headroom))
 
         const found: UpcomingView['occurrences'][number][] = []
         for (const row of rows) {

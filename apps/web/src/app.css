@@ -344,3 +344,4 @@
 .recur-days { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .recur-preview { margin: 4px 0 12px; }
 .recur-preview__list { margin: 4px 0 0; padding-left: 18px; font-variant-numeric: tabular-nums; }
+.acct-na { color: var(--wm-text-muted); }

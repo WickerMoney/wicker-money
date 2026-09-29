@@ -14,6 +14,11 @@ export interface Account {
   readonly currencyCode: string
   /** Decimal string. Amount held back from "available" figures. */
   readonly bufferAmount: string
+  /**
+   * Counts toward safe to spend on the "Until payday" widget. Only checking
+   * and savings can; checking starts on, savings off.
+   */
+  readonly spendable: boolean
   /** ISO timestamp, or `null` for an active account. */
   readonly archivedAt: string | null
 }

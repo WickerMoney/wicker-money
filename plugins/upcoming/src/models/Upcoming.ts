@@ -16,7 +16,7 @@ export interface UpcomingOccurrence {
   readonly legs: readonly UpcomingLeg[]
 }
 
-/** One checking account's outlook to payday. */
+/** One account's outlook to payday. */
 export interface UpcomingAccount {
   readonly accountId: string
   readonly name: string
@@ -26,13 +26,19 @@ export interface UpcomingAccount {
   /** `lowest − buffer`; negative when short. */
   readonly headroom: string
   readonly short: boolean
+  /**
+   * Whether the account counts toward `safeToSpend` (marked spendable on the
+   * Accounts page). Absent from servers older than the setting, which counted
+   * every account they listed; read it with {@link isCounted}.
+   */
+  readonly counted?: boolean
 }
 
 /** `GET /core/recurring-items/upcoming`: everything computed on the server. */
 export interface UpcomingResponse {
   readonly today: string
   readonly window: { readonly from: string; readonly through: string; readonly payday: string | null }
-  /** Sum of positive headroom across checking accounts; shortfalls are never netted away. */
+  /** Sum of positive headroom across counted accounts; shortfalls are never netted away. */
   readonly safeToSpend: string
   readonly accounts: readonly UpcomingAccount[]
   readonly occurrences: readonly UpcomingOccurrence[]

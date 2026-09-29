@@ -59,6 +59,7 @@ export class KyselyAccountRepository implements AccountRepository {
         initial_balance: input.initialBalance,
         currency_code: input.currencyCode,
         buffer_amount: input.bufferAmount,
+        spendable: input.spendable,
       })
       .returning('id')
       .executeTakeFirstOrThrow()
@@ -74,6 +75,7 @@ export class KyselyAccountRepository implements AccountRepository {
         ...(changes.accountType !== undefined ? { account_type: changes.accountType } : {}),
         ...(changes.currencyCode !== undefined ? { currency_code: changes.currencyCode } : {}),
         ...(changes.bufferAmount !== undefined ? { buffer_amount: changes.bufferAmount } : {}),
+        ...(changes.spendable !== undefined ? { spendable: changes.spendable } : {}),
         updated_at: databaseNow,
       })
       .where('id', '=', id)

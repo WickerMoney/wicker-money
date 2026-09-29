@@ -15,6 +15,7 @@ import type { MigrationResult } from './MigrationResult.js'
 import type { NewAccount } from './NewAccount.js'
 import { planMigration } from './planMigration.js'
 import { previewInitialBalanceChange } from './previewInitialBalanceChange.js'
+import { spendableChanges, spendableForNew } from './spendable.js'
 
 const SAME_ACCOUNT = 'Choose a different account to move things to.'
 
@@ -57,9 +58,11 @@ export class AccountService {
    * @param userId - The signed-in user.
    * @param input - The new account.
    * @returns The created account with its derived balance.
+   * @throws {ValidationError} If `spendable` is true for a type that cannot count toward safe to spend.
    */
-  create(userId: string, input: NewAccount): Promise<AccountWithBalance> {
-    return this.uow.forUser(userId, ({ accounts }) => accounts.insert({ userId, ...input }))
+  async create(userId: string, input: NewAccount): Promise<AccountWithBalance> {
+    const spendable = spendableForNew(input.accountType, input.spendable)
+    return this.uow.forUser(userId, ({ accounts }) => accounts.insert({ userId, ...input, spendable }))
   }
 
   /**
@@ -71,9 +74,14 @@ export class AccountService {
    * @param changes - Fields to change.
    * @returns The updated account.
    * @throws {NotFoundError} If it does not exist.
+   * @throws {ValidationError} If the edit would make a card, loan or investment account spendable.
    */
   async update(userId: string, id: string, changes: AccountChanges): Promise<AccountWithBalance> {
-    const account = await this.uow.forUser(userId, ({ accounts }) => accounts.update(id, changes))
+    const account = await this.uow.forUser(userId, async ({ accounts }) => {
+      const current = await accounts.findWithBalance(id)
+      if (current === undefined) return undefined
+      return accounts.update(id, spendableChanges(current, changes))
+    })
     if (account === undefined) throw new NotFoundError('Account')
     return account
   }

@@ -10,4 +10,9 @@ export interface NewAccount {
   readonly currencyCode: string
   /** Minimum balance the user wants to keep, as a non-negative decimal string. */
   readonly bufferAmount: string
+  /**
+   * Whether the account counts toward safe to spend. Omitted means the
+   * default for its type: checking yes, everything else no.
+   */
+  readonly spendable?: boolean | undefined
 }

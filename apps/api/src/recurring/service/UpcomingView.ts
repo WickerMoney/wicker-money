@@ -1,6 +1,6 @@
 import type { OccurrenceView } from './OccurrenceView.js'
 
-/** One checking account's outlook to the next payday. */
+/** One account's outlook to the next payday. */
 export interface UpcomingAccount {
   readonly accountId: string
   readonly name: string
@@ -16,6 +16,11 @@ export interface UpcomingAccount {
   /** `lowest.balance − buffer`. Negative means short. */
   readonly headroom: string
   readonly short: boolean
+  /**
+   * Whether the account is spendable and so counts toward `safeToSpend`. An
+   * account that is not counted is still projected and can still be short.
+   */
+  readonly counted: boolean
 }
 
 /** Everything the upcoming widget shows, computed on the server. */
@@ -31,12 +36,12 @@ export interface UpcomingView {
     readonly payday: string | null
   }
   /**
-   * Sum of the positive headrooms across checking accounts. An account that
-   * is short is never netted against another's surplus; it is listed with
-   * `short: true` instead.
+   * Sum of the positive headrooms across counted (spendable) accounts. An
+   * account that is short is never netted against another's surplus; it is
+   * listed with `short: true` instead. Zero when nothing is counted.
    */
   readonly safeToSpend: string
-  /** Active checking accounts, in name order. */
+  /** Active checking accounts and spendable savings accounts: counted first, then by name. */
   readonly accounts: readonly UpcomingAccount[]
   /** Every occurrence in the window, all kinds; a client chooses which to list. */
   readonly occurrences: readonly OccurrenceView[]

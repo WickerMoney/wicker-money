@@ -33,6 +33,16 @@
 .upc-accounts thead th.upc-num { font-family: inherit; }
 .upc-accounts tbody th { font-weight: 500; }
 .upc-accounts tr.is-short th { color: var(--wm-negative); }
+.upc-accounts tr.is-uncounted:not(.is-short) th,
+.upc-accounts tr.is-uncounted:not(.is-short) td { color: var(--wm-text-muted); }
+.upc-tag {
+  margin-left: 8px; padding: 1px 6px; border: 1px solid var(--wm-border); border-radius: 999px;
+  font-size: 11px; font-weight: 500; color: var(--wm-text-muted); white-space: nowrap;
+}
+.upc-link {
+  padding: 0; border: 0; background: none; font: inherit; cursor: pointer;
+  color: var(--wm-accent); text-decoration: underline; text-underline-offset: 2px;
+}
 
 .upc-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .upc-section__title { margin: 0; font-size: 13px; font-weight: 600; }

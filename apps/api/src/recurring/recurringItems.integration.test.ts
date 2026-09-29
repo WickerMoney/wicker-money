@@ -329,6 +329,29 @@ describe('plugin access', () => {
     expect((res.json() as { occurrences: { name: string }[] }).occurrences.map((o) => o.name)).toEqual(['Rent', 'Pay'])
   })
 
+  it('counts only spendable accounts, shows a non-spendable checking account, and serves it to the widget plugin', async () => {
+    const u = await createUser(h)
+    const make = async (payload: Record<string, unknown>) => (await h.app.inject({
+      method: 'POST', url: '/api/v1/accounts', headers: auth(u), payload: { initialBalance: '0', ...payload },
+    })).json() as { id: string; spendable: boolean }
+    const monthly = await make({ name: 'Monthly', accountType: 'checking', initialBalance: '1000.00', bufferAmount: '100.00' })
+    const yearly = await make({ name: 'Yearly', accountType: 'checking', initialBalance: '9000.00', spendable: false })
+    const hysa = await make({ name: 'High Yield', accountType: 'savings', initialBalance: '500.00', spendable: true })
+    await make({ name: 'Emergency Fund', accountType: 'savings', initialBalance: '50000.00' })
+
+    // Through the upcoming plugin's own role: the column must be readable under its grant.
+    const res = await h.app.inject({
+      method: 'GET', url: '/api/v1/core/recurring-items/upcoming', headers: asPlugin(u, 'wickermoney.upcoming'),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { safeToSpend: string; accounts: { accountId: string; counted: boolean }[] }
+    expect(body.accounts.map((a) => [a.accountId, a.counted])).toEqual([
+      [hysa.id, true], [monthly.id, true], [yearly.id, false],
+    ])
+    // 500 + (1000 − 100); neither Yearly's 9,000 nor the uncounted savings.
+    expect(body.safeToSpend).toBe('1400.0000')
+  })
+
   it('refuses the upcoming outlook to a plugin without both grants', async () => {
     const res = await h.app.inject({
       method: 'GET', url: '/api/v1/core/recurring-items/upcoming', headers: asPlugin(alice, 'wickermoney.insights'),

@@ -267,3 +267,48 @@ describe('AccountService archive and update', () => {
     expect(updated).toMatchObject({ name: 'Renamed', currency_code: 'EUR', buffer_amount: '50.0000' })
   })
 })
+
+describe('AccountService: spendable (counts toward safe to spend)', () => {
+  it('defaults checking to spendable and everything else to not', async () => {
+    expect((await service.create(ALICE, checking)).spendable).toBe(true)
+    expect((await service.create(ALICE, { ...checking, accountType: 'savings' })).spendable).toBe(false)
+    expect((await service.create(ALICE, { ...checking, accountType: 'credit_card' })).spendable).toBe(false)
+  })
+
+  it('takes the caller\'s choice for checking and savings', async () => {
+    expect((await service.create(ALICE, { ...checking, spendable: false })).spendable).toBe(false)
+    expect((await service.create(ALICE, { ...checking, accountType: 'savings', spendable: true })).spendable).toBe(true)
+  })
+
+  it.each(['credit_card', 'loan', 'investment'] as const)('refuses a spendable %s', async (accountType) => {
+    await expect(service.create(ALICE, { ...checking, accountType, spendable: true })).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  it('turns spendable on and off with an edit', async () => {
+    const account = await service.create(ALICE, { ...checking, accountType: 'savings' })
+    expect((await service.update(ALICE, account.id, { spendable: true })).spendable).toBe(true)
+    expect((await service.update(ALICE, account.id, { spendable: false })).spendable).toBe(false)
+  })
+
+  it('clears spendable when a savings account becomes a card, rather than refusing the edit', async () => {
+    const account = await service.create(ALICE, { ...checking, accountType: 'savings', spendable: true })
+    const updated = await service.update(ALICE, account.id, { accountType: 'credit_card' })
+    expect(updated).toMatchObject({ account_type: 'credit_card', spendable: false })
+  })
+
+  it('refuses making a card spendable, alone or in the same edit that changes the type', async () => {
+    const card = await service.create(ALICE, { ...checking, accountType: 'credit_card' })
+    await expect(service.update(ALICE, card.id, { spendable: true })).rejects.toBeInstanceOf(ValidationError)
+    const saving = await service.create(ALICE, { ...checking, accountType: 'savings' })
+    await expect(service.update(ALICE, saving.id, { accountType: 'loan', spendable: true })).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  it('keeps the choice when the type changes between checking and savings', async () => {
+    const account = await service.create(ALICE, checking)
+    expect((await service.update(ALICE, account.id, { accountType: 'savings' })).spendable).toBe(true)
+  })
+
+  it('still reports a missing account as not found', async () => {
+    await expect(service.update(ALICE, 'nope', { spendable: true })).rejects.toBeInstanceOf(NotFoundError)
+  })
+})

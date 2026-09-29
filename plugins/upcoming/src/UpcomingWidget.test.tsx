@@ -100,6 +100,34 @@ describe('UpcomingWidget', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
+  it('names the accounts it counts, treating a server without the flag as counting all', async () => {
+    render(<UpcomingWidget ctx={ctxWith(base)} size="lg" />)
+    expect(await screen.findByText(/Counting Monthly Expenses, Yearly Expenses\./)).toBeDefined()
+    expect(screen.queryByText('not counted')).toBeNull()
+  })
+
+  it('lists an account that is not counted, labelled, and links to where that is chosen', async () => {
+    const accounts = [base.accounts[0]!, { ...base.accounts[1]!, counted: false }]
+    const ctx = ctxWith({ ...base, accounts: [{ ...accounts[0]!, counted: true }, accounts[1]!] })
+    const user = userEvent.setup()
+    render(<UpcomingWidget ctx={ctx} size="lg" />)
+
+    expect(await screen.findByText(/Counting Monthly Expenses\./)).toBeDefined()
+    const row = screen.getByText('not counted').closest('tr') as HTMLElement
+    expect(row.textContent).toContain('Yearly Expenses')
+    expect(row.className).toContain('is-uncounted')
+
+    await user.click(screen.getByRole('button', { name: 'Choose accounts' }))
+    expect(ctx.navigate).toHaveBeenCalledWith('/accounts')
+  })
+
+  it('says so when no account counts', async () => {
+    const none = { ...base, safeToSpend: '0.0000', accounts: base.accounts.map((a) => ({ ...a, counted: false })) }
+    render(<UpcomingWidget ctx={ctxWith(none)} size="lg" />)
+    expect(await screen.findByText(/No account counts toward safe to spend yet\./)).toBeDefined()
+    expect(screen.getAllByText('not counted')).toHaveLength(2)
+  })
+
   it('invites adding items when there are none', async () => {
     const ctx = ctxWith({ ...base, hasItems: false, occurrences: [], accounts: [] })
     const user = userEvent.setup()
