@@ -4,6 +4,9 @@ import type { AccountUsage } from '../../../models/index.js'
 const FRIENDLY: Record<string, string> = {
   'core.transactions': 'transaction',
   'core.recurring_items': 'recurring item',
+  // Recurring items reach accounts through their legs, one per account per
+  // item, so a count of legs is a count of items.
+  'core.recurring_item_legs': 'recurring item',
 }
 
 /**

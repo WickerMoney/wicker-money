@@ -15,6 +15,7 @@ import { pingDatabase } from './db/healthcheck.js'
 import { AppError } from './errors.js'
 import { registerOnboardingRoutes } from './onboarding/routes/index.js'
 import { registerPluginRoutes } from './plugins/routes/index.js'
+import { registerRecurringItemRoutes } from './recurring/routes/index.js'
 import { registerSettingsRoutes } from './settings/routes/index.js'
 import { registerBundledPluginServers } from './plugins/server.js'
 import { registerTransactionRoutes } from './transactions/routes/index.js'
@@ -130,6 +131,7 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
   registerCategoryRoutes(app, services)
   registerOnboardingRoutes(app, services)
   registerTransactionRoutes(app, services)
+  registerRecurringItemRoutes(app, services)
   registerPluginRoutes(app, services)
   registerBundledPluginServers(app, db, services.plugins)
   registerCoreDataRoutes(app, services)

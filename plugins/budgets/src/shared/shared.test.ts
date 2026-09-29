@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AT_RISK_PACE, addMoney, balanceFor, carryForward, daysInMonth, draftPlannedFrom,
   editableMoney, elapsedFraction, formatMoney, isMonthKey, isValidPlan, monthKeyOf, monthPeriod,
-  parseMoney, previousMonth, rankAtRisk, ratio, shiftMonth, statusFor, subtractMoney,
+  parseMoney, previousMonth, rankAtRisk, rankBreakdown, ratio, shiftMonth, statusFor, subtractMoney,
   sumMoney, todayIn, totalPlanned, type HistoryEntry,
 } from './index.js'
 
@@ -303,6 +303,24 @@ describe('ranking for the dashboard', () => {
   it('leaves healthy lines out entirely', () => {
     // A widget that lists everything is a table, and the dashboard has two.
     expect(rankAtRisk([at('Fine', '400.0000', '20.0000')])).toEqual([])
+  })
+
+  it('breaks every line down, trouble first, then by how much is used, unused last', () => {
+    const lines = [
+      at('Unused', '50.0000', '0.0000'),
+      at('Fine', '400.0000', '50.0000'),
+      at('Groceries', '400.0000', '100.0000'),
+      at('Risky', '400.0000', '320.0000'),
+      at('Over', '100.0000', '140.0000'),
+    ]
+    expect(rankBreakdown(lines).map((l) => l.categoryName)).toEqual(['Over', 'Risky', 'Groceries', 'Fine', 'Unused'])
+    expect(rankBreakdown(lines, 3).map((l) => l.categoryName)).toEqual(['Over', 'Risky', 'Groceries'])
+  })
+
+  it('does not reorder the caller\'s array', () => {
+    const lines = [at('Fine', '400.0000', '50.0000'), at('Over', '100.0000', '140.0000')]
+    rankBreakdown(lines)
+    expect(lines.map((l) => l.categoryName)).toEqual(['Fine', 'Over'])
   })
 
   it('orders at-risk lines by how far past pace, not by size', () => {

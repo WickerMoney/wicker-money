@@ -57,6 +57,19 @@ describe('the scoped client handed to a plugin', () => {
     expect(apiGet).not.toHaveBeenCalled()
   })
 
+  it('maps a kebab-case path segment to its snake_case table', async () => {
+    const granted = buildPluginContext(
+      manifestWith([{ table: 'recurring_items', access: 'read' }]), user, () => {},
+    )
+    await granted.api.get('/core/recurring-items/upcoming')
+    expect(apiGet).toHaveBeenCalledWith('/core/recurring-items/upcoming', expect.anything())
+
+    const ungranted = buildPluginContext(
+      manifestWith([{ table: 'transactions', access: 'read' }]), user, () => {},
+    )
+    await expect(ungranted.api.get('/core/recurring-items/list')).rejects.toThrow(/no grant for 'recurring_items'/)
+  })
+
   it('applies the same guard to writes', async () => {
     const ctx = buildPluginContext(
       manifestWith([{ table: 'transactions', access: 'read' }]), user, () => {},

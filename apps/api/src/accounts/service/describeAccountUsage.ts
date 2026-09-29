@@ -4,6 +4,9 @@ import type { ReferenceUsage } from '../../db/usage.js'
 const FRIENDLY: Record<string, string> = {
   'core.transactions': 'transaction',
   'core.recurring_items': 'recurring item',
+  // An account is referenced by the item's leg; legs are one per account per
+  // item, so counting legs counts items.
+  'core.recurring_item_legs': 'recurring item',
 }
 
 /**

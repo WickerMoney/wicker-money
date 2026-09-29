@@ -9,6 +9,6 @@ import type { Account } from '../models/index.js'
 export function makeAccount(patch: Partial<Account> = {}): Account {
   return {
     id: 'acc-1', name: 'Checking', accountType: 'checking', initialBalance: '100.00',
-    balance: '250.00', currencyCode: 'USD', bufferAmount: '0.00', archivedAt: null, ...patch,
+    balance: '250.00', currencyCode: 'USD', bufferAmount: '0.00', spendable: true, archivedAt: null, ...patch,
   }
 }

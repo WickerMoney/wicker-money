@@ -15,6 +15,7 @@ export function present(row: AccountWithBalance) {
     balance: row.balance,
     currencyCode: row.currency_code,
     bufferAmount: row.buffer_amount,
+    spendable: row.spendable,
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

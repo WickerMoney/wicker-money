@@ -9,6 +9,7 @@ import { CategoryService } from '../categories/service/CategoryService.js'
 import { OnboardingService } from '../onboarding/service/OnboardingService.js'
 import { PluginService } from '../plugins/service/PluginService.js'
 import { ReportService } from '../core/service/ReportService.js'
+import { RecurringItemService } from '../recurring/service/RecurringItemService.js'
 import { SettingsService } from '../settings/service/SettingsService.js'
 import { TransactionService } from '../transactions/service/TransactionService.js'
 
@@ -33,5 +34,6 @@ export function createServices(db: Db, uow: UnitOfWork, config: Config): Service
     settings: new SettingsService(uow, { config, plugins }),
     plugins,
     reports: new ReportService(uow),
+    recurringItems: new RecurringItemService(uow),
   }
 }

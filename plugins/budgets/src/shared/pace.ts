@@ -128,6 +128,30 @@ export function rankAtRisk(lines: readonly LineStatus[], limit = 4): LineStatus[
     .slice(0, limit)
 }
 
+/**
+ * Every line, in the order a half-width dashboard breakdown should show them.
+ *
+ * Where {@link rankAtRisk} answers "what needs acting on", this answers "how is
+ * the month going": lines that need attention still lead (over, then at-risk,
+ * each worst pace first), then the rest by how much of their budget is used, so
+ * the next line likely to tip over sits right after the ones that already have.
+ * Unused lines come last, since an untouched budget says nothing yet.
+ *
+ * @param lines - Statuses for every line in a month.
+ * @param limit - Maximum number of lines to return; defaults to 6.
+ * @returns Up to `limit` lines, attention first.
+ */
+export function rankBreakdown(lines: readonly LineStatus[], limit = 6): LineStatus[] {
+  const weight = (l: LineStatus): number =>
+    l.health === 'over' ? 0 : l.health === 'at-risk' ? 1 : l.health === 'unused' ? 3 : 2
+  return [...lines]
+    .sort((a, b) =>
+      weight(a) - weight(b)
+      || (weight(a) < 2 ? b.pace - a.pace : b.used - a.used)
+      || a.categoryName.localeCompare(b.categoryName))
+    .slice(0, limit)
+}
+
 /** Whole-month totals across every budget line. */
 export interface MonthSummary {
   /** Total planned, as a decimal string. */

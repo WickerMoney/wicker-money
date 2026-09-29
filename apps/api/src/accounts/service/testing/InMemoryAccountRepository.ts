@@ -67,6 +67,7 @@ export class InMemoryAccountRepository implements AccountRepository {
       initial_balance: input.initialBalance,
       currency_code: input.currencyCode,
       buffer_amount: input.bufferAmount,
+      spendable: input.spendable,
       archived_at: null,
       created_at: now,
       updated_at: now,
@@ -83,6 +84,7 @@ export class InMemoryAccountRepository implements AccountRepository {
     if (changes.accountType !== undefined) row.account_type = changes.accountType
     if (changes.currencyCode !== undefined) row.currency_code = changes.currencyCode
     if (changes.bufferAmount !== undefined) row.buffer_amount = changes.bufferAmount
+    if (changes.spendable !== undefined) row.spendable = changes.spendable
     return this.withBalance(row)
   }
 

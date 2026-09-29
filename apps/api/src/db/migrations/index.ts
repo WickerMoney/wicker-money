@@ -20,6 +20,8 @@ import * as m017 from './017_import_idempotency.js'
 import * as m018 from './018_tenant_context_signature.js'
 import * as m019 from './019_app_deployments.js'
 import * as m020 from './020_semimonthly_frequency.js'
+import * as m021 from './021_recurring_item_legs.js'
+import * as m022 from './022_account_spendable.js'
 
 /**
  * The complete, ordered set of schema migrations, keyed by migration name.
@@ -50,6 +52,8 @@ export const MIGRATIONS: Record<string, Migration> = {
   '018_tenant_context_signature': m018,
   '019_app_deployments': m019,
   '020_semimonthly_frequency': m020,
+  '021_recurring_item_legs': m021,
+  '022_account_spendable': m022,
 }
 
 /** Kysely {@link MigrationProvider} that serves the fixed {@link MIGRATIONS} set. */

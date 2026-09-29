@@ -53,3 +53,11 @@ export {
   RANGE_KEYS, DEFAULT_RANGE_KEY, isRangeKey, rangeLabel, resolveRange, monthsInRange,
 } from './range.js'
 export type { DashboardRange, RangeKey } from './range.js'
+
+export {
+  DEFAULT_SEMIMONTHLY_DAYS, RECURRENCE_FREQUENCIES,
+  dailyBalances, flowTotals, monthlyEquivalent, nextOccurrence, nextPayday, occurrences,
+} from './recurrence/index.js'
+export type {
+  DailyBalance, FlowTotals, RecurrenceFrequency, RecurrenceSchedule, RecurringItem, RecurringLeg,
+} from './recurrence/index.js'

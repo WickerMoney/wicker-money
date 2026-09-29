@@ -11,6 +11,8 @@ export interface AtRiskReport {
   readonly total?: number
   /** The lines that are over or at risk, worst first, capped for a dashboard tile. */
   readonly lines: readonly LineStatus[]
+  /** Every line, attention first then by how much is used, capped for a half-width tile. Present when `planned`. */
+  readonly breakdown?: readonly LineStatus[]
   /** Spent and available across every line, not only the ranked ones. Present when `planned`. */
   readonly summary?: { readonly spent: string; readonly available: string }
 }

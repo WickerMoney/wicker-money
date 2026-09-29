@@ -118,7 +118,7 @@ describe('GET /api/v1/settings/export', () => {
     expect(Object.keys(doc)).toEqual(['exportedAt', 'core', 'plugins'])
     expect(Object.keys(doc.core)).toEqual([
       'profile', 'accounts', 'categories', 'categoryRules', 'categoryRuleConditions',
-      'transactions', 'transactionSplits', 'recurringItems',
+      'transactions', 'transactionSplits', 'recurringItems', 'recurringItemLegs',
     ])
     expect(new Date(doc.exportedAt).toString()).not.toBe('Invalid Date')
   })

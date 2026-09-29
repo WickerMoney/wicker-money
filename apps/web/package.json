@@ -32,6 +32,7 @@
   "devDependencies": {
     "@wickermoney/plugin-insights": "workspace:*",
     "@wickermoney/plugin-spending-trends": "workspace:*",
+    "@wickermoney/plugin-upcoming": "workspace:*",
     "@module-federation/vite": "^1.22.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

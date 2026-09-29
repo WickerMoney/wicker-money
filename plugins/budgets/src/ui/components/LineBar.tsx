@@ -12,6 +12,11 @@ export interface LineBarProps {
   readonly today: string
   /** Accessible description of the bar. */
   readonly label: string
+  /**
+   * The thinner, edge-to-edge bar the dashboard tiles use (the marketing
+   * site's budget tile), rather than the inset bar of the budgets table.
+   */
+  readonly slim?: boolean
 }
 
 /**
@@ -25,20 +30,20 @@ export interface LineBarProps {
  * The fill is capped at 100% of the track so an overspent line stays inside it;
  * the colour, not the geometry, carries "over".
  */
-export function LineBar({ used, health, monthKey, today, label }: LineBarProps) {
+export function LineBar({ used, health, monthKey, today, label, slim = false }: LineBarProps) {
   const fill = Math.max(0, Math.min(1, used))
   const elapsed = elapsedFraction(monthKey, today)
 
   return (
     <div
-      className="bud__bar"
+      className={slim ? 'bud__bar bud__bar--slim' : 'bud__bar'}
       role="img"
       aria-label={label}
       title={label}
     >
       <div
         className={`bud__bar-fill ${HEALTH_CLASS[health]}`}
-        style={{ width: `calc(${(fill * 100).toFixed(1)}% - 4px)` }}
+        style={{ width: slim ? `${(fill * 100).toFixed(1)}%` : `calc(${(fill * 100).toFixed(1)}% - 4px)` }}
       />
       {elapsed > 0 && elapsed < 1 ? (
         <div className="bud__bar-pace" style={{ left: `${(elapsed * 100).toFixed(1)}%` }} />

@@ -11,6 +11,8 @@ export interface AccountsTable {
   initial_balance: MoneyWithDefault
   currency_code: Generated<string>
   buffer_amount: MoneyWithDefault
+  /** Counts toward safe to spend. Only checking and savings may be true (migration 022). */
+  spendable: Generated<boolean>
   archived_at: Timestamp | null
   created_at: TimestampWithDefault
   updated_at: TimestampWithDefault

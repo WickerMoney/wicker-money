@@ -6,6 +6,7 @@ import { KyselyExportRepository } from '../settings/repository/KyselyExportRepos
 import { KyselyOnboardingRepository } from '../onboarding/repository/KyselyOnboardingRepository.js'
 import { KyselyPluginRegistryRepository } from '../plugins/repository/KyselyPluginRegistryRepository.js'
 import { KyselyReportRepository } from '../core/repository/KyselyReportRepository.js'
+import { KyselyRecurringItemRepository } from '../recurring/repository/KyselyRecurringItemRepository.js'
 import { KyselySessionRepository } from '../auth/repository/KyselySessionRepository.js'
 import { KyselySplitRepository } from '../transactions/repository/KyselySplitRepository.js'
 import { KyselyTransactionRepository } from '../transactions/repository/KyselyTransactionRepository.js'
@@ -33,5 +34,6 @@ export function createRepositories(trx: Trx): Repositories {
     pluginRegistry: new KyselyPluginRegistryRepository(trx),
     reports: new KyselyReportRepository(trx),
     exports: new KyselyExportRepository(trx),
+    recurringItems: new KyselyRecurringItemRepository(trx),
   }
 }

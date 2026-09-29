@@ -34,7 +34,8 @@ export function useAccountEditing(
         name: editing.name.trim(),
         accountType: editing.accountType,
         currencyCode: editing.currencyCode,
-        bufferAmount: editing.bufferAmount,
+        // An emptied field means no buffer, not an invalid amount.
+        bufferAmount: editing.bufferAmount.trim() === '' ? '0' : editing.bufferAmount.trim(),
       })
       setEditing(null)
       await onChanged()
@@ -43,5 +44,17 @@ export function useAccountEditing(
     } finally { status.end() }
   }
 
-  return { editing, change: setEditing, start, cancel, save }
+  // A checkbox saves on its own, outside the row editor: it is one click with
+  // nothing to type, and waiting for "Save" would make it look ignored.
+  const setSpendable = async (a: Account, spendable: boolean) => {
+    status.begin()
+    try {
+      await api.patch(`/accounts/${a.id}`, { spendable })
+      await onChanged()
+    } catch (e) {
+      status.show(e instanceof Error ? e.message : 'Could not save that account.')
+    } finally { status.end() }
+  }
+
+  return { editing, change: setEditing, start, cancel, save, setSpendable }
 }

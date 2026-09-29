@@ -4,6 +4,7 @@ import type { CategoriesTable } from './CategoriesTable.js'
 import type { CategoryRuleConditionsTable } from './CategoryRuleConditionsTable.js'
 import type { CategoryRulesTable } from './CategoryRulesTable.js'
 import type { PluginsTable } from './PluginsTable.js'
+import type { RecurringItemLegsTable } from './RecurringItemLegsTable.js'
 import type { RecurringItemsTable } from './RecurringItemsTable.js'
 import type { SessionsTable } from './SessionsTable.js'
 import type { TransactionSplitsTable } from './TransactionSplitsTable.js'
@@ -21,6 +22,7 @@ export interface Database {
   'core.transactions': TransactionsTable
   'core.transaction_splits': TransactionSplitsTable
   'core.recurring_items': RecurringItemsTable
+  'core.recurring_item_legs': RecurringItemLegsTable
   'core.plugins': PluginsTable
   'core.app_deployments': AppDeploymentsTable
 }

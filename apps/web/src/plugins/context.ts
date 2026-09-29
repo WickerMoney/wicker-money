@@ -1,6 +1,7 @@
 import type { PluginApi, PluginContext, PluginManifest } from '@wickermoney/plugin-sdk'
 import { api } from '../api/client.js'
 import type { CurrentUser } from '../auth/index.js'
+import { formatDate } from '../lib/formatDate.js'
 import { formatMoney } from '../lib/formatMoney.js'
 
 /** Paths a plugin may address, beyond its own namespace. */
@@ -9,14 +10,18 @@ const CORE_PREFIX = '/core/'
 /**
  * Extracts the core table a path addresses.
  *
+ * URLs are kebab-case and table names snake_case, so `/core/recurring-items/...`
+ * addresses `recurring_items`. Without that mapping the guard would refuse a
+ * granted plugin for a table name it could never have spelled.
+ *
  * @param path - A request path relative to the API root.
- * @returns The segment after `/core/` (up to any `/` or `?`), or `null` if the path is not under `/core/`.
+ * @returns The table named by the segment after `/core/` (up to any `/` or `?`), or `null` if the path is not under `/core/`.
  */
 function tableFromPath(path: string): string | null {
   if (!path.startsWith(CORE_PREFIX)) return null
   const rest = path.slice(CORE_PREFIX.length)
-  const table = rest.split(/[/?]/)[0]
-  return table === undefined || table === '' ? null : table
+  const segment = rest.split(/[/?]/)[0]
+  return segment === undefined || segment === '' ? null : segment.replaceAll('-', '_')
 }
 
 /**
@@ -96,6 +101,6 @@ export function buildPluginContext(
     api: scopedApi(manifest),
     navigate,
     formatMoney,
-    formatDate: (value) => new Date(value).toLocaleDateString(),
+    formatDate,
   }
 }

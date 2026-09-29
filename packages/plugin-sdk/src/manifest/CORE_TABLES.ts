@@ -11,5 +11,7 @@ export const CORE_TABLES = [
   'categories',
   'category_rules',
   'category_rule_conditions',
+  // Also grants `recurring_item_legs`: an item is its schedule plus its legs,
+  // and neither is usable without the other.
   'recurring_items',
 ] as const

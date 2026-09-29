@@ -1,4 +1,4 @@
-import type { Account, AccountUsage } from '../../../models/index.js'
+import type { Account, AccountUsage, RecurringItem } from '../../../models/index.js'
 
 /**
  * An account whose delete was refused because it still has history, together
@@ -9,4 +9,10 @@ export interface DeleteResolution {
   readonly account: Account
   /** What references the account. */
   readonly usage: AccountUsage
+  /**
+   * The recurring items with a leg on the account, ended ones included, so
+   * the choice can name them: deleting removes each whole (a split paycheck
+   * too), moving re-points them.
+   */
+  readonly recurringItems: readonly RecurringItem[]
 }

@@ -11,4 +11,6 @@ export interface NewAccountInput {
   readonly currencyCode: string
   /** Minimum balance the user wants to keep, as a non-negative decimal string. */
   readonly bufferAmount: string
+  /** Whether the account counts toward safe to spend; the service has already applied the default. */
+  readonly spendable: boolean
 }

@@ -26,6 +26,6 @@ export {
 } from './carry.js'
 
 export {
-  statusFor, rankAtRisk, AT_RISK_PACE,
+  statusFor, rankAtRisk, rankBreakdown, AT_RISK_PACE,
   type Health, type LineStatus, type StatusInput, type MonthSummary,
 } from './pace.js'

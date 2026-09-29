@@ -96,7 +96,14 @@
 .page__split { display: grid; gap: var(--wm-gap); grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 
 .slot { display: grid; gap: var(--wm-gap); min-width: 0; }
-.slot--primary { grid-template-columns: minmax(0, 1fr); }
+/* The primary slot is two columns and honours a widget's size: `lg` and
+   `full` take the whole row, `sm` and `md` take half, so two small widgets
+   can sit side by side above the full-width charts. */
+.slot--primary { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.slot--primary > .slot-item--lg,
+.slot--primary > .slot-item--full { grid-column: 1 / -1; }
+/* Side-by-side widgets share a row height, so their panels match. */
+.slot--primary > .slot-item > .wm-surface { height: 100%; }
 .slot--secondary { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .slot-item { min-width: 0; }
 
@@ -120,6 +127,7 @@
                 border-bottom: 1px solid var(--wm-border); }
   .shell__brand { padding: 4px 8px; }
   .page__split { grid-template-columns: minmax(0, 1fr); }
+  .slot--primary { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Inline category assignment in the transactions table. A select rather than a
@@ -319,3 +327,24 @@
 .settings-facts > div { display: grid; grid-template-columns: 160px 1fr; gap: 8px; }
 .settings-facts dt { color: var(--wm-text-muted); font-size: 13px; margin: 0; }
 .settings-facts dd { margin: 0; font-size: 13px; }
+
+/* Recurring items */
+.recur-split { grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); }
+@media (max-width: 1100px) { .recur-split { grid-template-columns: minmax(0, 1fr); } }
+.recur-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--wm-gap); }
+.recur-tiles__hint { margin: 8px 0 0; }
+.recur-sub { font-size: 12px; }
+.recur-arrow { color: var(--wm-text-muted); }
+.recur-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+.recur-actions .wm-btn { padding: 4px 10px; font-size: 13px; }
+.recur-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.recur-legs { border: 0; padding: 0; margin: 0 0 var(--wm-gap-sm); display: flex; flex-direction: column; gap: 4px; }
+.recur-legs__row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.recur-legs__row .wm-btn { margin-bottom: var(--wm-gap-sm); }
+.recur-days { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.recur-preview { margin: 4px 0 12px; }
+.recur-preview__list { margin: 4px 0 0; padding-left: 18px; font-variant-numeric: tabular-nums; }
+.acct-na { color: var(--wm-text-muted); }
+/* The accounts table has seven columns plus actions; give it the room the recurring list gets. */
+.acct-split { grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); }
+@media (max-width: 1100px) { .acct-split { grid-template-columns: minmax(0, 1fr); } }

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
-import type { Account, AccountUsage, MigrationPlan } from '../../../models/index.js'
+import type { Account, AccountUsage, MigrationPlan, RecurringItemList } from '../../../models/index.js'
 import { describeUsage } from '../helpers/describeUsage.js'
 import type { DeleteResolution } from '../state/DeleteResolution.js'
 
@@ -89,8 +89,13 @@ export function useAccountDeletion(
         await reload()
         return
       }
+      // Only asked for when something recurring uses the account, so a plain
+      // account with transactions costs one request, as before.
+      const recurring = usage.by.some((u) => u.table === 'core.recurring_item_legs')
+        ? (await api.get<RecurringItemList>(`/recurring-items?accountId=${a.id}&includeEnded=true`)).items
+        : []
       latestPreview.cancel()
-      setResolving({ account: a, usage })
+      setResolving({ account: a, usage, recurringItems: recurring })
       setMigrateTargetId('')
       setMigratePlan(null)
     } catch (e) {

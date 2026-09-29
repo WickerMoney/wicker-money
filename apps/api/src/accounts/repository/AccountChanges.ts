@@ -6,4 +6,5 @@ export interface AccountChanges {
   readonly accountType?: AccountType | undefined
   readonly currencyCode?: string | undefined
   readonly bufferAmount?: string | undefined
+  readonly spendable?: boolean | undefined
 }

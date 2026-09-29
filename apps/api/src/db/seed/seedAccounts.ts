@@ -11,6 +11,8 @@ export interface AccountDef {
   /** Opening balance, signed the same way every derived balance is: negative means the account already owes or is overdrawn. */
   readonly initialBalance: string
   readonly bufferAmount: string
+  /** Counts toward safe to spend; omitted means the default for the type (checking only). */
+  readonly spendable?: boolean
   /** Archived right after creation, to exercise an account a user has retired but kept for history. */
   readonly archived?: boolean
 }
@@ -46,6 +48,17 @@ export function accountDefsFor(persona: Persona): readonly AccountDef[] {
         { key: 'checking', name: 'Joint Checking', accountType: 'checking', initialBalance: '2200.0000', bufferAmount: '500.0000' },
         { key: 'savings', name: 'Savings', accountType: 'savings', initialBalance: '4300.0000', bufferAmount: '0.0000' },
       ]
+    case 'household':
+      // Two checking accounts on purpose: bills are paid from the one that
+      // funds them, and Yearly Expenses must never read as covering Monthly.
+      return [
+        { key: 'monthly', name: 'Monthly Expenses', accountType: 'checking', initialBalance: '2400.0000', bufferAmount: '500.0000' },
+        // Money set aside for annual bills: shown in "Until payday", never
+        // counted as safe to spend.
+        { key: 'yearly', name: 'Yearly Expenses', accountType: 'checking', initialBalance: '3100.0000', bufferAmount: '250.0000', spendable: false },
+        { key: 'savings', name: 'Sinking Funds', accountType: 'savings', initialBalance: '6200.0000', bufferAmount: '0.0000' },
+        { key: 'credit_card', name: 'Everyday Card', accountType: 'credit_card', initialBalance: '-780.0000', bufferAmount: '0.0000' },
+      ]
     case 'fresh':
       return []
   }
@@ -75,6 +88,7 @@ export async function createAccounts(
       initialBalance: def.initialBalance,
       currencyCode: 'USD',
       bufferAmount: def.bufferAmount,
+      spendable: def.spendable,
     })
     ids.set(def.key, created.id)
     if (def.archived === true) await service.archive(userId, created.id)

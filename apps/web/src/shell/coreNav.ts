@@ -3,5 +3,6 @@ export const CORE_NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/accounts', label: 'Accounts', end: false },
   { to: '/transactions', label: 'Transactions', end: false },
+  { to: '/recurring', label: 'Recurring', end: false },
   { to: '/categories', label: 'Categories', end: false },
 ]
