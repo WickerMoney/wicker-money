@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react'
 import type { PluginWidgetProps } from '@wickermoney/plugin-sdk'
-import { EmptyState, Spinner } from '@wickermoney/ui-kit'
+import { Button, EmptyState, Spinner } from '@wickermoney/ui-kit'
 import './styles.js'
 import { BUDGETS_API_BASE } from '../server/constants.js'
 import { LineBar } from './components/LineBar.js'
+import { BUDGETS_PAGE_PATH } from './helpers/budgetsPagePath.js'
+import { HEALTH_CLASS } from './helpers/healthClass.js'
 import type { AtRiskResponse } from './models/index.js'
 
 /**
- * A dashboard widget listing the budget lines worth acting on, worst first.
+ * A dashboard widget breaking the month's budget down line by line, trouble first.
  *
- * A tile has room for about four rows, so the question is which four. Not the
- * biggest budgets: a large mortgage line at 50% on the 15th is doing exactly what
- * it should. Not everything either, since that is the full page. What fits is
- * the short list of lines that are over, or spending faster than the month is
- * arriving, which is the only set where seeing it today rather than on the 30th
- * changes anything.
+ * It sits beside "Until payday" at half width, which is room for about six
+ * tiles. Lines that are over, or spending faster than the month is arriving,
+ * lead, because seeing those today rather than on the 30th is what changes
+ * anything; the rest follow by how much of their budget is gone, so the half
+ * tile reads as the month's breakdown rather than an alarm list with gaps.
  *
  * Ranking and health come from the plugin's shared module, which the page and
  * the server also use, so the widget cannot call a line at-risk that the page
@@ -60,7 +61,9 @@ export default function AtRiskWidget({ ctx }: PluginWidgetProps) {
     )
   }
 
-  if (data.lines.length === 0) {
+  // Servers from before the breakdown send only the ranked lines.
+  const tiles = data.breakdown ?? data.lines
+  if (tiles.length === 0) {
     return (
       <p className="budw__ok">
         All {data.total} budget lines are on pace. Nothing needs attention today.
@@ -68,31 +71,52 @@ export default function AtRiskWidget({ ctx }: PluginWidgetProps) {
     )
   }
 
+  const total = data.total ?? tiles.length
+  const attention = data.lines.length
+
   return (
     <div className="budw">
-      {data.lines.map((line) => (
-        <div className="budw__row" key={line.categoryId}>
-          <div className="budw__head">
-            <span className="budw__name">{line.categoryName}</span>
-            <span className={`budw__amount${line.health === 'over' ? ' is-over' : ''}`}>
-              {line.health === 'over'
-                ? `${ctx.formatMoney(line.remaining.replace('-', ''))} over`
-                : `${ctx.formatMoney(line.remaining)} left`}
-            </span>
+      <div className="budw__tiles">
+        {tiles.map((line) => (
+          // One tile per line, in the same shape as the marketing site's
+          // budget tile: what the line is, spent of available, and the bar.
+          <div className={`budw__tile ${HEALTH_CLASS[line.health]}`} key={line.categoryId}>
+            <div className="budw__tile-head">
+              <p className="budw__tile-label">{line.categoryName}</p>
+              <span className={`budw__amount${line.health === 'over' ? ' is-over' : ''}`}>
+                {line.health === 'over'
+                  ? `${ctx.formatMoney(line.remaining.replace('-', ''))} over`
+                  : `${ctx.formatMoney(line.remaining)} left`}
+              </span>
+            </div>
+            <p className="budw__tile-value">
+              {ctx.formatMoney(line.spent)} <span className="budw__tile-sub">of {ctx.formatMoney(line.available)}</span>
+            </p>
+            <LineBar
+              slim
+              used={line.used}
+              health={line.health}
+              monthKey={data.monthKey}
+              today={data.today}
+              label={`${line.categoryName}: ${ctx.formatMoney(line.spent)} of ${ctx.formatMoney(line.available)}`}
+            />
           </div>
-          <LineBar
-            used={line.used}
-            health={line.health}
-            monthKey={data.monthKey}
-            today={data.today}
-            label={`${line.categoryName}: ${ctx.formatMoney(line.spent)} of ${ctx.formatMoney(line.available)}`}
-          />
-        </div>
-      ))}
-      <p className="budw__foot">
-        {data.lines.length} of {data.total} lines need attention.
-        {' '}The mark on each bar is today.
-      </p>
+        ))}
+      </div>
+      <div className="budw__foot">
+        <p>
+          {attention === 0
+            ? `All ${total} budget lines are on pace.`
+            : `${attention} of ${total} lines need attention.`}
+          {data.summary && ` ${ctx.formatMoney(data.summary.spent)} of ${ctx.formatMoney(data.summary.available)} spent.`}
+          {' '}The mark on each bar is today.
+        </p>
+        {total > tiles.length && (
+          <Button onClick={() => ctx.navigate(BUDGETS_PAGE_PATH)}>
+            All {total} lines
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

@@ -34,6 +34,34 @@ describe('AtRiskWidget', () => {
     })
   })
 
+  it('shows the whole breakdown when the server sends one, with the month\'s totals and a way to the page', async () => {
+    const fine: MonthLine = {
+      ...overLine, id: 'l2', categoryId: 'c2', categoryName: 'Groceries', available: '450.0000',
+      planned: '450.0000', spent: '312.0000', remaining: '138.0000', used: 312 / 450, pace: 1, health: 'on-track',
+    }
+    const api = makeApi()
+    api.get.mockResolvedValue(atRisk({ total: 9, breakdown: [overLine, fine], summary: { spent: '442.0000', available: '550.0000' } }))
+    const ctx = makeCtx(api)
+
+    render(<AtRiskWidget ctx={ctx} size="md" />)
+
+    expect(await screen.findByText('Groceries')).toBeTruthy()
+    expect(screen.getByText('$138.0000 left')).toBeTruthy()
+    expect(screen.getByText(/1 of 9 lines need attention\. \$442\.0000 of \$550\.0000 spent\./)).toBeTruthy()
+    act(() => { screen.getByRole('button', { name: 'All 9 lines' }).click() })
+    expect(ctx.navigate).toHaveBeenCalledWith('/p/wickermoney.budgets/budgets')
+  })
+
+  it('says every line is on pace under a breakdown with nothing over', async () => {
+    const api = makeApi()
+    api.get.mockResolvedValue(atRisk({ lines: [], total: 1, breakdown: [{ ...overLine, remaining: '10.0000', health: 'on-track' }] }))
+
+    render(<AtRiskWidget ctx={makeCtx(api)} size="md" />)
+
+    expect(await screen.findByText(/All 1 budget lines are on pace\./)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /lines$/ })).toBeNull()
+  })
+
   it('says so when the month has no budget', async () => {
     const api = makeApi()
     api.get.mockResolvedValue(atRisk({ planned: false, lines: [] }))

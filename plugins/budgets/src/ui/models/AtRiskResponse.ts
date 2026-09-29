@@ -9,5 +9,10 @@ export interface AtRiskResponse {
   /** Total number of lines in the month, including those that are fine. */
   readonly total?: number
   readonly lines: readonly MonthLine[]
+  /**
+   * Every line, attention first then by how much is used, capped at six.
+   * Absent from servers older than the breakdown; the widget falls back to `lines`.
+   */
+  readonly breakdown?: readonly MonthLine[]
   readonly summary?: { readonly spent: string; readonly available: string }
 }

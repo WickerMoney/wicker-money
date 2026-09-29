@@ -187,10 +187,12 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
       widgets: [
         {
           id: 'budget-at-risk',
-          slot: 'dashboard.secondary',
-          title: 'Watch list',
+          // Beside "Until payday" at the top: what is safe to spend next to
+          // which budgets need attention. `md` is half of the primary slot.
+          slot: 'dashboard.primary',
+          title: 'Budget breakdown',
           defaultSize: 'md',
-          order: 15,
+          order: 6,
           module: './AtRiskWidget',
         },
       ],
@@ -225,7 +227,8 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
           id: 'until-payday',
           slot: 'dashboard.primary',
           title: 'Until payday',
-          defaultSize: 'lg',
+          // Half the primary slot, with the budgets watch list beside it.
+          defaultSize: 'md',
           // First on the dashboard: "will I make it to payday?" is the question
           // the charts below it are context for.
           order: 5,

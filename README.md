@@ -239,8 +239,9 @@ Nothing is written until you edit one or press *Start &lt;month&gt; from these*,
 looking ahead at November in October stays a read.
 
 The bar on each line marks today. A line at 80% is fine on the 28th and a
-problem on the 10th, and the *Watch list* dashboard widget ranks by that rather
-than by amount.
+problem on the 10th, and the *Budget breakdown* dashboard widget ranks by that
+rather than by amount: lines that are over or ahead of pace first, then the rest
+by how much of their budget is used.
 
 ### Forgotten password
 

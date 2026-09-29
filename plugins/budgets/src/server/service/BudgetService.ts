@@ -1,5 +1,5 @@
 import {
-  draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, sumMoney, todayIn,
+  draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown, sumMoney, todayIn,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
 import type { BudgetUnitOfWork } from '../repository/BudgetUnitOfWork.js'
@@ -243,6 +243,7 @@ export class BudgetService {
       // Ranking is delegated to the shared module so this widget and the month
       // page agree on what "in trouble" means.
       lines: rankAtRisk(statuses),
+      breakdown: rankBreakdown(statuses),
       summary: {
         spent: sumMoney(statuses.map((s) => s.spent)),
         available: sumMoney(statuses.map((s) => s.available)),

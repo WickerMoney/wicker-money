@@ -96,7 +96,14 @@
 .page__split { display: grid; gap: var(--wm-gap); grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 
 .slot { display: grid; gap: var(--wm-gap); min-width: 0; }
-.slot--primary { grid-template-columns: minmax(0, 1fr); }
+/* The primary slot is two columns and honours a widget's size: `lg` and
+   `full` take the whole row, `sm` and `md` take half, so two small widgets
+   can sit side by side above the full-width charts. */
+.slot--primary { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.slot--primary > .slot-item--lg,
+.slot--primary > .slot-item--full { grid-column: 1 / -1; }
+/* Side-by-side widgets share a row height, so their panels match. */
+.slot--primary > .slot-item > .wm-surface { height: 100%; }
 .slot--secondary { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .slot-item { min-width: 0; }
 
@@ -120,6 +127,7 @@
                 border-bottom: 1px solid var(--wm-border); }
   .shell__brand { padding: 4px 8px; }
   .page__split { grid-template-columns: minmax(0, 1fr); }
+  .slot--primary { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Inline category assignment in the transactions table. A select rather than a
