@@ -1,5 +1,6 @@
 import { sql } from 'kysely'
 import type { Trx } from '../../db/Trx.js'
+import type { CategoryKind } from '../../db/models/index.js'
 import { databaseNow } from '../../accounts/repository/databaseNow.js'
 import type { LegAccount } from './LegAccount.js'
 import type { RecurringItemRepository } from './RecurringItemRepository.js'
@@ -94,10 +95,9 @@ export class KyselyRecurringItemRepository implements RecurringItemRepository {
   }
 
   /** @inheritdoc */
-  async findCategoryIds(ids: readonly string[]): Promise<Set<string>> {
-    if (ids.length === 0) return new Set()
-    const rows = await this.trx.selectFrom('core.categories').select('id').where('id', 'in', [...ids]).execute()
-    return new Set(rows.map((row) => row.id))
+  async findCategoryKind(id: string): Promise<CategoryKind | undefined> {
+    const row = await this.trx.selectFrom('core.categories').select('kind').where('id', '=', id).executeTakeFirst()
+    return row?.kind
   }
 
   /** Inserts an item's legs. */

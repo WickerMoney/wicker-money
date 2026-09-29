@@ -319,3 +319,16 @@
 .settings-facts > div { display: grid; grid-template-columns: 160px 1fr; gap: 8px; }
 .settings-facts dt { color: var(--wm-text-muted); font-size: 13px; margin: 0; }
 .settings-facts dd { margin: 0; font-size: 13px; }
+
+/* Recurring items */
+.recur-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--wm-gap); }
+.recur-tiles__hint { margin: 8px 0 0; }
+.recur-sub { font-size: 12px; }
+.recur-arrow { color: var(--wm-text-muted); }
+.recur-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.recur-legs { border: 0; padding: 0; margin: 0 0 var(--wm-gap-sm); display: flex; flex-direction: column; gap: 4px; }
+.recur-legs__row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.recur-legs__row .wm-btn { margin-bottom: var(--wm-gap-sm); }
+.recur-days { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.recur-preview { margin: 4px 0 12px; }
+.recur-preview__list { margin: 4px 0 0; padding-left: 18px; font-variant-numeric: tabular-nums; }

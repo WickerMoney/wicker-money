@@ -1,3 +1,4 @@
+import type { CategoryKind } from '../../db/models/index.js'
 import type { LegAccount } from './LegAccount.js'
 import type { RecurringItemRow } from './RecurringItemRow.js'
 import type { RecurringItemWrite } from './RecurringItemWrite.js'
@@ -69,10 +70,10 @@ export interface RecurringItemRepository {
   findAccounts(ids: readonly string[]): Promise<LegAccount[]>
 
   /**
-   * Checks which categories exist for this user.
+   * Looks up a category's kind.
    *
-   * @param ids - Category ids.
-   * @returns The subset that exists.
+   * @param id - Category id.
+   * @returns Its kind, or `undefined` if it does not exist for this user.
    */
-  findCategoryIds(ids: readonly string[]): Promise<Set<string>>
+  findCategoryKind(id: string): Promise<CategoryKind | undefined>
 }

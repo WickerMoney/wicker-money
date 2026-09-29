@@ -1,5 +1,6 @@
 import { ValidationError } from '../../errors.js'
 import { money, toMoney } from '../../money.js'
+import type { CategoryKind } from '../../db/models/index.js'
 import type { LegAccount } from '../repository/LegAccount.js'
 import type { RecurringItemWrite } from '../repository/RecurringItemWrite.js'
 import type { RecurringItemInput } from './RecurringItemInput.js'
@@ -29,18 +30,20 @@ const LIABILITY_TYPES = new Set(['credit_card', 'loan'])
  * - A debt payment pays a credit card or loan. Only checked here: account type
  *   can change later, so the database cannot keep this true.
  * - A transfer or debt payment has no category (it is money moving, not
- *   spending or income), and a category, when set, exists.
+ *   spending or income); income takes an income category and a bill an
+ *   expense category, so a future transaction matched to the item is
+ *   categorised the way the item says. A category, when set, exists.
  *
  * @param input - The submitted item.
  * @param accounts - The accounts the legs name that exist for this user.
- * @param categoryExists - Whether `input.categoryId` (when set) exists for this user.
+ * @param categoryKind - The kind of `input.categoryId` when set, or `undefined` if it does not exist for this user.
  * @returns The item in the shape the repository writes.
  * @throws {ValidationError} Naming the first rule the item breaks.
  */
 export function validateRecurringItem(
   input: RecurringItemInput,
   accounts: readonly LegAccount[],
-  categoryExists: boolean,
+  categoryKind: CategoryKind | undefined,
 ): RecurringItemWrite {
   const endDate = input.endDate ?? null
   if (endDate !== null && endDate < input.seriesStartDate) {
@@ -57,7 +60,15 @@ export function validateRecurringItem(
         'it is money moving between your accounts, not spending or income.',
     )
   }
-  if (categoryId !== null && !categoryExists) throw new ValidationError('categoryId: Category not found.')
+  if (categoryId !== null) {
+    if (categoryKind === undefined) throw new ValidationError('categoryId: Category not found.')
+    const wanted = input.kind === 'income' ? 'income' : 'expense'
+    if (categoryKind !== wanted) {
+      throw new ValidationError(
+        `categoryId: ${input.kind === 'income' ? 'Income' : 'A bill'} needs ${wanted === 'income' ? 'an income' : 'an expense'} category.`,
+      )
+    }
+  }
 
   return {
     name: input.name,

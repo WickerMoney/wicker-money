@@ -3,7 +3,7 @@ import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import type { Repositories } from '../../data/Repositories.js'
 import { todayIn } from '../../core/service/todayIn.js'
 import { NotFoundError, ValidationError } from '../../errors.js'
-import { addMoney } from '../../money.js'
+import { addMoney, negate } from '../../money.js'
 import type { RecurringItemRow } from '../repository/RecurringItemRow.js'
 import { addDays } from './addDays.js'
 import type { OccurrenceView } from './OccurrenceView.js'
@@ -20,11 +20,29 @@ export const MAX_WINDOW_DAYS = 400
 /** The name the legs trigger reports violations under (migration 021). */
 const LEGS_RULE = 'ck_recurring_items_legs_match_kind'
 
+/**
+ * Monthly rates across the active items listed, for summary tiles.
+ *
+ * Transfers are excluded: moving money between your own accounts is neither
+ * income nor spending. Debt payments count with bills, because from the
+ * household's cash they are money going out.
+ */
+export interface RecurringSummary {
+  /** Sum of income items' monthly equivalents (zero or positive). */
+  readonly monthlyIncome: string
+  /** Sum of bills' and debt payments' monthly equivalents, as a negative amount. */
+  readonly monthlyOutgoings: string
+  /** `monthlyIncome + monthlyOutgoings`. */
+  readonly monthlyNet: string
+}
+
 /** Items plus the day they were evaluated against. */
 export interface RecurringItemList {
   /** The user's today, `YYYY-MM-DD`, in their time zone. Everything derived was computed against it. */
   readonly today: string
   readonly items: readonly RecurringItemView[]
+  /** Computed over the listed items that still occur; ended ones have no rate going forward. */
+  readonly summary: RecurringSummary
 }
 
 /** Occurrences in a half-open range plus the day it was evaluated against. */
@@ -61,10 +79,13 @@ export class RecurringItemService {
    * Lists the user's items with their derived next due date.
    *
    * @param userId - The signed-in user.
-   * @param includeEnded - Include items with no occurrence left (ended series, past one-offs).
+   * @param options - `includeEnded` keeps items with no occurrence left (ended
+   *   series, past one-offs); `accountId` keeps only items with a leg on that
+   *   account, which is what an account's delete or merge dialog lists.
    * @returns Items ordered by next due date (ended last), then name.
    */
-  list(userId: string, includeEnded = false): Promise<RecurringItemList> {
+  list(userId: string, options: { includeEnded?: boolean; accountId?: string } = {}): Promise<RecurringItemList> {
+    const { includeEnded = false, accountId } = options
     return this.uow.forUser(
       userId,
       async (repos) => {
@@ -72,8 +93,9 @@ export class RecurringItemService {
         const items = (await repos.recurringItems.list())
           .map((row) => view(row, today))
           .filter((item) => includeEnded || item.nextDue !== null)
+          .filter((item) => accountId === undefined || item.legs.some((l) => l.accountId === accountId))
           .sort(byNextDue)
-        return { today, items }
+        return { today, items, summary: summarize(items) }
       },
       { readOnly: true },
     )
@@ -214,8 +236,8 @@ export class RecurringItemService {
   private async validate(repos: Repositories, input: RecurringItemInput) {
     const accounts = await repos.recurringItems.findAccounts(input.legs.map((l) => l.accountId))
     const categoryId = input.categoryId ?? null
-    const categoryExists = categoryId === null ? true : (await repos.recurringItems.findCategoryIds([categoryId])).has(categoryId)
-    return validateRecurringItem(input, accounts, categoryExists)
+    const categoryKind = categoryId === null ? undefined : await repos.recurringItems.findCategoryKind(categoryId)
+    return validateRecurringItem(input, accounts, categoryKind)
   }
 
   /**
@@ -272,6 +294,20 @@ function headlineAmount(row: RecurringItemRow): string {
     return row.legs.find((l) => !l.amount.startsWith('-'))?.amount ?? '0.0000'
   }
   return addMoney(...row.legs.map((l) => l.amount))
+}
+
+/** Sums the active items' monthly rates by direction, leaving transfers out. */
+function summarize(items: readonly RecurringItemView[]): RecurringSummary {
+  const active = items.filter((i) => i.nextDue !== null)
+  const monthlyIncome = addMoney('0', ...active.filter((i) => i.kind === 'income').map((i) => i.monthlyEquivalent))
+  const monthlyOutgoings = addMoney(
+    '0',
+    ...active.filter((i) => i.kind === 'bill').map((i) => i.monthlyEquivalent),
+    // A debt payment's headline amount is what it moves (positive); from the
+    // household's cash it is an outgoing.
+    ...active.filter((i) => i.kind === 'debt_payment').map((i) => negate(i.monthlyEquivalent)),
+  )
+  return { monthlyIncome, monthlyOutgoings, monthlyNet: addMoney(monthlyIncome, monthlyOutgoings) }
 }
 
 /** Next due ascending, ended items last, then name. */

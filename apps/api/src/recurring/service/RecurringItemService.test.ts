@@ -97,9 +97,18 @@ describe('RecurringItemService: derived fields', () => {
     const active = await serviceOver(rows, 'UTC', now).list('u')
     expect(active.items.map((i) => i.id)).toEqual(['soon', 'later'])
 
-    const all = await serviceOver(rows, 'UTC', now).list('u', true)
+    const all = await serviceOver(rows, 'UTC', now).list('u', { includeEnded: true })
     expect(all.items.map((i) => i.id)).toEqual(['soon', 'later', 'ended', 'past'])
     expect(all.items.find((i) => i.id === 'ended')?.nextDue).toBeNull()
+  })
+
+  it('narrows to the items with a leg on one account, ended ones included on request', async () => {
+    const rows = [
+      row({ id: 'mine', legs: [{ account_id: 'savings', amount: '-1.0000' }] }),
+      row({ id: 'other', legs: [{ account_id: 'checking', amount: '-1.0000' }] }),
+    ]
+    const r = await serviceOver(rows, 'UTC', now).list('u', { accountId: 'savings', includeEnded: true })
+    expect(r.items.map((i) => i.id)).toEqual(['mine'])
   })
 
   it('states the headline amount per kind and its exact monthly rate', async () => {
@@ -120,6 +129,18 @@ describe('RecurringItemService: derived fields', () => {
     expect(by['pay']).toMatchObject({ amount: '370.0000', monthlyEquivalent: '801.6667' })
     expect(by['move']).toMatchObject({ amount: '200.0000', monthlyEquivalent: '200.0000' })
     expect(by['bill']).toMatchObject({ amount: '-410.0000', monthlyEquivalent: '-136.6667' })
+  })
+
+  it('summarizes monthly rates, leaving transfers out and counting debt payments as outgoings', async () => {
+    const rows = [
+      row({ id: 'pay', kind: 'income', legs: [{ account_id: 'checking', amount: '2000.0000' }] }),
+      row({ id: 'rent', kind: 'bill', legs: [{ account_id: 'checking', amount: '-1500.0000' }] }),
+      row({ id: 'card', kind: 'debt_payment', legs: [{ account_id: 'checking', amount: '-300.0000' }, { account_id: 'card', amount: '300.0000' }] }),
+      row({ id: 'save', kind: 'transfer', legs: [{ account_id: 'checking', amount: '-100.0000' }, { account_id: 'savings', amount: '100.0000' }] }),
+      row({ id: 'gone', kind: 'bill', end_date: '2026-01-01', legs: [{ account_id: 'checking', amount: '-999.0000' }] }),
+    ]
+    const r = await serviceOver(rows, 'UTC', now).list('u', { includeEnded: true })
+    expect(r.summary).toEqual({ monthlyIncome: '2000.0000', monthlyOutgoings: '-1800.0000', monthlyNet: '200.0000' })
   })
 
   it('maps semimonthly columns to the SDK pair', async () => {

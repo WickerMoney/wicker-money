@@ -149,6 +149,24 @@ describe('creating', () => {
     expect(res.json().message).toMatch(message)
   })
 
+  it('refuses an income item filed under an expense category', async () => {
+    const res = await create({ ...bill({ kind: 'income', categoryId }), legs: [{ accountId: acct.checking, amount: '10' }] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().message).toMatch(/income category/)
+  })
+
+  it('lists only the items touching one account', async () => {
+    const u = await createUser(h)
+    const a = await makeAccount(u, 'A', 'checking')
+    const b = await makeAccount(u, 'B', 'savings')
+    const onA = await created(bill({ legs: [{ accountId: a, amount: '-1' }] }), u)
+    await created(bill({ legs: [{ accountId: b, amount: '-1' }] }), u)
+    const res = await h.app.inject({ method: 'GET', url: `/api/v1/recurring-items?accountId=${a}&includeEnded=true`, headers: auth(u) })
+    expect((res.json() as { items: Item[] }).items.map((i) => i.id)).toEqual([onA.id])
+    const bad = await h.app.inject({ method: 'GET', url: '/api/v1/recurring-items?accountId=nope', headers: auth(u) })
+    expect(bad.statusCode).toBe(400)
+  })
+
   it('refuses a category that belongs to someone else', async () => {
     const res = await create(bill({ categoryId }), bob)
     expect(res.statusCode).toBe(400)

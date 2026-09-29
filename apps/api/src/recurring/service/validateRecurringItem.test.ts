@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { CategoryKind } from '../../db/models/index.js'
 import { ValidationError } from '../../errors.js'
 import type { LegAccount } from '../repository/LegAccount.js'
 import type { RecurringItemInput } from './RecurringItemInput.js'
@@ -38,8 +39,9 @@ function failure(fn: () => unknown): string {
   throw new Error('expected a ValidationError')
 }
 
-const check = (over: Partial<RecurringItemInput>, categoryExists = true) =>
-  validateRecurringItem(input(over), ACCOUNTS, categoryExists)
+/** Validates with the category (when the input names one) of the given kind, or missing. */
+const check = (over: Partial<RecurringItemInput>, category: CategoryKind | 'missing' = 'expense') =>
+  validateRecurringItem(input(over), ACCOUNTS, category === 'missing' ? undefined : category)
 
 describe('validateRecurringItem', () => {
   describe('accepts', () => {
@@ -117,7 +119,16 @@ describe('validateRecurringItem', () => {
     })
 
     it('a category that does not exist', () => {
-      expect(failure(() => check({ categoryId: 'missing' }, false))).toMatch(/Category not found/)
+      expect(failure(() => check({ categoryId: 'c' }, 'missing'))).toMatch(/Category not found/)
+    })
+
+    it('a category of the wrong kind', () => {
+      const pay = { kind: 'income' as const, categoryId: 'c', legs: [{ accountId: CHECKING, amount: '10' }] }
+      expect(failure(() => check(pay, 'expense'))).toMatch(/Income needs an income category/)
+      expect(failure(() => check({ categoryId: 'c' }, 'income'))).toMatch(/A bill needs an expense category/)
+      expect(failure(() => check({ categoryId: 'c' }, 'transfer'))).toMatch(/expense category/)
+      expect(() => check(pay, 'income')).not.toThrow()
+      expect(() => check({ categoryId: 'c' }, 'expense')).not.toThrow()
     })
   })
 

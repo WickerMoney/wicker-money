@@ -9,6 +9,7 @@ import { CategoriesPage } from './pages/Categories/index.js'
 import { Dashboard } from './pages/Dashboard/index.js'
 import { SettingsPage } from './pages/Settings/index.js'
 import { TransactionsPage } from './pages/Transactions/index.js'
+import { RecurringPage } from './pages/Recurring/index.js'
 import { buildPluginContext } from './plugins/context.js'
 import { loadPluginRegistry } from './plugins/loader.js'
 import type { PluginLoadFailure } from './plugins/PluginLoadFailure.js'
@@ -75,6 +76,7 @@ export function AuthenticatedApp() {
           <Route index element={<Dashboard plugins={plugins} contextFor={contextFor} />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="transactions" element={<TransactionsPage />} />
+          <Route path="recurring" element={<RecurringPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="settings" element={<SettingsPage />} />
           {pluginRoutes(plugins, contextFor)}
