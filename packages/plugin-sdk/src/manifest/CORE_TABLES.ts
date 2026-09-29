@@ -12,4 +12,5 @@ export const CORE_TABLES = [
   'category_rules',
   'category_rule_conditions',
   'recurring_items',
+  'recurring_item_legs',
 ] as const

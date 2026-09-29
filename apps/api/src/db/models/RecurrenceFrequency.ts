@@ -1,3 +1,3 @@
-/** How often a recurring item repeats. */
+/** How often a recurring item repeats. `once` is a one-off future item. */
 export type RecurrenceFrequency =
-  | 'daily' | 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'annual'
+  | 'once' | 'daily' | 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'quarterly' | 'annual'

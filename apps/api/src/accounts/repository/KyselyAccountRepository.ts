@@ -12,8 +12,8 @@ import type { MigrationCounts } from './MigrationCounts.js'
 import type { NewAccountInput } from './NewAccountInput.js'
 import { SELECT_WITH_BALANCE } from './SELECT_WITH_BALANCE.js'
 
-/** Tables whose rows reference accounts as `account_id` and `transfer_account_id`. */
-type AccountReferencingTable = 'core.transactions' | 'core.recurring_items'
+/** Recurring-item kinds whose two legs make them a transfer between two accounts. */
+const TWO_ACCOUNT_KINDS = ['transfer', 'debt_payment'] as const
 
 /** Kysely implementation of {@link AccountRepository} over a single transaction. */
 export class KyselyAccountRepository implements AccountRepository {
@@ -114,8 +114,8 @@ export class KyselyAccountRepository implements AccountRepository {
   /** @inheritdoc */
   async countMigrationRows(fromId: string, toId: string): Promise<MigrationCounts> {
     const [transactions, recurringItems] = await Promise.all([
-      this.countMigrationRowsIn('core.transactions', fromId, toId),
-      this.countMigrationRowsIn('core.recurring_items', fromId, toId),
+      this.countTransactionMigrationRows(fromId, toId),
+      this.countRecurringMigrationRows(fromId, toId),
     ])
     return {
       transferTransactions: transactions.transfers,
@@ -127,17 +127,15 @@ export class KyselyAccountRepository implements AccountRepository {
 
   /** @inheritdoc */
   async moveHistory(fromId: string, toId: string): Promise<void> {
-    for (const table of ['core.transactions', 'core.recurring_items'] as const) {
-      await this.trx
-        .deleteFrom(table)
-        .where((eb) =>
-          eb.or([
-            eb.and([eb('account_id', '=', fromId), eb('transfer_account_id', '=', toId)]),
-            eb.and([eb('account_id', '=', toId), eb('transfer_account_id', '=', fromId)]),
-          ]),
-        )
-        .execute()
-    }
+    await this.trx
+      .deleteFrom('core.transactions')
+      .where((eb) =>
+        eb.or([
+          eb.and([eb('account_id', '=', fromId), eb('transfer_account_id', '=', toId)]),
+          eb.and([eb('account_id', '=', toId), eb('transfer_account_id', '=', fromId)]),
+        ]),
+      )
+      .execute()
 
     // The unique index is per (account_id, external_id), so merging two
     // accounts that share an external id, most likely because both were
@@ -155,15 +153,50 @@ export class KyselyAccountRepository implements AccountRepository {
         .execute()
     })
 
+    await this.moveRecurringLegs(fromId, toId)
+  }
+
+  /**
+   * Moves recurring-item legs from one account to another.
+   *
+   * An item with a leg on each account is the one case that needs a decision,
+   * because legs are one per account per item:
+   *
+   * - a transfer or debt payment between the two becomes a transfer from an
+   *   account to itself, so it is deleted (as transactions are);
+   * - a split paycheck into both keeps paying the same total, so its two legs
+   *   are summed into the target's.
+   *
+   * Every other leg on the source is re-pointed. The legs trigger checks the
+   * result at commit.
+   */
+  private async moveRecurringLegs(fromId: string, toId: string): Promise<void> {
+    await sql`
+      DELETE FROM core.recurring_items i
+       WHERE i.kind IN (${sql.join(TWO_ACCOUNT_KINDS.map((k) => sql.lit(k)))})
+         AND EXISTS (SELECT 1 FROM core.recurring_item_legs f WHERE f.recurring_item_id = i.id AND f.account_id = ${fromId})
+         AND EXISTS (SELECT 1 FROM core.recurring_item_legs t WHERE t.recurring_item_id = i.id AND t.account_id = ${toId})
+    `.execute(this.trx)
+    await sql`
+      UPDATE core.recurring_item_legs t
+         SET amount = t.amount + f.amount, updated_at = now()
+        FROM core.recurring_item_legs f
+       WHERE f.recurring_item_id = t.recurring_item_id
+         AND f.account_id = ${fromId}
+         AND t.account_id = ${toId}
+    `.execute(this.trx)
+    await sql`
+      DELETE FROM core.recurring_item_legs f
+       WHERE f.account_id = ${fromId}
+         AND EXISTS (
+           SELECT 1 FROM core.recurring_item_legs t
+            WHERE t.recurring_item_id = f.recurring_item_id AND t.account_id = ${toId}
+         )
+    `.execute(this.trx)
     await this.trx
-      .updateTable('core.recurring_items')
+      .updateTable('core.recurring_item_legs')
       .set({ account_id: toId, updated_at: databaseNow })
       .where('account_id', '=', fromId)
-      .execute()
-    await this.trx
-      .updateTable('core.recurring_items')
-      .set({ transfer_account_id: toId, updated_at: databaseNow })
-      .where('transfer_account_id', '=', fromId)
       .execute()
   }
 
@@ -174,24 +207,33 @@ export class KyselyAccountRepository implements AccountRepository {
       .where((eb) => eb.or([eb('account_id', '=', id), eb('transfer_account_id', '=', id)]))
       .returning('id')
       .execute()
+    // The whole item goes, not just the leg: a paycheck that silently shrank
+    // in the forecast would be harder to notice than one that is gone. Legs
+    // cascade from the item.
     const recurringItems = await this.trx
       .deleteFrom('core.recurring_items')
-      .where((eb) => eb.or([eb('account_id', '=', id), eb('transfer_account_id', '=', id)]))
+      .where((eb) =>
+        eb.exists(
+          eb.selectFrom('core.recurring_item_legs as l')
+            .select('l.id')
+            .whereRef('l.recurring_item_id', '=', 'core.recurring_items.id')
+            .where('l.account_id', '=', id),
+        ),
+      )
       .returning('id')
       .execute()
     return { transactions: transactions.length, recurringItems: recurringItems.length }
   }
 
   /**
-   * Splits the rows of one table that refer to `fromId` into transfers between
-   * the two accounts and everything else.
+   * Splits the transactions that refer to `fromId` into transfers between the
+   * two accounts and everything else.
    *
    * `transfer_account_id` is NULL on every ordinary row, so the "between the
    * two accounts" test is NULL rather than false for them; `IS TRUE` and
    * `IS NOT TRUE` keep such rows counted as "others" instead of dropping them.
    */
-  private async countMigrationRowsIn(
-    table: AccountReferencingTable,
+  private async countTransactionMigrationRows(
     fromId: string,
     toId: string,
   ): Promise<{ transfers: number; others: number }> {
@@ -204,8 +246,38 @@ export class KyselyAccountRepository implements AccountRepository {
           (account_id = ${fromId} AND transfer_account_id = ${toId})
           OR (account_id = ${toId} AND transfer_account_id = ${fromId})
         ) AS between_the_two
-        FROM ${sql.table(table)}
+        FROM core.transactions
         WHERE account_id = ${fromId} OR transfer_account_id = ${fromId}
+      ) refs
+    `.execute(this.trx)
+    const row = result.rows[0]
+    return { transfers: Number(row?.transfers ?? 0), others: Number(row?.others ?? 0) }
+  }
+
+  /**
+   * Splits the recurring items with a leg on `fromId` into transfers (or debt
+   * payments) between the two accounts, which a merge deletes, and everything
+   * else, which it moves. Counted per item, not per leg.
+   */
+  private async countRecurringMigrationRows(
+    fromId: string,
+    toId: string,
+  ): Promise<{ transfers: number; others: number }> {
+    const result = await sql<{ transfers: string; others: string }>`
+      SELECT
+        count(*) FILTER (WHERE between_the_two)::text AS transfers,
+        count(*) FILTER (WHERE NOT between_the_two)::text AS others
+      FROM (
+        SELECT (
+          i.kind IN (${sql.join(TWO_ACCOUNT_KINDS.map((k) => sql.lit(k)))})
+          AND EXISTS (
+            SELECT 1 FROM core.recurring_item_legs t WHERE t.recurring_item_id = i.id AND t.account_id = ${toId}
+          )
+        ) AS between_the_two
+        FROM core.recurring_items i
+        WHERE EXISTS (
+          SELECT 1 FROM core.recurring_item_legs f WHERE f.recurring_item_id = i.id AND f.account_id = ${fromId}
+        )
       ) refs
     `.execute(this.trx)
     const row = result.rows[0]

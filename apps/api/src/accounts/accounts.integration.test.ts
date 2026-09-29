@@ -132,22 +132,60 @@ async function newTransaction(accountId: string, amount: string, u = user, merch
   return (res.json() as { id: string }).id
 }
 
+/** Inserts a one-leg bill on `accountId`; `over` overrides item columns. */
 async function newRecurring(accountId: string, over: Record<string, unknown> = {}, u = user) {
-  return asUser(h.db, u.id, async (trx) =>
-    trx
+  return asUser(h.db, u.id, async (trx) => {
+    const item = await trx
       .insertInto('core.recurring_items')
       .values({
         user_id: u.id,
-        account_id: accountId,
         name: 'Recurring',
-        amount: '-10.00',
+        kind: 'bill',
         frequency: 'monthly',
         series_start_date: '2026-01-01',
         ...over,
       })
       .returning('id')
-      .executeTakeFirstOrThrow(),
+      .executeTakeFirstOrThrow()
+    await trx
+      .insertInto('core.recurring_item_legs')
+      .values({ user_id: u.id, recurring_item_id: item.id, account_id: accountId, amount: '-10.00' })
+      .execute()
+    return item
+  })
+}
+
+/** Inserts a recurring item of any kind with the given legs; returns its id. */
+async function newRecurringWithLegs(
+  kind: 'income' | 'bill' | 'debt_payment' | 'transfer',
+  legs: ReadonlyArray<readonly [accountId: string, amount: string]>,
+  u = user,
+): Promise<string> {
+  return asUser(h.db, u.id, async (trx) => {
+    const item = await trx
+      .insertInto('core.recurring_items')
+      .values({ user_id: u.id, name: `Recurring ${kind}`, kind, frequency: 'monthly', series_start_date: '2026-01-01' })
+      .returning('id')
+      .executeTakeFirstOrThrow()
+    await trx
+      .insertInto('core.recurring_item_legs')
+      .values(legs.map(([accountId, amount]) => ({ user_id: u.id, recurring_item_id: item.id, account_id: accountId, amount })))
+      .execute()
+    return item.id
+  })
+}
+
+/** Every leg of the given items as `item → { account → amount }`. */
+async function legsOf(itemIds: readonly string[], u = user): Promise<Record<string, Record<string, string>>> {
+  const rows = await asUser(h.db, u.id, (trx) =>
+    trx.selectFrom('core.recurring_item_legs')
+      .select(['recurring_item_id', 'account_id', 'amount'])
+      .where('recurring_item_id', 'in', [...itemIds])
+      .execute(),
   )
+  const out: Record<string, Record<string, string>> = {}
+  for (const r of rows) (out[r.recurring_item_id] ??= {})[r.account_id] = r.amount
+  return out
 }
 
 async function doTransfer(fromAccountId: string, toAccountId: string, amount: string, u = user) {
@@ -183,7 +221,8 @@ describe('account usage', () => {
     expect(usage.by).toEqual(
       expect.arrayContaining([
         { table: 'core.transactions', count: 1 },
-        { table: 'core.recurring_items', count: 1 },
+        // Items reach accounts through their legs.
+        { table: 'core.recurring_item_legs', count: 1 },
       ]),
     )
   })
@@ -711,5 +750,80 @@ describe('balances at the edges of the money range', () => {
       })
       expect(res.statusCode, initialBalance).toBe(400)
     }
+  })
+})
+
+describe('recurring items when accounts are merged or deleted', () => {
+  it('deletes a transfer between the two, sums a split paycheck, and moves the rest', async () => {
+    const a = await makeAccount(user, { name: 'RecurMergeA' })
+    const b = await makeAccount(user, { name: 'RecurMergeB' })
+    const other = await makeAccount(user, { name: 'RecurMergeOther', accountType: 'savings' })
+    const between = await newRecurringWithLegs('transfer', [[a.id, '-100.00'], [b.id, '100.00']])
+    const split = await newRecurringWithLegs('income', [[a.id, '300.00'], [b.id, '1200.00']])
+    const bill = await newRecurringWithLegs('bill', [[a.id, '-45.00']])
+    const toSavings = await newRecurringWithLegs('transfer', [[a.id, '-50.00'], [other.id, '50.00']])
+
+    const preview = await h.app.inject({
+      method: 'POST', url: `/api/v1/accounts/${a.id}/migrate/preview`, headers: auth(user),
+      payload: { toAccountId: b.id },
+    })
+    const plan = preview.json()
+    // Counted per item, not per leg.
+    expect(plan.removedTransferRecurringItems).toBe(1)
+    expect(plan.movedRecurringItems).toBe(3)
+
+    const commit = await h.app.inject({
+      method: 'POST', url: `/api/v1/accounts/${a.id}/migrate`, headers: auth(user),
+      payload: { toAccountId: b.id, confirmCount: plan.totalAffected },
+    })
+    expect(commit.statusCode).toBe(200)
+
+    const legs = await legsOf([between, split, bill, toSavings])
+    expect(legs[between]).toBeUndefined()
+    // Same total paid, now in one leg (legs are one per account per item).
+    expect(legs[split]).toEqual({ [b.id]: '1500.0000' })
+    expect(legs[bill]).toEqual({ [b.id]: '-45.0000' })
+    expect(legs[toSavings]).toEqual({ [b.id]: '-50.0000', [other.id]: '50.0000' })
+  })
+
+  it('also removes a debt payment between the two accounts', async () => {
+    const checking = await makeAccount(user, { name: 'RecurMergeChecking' })
+    const card = await makeAccount(user, { name: 'RecurMergeCard', accountType: 'credit_card' })
+    const payment = await newRecurringWithLegs('debt_payment', [[checking.id, '-400.00'], [card.id, '400.00']])
+
+    const preview = await h.app.inject({
+      method: 'POST', url: `/api/v1/accounts/${card.id}/migrate/preview`, headers: auth(user),
+      payload: { toAccountId: checking.id },
+    })
+    expect(preview.json().removedTransferRecurringItems).toBe(1)
+    await h.app.inject({
+      method: 'POST', url: `/api/v1/accounts/${card.id}/migrate`, headers: auth(user),
+      payload: { toAccountId: checking.id, confirmCount: preview.json().totalAffected },
+    })
+    expect(await legsOf([payment])).toEqual({})
+  })
+
+  it('deletes every item with a leg on a deleted account, whole, and leaves the rest alone', async () => {
+    const a = await makeAccount(user, { name: 'RecurDeleteA' })
+    const b = await makeAccount(user, { name: 'RecurDeleteB' })
+    const split = await newRecurringWithLegs('income', [[a.id, '300.00'], [b.id, '1200.00']])
+    const bill = await newRecurringWithLegs('bill', [[a.id, '-45.00']])
+    const untouched = await newRecurringWithLegs('bill', [[b.id, '-10.00']])
+
+    const usage = await usageOf(a.id)
+    expect(usage.by).toEqual([{ table: 'core.recurring_item_legs', count: 2 }])
+
+    const res = await h.app.inject({
+      method: 'POST', url: `/api/v1/accounts/${a.id}/delete-with-history`, headers: auth(user),
+      payload: { confirmCount: usage.total },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().deletedRecurringItems).toBe(2)
+
+    const legs = await legsOf([split, bill, untouched])
+    // The split paycheck goes entirely, including its leg on B.
+    expect(legs[split]).toBeUndefined()
+    expect(legs[bill]).toBeUndefined()
+    expect(legs[untouched]).toEqual({ [b.id]: '-10.0000' })
   })
 })

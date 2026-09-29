@@ -17,6 +17,7 @@ const TABLE_REFS: Readonly<Record<ExportTable, ReturnType<typeof sql.table>>> = 
   transactions: sql.table('core.transactions'),
   transaction_splits: sql.table('core.transaction_splits'),
   recurring_items: sql.table('core.recurring_items'),
+  recurring_item_legs: sql.table('core.recurring_item_legs'),
 }
 
 /** Kysely implementation of {@link ExportRepository} over a single transaction. */

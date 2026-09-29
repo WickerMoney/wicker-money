@@ -9,4 +9,5 @@ export const EXPORT_SECTIONS: readonly { readonly key: string; readonly table: E
   { key: 'transactions', table: 'transactions' },
   { key: 'transactionSplits', table: 'transaction_splits' },
   { key: 'recurringItems', table: 'recurring_items' },
+  { key: 'recurringItemLegs', table: 'recurring_item_legs' },
 ]

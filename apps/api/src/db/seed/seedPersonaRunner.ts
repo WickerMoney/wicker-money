@@ -84,6 +84,10 @@ export async function runPersona(ctx: RunContext, persona: Persona): Promise<Run
     await seedLightHistory(ctx.services.transactions, userId, accountIds, slugToId, rng)
     await createRecurringItems(ctx.db, userId, recurringItemDefsFor('second'), accountIds, slugToId)
     await createBudgetLines(ctx.db, userId, budgetLineDefsFor('second'), slugToId)
+  } else if (persona.key === 'household') {
+    // Recurring items only: balances are the opening balances, which is all
+    // the upcoming widget and forecast need to project from.
+    await createRecurringItems(ctx.db, userId, recurringItemDefsFor('household'), accountIds, slugToId)
   }
 
   return 'created'

@@ -3,6 +3,7 @@ import { asPlugin, type Db } from '../client.js'
 import { pluginRoleName } from '../plugin-roles.js'
 import { queryRunner } from '../../plugins/queryRunner.js'
 import { addMonthsClamped, firstDayOfMonth, todayIso } from './seedRng.js'
+import type { Persona } from './seedPersonas.js'
 
 /** One `plugin_budgets.budget_lines` row to create, for one calendar month. */
 export interface BudgetLineDef {
@@ -23,7 +24,7 @@ export interface BudgetLineDef {
  * category (`household-items`, which already has real spend from the Costco
  * split and the Amazon rule) left with no line whatsoever.
  */
-export function budgetLineDefsFor(personaKey: 'hero' | 'second' | 'fresh'): readonly BudgetLineDef[] {
+export function budgetLineDefsFor(personaKey: Persona['key']): readonly BudgetLineDef[] {
   if (personaKey === 'hero') {
     const months = [0, 1]
     return months.flatMap((monthsAgo) => [

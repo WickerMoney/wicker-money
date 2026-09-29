@@ -10,7 +10,7 @@ export const SEED_EMAIL_DOMAIN = 'seed.wickermoney.test'
 /** One fixed persona the dev dataset creates. */
 export interface Persona {
   /** Stable id, also used to derive this persona's random seed. */
-  readonly key: 'hero' | 'second' | 'fresh'
+  readonly key: 'hero' | 'second' | 'household' | 'fresh'
   /** Login email, always under {@link SEED_EMAIL_DOMAIN}. */
   readonly email: string
   /** Fixed password so the seed is a documented, repeatable login, not a mystery. */
@@ -28,13 +28,15 @@ export interface Persona {
 }
 
 /**
- * The three personas a seed run creates.
+ * The four personas a seed run creates.
  *
  * `hero` is the polished one: full history, every account type, every
  * transaction shape, sized to look good in a screenshot or a recording.
  * `second` is a second onboarded household, small on purpose — its main job is
  * proving that `hero`'s data never leaks into it (or the reverse) under
- * row-level security. `fresh` never runs onboarding, so logging in as it is
+ * row-level security. `household` is a two-income household running its money
+ * through two checking accounts (Monthly and Yearly Expenses), built to
+ * exercise recurring items and the upcoming widget. `fresh` never runs onboarding, so logging in as it is
  * the only way to see the setup wizard without clearing a real account.
  */
 export const PERSONAS: readonly Persona[] = [
@@ -56,6 +58,14 @@ export const PERSONAS: readonly Persona[] = [
     description: 'A second onboarded household with a little data, for checking tenant isolation.',
     onboard: true,
     situations: ['vehicle'],
+  },
+  {
+    key: 'household',
+    email: `household@${SEED_EMAIL_DOMAIN}`,
+    password: 'SeedHousehold!2026',
+    description: 'Two incomes, a split paycheck, Monthly + Yearly Expenses checking and sinking funds: recurring items only.',
+    onboard: true,
+    situations: ['homeowner', 'vehicle', 'dental-vision'],
   },
   {
     key: 'fresh',
