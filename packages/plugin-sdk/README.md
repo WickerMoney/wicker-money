@@ -28,10 +28,39 @@ plugin as a Module Federation singleton.
 | Import | Use it for | Contents |
 |---|---|---|
 | `@wickermoney/plugin-sdk/runtime` | Plugin UI code (browser) | Types for the React components a plugin exports (`PluginWidgetProps`, `PluginPageProps`, `PluginContext`, ...), and `adoptPluginStyles` |
+| `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals` |
 | `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above, plus the Zod manifest schemas, `parseManifest`, dashboard-range helpers and constants |
 
-Import from `/runtime` in plugin UI code. The package root re-exports the Zod
-manifest schemas, which add about 85 kB to a plugin bundle that never uses them.
+Import from `/runtime` (and `/recurrence` if you need it) in plugin UI code.
+The package root re-exports the Zod manifest schemas, which add about 85 kB to
+a plugin bundle that never uses them.
+
+## Recurring items
+
+`/recurrence` is pure and dependency-free: calendar dates in and out as
+`YYYY-MM-DD`, money as decimal strings (never `number`), and no clock. Work out
+the user's today once, in their time zone, and pass it in. Ranges are
+half-open, like `DashboardRange`: `from` inclusive, `to` exclusive.
+
+```ts
+import { dailyBalances, nextPayday, occurrences } from '@wickermoney/plugin-sdk/recurrence'
+
+const rent = {
+  frequency: 'monthly',
+  seriesStartDate: '2026-01-31',          // immutable anchor
+  legs: [{ accountId: 'checking', amount: '-1550.0000' }],
+} as const
+
+occurrences(rent, '2026-02-01', '2026-04-01') // ['2026-02-28', '2026-03-31']
+
+const payday = nextPayday(items, today)       // strictly after today, or null
+const series = dailyBalances(items, { checking: '812.4000' }, tomorrow, payday ?? fallback)
+```
+
+Monthly, quarterly and annual items clamp to the end of short months, computed
+from the anchor each time (Jan 31 → Feb 28 → Mar 31). `semimonthly` takes two
+days (`semimonthlyDays`, default `[1, 15]`). An unknown frequency throws rather
+than dropping an item from a forecast.
 
 ## A plugin, in brief
 
