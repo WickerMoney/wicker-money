@@ -1,0 +1,54 @@
+/** One leg of an occurrence: a signed amount on one account. */
+export interface UpcomingLeg {
+  readonly accountId: string
+  readonly amount: string
+}
+
+/** One occurrence of a recurring item inside the window. */
+export interface UpcomingOccurrence {
+  readonly itemId: string
+  readonly date: string
+  readonly name: string
+  readonly kind: 'income' | 'bill' | 'debt_payment' | 'transfer'
+  readonly categoryId: string | null
+  /** Income total, a bill's (negative) amount, or what a transfer moves (positive). */
+  readonly amount: string
+  readonly legs: readonly UpcomingLeg[]
+}
+
+/** One checking account's outlook to payday. */
+export interface UpcomingAccount {
+  readonly accountId: string
+  readonly name: string
+  readonly balance: string
+  readonly buffer: string
+  readonly lowest: { readonly date: string; readonly balance: string }
+  /** `lowest − buffer`; negative when short. */
+  readonly headroom: string
+  readonly short: boolean
+}
+
+/** `GET /core/recurring-items/upcoming`: everything computed on the server. */
+export interface UpcomingResponse {
+  readonly today: string
+  readonly window: { readonly from: string; readonly through: string; readonly payday: string | null }
+  /** Sum of positive headroom across checking accounts; shortfalls are never netted away. */
+  readonly safeToSpend: string
+  readonly accounts: readonly UpcomingAccount[]
+  readonly occurrences: readonly UpcomingOccurrence[]
+  readonly hasItems: boolean
+}
+
+/** `GET /core/accounts/list`: names for the legs of transfers. */
+export interface AccountListResponse {
+  readonly accounts: readonly { readonly id: string; readonly name: string; readonly type: string }[]
+}
+
+/** What the widget's data hook returns. */
+export interface UpcomingState {
+  readonly data: UpcomingResponse | null
+  /** Account names by id, for describing where money goes. */
+  readonly accountNames: ReadonlyMap<string, string>
+  readonly loading: boolean
+  readonly error: string | null
+}

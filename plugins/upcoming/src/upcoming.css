@@ -1,0 +1,54 @@
+/*
+ * Colours come from the host's --wm-* tokens (packages/ui-kit/src/tokens.css),
+ * which switch between light and dark, so this file defines no colour of its
+ * own. Identity is never colour alone: every amount has a name beside it and
+ * every shortfall is a sentence.
+ */
+.upc { display: flex; flex-direction: column; gap: var(--wm-gap, 16px); min-width: 0; }
+.upc-center { display: flex; justify-content: center; }
+
+.upc-head__label { font-size: 12px; color: var(--wm-text-muted); }
+.upc-head__value { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.upc-warn { color: var(--wm-warning); }
+.upc-note { margin: 4px 0 0; font-size: 12px; color: var(--wm-text-muted); }
+
+.upc-alerts {
+  border: 1px solid var(--wm-border); border-left: 3px solid var(--wm-negative);
+  background: var(--wm-surface-alt); border-radius: var(--wm-radius-sm, 6px);
+  padding: 10px 12px;
+}
+.upc-alert { margin: 0 0 4px; font-size: 13px; color: var(--wm-text); }
+.upc-alert::before { content: "Short: "; font-weight: 650; color: var(--wm-negative); }
+
+.upc-num { text-align: right; font-family: var(--wm-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.upc-muted { color: var(--wm-text-muted); font-size: 12px; font-family: var(--wm-font); }
+.upc-pos { color: var(--wm-positive); }
+.upc-neg { color: var(--wm-negative); }
+.upc-neutral { color: var(--wm-text); }
+
+.upc-accounts { width: 100%; border-collapse: collapse; font-size: 13px; }
+.upc-accounts th, .upc-accounts td { padding: 6px 8px; border-bottom: 1px solid var(--wm-border); text-align: left; }
+.upc-accounts thead th { font-size: 12px; color: var(--wm-text-muted); font-weight: 600; }
+.upc-accounts th.upc-num, .upc-accounts td.upc-num { text-align: right; }
+.upc-accounts thead th.upc-num { font-family: inherit; }
+.upc-accounts tbody th { font-weight: 500; }
+.upc-accounts tr.is-short th { color: var(--wm-negative); }
+
+.upc-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.upc-section__title { margin: 0; font-size: 13px; font-weight: 600; }
+.upc-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--wm-text-muted); }
+
+.upc-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; }
+.upc-list__item {
+  display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 6px 0; border-bottom: 1px solid var(--wm-border);
+}
+.upc-list__item:last-child { border-bottom: 0; }
+.upc-list__date { font-size: 12px; color: var(--wm-text-muted); font-variant-numeric: tabular-nums; }
+.upc-list__what { display: flex; flex-direction: column; min-width: 0; }
+.upc-list__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 480px) {
+  .upc-list__item { grid-template-columns: minmax(0, 1fr) auto; }
+  .upc-list__date { grid-column: 1 / -1; }
+}

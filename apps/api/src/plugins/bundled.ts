@@ -201,4 +201,40 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
       exporters: true,
     },
   },
+  {
+    id: 'wickermoney.upcoming',
+    name: 'Upcoming',
+    version: '0.1.0',
+    description: 'What is safe to spend until payday, and what lands before then.',
+    author: 'Wicker',
+    sdkVersion: SDK_MAJOR_VERSION,
+    // Read-only. `recurring_items` (which brings its legs) for what is due, and
+    // `accounts` because the outlook is built from balances and buffers and a
+    // transfer names both of its accounts. No transactions: the balance the
+    // projection starts from is computed by core, not summed here.
+    requiredTables: [
+      { table: 'recurring_items', access: 'read' },
+      { table: 'accounts', access: 'read' },
+    ],
+    permissions: [],
+    remoteEntry: '/plugins/upcoming/remoteEntry.js',
+    contributes: {
+      pages: [],
+      widgets: [
+        {
+          id: 'until-payday',
+          slot: 'dashboard.primary',
+          title: 'Until payday',
+          defaultSize: 'lg',
+          // First on the dashboard: "will I make it to payday?" is the question
+          // the charts below it are context for.
+          order: 5,
+          module: './UpcomingWidget',
+        },
+      ],
+      // No server half: it reads core's upcoming outlook through the SDK client.
+      endpoints: false,
+      exporters: false,
+    },
+  },
 ]
