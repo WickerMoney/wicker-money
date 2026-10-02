@@ -3,8 +3,8 @@
 Wicker Money is pre-1.0 and has a single maintainer. This is direction, not a
 promise: items move, shrink or disappear, and there are no dates.
 
-**Now** is the scope of the first public release, `v0.1.0`: nothing under Now is
-optional, and nothing outside it blocks the tag.
+**Now** is what the next release is working toward. The current release is
+`v0.2.0`; see `CHANGELOG.md` for what each tag contains.
 
 ## Shipped
 
@@ -13,32 +13,23 @@ optional, and nothing outside it blocks the tag.
 | M1 | Auth and ledger: users, accounts, categories, rules, transactions, splits, all under row-level security |
 | M2 | The shell and the first plugin: Module Federation host, dashboard widgets from plugins, scoped plugin client |
 | M3 | Import and categorization: CSV import, category rules with preview, triage tools |
-| M4 | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
+| M4 (`v0.1.0`) | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
+| `v0.2.0` | Recurring items, Phase A: a Recurring page for income, bills, debt payments and transfers (items plus per-account legs), the "Until payday" dashboard widget with per-account shortfall warnings and a choice of which accounts count toward safe to spend, buffers editable on the Accounts page, the `plugin-sdk` recurrence module, and transfer `externalId` for duplicate-safe imports |
 
 ## Now
 
-Nothing outstanding. Everything that was here shipped as M4, above — the
-codebase is ready for the `v0.1.0` tag (still `rc.4` as of this writing; the
-tag itself hasn't been cut).
+Recurring items, Phase B and its fast follow:
 
-## Next
-
-- Recurring items management in core, on its own page: create, edit and end
-  recurring bills and income. The table and its export exist today, but nothing
-  can populate it.
-- An upcoming bills and income dashboard widget. Read-only and at a glance from
-  today, running through the next payday. It shows expected income and bills at
-  their nominal dates, and warns if a checking account would fall below its buffer
-  amount before that payday. Credit card and loan payments show as bills, and
-  transfers between your own accounts, such as checking to savings, sit behind
-  an "all" option. Occurrence math lives
-  in a shared, well-tested module so forecasting can reuse it.
-- Paid / landed matching for that widget, as a fast follow: match expected items
+- Forecasting: a forecast page with a daily balance chart per account, built on
+  the same `plugin-sdk` recurrence module as "Until payday".
+- Paid / landed matching for the "Until payday" widget: match expected items
   against ledger transactions and show which have arrived, which also settles
   weekend and holiday shifting as expected versus cleared. Needs a link between
   a recurring item and a transaction, and per-occurrence overrides (skip a
   month, change one month's amount).
-- Forecasting, using recurring items for the known part of the future.
+
+## Next
+
 - A plugin picker (UI to enable and disable plugins). Plugins in the same area,
   such as several budgeting approaches, can be enabled together.
 - A debt payoff plugin with snowball and avalanche strategies. It keeps its own

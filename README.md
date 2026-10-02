@@ -178,6 +178,12 @@ sign.
 Migration 012 backfills existing one-sided transfers — pairing any that already
 had a mirror image, and writing the missing leg for the rest.
 
+An importer can pass an optional `externalId` to
+`POST /api/v1/transactions/transfer`. It is stored on both legs and is unique
+per account, like a single transaction's, so sending the same transfer twice
+answers `409 duplicate_external_id` instead of writing a second copy — and
+neither leg is written if either account already has that id.
+
 ### What a category counts as
 
 Every category has a **kind**: spending, income, or transfer.
@@ -242,6 +248,46 @@ The bar on each line marks today. A line at 80% is fine on the 28th and a
 problem on the 10th, and the *Budget breakdown* dashboard widget ranks by that
 rather than by amount: lines that are over or ahead of pace first, then the rest
 by how much of their budget is used.
+
+### Recurring items and "Until payday"
+
+**Recurring** (in the sidebar, after Transactions) holds the income, bills, debt
+payments and transfers you expect. Each item is a schedule plus one **leg** per
+account it touches, with a signed amount, the same way a transfer is two
+transaction rows: a bill is one negative leg, a split paycheck is a positive leg
+per account, and a transfer or debt payment is two legs that net to zero. The
+form asks for positive amounts; the kind supplies the sign.
+
+The schedule's start date is an anchor, never shown as "due". The next due date
+is always derived, and "today" is your calendar day in your user's timezone
+(`users.timezone`), worked out on the server — so the page, the widget and any
+plugin agree, and none of them trust the browser clock. There is no setting for
+the timezone yet: it defaults to `UTC`, so west of UTC "today" turns over in the
+evening (8pm in New York in summer). Until Settings can change it, set
+`core.users.timezone` to an IANA name such as `America/New_York` in the
+database. Monthly, quarterly and annual items on the 29th–31st clamp to the last
+day of shorter months; semimonthly items store their two days (1st and 15th by
+default). Editing an item rewrites the whole series; to change something from
+now on, end the item and add a new one. The monthly tiles use exact factors
+(biweekly is 26/12 a month, not 2.17).
+
+The **Until payday** widget (bundled plugin `plugins/upcoming`) answers "will I
+make it to payday?" for the window from tomorrow through the next expected
+income into any account, or 14 days if none is expected:
+
+- each checking account's lowest point in that window (and any savings account
+  marked *Safe to spend*), counting a day's outflows before its inflows, and its
+  room above that account's **buffer**;
+- a shortfall banner for any account that dips below its buffer. Accounts are
+  never pooled: one account's surplus does not cover another's shortfall;
+- **safe to spend**: the sum of positive room across the accounts you mark
+  *Safe to spend* on the Accounts page (checking accounts by default; savings can
+  opt in). An account that is not counted is still projected and still warned
+  about.
+
+Set each account's buffer and *Safe to spend* on the Accounts page. Matching
+expected items against the transactions that actually landed is not built yet;
+see `ROADMAP.md`.
 
 ### Forgotten password
 
@@ -406,6 +452,18 @@ when the image was built from a tag) -- handy for confirming what actually
 redeployed without cross-checking the image tag. `core.app_deployments` keeps
 one row per boot with the same information, for after the fact.
 
+### Upgrading
+
+Read the release's entry in [`CHANGELOG.md`](CHANGELOG.md) first, and **back up
+the database** (`pg_dump -Fc`) before migrating. Migrations only move forward in
+practice: some have no `down` at all (021, in `v0.2.0`, reshapes recurring items
+and adds an enum label PostgreSQL cannot remove), so the way back to an older
+image is restoring that backup.
+
+Then pull the new image and migrate before starting it, exactly as on first
+install (`node dist/db/cli.js up`). With the compose sample, `docker compose pull`
+and `docker compose up -d` do both, because its `migrate` service runs first.
+
 ## Releasing
 
 Push a version tag; `.github/workflows/release.yml` does the rest.
@@ -517,6 +575,17 @@ otherwise fight over them. Set `APP_DB_ROLE` the same way for `pnpm migrate` and
 for the API.
 
 ## Status
+
+**`v0.2.0` — recurring items, Phase A.** A Recurring page for income, bills,
+debt payments and transfers, modelled as an item plus per-account legs
+(migration 021), and the "Until payday" dashboard widget from a new bundled
+plugin, `plugins/upcoming`: safe to spend until the next payday, each checking
+account's low point against its buffer, and a shortfall warning that never nets
+one account against another. Which accounts count toward safe to spend is a
+per-account choice (migration 022), and buffers are editable on the Accounts
+page. The date maths is public in `@wickermoney/plugin-sdk/recurrence` so
+forecasting can reuse it. Also: transfer `externalId` for duplicate-safe
+imports, and a fix for plugins showing calendar dates a day early west of UTC.
 
 **M4 — release readiness and brand identity.** Everything needed to cut the
 first public tag, `v0.1.0`: a self-hosting quickstart (`docker/docker-compose.sample.yml`
