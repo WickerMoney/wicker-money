@@ -64,6 +64,7 @@ export interface TransactionRepository {
    *
    * @param legs - The legs to insert.
    * @returns The inserted rows, in the order given.
+   * @throws {DuplicateKeyError} If either leg's account already has a transaction with that leg's external id.
    */
   insertTransferLegs(legs: readonly NewTransferLegInput[]): Promise<Transaction[]>
 

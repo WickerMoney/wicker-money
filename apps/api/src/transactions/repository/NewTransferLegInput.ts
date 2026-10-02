@@ -13,4 +13,6 @@ export interface NewTransferLegInput {
   readonly notes: string | null
   /** Shared by both legs of the transfer. */
   readonly transferId: string
+  /** The source's own id, the same on both legs; unique per account, like any external id. */
+  readonly externalId: string | null
 }

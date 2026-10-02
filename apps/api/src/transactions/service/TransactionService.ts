@@ -156,41 +156,54 @@ export class TransactionService {
       throw new ValidationError('Give a positive amount — which account it leaves is what sets the direction.')
     }
 
-    return this.uow.forUser(userId, async ({ transactions }) => {
-      const accounts = await transactions.findAccounts([input.fromAccountId, input.toAccountId])
-      // Row-level security confines the lookup to the user's own accounts, so a
-      // missing one belongs to someone else or does not exist. Both are "not
-      // found" from where the caller is standing.
-      if (accounts.length !== 2) throw new NotFoundError('Account')
-      const nameOf = (id: string): string => accounts.find((a) => a.id === id)?.name ?? 'account'
-      const labels = transferLabels(input.description, nameOf(input.fromAccountId), nameOf(input.toAccountId))
+    try {
+      return await this.uow.forUser(userId, async ({ transactions }) => {
+        const accounts = await transactions.findAccounts([input.fromAccountId, input.toAccountId])
+        // Row-level security confines the lookup to the user's own accounts, so a
+        // missing one belongs to someone else or does not exist. Both are "not
+        // found" from where the caller is standing.
+        if (accounts.length !== 2) throw new NotFoundError('Account')
+        const nameOf = (id: string): string => accounts.find((a) => a.id === id)?.name ?? 'account'
+        const labels = transferLabels(input.description, nameOf(input.fromAccountId), nameOf(input.toAccountId))
 
-      const transferId = randomUUID()
-      const notes = input.notes ?? null
-      const legs = await transactions.insertTransferLegs([
-        {
-          userId,
-          accountId: input.fromAccountId,
-          counterpartAccountId: input.toAccountId,
-          amount: negate(input.amount),
-          merchant: labels.outgoing,
-          transactionDate: input.transactionDate,
-          notes,
-          transferId,
-        },
-        {
-          userId,
-          accountId: input.toAccountId,
-          counterpartAccountId: input.fromAccountId,
-          amount: input.amount,
-          merchant: labels.incoming,
-          transactionDate: input.transactionDate,
-          notes,
-          transferId,
-        },
-      ])
-      return { transferId, legs }
-    })
+        const transferId = randomUUID()
+        const notes = input.notes ?? null
+        const externalId = input.externalId ?? null
+        const legs = await transactions.insertTransferLegs([
+          {
+            userId,
+            accountId: input.fromAccountId,
+            counterpartAccountId: input.toAccountId,
+            amount: negate(input.amount),
+            merchant: labels.outgoing,
+            transactionDate: input.transactionDate,
+            notes,
+            transferId,
+            externalId,
+          },
+          {
+            userId,
+            accountId: input.toAccountId,
+            counterpartAccountId: input.fromAccountId,
+            amount: input.amount,
+            merchant: labels.incoming,
+            transactionDate: input.transactionDate,
+            notes,
+            transferId,
+            externalId,
+          },
+        ])
+        return { transferId, legs }
+      })
+    } catch (error) {
+      if (error instanceof DuplicateKeyError) {
+        throw new ConflictError(
+          'A transaction with that external id already exists on one of these accounts.',
+          'duplicate_external_id',
+        )
+      }
+      throw error
+    }
   }
 
   /**

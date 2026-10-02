@@ -138,10 +138,18 @@ export class InMemoryTransactionRepository implements TransactionRepository {
 
   /** @inheritdoc */
   insertTransferLegs(legs: readonly NewTransferLegInput[]): Promise<Transaction[]> {
+    // One statement in Postgres: either leg clashing writes neither.
+    const clash = legs.some(
+      (leg) =>
+        leg.externalId !== null &&
+        this.ledger.transactions.some((t) => t.account_id === leg.accountId && t.external_id === leg.externalId),
+    )
+    if (clash) return Promise.reject(new DuplicateKeyError('transactions_external_id', undefined))
     const rows = legs.map((leg) => {
       const row = this.build(leg)
       row.transfer_account_id = leg.counterpartAccountId
       row.transfer_id = leg.transferId
+      row.external_id = leg.externalId
       return row
     })
     this.ledger.transactions.push(...rows)

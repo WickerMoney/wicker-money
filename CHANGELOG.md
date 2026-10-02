@@ -9,6 +9,14 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- `POST /api/v1/transactions/transfer` accepts an optional `externalId`, stored
+  on both legs. Like a single transaction's, it is unique per account, so an
+  importer can send the same transfer again and get `409 duplicate_external_id`
+  instead of a second copy. Neither leg is written when either account already
+  has that id.
+
 ## [0.1.0] - 2026-09-28
 
 ### Added

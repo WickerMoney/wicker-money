@@ -11,4 +11,6 @@ export interface NewTransfer {
   /** Label for both legs. Defaults to "Transfer to X" / "Transfer from Y". */
   readonly description?: string | undefined
   readonly notes?: string | null | undefined
+  /** The source's own id, stored on both legs; a repeat on either account is a conflict. */
+  readonly externalId?: string | null | undefined
 }

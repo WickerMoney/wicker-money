@@ -116,6 +116,23 @@ describe('TransactionService.createTransfer', () => {
     await expect(service.createTransfer(ALICE, { ...base, toAccountId: 'acc-bob' })).rejects.toBeInstanceOf(NotFoundError)
     expect(uow.ledger.transactions).toHaveLength(0)
   })
+  it('stores an external id on both legs and refuses the same transfer twice', async () => {
+    const input = { fromAccountId: 'acc-checking', toAccountId: 'acc-savings', amount: '5.00', transactionDate: '2026-03-01', externalId: 't1' }
+    const { legs } = await service.createTransfer(ALICE, input)
+    expect(legs.map((l) => l.external_id)).toEqual(['t1', 't1'])
+    const again = service.createTransfer(ALICE, input)
+    await expect(again).rejects.toBeInstanceOf(ConflictError)
+    await expect(again).rejects.toMatchObject({ code: 'duplicate_external_id' })
+    expect(uow.ledger.transactions).toHaveLength(2)
+  })
+
+  it('writes neither leg when only one account already has the external id', async () => {
+    await service.create(ALICE, { accountId: 'acc-savings', amount: '1.00', merchant: 'x', transactionDate: '2026-03-01', externalId: 't2' })
+    await expect(
+      service.createTransfer(ALICE, { fromAccountId: 'acc-checking', toAccountId: 'acc-savings', amount: '5.00', transactionDate: '2026-03-01', externalId: 't2' }),
+    ).rejects.toMatchObject({ code: 'duplicate_external_id' })
+    expect(uow.ledger.transactions).toHaveLength(1)
+  })
 })
 
 describe('TransactionService.update on a transfer', () => {

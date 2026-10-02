@@ -152,6 +152,69 @@ describe('recording a transfer', () => {
   })
 })
 
+describe('a transfer with an external id', () => {
+  it('stores it on both legs, where the transaction list returns it', async () => {
+    const res = await transfer({
+      fromAccountId: checking, toAccountId: savings,
+      amount: '7.00', transactionDate: '2026-05-01', externalId: 'import:t-1',
+    })
+    expect(res.statusCode).toBe(201)
+    const legs = (res.json() as { legs: Array<{ external_id: string | null }> }).legs
+    expect(legs.map((l) => l.external_id)).toEqual(['import:t-1', 'import:t-1'])
+
+    const list = await h.app.inject({
+      method: 'GET', url: `/api/v1/transactions?accountId=${savings}&from=2026-05-01&to=2026-05-02`, headers: auth(user),
+    })
+    const items = (list.json() as { items: Array<{ external_id: string | null }> }).items
+    expect(items.map((i) => i.external_id)).toContain('import:t-1')
+  })
+
+  it('refuses the same transfer twice and writes nothing the second time', async () => {
+    const payload = {
+      fromAccountId: checking, toAccountId: savings,
+      amount: '8.00', transactionDate: '2026-05-02', externalId: 'import:t-2',
+    }
+    expect((await transfer(payload)).statusCode).toBe(201)
+    const before = await balances()
+    const again = await transfer(payload)
+    expect(again.statusCode).toBe(409)
+    expect((again.json() as { code: string }).code).toBe('duplicate_external_id')
+    expect(await balances()).toEqual(before)
+  })
+
+  it('refuses when only the destination already has the id, leaving the source untouched', async () => {
+    const single = await h.app.inject({
+      method: 'POST', url: '/api/v1/transactions', headers: auth(user),
+      payload: { accountId: savings, merchant: 'Interest', amount: '0.10', transactionDate: '2026-05-03', externalId: 'import:t-3' },
+    })
+    expect(single.statusCode).toBe(201)
+    const before = await balances()
+    const res = await transfer({
+      fromAccountId: checking, toAccountId: savings,
+      amount: '9.00', transactionDate: '2026-05-03', externalId: 'import:t-3',
+    })
+    expect(res.statusCode).toBe(409)
+    expect(await balances()).toEqual(before)
+  })
+
+  it('still allows any number of transfers without one', async () => {
+    const payload = { fromAccountId: checking, toAccountId: savings, amount: '1.00', transactionDate: '2026-05-04' }
+    expect((await transfer(payload)).statusCode).toBe(201)
+    expect((await transfer(payload)).statusCode).toBe(201)
+  })
+
+  it('deletes both legs from either one, freeing the id for a re-import', async () => {
+    const payload = {
+      fromAccountId: checking, toAccountId: savings,
+      amount: '6.00', transactionDate: '2026-05-05', externalId: 'import:t-4',
+    }
+    const legs = ((await transfer(payload)).json() as { legs: Array<{ id: string }> }).legs
+    const del = await h.app.inject({ method: 'DELETE', url: `/api/v1/transactions/${legs[1]!.id}`, headers: auth(user) })
+    expect(del.statusCode).toBe(204)
+    expect((await transfer(payload)).statusCode).toBe(201)
+  })
+})
+
 describe('a transfer is neither income nor spending', () => {
   it('appears in neither series', async () => {
     const before = await summary()

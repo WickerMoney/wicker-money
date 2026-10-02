@@ -95,22 +95,25 @@ export class KyselyTransactionRepository implements TransactionRepository {
 
   /** @inheritdoc */
   insertTransferLegs(legs: readonly NewTransferLegInput[]): Promise<Transaction[]> {
-    return this.trx
-      .insertInto('core.transactions')
-      .values(
-        legs.map((leg) => ({
-          user_id: leg.userId,
-          account_id: leg.accountId,
-          amount: leg.amount,
-          merchant: leg.merchant,
-          transaction_date: leg.transactionDate,
-          notes: leg.notes,
-          transfer_account_id: leg.counterpartAccountId,
-          transfer_id: leg.transferId,
-        })),
-      )
-      .returningAll()
-      .execute()
+    return translateDuplicateKey(() =>
+      this.trx
+        .insertInto('core.transactions')
+        .values(
+          legs.map((leg) => ({
+            user_id: leg.userId,
+            account_id: leg.accountId,
+            amount: leg.amount,
+            merchant: leg.merchant,
+            transaction_date: leg.transactionDate,
+            notes: leg.notes,
+            transfer_account_id: leg.counterpartAccountId,
+            transfer_id: leg.transferId,
+            external_id: leg.externalId,
+          })),
+        )
+        .returningAll()
+        .execute(),
+    )
   }
 
   /** @inheritdoc */

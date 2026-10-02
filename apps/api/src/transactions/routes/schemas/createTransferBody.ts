@@ -11,4 +11,10 @@ export const createTransferBody = z.object({
   transactionDate: isoDate,
   description: z.string().trim().max(300).optional(),
   notes: z.string().max(1000).nullish(),
+  /**
+   * The source's own id for this transfer, stored on both legs. Each leg is
+   * on a different account and the external id is unique per account, so
+   * sending the same transfer twice is refused instead of doubled.
+   */
+  externalId: z.string().max(255).nullish(),
 })
