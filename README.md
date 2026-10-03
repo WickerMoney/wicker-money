@@ -530,6 +530,24 @@ repository check, so a tag pushed to a fork or mirror publishes nothing.
 Pull requests also build the image (without pushing it), so a broken Dockerfile
 fails before a tag does.
 
+### Trying a branch before it merges
+
+`.github/workflows/preview-image.yml` builds an image from any branch on
+demand: **Actions → Preview image → Run workflow**, choose the branch and the
+architecture. It pushes `ghcr.io/wickermoney/wicker-money-preview:<branch>`
+(lowercased, `/` becomes `-`) plus a `-<short sha>` tag. It publishes nothing
+to npm, creates no release, and never touches the real `wicker-money` package.
+The app reports its version as `0.0.0-preview.<sha>`, so a preview cannot be
+mistaken for a release.
+
+`docker/docker-compose.preview.yml` runs that image beside a real install, with
+its own project name, database volume and port (8181). It can start empty or
+from a `pg_dump` of the real database (the steps are in the file's header). To
+throw a preview away, `down --volumes` removes the database with it, and
+deleting the package version in the organization's package settings removes
+the image. The preview package is private by default, so the Docker host
+needs a `docker login ghcr.io` with a token that has `read:packages`.
+
 ## Writing a plugin
 
 A plugin is a Module Federation remote plus a manifest. Two rules are not
