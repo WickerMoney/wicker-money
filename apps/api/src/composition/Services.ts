@@ -5,6 +5,7 @@ import type { CategoryService } from '../categories/service/CategoryService.js'
 import type { OnboardingService } from '../onboarding/service/OnboardingService.js'
 import type { PluginService } from '../plugins/service/PluginService.js'
 import type { RecurringItemService } from '../recurring/service/RecurringItemService.js'
+import type { RecurringOccurrenceService } from '../recurring/service/RecurringOccurrenceService.js'
 import type { ReportService } from '../core/service/ReportService.js'
 import type { SettingsService } from '../settings/service/SettingsService.js'
 import type { TransactionService } from '../transactions/service/TransactionService.js'
@@ -30,4 +31,6 @@ export interface Services {
   /** Read-side aggregations for dashboards and plugins. */
   readonly reports: ReportService
   readonly recurringItems: RecurringItemService
+  /** Single occurrences: skip, move, re-price, and matching to transactions. */
+  readonly recurringOccurrences: RecurringOccurrenceService
 }

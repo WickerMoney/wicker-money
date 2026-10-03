@@ -1,5 +1,6 @@
 import type { RecurringKind } from '../../db/models/index.js'
 import type { ForecastHorizon } from './FORECAST_HORIZONS.js'
+import type { OccurrenceStatus } from './OccurrenceStatus.js'
 
 /** An account a forecast can be drawn for. */
 export interface ForecastAccountOption {
@@ -60,12 +61,19 @@ export interface ForecastStats {
 /** One occurrence that moves the forecast account's balance. */
 export interface ForecastEntry {
   readonly itemId: string
+  /** The day it is projected on (a late occurrence is carried to the first projected day). */
   readonly date: string
+  /** The schedule's date for it; with `itemId`, its identity. */
+  readonly nominalDate: string
+  readonly status: OccurrenceStatus
   readonly name: string
   readonly kind: RecurringKind
-  /** What this occurrence does to this account: negative leaves it, positive arrives. */
+  /**
+   * What this occurrence still does to this account: negative leaves it,
+   * positive arrives. Zero when this account's leg has already posted.
+   */
   readonly amount: string
-  /** Every leg of the item, so a transfer can show where the money goes or comes from. */
+  /** Every leg of the occurrence, so a transfer can show where the money goes or comes from. */
   readonly legs: readonly { readonly accountId: string; readonly amount: string }[]
 }
 

@@ -41,6 +41,7 @@ function serviceOver(
   } as Partial<RecurringItemRepository> as RecurringItemRepository
   const repos = {
     recurringItems,
+    recurringOccurrences: { listRecords: async () => [], listLinks: async () => [], trackingStarts: async () => new Map() },
     reports: { findTimezone: async () => timezone },
     accounts: { listWithBalances: async () => [...accounts] },
   } as unknown as Repositories

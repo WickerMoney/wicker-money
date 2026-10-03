@@ -21,8 +21,17 @@ export interface RecurringItemView {
   readonly amount: string
   /** {@link amount} as a monthly rate, for summaries; `0.0000` for `once`. */
   readonly monthlyEquivalent: string
-  /** First occurrence on or after today, derived, or `null` once the series has ended. */
+  /**
+   * First occurrence on or after today that is still to come, derived, or
+   * `null` once the series has ended. Skipped occurrences and ones already
+   * settled by a transaction are passed over, and a moved one counts on the
+   * date it moved to.
+   */
   readonly nextDue: string | null
+  /** Whether a transaction has ever been matched to one of its occurrences. Until then nothing is ever late. */
+  readonly tracked: boolean
+  /** Nominal dates of occurrences that are late: expected in the last week, not yet settled. Oldest first. */
+  readonly late: readonly string[]
   readonly createdAt: Date
   readonly updatedAt: Date
 }

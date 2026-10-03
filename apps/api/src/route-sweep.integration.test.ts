@@ -91,6 +91,12 @@ const PROTECTED_ROUTES: readonly string[] = [
   'PUT /api/v1/recurring-items/:id',
   'DELETE /api/v1/recurring-items/:id',
   'POST /api/v1/recurring-items/:id/end',
+  'GET /api/v1/recurring-items/suggestions',
+  'GET /api/v1/recurring-items/:id/occurrences/:date',
+  'PUT /api/v1/recurring-items/:id/occurrences/:date',
+  'GET /api/v1/recurring-items/:id/occurrences/:date/candidates',
+  'POST /api/v1/recurring-items/:id/occurrences/:date/matches',
+  'DELETE /api/v1/recurring-items/:id/occurrences/:date/matches/:transactionId',
 
   'GET /api/v1/plugins',
 

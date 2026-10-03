@@ -1,17 +1,25 @@
 import {
-  dailyBalances, monthlyEquivalent, nextOccurrence, nextPayday, occurrences,
+  dailyBalances, monthlyEquivalent, nextPayday, nextScheduledOccurrence, occurrences, scheduledOccurrences,
 } from '@wickermoney/plugin-sdk/recurrence'
+import type { RecurringItem } from '@wickermoney/plugin-sdk/recurrence'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import type { Repositories } from '../../data/Repositories.js'
 import { todayIn } from '../../core/service/todayIn.js'
 import { NotFoundError, ValidationError } from '../../errors.js'
 import { addMoney, money, negate, toMoney } from '../../money.js'
+import type { OccurrenceFilter } from '../repository/RecurringOccurrenceRepository.js'
 import type { RecurringItemRow } from '../repository/RecurringItemRow.js'
 import { addDays } from './addDays.js'
 import { DEFAULT_FORECAST_HORIZON, type ForecastHorizon } from './FORECAST_HORIZONS.js'
 import { forecastStats } from './forecastStats.js'
 import type { ForecastAccount, ForecastEntry, ForecastView } from './ForecastView.js'
+import { headlineAmount } from './headlineAmount.js'
+import { toOccurrenceView } from './toOccurrenceView.js'
 import { horizonEnd } from './horizonEnd.js'
+import { LATE_DAYS, MAX_MOVE_DAYS } from './OCCURRENCE_RULES.js'
+import {
+  describeOccurrence, groupHistories, projectedItem, type ItemHistory,
+} from './occurrenceState.js'
 import type { OccurrenceView } from './OccurrenceView.js'
 import type { RecurringItemInput } from './RecurringItemInput.js'
 import type { RecurringItemView } from './RecurringItemView.js'
@@ -99,8 +107,9 @@ export class RecurringItemService {
       userId,
       async (repos) => {
         const today = await this.today(repos, userId)
+        const history = await loadHistories(repos, { from: historyStart(today) })
         const items = (await repos.recurringItems.list())
-          .map((row) => view(row, today))
+          .map((row) => view(row, today, history(row.id)))
           .filter((item) => includeEnded || item.nextDue !== null)
           .filter((item) => accountId === undefined || item.legs.some((l) => l.accountId === accountId))
           .sort(byNextDue)
@@ -153,6 +162,9 @@ export class RecurringItemService {
     return this.write(userId, async (repos) => {
       const item = await this.validate(repos, input)
       if (!(await repos.recurringItems.replace(userId, id, item))) throw new NotFoundError('Recurring item')
+      // One occurrence's amount on a leg that is gone, or that changed
+      // direction, no longer means anything.
+      await repos.recurringOccurrences.pruneAmounts(id)
       return this.load(repos, userId, id)
     })
   }
@@ -195,14 +207,20 @@ export class RecurringItemService {
   }
 
   /**
-   * Lists every occurrence of every item in a half-open range.
+   * Lists every occurrence of every item expected in a half-open range, with
+   * where each stands (settled, skipped, late...).
+   *
+   * An occurrence is listed by its expected date, so one moved into the range
+   * is included and one moved out is not. Skipped occurrences are listed on
+   * their nominal date, so they can be found to un-skip.
    *
    * @param userId - The signed-in user.
-   * @param range - `from` defaults to the user's today; `to` to {@link DEFAULT_WINDOW_DAYS} after `from`.
+   * @param range - `from` defaults to the user's today; `to` to {@link DEFAULT_WINDOW_DAYS} after `from`;
+   *   `itemId` keeps one item's occurrences.
    * @returns The occurrences and the range and today they were computed for.
    * @throws {ValidationError} If `to` is before `from` or the range exceeds {@link MAX_WINDOW_DAYS}.
    */
-  occurrences(userId: string, range: { from?: string; to?: string } = {}): Promise<OccurrenceList> {
+  occurrences(userId: string, range: { from?: string; to?: string; itemId?: string } = {}): Promise<OccurrenceList> {
     return this.uow.forUser(
       userId,
       async (repos) => {
@@ -214,16 +232,22 @@ export class RecurringItemService {
           throw new ValidationError(`to: The range may cover at most ${MAX_WINDOW_DAYS} days.`)
         }
 
+        // Look a month either side: an occurrence may have been moved in.
+        const scanFrom = addDays(from, -MAX_MOVE_DAYS)
+        const scanTo = addDays(to, MAX_MOVE_DAYS)
+        const filter = { from: scanFrom, to: scanTo, ...(range.itemId === undefined ? {} : { itemId: range.itemId }) }
+        const history = await loadHistories(repos, filter)
+        const rows = (await repos.recurringItems.list()).filter((r) => range.itemId === undefined || r.id === range.itemId)
+
         const found: OccurrenceView[] = []
-        for (const row of await repos.recurringItems.list()) {
-          const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
-          const amount = headlineAmount(row)
-          for (const date of occurrences(toSchedule(row), from, to)) {
-            found.push({ itemId: row.id, date, name: row.name, kind: row.kind, categoryId: row.category_id, amount, legs })
+        for (const row of rows) {
+          const h = history(row.id)
+          for (const nominalDate of occurrences(toSchedule(row), scanFrom, scanTo)) {
+            const state = describeOccurrence(row, h, nominalDate, today)
+            if (state.expectedDate >= from && state.expectedDate < to) found.push(toOccurrenceView(row, state, state.expectedDate))
           }
         }
-        found.sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1))
-        return { today, from, to, occurrences: found }
+        return { today, from, to, occurrences: found.sort(byDateThenName) }
       },
       { readOnly: true },
     )
@@ -250,6 +274,10 @@ export class RecurringItemService {
    * - Headroom is the lowest point minus the account's buffer. Safe to spend
    *   is the sum of positive headrooms of counted accounts; a short account
    *   is reported on its own and never netted away.
+   * - What is recorded about single occurrences applies (see
+   *   `projectedItem`): skipped ones are left out, money that already arrived
+   *   is not projected again, and on an item that is matched, an occurrence
+   *   that is late is still expected and lands on the window's first day.
    *
    * @param userId - The signed-in user.
    * @returns The window, per-account outlook, safe-to-spend and the occurrences in the window.
@@ -259,13 +287,11 @@ export class RecurringItemService {
       userId,
       async (repos) => {
         const today = await this.today(repos, userId)
-        const rows = await repos.recurringItems.list()
-        const items = rows.map((row) => ({
-          ...toSchedule(row),
-          legs: row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount })),
-        }))
-
         const from = addDays(today, 1)
+        const rows = await repos.recurringItems.list()
+        const history = await loadHistories(repos, { from: historyStart(today) })
+        const items = rows.map((row) => projectedItem(row, history(row.id), today, from))
+
         const payday = nextPayday(items, today)
         const through = payday ?? addDays(today, FALLBACK_WINDOW_DAYS)
         const to = addDays(through, 1)
@@ -290,15 +316,14 @@ export class RecurringItemService {
         })
         const safeToSpend = addMoney('0', ...accounts.filter((a) => a.counted && !a.short).map((a) => a.headroom))
 
-        const found: UpcomingView['occurrences'][number][] = []
-        for (const row of rows) {
-          const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
-          const amount = headlineAmount(row)
-          for (const date of occurrences(toSchedule(row), from, to)) {
-            found.push({ itemId: row.id, date, name: row.name, kind: row.kind, categoryId: row.category_id, amount, legs })
+        const found: OccurrenceView[] = []
+        rows.forEach((row, i) => {
+          for (const placed of scheduledOccurrences(items[i] as RecurringItem, from, to)) {
+            const state = describeOccurrence(row, history(row.id), placed.nominalDate, today)
+            found.push(toOccurrenceView(row, state, placed.date))
           }
-        }
-        found.sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1))
+        })
+        found.sort(byDateThenName)
 
         return {
           today,
@@ -362,22 +387,25 @@ export class RecurringItemService {
         }
 
         const touching = rows.filter((row) => row.legs.some((l) => l.account_id === chosen.id))
-        const items = touching.map((row) => ({
-          ...toSchedule(row),
-          legs: row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount })),
-        }))
+        const history = await loadHistories(repos, { from: historyStart(today) })
+        const items = touching.map((row) => projectedItem(row, history(row.id), today, from))
         const to = addDays(through, 1)
         const days = dailyBalances(items, { [chosen.id]: chosen.balance }, from, to)[chosen.id] ?? []
 
         const entries: ForecastEntry[] = []
-        for (const row of touching) {
-          const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
-          const amount = addMoney(...legs.filter((l) => l.accountId === chosen.id).map((l) => l.amount))
-          for (const date of occurrences(toSchedule(row), from, to)) {
-            entries.push({ itemId: row.id, date, name: row.name, kind: row.kind, amount, legs })
+        touching.forEach((row, i) => {
+          for (const placed of scheduledOccurrences(items[i] as RecurringItem, from, to)) {
+            const state = describeOccurrence(row, history(row.id), placed.nominalDate, today)
+            entries.push({
+              itemId: row.id, date: placed.date, nominalDate: placed.nominalDate, status: state.status,
+              name: row.name, kind: row.kind,
+              // Only what is still to come moves the line: a leg already settled adds nothing.
+              amount: addMoney('0', ...placed.legs.filter((l) => l.accountId === chosen.id).map((l) => l.amount)),
+              legs: state.legs.map((l) => ({ accountId: l.accountId, amount: l.amount })),
+            })
           }
-        }
-        entries.sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1))
+        })
+        entries.sort(byDateThenName)
 
         return {
           today, horizon, window, accounts, account, days,
@@ -399,7 +427,9 @@ export class RecurringItemService {
   private async load(repos: Repositories, userId: string, id: string): Promise<RecurringItemView> {
     const row = await repos.recurringItems.find(id)
     if (row === undefined) throw new NotFoundError('Recurring item')
-    return view(row, await this.today(repos, userId))
+    const today = await this.today(repos, userId)
+    const history = await loadHistories(repos, { itemId: id, from: historyStart(today) })
+    return view(row, today, history(id))
   }
 
   /** Validates input against the user's accounts and categories. */
@@ -444,9 +474,13 @@ function defaultForecastAccount<T extends { account_type: string; spendable: boo
 }
 
 /** Derives an item's view against today. */
-function view(row: RecurringItemRow, today: string): RecurringItemView {
+function view(row: RecurringItemRow, today: string, history: ItemHistory): RecurringItemView {
   const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
-  const amount = headlineAmount(row)
+  const amount = headlineAmount(row.kind, legs)
+  const late = history.tracked
+    ? occurrences(toSchedule(row), addDays(today, -LATE_DAYS), today)
+      .filter((date) => describeOccurrence(row, history, date, today).status === 'late')
+    : []
   return {
     id: row.id,
     name: row.name,
@@ -462,22 +496,12 @@ function view(row: RecurringItemRow, today: string): RecurringItemView {
     legs,
     amount,
     monthlyEquivalent: monthlyEquivalent(amount, row.frequency),
-    nextDue: nextOccurrence(toSchedule(row), today),
+    nextDue: nextScheduledOccurrence(projectedItem(row, history, today, null), today)?.date ?? null,
+    tracked: history.tracked,
+    late,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
-}
-
-/**
- * One amount that stands for the item: what income brings in (all legs), what
- * a bill costs (its one negative leg), or what a transfer moves (its positive
- * leg — a transfer's legs net to zero, which says nothing).
- */
-function headlineAmount(row: RecurringItemRow): string {
-  if (row.kind === 'transfer' || row.kind === 'debt_payment') {
-    return row.legs.find((l) => !l.amount.startsWith('-'))?.amount ?? '0.0000'
-  }
-  return addMoney(...row.legs.map((l) => l.amount))
 }
 
 /** Sums the active items' monthly rates by direction, leaving transfers out. */
@@ -502,4 +526,26 @@ function byNextDue(a: RecurringItemView, b: RecurringItemView): number {
     return a.nextDue < b.nextDue ? -1 : 1
   }
   return a.name.localeCompare(b.name)
+}
+
+/**
+ * The earliest nominal date whose record can still matter today: a late
+ * occurrence (up to {@link LATE_DAYS} ago) that was also moved by up to
+ * {@link MAX_MOVE_DAYS}.
+ */
+function historyStart(today: string): string {
+  return addDays(today, -(LATE_DAYS + MAX_MOVE_DAYS))
+}
+
+/** Reads occurrence records and links and groups them by item. */
+async function loadHistories(repos: Repositories, filter: OccurrenceFilter): Promise<(itemId: string) => ItemHistory> {
+  const records = await repos.recurringOccurrences.listRecords(filter)
+  const links = await repos.recurringOccurrences.listLinks(filter)
+  const starts = await repos.recurringOccurrences.trackingStarts()
+  return groupHistories(records, links, starts)
+}
+
+/** Date ascending, then name. */
+function byDateThenName(a: { date: string; name: string }, b: { date: string; name: string }): number {
+  return a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1
 }
