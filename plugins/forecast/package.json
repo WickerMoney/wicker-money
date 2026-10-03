@@ -1,0 +1,44 @@
+{
+  "name": "@wickermoney/plugin-forecast",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WickerMoney/wicker-money.git",
+    "directory": "plugins/forecast"
+  },
+  "homepage": "https://github.com/WickerMoney/wicker-money#readme",
+  "bugs": {
+    "url": "https://github.com/WickerMoney/wicker-money/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "node -e \"require('node:fs').rmSync('../../apps/web/public/plugins/forecast',{recursive:true,force:true})\" && vite build --watch"
+  },
+  "dependencies": {
+    "@wickermoney/plugin-sdk": "workspace:*",
+    "@wickermoney/ui-kit": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "^1.22.0",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "26.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}

@@ -9,6 +9,51 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-02
+
+Recurring items, Phase B: the forecast. Also the fix for 0.2.0's known
+limitation: you can now set your time zone. **No migrations**, so
+upgrading from 0.2.0 is a pull and a restart, and going back to 0.2.0 is
+safe. After upgrading, open **Settings → Time zone**. Accounts made before
+this release are still on `UTC`, and the section offers your browser's zone
+in one click.
+
+### Added
+
+- **Forecast page**, from a new bundled, read-only plugin (`plugins/forecast`,
+  `wickermoney.forecast`; sidebar, after Recurring). It projects one account's
+  balance day by day from its recurring items, starting from today's actual
+  balance. Pick the account and 30 days, 60 days, 90 days, 6 months or end of
+  year. It is a step chart, with each day's outflows drawn before its inflows,
+  so a bill due on payday shows as the dip it is. Zero and the account's buffer
+  are marked. A banner names the first day the account drops below either. Stat
+  tiles show today, the end, the lowest point, days below zero and days below
+  the buffer. A list shows what moves the line, with transfers kept neutral and
+  their direction spelled out. Cards and loans get the chart without overdraft
+  or buffer warnings. The line covers recurring items only, not everyday
+  spending, and the page says so.
+- `GET /api/v1/core/recurring-items/forecast?accountId&horizon` (needs the
+  `recurring_items` and `accounts` grants). `horizon` is `30d`, `60d`, `90d`
+  (default), `6m` or `eoy`, resolved against the user's today on the server.
+  The response has the daily series (end balance and low), the stats, the
+  first breach of zero and of the buffer, and the occurrences on the account.
+- **Time zone setting.** A Time zone section in Settings, and
+  `PATCH /api/v1/auth/me` with `{ "timezone": "America/New_York" }`. Zones are
+  IANA names, matched case-insensitively and stored canonically. Fixed offsets
+  such as `+01:00` are refused. `GET /api/v1/auth/me` now returns the zone too.
+- Registration takes the browser's time zone (optional `timezone` in
+  `POST /api/v1/auth/register`). An unrecognised zone keeps `UTC` and does not
+  fail the sign-up.
+
+### Fixed
+
+- "Today" on the Recurring page and in "Until payday" no longer rolls over
+  in the evening west of UTC, once your time zone is set (the 0.2.0 known
+  limitation).
+- Six integration tests in the budgets and insights suites failed with `401`
+  between the 1st and the 14th of every month. They pinned the clock to the
+  15th after issuing access tokens, so the tokens looked expired.
+
 ## [0.2.0] - 2026-10-02
 
 Recurring items and the "Until payday" dashboard (Phase A of recurring items).
@@ -142,6 +187,7 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/WickerMoney/wicker-money/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/WickerMoney/wicker-money/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/WickerMoney/wicker-money/releases/tag/v0.1.0

@@ -488,7 +488,13 @@ describe('the at-risk widget', () => {
     if (res.statusCode !== 201) throw new Error(`transaction failed: ${res.statusCode} ${res.body}`)
   }
 
-  /** Fixes the clock to noon on the 15th of the real current month; returns that month's and the previous month's keys and dates. */
+  /**
+   * Fixes the clock to noon on the 15th of the real current month; returns
+   * that month's and the previous month's keys and dates. Call it before
+   * creating users: access tokens are checked against the faked clock, so a
+   * token issued on the real clock looks expired whenever the real date is
+   * more than its 15-minute lifetime before the 15th.
+   */
   function fixClock(): { key: string; day: string; previousKey: string; previousDay: string } {
     const real = new Date()
     const at = (offset: number): Date => new Date(Date.UTC(real.getUTCFullYear(), real.getUTCMonth() + offset, 15, 12))
@@ -500,16 +506,16 @@ describe('the at-risk widget', () => {
   afterEach(() => { vi.useRealTimers() })
 
   it('reports an unplanned month without inventing lines', async () => {
-    const p = await newPlayer()
     const { key, day } = fixClock()
+    const p = await newPlayer()
 
     expect(await atRisk(p.u)).toEqual({ monthKey: key, today: day, planned: false, lines: [] })
   })
 
   it('ranks lines that are over before those that are only at risk, and skips the healthy', async () => {
+    const { key, day } = fixClock()
     const p = await newPlayer()
     const [over, risky, fine, idle] = [await p.cat('Over'), await p.cat('Risky'), await p.cat('Fine'), await p.cat('Idle')]
-    const { key, day } = fixClock()
     for (const c of [over, risky, fine, idle]) {
       await putLine({ month: key, categoryId: c, planned: '100.0000', rollover: false }, p.u)
     }
@@ -527,9 +533,9 @@ describe('the at-risk widget', () => {
   })
 
   it('counts a rolled-over balance from last month as available', async () => {
+    const { key, day, previousKey, previousDay } = fixClock()
     const p = await newPlayer()
     const fund = await p.cat('Fund')
-    const { key, day, previousKey, previousDay } = fixClock()
     await putLine({ month: previousKey, categoryId: fund, planned: '100.0000', rollover: true }, p.u)
     await spendAs(p, fund, '-40.00', previousDay)
     await putLine({ month: key, categoryId: fund, planned: '100.0000', rollover: true }, p.u)
@@ -542,11 +548,11 @@ describe('the at-risk widget', () => {
   })
 
   it('shows each user only their own lines and spending', async () => {
+    const { key, day } = fixClock()
     const a = await newPlayer()
     const b = await newPlayer()
     const aCat = await a.cat('Alpha')
     const bCat = await b.cat('Beta')
-    const { key, day } = fixClock()
     await putLine({ month: key, categoryId: aCat, planned: '10.0000', rollover: false }, a.u)
     await spendAs(a, aCat, '-500.00', day)
     await putLine({ month: key, categoryId: bCat, planned: '100.0000', rollover: false }, b.u)

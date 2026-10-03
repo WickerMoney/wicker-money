@@ -103,9 +103,10 @@ describe('monthly summary', () => {
   // The summary asks the clock which month is current, and `months=1` covers
   // only that month. Fixing the date to the middle of the real current month
   // makes the transactions below and the server agree on "today" however close
-  // to a month boundary the suite happens to run. Only `Date` is faked, and
-  // each test calls this after its users and tokens exist, so nothing that was
-  // issued against the real clock is judged by the fake one.
+  // to a month boundary the suite happens to run. Only `Date` is faked. Each
+  // test calls this before it creates users, so their access tokens are issued
+  // and checked on the same (fake) clock. Calling it afterwards made every
+  // token look expired whenever the real date was before the 15th.
   const fixClockMidMonth = (): void => {
     const real = new Date()
     vi.useFakeTimers({
@@ -116,6 +117,7 @@ describe('monthly summary', () => {
   afterEach(() => { vi.useRealTimers() })
 
   it('aggregates expenses by month and category, excluding transfers', async () => {
+    fixClockMidMonth()
     const u = await createUser(h)
     const acc = (await h.app.inject({
       method: 'POST', url: '/api/v1/accounts', headers: auth(u),
@@ -130,7 +132,6 @@ describe('monthly summary', () => {
       payload: { name: 'Groceries', slug: 'groceries' },
     })).json()
 
-    fixClockMidMonth()
     const today = new Date().toISOString().slice(0, 10)
     for (const amount of ['-20.00', '-30.00']) {
       await h.app.inject({
@@ -176,13 +177,13 @@ describe('monthly summary', () => {
   })
 
   it('is scoped to the caller — one user never sees another', async () => {
+    fixClockMidMonth()
     const alice = await createUser(h)
     const bob = await createUser(h)
     const acc = (await h.app.inject({
       method: 'POST', url: '/api/v1/accounts', headers: auth(alice),
       payload: { name: 'Alice', accountType: 'checking' },
     })).json()
-    fixClockMidMonth()
     await h.app.inject({
       method: 'POST', url: '/api/v1/transactions', headers: auth(alice),
       payload: {

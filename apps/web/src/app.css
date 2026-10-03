@@ -348,3 +348,14 @@
 /* The accounts table has seven columns plus actions; give it the room the recurring list gets. */
 .acct-split { grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); }
 @media (max-width: 1100px) { .acct-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* Settings: time zone. The select keeps its field margin; the button and the
+   saved note line up with the control, not the label. */
+.tz-form { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.tz-form .wm-field { flex: 1 1 260px; max-width: 360px; }
+.tz-form > .wm-btn, .tz-form > [role="status"] { margin-bottom: var(--wm-gap-sm); }
+.tz-mismatch {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center;
+  margin: 0 0 12px; padding: 8px 10px; border-radius: var(--wm-radius-sm);
+  background: var(--wm-surface-alt); font-size: 13px;
+}

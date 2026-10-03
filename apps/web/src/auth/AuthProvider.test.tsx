@@ -119,6 +119,31 @@ describe('signing in', () => {
     expect(screen.getByText('in:a@example.com')).toBeTruthy()
   })
 
+  it("sends the browser's time zone when registering", async () => {
+    mount()
+    await screen.findByText('signed-out')
+    fetchMock.mockResolvedValue(json({ accessToken: 'tok', user: USER }, 201))
+
+    await act(async () => { await auth.register('a@example.com', 'correct horse battery') })
+
+    const body = JSON.parse(callsTo('/auth/register')[0]![1].body as string) as { timezone?: string }
+    expect(body.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+  })
+
+  it('updates the user after setting the time zone', async () => {
+    fetchMock.mockResolvedValue(json({ accessToken: 'tok', user: USER }))
+    mount()
+    await screen.findByText('in:a@example.com')
+    fetchMock.mockResolvedValue(json({ ...USER, timezone: 'America/Chicago' }))
+
+    await act(async () => { await auth.setTimezone('america/chicago') })
+
+    const patch = callsTo('/auth/me')[0]![1]
+    expect(patch.method).toBe('PATCH')
+    expect(JSON.parse(patch.body as string)).toEqual({ timezone: 'america/chicago' })
+    expect(auth.user?.timezone).toBe('America/Chicago')
+  })
+
   it('surfaces a rejected login and stays signed out', async () => {
     mount()
     await screen.findByText('signed-out')

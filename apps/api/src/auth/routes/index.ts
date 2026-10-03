@@ -7,6 +7,7 @@ import { registerLogin } from './handlers/login.js'
 import { registerLogout } from './handlers/logout.js'
 import { registerRefresh } from './handlers/refresh.js'
 import { registerRegisterUser } from './handlers/registerUser.js'
+import { registerUpdateMe } from './handlers/updateMe.js'
 import { rateLimitedError } from './helpers/rateLimitedError.js'
 import { requireSameOrigin } from './helpers/requireSameOrigin.js'
 
@@ -34,6 +35,7 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthService): voi
     registerRefresh(scope, auth)
     registerLogout(scope, auth)
     registerChangePassword(scope, auth)
-    registerGetMe(scope)
+    registerGetMe(scope, auth)
+    registerUpdateMe(scope, auth)
   })
 }

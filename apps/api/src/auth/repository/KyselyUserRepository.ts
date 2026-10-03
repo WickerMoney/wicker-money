@@ -38,6 +38,15 @@ export class KyselyUserRepository implements UserRepository {
   }
 
   /** @inheritdoc */
+  async findIdentity(userId: string): Promise<UserIdentity | undefined> {
+    return this.trx
+      .selectFrom('core.users')
+      .select(['id', 'email', 'timezone'])
+      .where('id', '=', userId)
+      .executeTakeFirst()
+  }
+
+  /** @inheritdoc */
   async findPasswordHash(userId: string): Promise<string | undefined> {
     const row = await this.trx
       .selectFrom('core.users')
@@ -54,5 +63,15 @@ export class KyselyUserRepository implements UserRepository {
       .set({ password_hash: passwordHash, updated_at: sql<Date>`now()` })
       .where('id', '=', userId)
       .execute()
+  }
+
+  /** @inheritdoc */
+  async updateTimezone(userId: string, timezone: string): Promise<UserIdentity | undefined> {
+    return this.trx
+      .updateTable('core.users')
+      .set({ timezone, updated_at: sql<Date>`now()` })
+      .where('id', '=', userId)
+      .returning(['id', 'email', 'timezone'])
+      .executeTakeFirst()
   }
 }

@@ -29,6 +29,12 @@ export interface UserRepository {
 
   /**
    * @param userId - The current user.
+   * @returns The account's identity, or `undefined` if it does not exist.
+   */
+  findIdentity(userId: string): Promise<UserIdentity | undefined>
+
+  /**
+   * @param userId - The current user.
    * @returns The stored password digest, or `undefined` if the account does not exist.
    */
   findPasswordHash(userId: string): Promise<string | undefined>
@@ -40,4 +46,14 @@ export interface UserRepository {
    * @param passwordHash - Argon2 digest of the new password.
    */
   updatePasswordHash(userId: string, passwordHash: string): Promise<void>
+
+  /**
+   * Sets the time zone that decides where the user's days and months end, and
+   * stamps `updated_at`.
+   *
+   * @param userId - The current user.
+   * @param timezone - A canonical IANA zone name; the caller validates it.
+   * @returns The updated identity, or `undefined` if the account does not exist.
+   */
+  updateTimezone(userId: string, timezone: string): Promise<UserIdentity | undefined>
 }
