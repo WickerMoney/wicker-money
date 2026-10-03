@@ -14,11 +14,15 @@ export interface BudgetLinesTableProps {
   readonly edits: Readonly<Record<string, string>>
   readonly busy: boolean
   readonly formatMoney: (value: string) => string
+  /** Formats a `YYYY-MM-DD` date for display. */
+  readonly formatDate: (value: string) => string
   /** Records what the user is typing in a line's plan field. */
   readonly onEditPlan: (categoryId: string, value: string) => void
   /** Saves a line's plan and rollover setting. */
   readonly onSave: (line: MonthLine, planned: string, rollover: boolean) => void
   readonly onRemove: (line: MonthLine) => void
+  /** Opens a window in the window form. */
+  readonly onEditWindow: (line: MonthLine) => void
 }
 
 /**
@@ -26,7 +30,7 @@ export interface BudgetLinesTableProps {
  * pace bar, a status and the rollover setting.
  */
 export function BudgetLinesTable({
-  month, edits, busy, formatMoney: money, onEditPlan, onSave, onRemove,
+  month, edits, busy, formatMoney: money, formatDate, onEditPlan, onSave, onRemove, onEditWindow,
 }: BudgetLinesTableProps) {
   if (month.lines.length === 0) {
     return (
@@ -43,7 +47,7 @@ export function BudgetLinesTable({
         {
           key: 'name',
           header: 'Category',
-          render: (l: MonthLine) => <CategoryCell line={l} formatMoney={money} />,
+          render: (l: MonthLine) => <CategoryCell line={l} formatMoney={money} formatDate={formatDate} />,
         },
         {
           key: 'planned',
@@ -87,11 +91,13 @@ export function BudgetLinesTable({
         {
           key: 'del',
           header: '',
-          render: (l: MonthLine) => <RemoveCell line={l} busy={busy} onRemove={onRemove} />,
+          render: (l: MonthLine) => <RemoveCell line={l} busy={busy} onRemove={onRemove} onEdit={onEditWindow} />,
         },
       ]}
       rows={[...month.lines]}
-      rowKey={(l) => l.categoryId}
+      // A category can have two windows in one month (one ending, the next
+      // starting), so a stored line is keyed by its id.
+      rowKey={(l) => l.id ?? l.categoryId}
     />
   )
 }

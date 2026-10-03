@@ -1,6 +1,8 @@
 export type { AtRiskResponse } from './AtRiskResponse.js'
 export type { Category } from './Category.js'
+export type { LineWindow } from './LineWindow.js'
 export type { MonthLine } from './MonthLine.js'
 export type { MonthResponse } from './MonthResponse.js'
 export type { MonthSummary } from './MonthSummary.js'
 export type { Unbudgeted } from './Unbudgeted.js'
+export type { WindowDraft } from './WindowDraft.js'

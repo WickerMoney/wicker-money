@@ -17,6 +17,8 @@ export interface RolloverCellProps {
  * yet committed, so flipping the box does not discard that edit.
  */
 export function RolloverCell({ line, draftValue, busy, onSave }: RolloverCellProps) {
+  // A window already carries what is left from month to month until it ends.
+  if (line.window != null) return <span className="bud__carry">Window</span>
   return (
     <label className="check">
       <input

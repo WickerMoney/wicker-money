@@ -20,6 +20,11 @@ export interface PlannedCellProps {
  * edit is saved when the field loses focus, and Enter leaves the field.
  */
 export function PlannedCell({ line, draftValue, onEditPlan, onSave }: PlannedCellProps) {
+  // A window's amount belongs to the whole window, so it is changed in the
+  // window form rather than inline in one month's row.
+  if (line.window != null) {
+    return <span className="bud__num">{line.planned === '0.0000' ? '—' : editableMoney(line.planned)}</span>
+  }
   const stored = editableMoney(line.planned)
   const value = draftValue ?? stored
   return (

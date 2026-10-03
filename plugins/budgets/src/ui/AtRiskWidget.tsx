@@ -98,6 +98,7 @@ export default function AtRiskWidget({ ctx }: PluginWidgetProps) {
               health={line.health}
               monthKey={data.monthKey}
               today={data.today}
+              elapsed={line.elapsed}
               label={`${line.categoryName}: ${ctx.formatMoney(line.spent)} of ${ctx.formatMoney(line.available)}`}
             />
           </div>

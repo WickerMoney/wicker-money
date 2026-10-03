@@ -14,13 +14,18 @@ export interface PaceCellProps {
 
 /** A line's spend against what it has available, as a bar with today marked on it. */
 export function PaceCell({ line, monthKey, today, formatMoney }: PaceCellProps) {
+  // A window's bar is the whole pot, with the mark at how far through the window today is.
+  const label = line.window != null
+    ? `${line.categoryName}: ${formatMoney(line.window.spentToDate)} of ${formatMoney(line.window.funded)} spent so far`
+    : `${line.categoryName}: ${formatMoney(line.spent)} of ${formatMoney(line.available)}`
   return (
     <LineBar
       used={line.used}
       health={line.health}
       monthKey={monthKey}
       today={today}
-      label={`${line.categoryName}: ${formatMoney(line.spent)} of ${formatMoney(line.available)}`}
+      elapsed={line.window != null ? line.elapsed : undefined}
+      label={label}
     />
   )
 }
