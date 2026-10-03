@@ -21,11 +21,11 @@ promise: items move, shrink or disappear, and there are no dates.
 
 The fast follow to recurring items:
 
-- Paid / landed matching for "Until payday" and the forecast: match expected items
-  against ledger transactions and show which have arrived, which also settles
-  weekend and holiday shifting as expected versus cleared. Needs a link between
-  a recurring item and a transaction, and per-occurrence overrides (skip a
-  month, change one month's amount).
+- Paid / landed matching for "Until payday" and the forecast (in review):
+  transactions matched to occurrences, suggested matches to confirm,
+  per-occurrence skip, move and amount, and late occurrences carried
+  forward on items that are matched. Follow-ups: matching from the
+  Transactions page, dismissing a suggestion, and seed data that shows it.
 
 ## Next
 

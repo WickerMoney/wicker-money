@@ -8,6 +8,7 @@ import type { UsageRepository } from '../db/repository/UsageRepository.js'
 import type { OnboardingRepository } from '../onboarding/repository/OnboardingRepository.js'
 import type { PluginRegistryRepository } from '../plugins/repository/PluginRegistryRepository.js'
 import type { RecurringItemRepository } from '../recurring/repository/RecurringItemRepository.js'
+import type { RecurringOccurrenceRepository } from '../recurring/repository/RecurringOccurrenceRepository.js'
 import type { ExportRepository } from '../settings/repository/ExportRepository.js'
 import type { SplitRepository } from '../transactions/repository/SplitRepository.js'
 import type { TransactionRepository } from '../transactions/repository/TransactionRepository.js'
@@ -46,4 +47,6 @@ export interface Repositories {
   /** Whole-account data reads for export. */
   readonly exports: ExportRepository
   readonly recurringItems: RecurringItemRepository
+  /** Skipped, moved and re-priced occurrences, and the transactions that settle them. */
+  readonly recurringOccurrences: RecurringOccurrenceRepository
 }

@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../api/client.js'
 import { formatDate } from '../../lib/formatDate.js'
-import type { RecurringItem, RecurringItemList } from '../../models/index.js'
+import type {
+  MatchSuggestionList, OccurrenceCandidates, RecurringItem, RecurringItemList, RecurringOccurrence,
+} from '../../models/index.js'
 import { makeAccount } from '../../testing/makeAccount.js'
 import { makeCategory } from '../../testing/makeCategory.js'
 import { RecurringPage } from './RecurringPage.js'
@@ -22,7 +24,7 @@ function item(over: Partial<RecurringItem>): RecurringItem {
   return {
     id: 'i', name: 'Mortgage', kind: 'bill', frequency: 'monthly', seriesStartDate: '2025-01-31', endDate: null,
     semimonthlyDays: null, categoryId: 'rent', legs: [{ accountId: 'chk', amount: '-2100.0000' }],
-    amount: '-2100.0000', monthlyEquivalent: '-2100.0000', nextDue: '2026-09-30', ...over,
+    amount: '-2100.0000', monthlyEquivalent: '-2100.0000', nextDue: '2026-09-30', tracked: false, late: [], ...over,
   }
 }
 
@@ -44,8 +46,42 @@ const full: RecurringItemList = {
   summary: { monthlyIncome: '4766.6667', monthlyOutgoings: '-2100.0000', monthlyNet: '2666.6667' },
 }
 
-function serve(list: RecurringItemList) {
+/** An occurrence of the mortgage. */
+function occurrence(over: Partial<RecurringOccurrence>): RecurringOccurrence {
+  return {
+    itemId: 'mortgage', date: '2026-09-30', nominalDate: '2026-09-30', expectedDate: '2026-09-30', status: 'upcoming',
+    moved: false, changed: false, name: 'Mortgage', kind: 'bill', categoryId: 'rent', amount: '-2100.0000',
+    legs: [{ accountId: 'chk', amount: '-2100.0000', transaction: null }], ...over,
+  }
+}
+
+const history: readonly RecurringOccurrence[] = [
+  occurrence({
+    date: '2026-08-31', nominalDate: '2026-08-31', expectedDate: '2026-08-31', status: 'cleared',
+    legs: [{ accountId: 'chk', amount: '-2100.0000', transaction: { id: 't-aug', date: '2026-08-31', amount: '-2100.0000', merchant: 'BANK MORTGAGE' } }],
+  }),
+  occurrence({}),
+]
+
+const candidates: OccurrenceCandidates = {
+  today: '2026-09-28',
+  occurrence: occurrence({}),
+  legs: [{
+    accountId: 'chk', amount: '-2100.0000',
+    candidates: [{ transactionId: 't-sep', date: '2026-09-27', amount: '-2100.0000', merchant: 'BANK MORTGAGE', dayDifference: -3, amountDifference: '0.0000', confident: true }],
+  }],
+}
+
+/** The occurrences the History panel asks for. */
+function occurrencesFor(path: string): readonly RecurringOccurrence[] {
+  return path.includes('itemId=mortgage') ? history : []
+}
+
+function serve(list: RecurringItemList, suggestions: MatchSuggestionList['suggestions'] = []) {
   return vi.spyOn(api, 'get').mockImplementation(async (path: string) => {
+    if (path.startsWith('/recurring-items/suggestions')) return { today: list.today, suggestions }
+    if (path.startsWith('/recurring-items/occurrences')) return { today: list.today, from: '', to: '', occurrences: occurrencesFor(path) }
+    if (path.includes('/candidates')) return candidates
     if (path.startsWith('/recurring-items')) return list
     if (path.startsWith('/accounts')) return accounts
     if (path.startsWith('/categories')) return categories
@@ -162,5 +198,75 @@ describe('the form', () => {
       kind: 'transfer', legs: [{ accountId: 'chk', amount: '-200.0000' }, { accountId: 'sav', amount: '200.0000' }],
     })))
     expect(await screen.findByText('legs: A transfer is two legs that cancel out.')).toBeTruthy()
+  })
+})
+
+describe('paid / landed matching', () => {
+  it('offers suggested matches and records one only when asked', async () => {
+    serve(full, [{ occurrence: occurrence({}), accountId: 'chk', candidate: candidates.legs[0]!.candidates[0]! }])
+    const post = vi.spyOn(api, 'post').mockResolvedValue(occurrence({ status: 'cleared' }))
+    const user = userEvent.setup()
+    render(<RecurringPage />)
+    const panel = (await screen.findByText('Did these land?')).closest('section') ?? document.body
+    expect(within(panel as HTMLElement).getByText(/BANK MORTGAGE/).textContent).toContain('3 days early')
+    expect(post).not.toHaveBeenCalled()
+
+    await user.click(within(panel as HTMLElement).getByRole('button', { name: 'Match' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      '/recurring-items/mortgage/occurrences/2026-09-30/matches', { transactionId: 't-sep' },
+    ))
+  })
+
+  it('shows no suggestions panel when there is nothing to confirm', async () => {
+    serve(full)
+    render(<RecurringPage />)
+    await screen.findByText('Vacation Fund')
+    expect(screen.queryByText('Did these land?')).toBeNull()
+  })
+
+  it('flags a late occurrence on the item', async () => {
+    serve({ ...full, items: [item({ id: 'mortgage', tracked: true, late: ['2026-09-25'] })] })
+    render(<RecurringPage />)
+    expect(await screen.findByText(`Late: ${formatDate('2026-09-25')}`)).toBeTruthy()
+  })
+
+  it('shows an item\'s history, finds the payment and matches it', async () => {
+    serve(full)
+    const post = vi.spyOn(api, 'post').mockResolvedValue(occurrence({ status: 'cleared' }))
+    const user = userEvent.setup()
+    render(<RecurringPage />)
+    const row = (await screen.findByText('Mortgage')).closest('tr') as HTMLElement
+    await user.click(within(row).getByRole('button', { name: 'History' }))
+
+    expect(await screen.findByText('Paid')).toBeTruthy()
+    expect(screen.getByText(/BANK MORTGAGE/).textContent).toContain(formatDate('2026-08-31'))
+    await user.click(screen.getByRole('button', { name: 'Find payment' }))
+    expect((await screen.findByText(/3 days early/)).textContent).toBe('(3 days early)')
+    await user.click(screen.getAllByRole('button', { name: 'Match' }).at(-1) as HTMLElement)
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      '/recurring-items/mortgage/occurrences/2026-09-30/matches', { transactionId: 't-sep' },
+    ))
+  })
+
+  it('skips one occurrence, and changes one with the amount typed positive and sent negative', async () => {
+    serve(full)
+    const put = vi.spyOn(api, 'put').mockResolvedValue(occurrence({}))
+    const user = userEvent.setup()
+    render(<RecurringPage />)
+    const row = (await screen.findByText('Mortgage')).closest('tr') as HTMLElement
+    await user.click(within(row).getByRole('button', { name: 'History' }))
+    await screen.findByText('Upcoming')
+
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+    await waitFor(() => expect(put).toHaveBeenCalledWith('/recurring-items/mortgage/occurrences/2026-09-30', { skipped: true }))
+
+    await user.click(screen.getByRole('button', { name: 'Change' }))
+    const amount = screen.getByLabelText('Amount, Monthly Expenses')
+    await user.clear(amount)
+    await user.type(amount, '2150')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(put).toHaveBeenLastCalledWith('/recurring-items/mortgage/occurrences/2026-09-30', {
+      expectedDate: null, legs: [{ accountId: 'chk', amount: '-2150' }],
+    }))
   })
 })

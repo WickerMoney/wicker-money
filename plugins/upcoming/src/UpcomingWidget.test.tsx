@@ -151,4 +151,23 @@ describe('amount text helpers', () => {
   it.each([['0', true], ['0.0000', true], ['-0.00', true], ['0.01', false], ['', false], ['.', false]])('isZeroAmount(%j) = %s', (v, zero) => {
     expect(isZeroAmount(v)).toBe(zero)
   })
+
+  it('tags what already arrived and what is late, so the list says what is still to come', async () => {
+    const data: UpcomingResponse = {
+      ...base,
+      occurrences: [
+        { ...base.occurrences[0]!, status: 'late', nominalDate: '2026-09-25', expectedDate: '2026-09-25', date: '2026-09-29' },
+        { ...base.occurrences[2]!, status: 'cleared', nominalDate: '2026-10-02', expectedDate: '2026-10-02' },
+      ],
+    }
+    render(<UpcomingWidget ctx={ctxWith(data)} size="lg" />)
+    expect(await screen.findByText('Late, due 2026-09-25')).toBeDefined()
+    expect(screen.getByText('Arrived')).toBeDefined()
+  })
+
+  it('shows no tag for occurrences from a server older than matching', async () => {
+    render(<UpcomingWidget ctx={ctxWith(base)} size="lg" />)
+    await screen.findByText('Mortgage')
+    expect(screen.queryByText('Arrived')).toBeNull()
+  })
 })

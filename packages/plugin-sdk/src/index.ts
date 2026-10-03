@@ -56,10 +56,12 @@ export type { DashboardRange, RangeKey } from './range.js'
 
 export {
   DEFAULT_SEMIMONTHLY_DAYS, RECURRENCE_FREQUENCIES,
-  dailyBalances, flowTotals, monthlyEquivalent, nextOccurrence, nextPayday, occurrences,
+  dailyBalances, flowTotals, monthlyEquivalent, nextOccurrence, nextPayday, nextScheduledOccurrence,
+  occurrences, scheduledOccurrences,
 } from './recurrence/index.js'
 export type {
-  DailyBalance, FlowTotals, RecurrenceFrequency, RecurrenceSchedule, RecurringItem, RecurringLeg,
+  DailyBalance, FlowTotals, OccurrenceOverride, RecurrenceFrequency, RecurrenceSchedule, RecurringItem,
+  RecurringLeg, ScheduledOccurrence,
 } from './recurrence/index.js'
 
 export {

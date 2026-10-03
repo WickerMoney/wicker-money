@@ -10,7 +10,7 @@ function item(over: Partial<RecurringItem>): RecurringItem {
   return {
     id: 'i', name: 'Rent', kind: 'bill', frequency: 'monthly', seriesStartDate: '2025-01-31', endDate: null,
     semimonthlyDays: null, categoryId: null, legs: [{ accountId: 'chk', amount: '-1550.0000' }],
-    amount: '-1550.0000', monthlyEquivalent: '-1550.0000', nextDue: '2026-09-30', ...over,
+    amount: '-1550.0000', monthlyEquivalent: '-1550.0000', nextDue: '2026-09-30', tracked: false, late: [], ...over,
   }
 }
 

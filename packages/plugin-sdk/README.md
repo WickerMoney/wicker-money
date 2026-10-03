@@ -28,7 +28,7 @@ plugin as a Module Federation singleton.
 | Import | Use it for | Contents |
 |---|---|---|
 | `@wickermoney/plugin-sdk/runtime` | Plugin UI code (browser) | Types for the React components a plugin exports (`PluginWidgetProps`, `PluginPageProps`, `PluginContext`, ...), and `adoptPluginStyles` |
-| `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals` |
+| `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `scheduledOccurrences`, `nextScheduledOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals`, with per-occurrence overrides (skip, move, change the legs) |
 | `@wickermoney/plugin-sdk/money` | Anything (browser or Node) | Exact money arithmetic on decimal strings: `addMoney`, `sumMoney`, `compareMoney`, `equalMoney`, `moneyToUnits`, `divideUnits`, ... |
 | `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above, plus the Zod manifest schemas, `parseManifest`, dashboard-range helpers and constants |
 
@@ -62,6 +62,19 @@ Monthly, quarterly and annual items clamp to the end of short months, computed
 from the anchor each time (Jan 31 → Feb 28 → Mar 31). `semimonthly` takes two
 days (`semimonthlyDays`, default `[1, 15]`). An unknown frequency throws rather
 than dropping an item from a forecast.
+
+An item can carry `overrides`, keyed by nominal date, to change single
+occurrences: `skipped`, a new `date` (earlier or later, even outside the range
+asked about) or replacement `legs`. Every projection honours them, and
+`scheduledOccurrences(item, from, to)` lists what lands in a range after them.
+An empty `legs` list means "happens, moves nothing", which is how money that
+has already posted is kept out of a projection.
+
+```ts
+const bills = { ...rent, overrides: { '2026-03-31': { skipped: true }, '2026-04-30': { date: '2026-05-01' } } }
+scheduledOccurrences(bills, '2026-03-01', '2026-06-01')
+// [{ nominalDate: '2026-04-30', date: '2026-05-01', legs }, { nominalDate: '2026-05-31', ... }]
+```
 
 ## Money
 

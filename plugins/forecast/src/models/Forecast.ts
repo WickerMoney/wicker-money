@@ -46,10 +46,15 @@ export interface ForecastStats {
 /** One occurrence that moves the account. */
 export interface ForecastEntry {
   readonly itemId: string
+  /** The day it is projected on; a late one is carried to the first projected day. */
   readonly date: string
+  /** The schedule's date for it; with `itemId`, its identity. Absent from servers older than matching. */
+  readonly nominalDate?: string
+  /** Where it stands; absent from servers older than matching. */
+  readonly status?: 'upcoming' | 'due' | 'late' | 'missed' | 'cleared' | 'skipped' | 'assumed'
   readonly name: string
   readonly kind: 'income' | 'bill' | 'debt_payment' | 'transfer'
-  /** What it does to this account: negative leaves, positive arrives. */
+  /** What it still does to this account: negative leaves, positive arrives; zero once it has arrived. */
   readonly amount: string
   readonly legs: readonly { readonly accountId: string; readonly amount: string }[]
 }

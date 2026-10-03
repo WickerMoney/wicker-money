@@ -3,18 +3,28 @@ import type { Services } from '../../composition/Services.js'
 import { registerCreateRecurringItem } from './handlers/createRecurringItem.js'
 import { registerDeleteRecurringItem } from './handlers/deleteRecurringItem.js'
 import { registerEndRecurringItem } from './handlers/endRecurringItem.js'
+import { registerGetOccurrence } from './handlers/getOccurrence.js'
 import { registerGetRecurringItem } from './handlers/getRecurringItem.js'
+import { registerListCandidates } from './handlers/listCandidates.js'
 import { registerListOccurrences } from './handlers/listOccurrences.js'
 import { registerListRecurringItems } from './handlers/listRecurringItems.js'
+import { registerListSuggestions } from './handlers/listSuggestions.js'
+import { registerMatchOccurrence } from './handlers/matchOccurrence.js'
+import { registerOverrideOccurrence } from './handlers/overrideOccurrence.js'
+import { registerUnmatchOccurrence } from './handlers/unmatchOccurrence.js'
 import { registerUpdateRecurringItem } from './handlers/updateRecurringItem.js'
 
 /**
- * Registers every recurring-item endpoint under `/api/v1/recurring-items`.
+ * Registers every recurring-item endpoint under `/api/v1/recurring-items`,
+ * including single occurrences and matching them to transactions.
  *
  * @param app - The Fastify instance to register routes on.
  * @param services - The application services.
  */
-export function registerRecurringItemRoutes(app: FastifyInstance, { recurringItems }: Services): void {
+export function registerRecurringItemRoutes(
+  app: FastifyInstance,
+  { recurringItems, recurringOccurrences }: Services,
+): void {
   registerListRecurringItems(app, recurringItems)
   registerListOccurrences(app, recurringItems)
   registerGetRecurringItem(app, recurringItems)
@@ -22,4 +32,10 @@ export function registerRecurringItemRoutes(app: FastifyInstance, { recurringIte
   registerUpdateRecurringItem(app, recurringItems)
   registerEndRecurringItem(app, recurringItems)
   registerDeleteRecurringItem(app, recurringItems)
+  registerListSuggestions(app, recurringOccurrences)
+  registerGetOccurrence(app, recurringOccurrences)
+  registerOverrideOccurrence(app, recurringOccurrences)
+  registerListCandidates(app, recurringOccurrences)
+  registerMatchOccurrence(app, recurringOccurrences)
+  registerUnmatchOccurrence(app, recurringOccurrences)
 }

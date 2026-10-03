@@ -7,6 +7,8 @@ const FRIENDLY: Record<string, string> = {
   // An account is referenced by the item's leg; legs are one per account per
   // item, so counting legs counts items.
   'core.recurring_item_legs': 'recurring item',
+  // One leg's amount changed for one occurrence ("this month's bill is $20 more").
+  'core.recurring_occurrence_legs': 'changed occurrence amount',
 }
 
 /**

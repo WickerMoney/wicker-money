@@ -15,6 +15,8 @@ export interface RecurringSectionProps {
   readonly categoryName: (id: string | null) => string | null
   readonly busy: boolean
   readonly onEdit: (item: RecurringItem) => void
+  /** Opens the item's occurrences: what landed, what is late, matching, skipping. */
+  readonly onHistory: (item: RecurringItem) => void
   readonly onEnd: (item: RecurringItem) => void
   readonly onDelete: (item: RecurringItem) => void
 }
@@ -24,10 +26,11 @@ export interface RecurringSectionProps {
  *
  * "Next due" is the date the server derived from the schedule and today, never
  * the anchor the series was started from: showing the anchor as "due" is how
- * the old app came to list a year-old date as upcoming.
+ * the old app came to list a year-old date as upcoming. An item that is
+ * matched to transactions also says when an occurrence is late.
  */
 export function RecurringSection({
-  title, items, currency, accountName, categoryName, busy, onEdit, onEnd, onDelete,
+  title, items, currency, accountName, categoryName, busy, onEdit, onHistory, onEnd, onDelete,
 }: RecurringSectionProps) {
   if (items.length === 0) return null
   return (
@@ -47,6 +50,14 @@ export function RecurringSection({
               {i.nextDue === null
                 ? <span className="wm-muted">Ended</span>
                 : <span className="recur-date">{formatDate(i.nextDue)}</span>}
+              {i.late.length > 0 ? (
+                <div>
+                  <button type="button" className="recur-status recur-status--warn recur-status--button"
+                          onClick={() => onHistory(i)}>
+                    {`Late: ${i.late.map(formatDate).join(', ')}`}
+                  </button>
+                </div>
+              ) : null}
               <div className="wm-muted recur-sub">{describeSchedule(i)}</div>
             </div>
           ) },
@@ -59,6 +70,7 @@ export function RecurringSection({
               : <AmountCell value={i.monthlyEquivalent} kind={i.kind} currency={currency} /> },
           { key: 'actions', header: '', render: (i: RecurringItem) => (
             <div className="recur-actions">
+              <Button disabled={busy} onClick={() => onHistory(i)}>History</Button>
               <Button disabled={busy} onClick={() => onEdit(i)}>Edit</Button>
               {i.nextDue !== null && i.frequency !== 'once'
                 ? <Button disabled={busy} onClick={() => onEnd(i)}>End</Button>

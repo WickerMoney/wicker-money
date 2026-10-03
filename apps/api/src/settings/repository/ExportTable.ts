@@ -8,3 +8,5 @@ export type ExportTable =
   | 'transaction_splits'
   | 'recurring_items'
   | 'recurring_item_legs'
+  | 'recurring_occurrences'
+  | 'recurring_occurrence_legs'

@@ -16,4 +16,6 @@ export interface Transaction {
   readonly notes: string | null
   /** Set on both legs of a transfer, and on nothing else. */
   readonly transfer_id: string | null
+  /** The recurring occurrence this transaction was matched to, if any. Absent from older servers. */
+  readonly recurring_occurrence_id?: string | null
 }
