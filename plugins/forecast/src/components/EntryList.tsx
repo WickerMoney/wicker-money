@@ -17,6 +17,10 @@ export interface EntryListProps {
  * day. Money in is green and money out red, except transfers between the
  * user's own accounts, which stay neutral with their direction spelled out:
  * moving money to savings is neither earned nor spent.
+ *
+ * An occurrence that already arrived stays listed, tagged and with no
+ * amount, since it no longer moves the line; a late one is tagged on the
+ * day it is now expected.
  */
 export function EntryList({ accountId, entries, days, accountName, formatMoney, formatDate }: EntryListProps) {
   const endOf = new Map(days.map((d) => [d.date, d.balance]))
@@ -36,13 +40,19 @@ export function EntryList({ accountId, entries, days, accountName, formatMoney, 
           const lastOfDay = entries[i + 1]?.date !== e.date
           const other = counterpart(e, accountId, accountName)
           return (
-            <tr key={`${e.itemId}:${e.date}`}>
+            <tr key={`${e.itemId}:${e.nominalDate ?? e.date}`}>
               <td className="fc-date">{formatDate(e.date)}</td>
               <th scope="row">
                 {e.name}
                 {other !== '' ? <span className="fc-muted"> {other}</span> : null}
+                {e.status === 'cleared' ? <span className="fc-tag">Arrived</span> : null}
+                {e.status === 'late' || e.status === 'due'
+                  ? <span className="fc-tag fc-tag--warn">{e.status === 'late' ? `Late, due ${formatDate(e.nominalDate ?? e.date)}` : 'Not in yet'}</span>
+                  : null}
               </th>
-              <td className={`fc-num ${tone}`}>{formatMoney(e.amount)}</td>
+              <td className={`fc-num ${e.status === 'cleared' ? 'fc-muted' : tone}`}>
+                {e.status === 'cleared' ? '—' : formatMoney(e.amount)}
+              </td>
               <td className="fc-num">{lastOfDay ? formatMoney(endOf.get(e.date) ?? '0') : ''}</td>
             </tr>
           )

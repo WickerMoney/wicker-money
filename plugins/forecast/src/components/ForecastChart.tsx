@@ -144,7 +144,7 @@ export function ForecastChart({
           isToday={hover === 0}
           balance={hover === 0 ? start : days[hover - 1]!.balance}
           low={hover === 0 ? start : days[hover - 1]!.low}
-          entries={entries.filter((e) => e.date === hovered)}
+          entries={entries.filter((e) => e.date === hovered && e.status !== 'cleared')}
           leftPercent={((x(hover) + slot / 2) / W) * 100}
           formatMoney={formatMoney}
           formatDate={formatDate}
