@@ -2,7 +2,7 @@ import { fromDayNumber, toDayNumber } from './calendar.js'
 import { divideUnits } from '../money/divideUnits.js'
 import { moneyToUnits } from '../money/moneyToUnits.js'
 import { unitsToMoney } from '../money/unitsToMoney.js'
-import { nextOccurrence, occurrences } from './schedule.js'
+import { nextScheduledOccurrence, scheduledOccurrences } from './scheduled.js'
 import type {
   DailyBalance, FlowTotals, RecurrenceFrequency, RecurringItem,
 } from './types.js'
@@ -67,6 +67,10 @@ function isIncome(item: RecurringItem): boolean {
  * anything that landed today. Every income item counts, so two people paid
  * biweekly on offset weeks give a payday every week.
  *
+ * Overrides apply: a skipped paycheck is not a payday, one moved is a payday
+ * on the date it lands, and one whose override leaves no legs (it already
+ * arrived) is passed over for the next.
+ *
  * @param items - All of the user's recurring items; non-income items are ignored.
  * @param today - The user's today, `YYYY-MM-DD`, in their time zone.
  * @returns The date, or `null` when no income occurs after today (the caller
@@ -78,7 +82,7 @@ export function nextPayday(items: readonly RecurringItem[], today: string): stri
   let earliest: string | null = null
   for (const item of items) {
     if (!isIncome(item)) continue
-    const next = nextOccurrence(item, tomorrow)
+    const next = nextScheduledOccurrence(item, tomorrow)?.date ?? null
     if (next !== null && (earliest === null || next < earliest)) earliest = next
   }
   return earliest
@@ -96,6 +100,9 @@ export function nextPayday(items: readonly RecurringItem[], today: string): stri
  * Every day in the range is present for every account, including days with
  * no activity, so a chart can plot the series directly. Each day also carries
  * its `low`: the balance after that day's outflows but before its inflows.
+ *
+ * Per-occurrence overrides apply (see `scheduledOccurrences`): each
+ * occurrence moves its own legs on the date it lands.
  *
  * @param items - Recurring items to apply.
  * @param startingBalances - Balance per account id at the end of the day
@@ -130,14 +137,12 @@ export function dailyBalances(
   }
 
   for (const item of items) {
-    const dates = occurrences(item, from, to)
-    for (const leg of item.legs) {
-      const amount = moneyToUnits(leg.amount, 'leg amount')
-      const series = (amount < 0n ? outs : ins).get(leg.accountId)
-      if (!series) continue
-      for (const date of dates) {
-        const offset = toDayNumber(date) - first
-        series[offset] = (series[offset] ?? 0n) + amount
+    for (const occurrence of scheduledOccurrences(item, from, to)) {
+      const offset = toDayNumber(occurrence.date) - first
+      for (const leg of occurrence.legs) {
+        const amount = moneyToUnits(leg.amount, 'leg amount')
+        const series = (amount < 0n ? outs : ins).get(leg.accountId)
+        if (series) series[offset] = (series[offset] ?? 0n) + amount
       }
     }
   }
@@ -166,7 +171,7 @@ export function dailyBalances(
  * listed accounts (checking to savings, with both listed) nets to zero and is
  * never spending, while the same transfer measured on checking alone is an
  * outflow. A payment from checking to a loan, with only cash accounts listed,
- * is an outflow.
+ * is an outflow. Per-occurrence overrides apply.
  *
  * @param items - Recurring items to total.
  * @param accountIds - The accounts that make up "the household" for this total.
@@ -185,15 +190,15 @@ export function flowTotals(
   let inflow = 0n
   let outflow = 0n
   for (const item of items) {
-    const dates = occurrences(item, from, to)
-    let perOccurrence = 0n
-    for (const leg of item.legs) {
-      const amount = moneyToUnits(leg.amount, 'leg amount')
-      if (inSet.has(leg.accountId)) perOccurrence += amount
+    for (const occurrence of scheduledOccurrences(item, from, to)) {
+      let net = 0n
+      for (const leg of occurrence.legs) {
+        const amount = moneyToUnits(leg.amount, 'leg amount')
+        if (inSet.has(leg.accountId)) net += amount
+      }
+      if (net > 0n) inflow += net
+      else outflow += net
     }
-    const total = perOccurrence * BigInt(dates.length)
-    if (total > 0n) inflow += total
-    else outflow += total
   }
   return { inflow: unitsToMoney(inflow), outflow: unitsToMoney(outflow), net: unitsToMoney(inflow + outflow) }
 }

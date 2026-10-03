@@ -12,9 +12,11 @@
  */
 export { DEFAULT_SEMIMONTHLY_DAYS, RECURRENCE_FREQUENCIES } from './types.js'
 export type {
-  DailyBalance, FlowTotals, RecurrenceFrequency, RecurrenceSchedule, RecurringItem, RecurringLeg,
+  DailyBalance, FlowTotals, OccurrenceOverride, RecurrenceFrequency, RecurrenceSchedule, RecurringItem,
+  RecurringLeg, ScheduledOccurrence,
 } from './types.js'
 export { nextOccurrence, occurrences } from './schedule.js'
+export { nextScheduledOccurrence, scheduledOccurrences } from './scheduled.js'
 export {
   dailyBalances, flowTotals, monthlyEquivalent, nextPayday,
 } from './projection.js'
