@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, SelectField } from '@wickermoney/ui-kit'
+import { Button, CategoryOptions, SelectField, orderByParent } from '@wickermoney/ui-kit'
 import type { Category, MonthLine } from '../models/index.js'
 
 /** Props for {@link AddLineForm}. */
@@ -12,14 +12,19 @@ export interface AddLineFormProps {
   readonly onAdd: (categoryId: string) => void
 }
 
-/** A picker and button that add a budget line for a category that has none this month. */
+/**
+ * A picker and button that add a budget line for a category that has none this
+ * month. Categories are grouped under their parents, as everywhere else in the app.
+ */
 export function AddLineForm({ categories, lines, busy, onAdd }: AddLineFormProps) {
   const [addCategoryId, setAddCategoryId] = useState('')
 
-  const addable = useMemo(() => {
-    const taken = new Set(lines.map((l) => l.categoryId))
-    return categories.filter((c) => !taken.has(c.id))
-  }, [categories, lines])
+  const taken = useMemo(() => new Set(lines.map((l) => l.categoryId)), [lines])
+  // In the order the grouped dropdown shows them, so the default is the first option listed.
+  const addable = useMemo(
+    () => orderByParent(categories.filter((c) => !taken.has(c.id))),
+    [categories, taken],
+  )
 
   useEffect(() => {
     setAddCategoryId((current) =>
@@ -34,7 +39,7 @@ export function AddLineForm({ categories, lines, busy, onAdd }: AddLineFormProps
         value={addCategoryId}
         onChange={(e) => setAddCategoryId(e.target.value)}
       >
-        {addable.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        <CategoryOptions categories={categories} exclude={taken} />
       </SelectField>
       <Button disabled={busy || addCategoryId === ''} onClick={() => onAdd(addCategoryId)}>
         Add line

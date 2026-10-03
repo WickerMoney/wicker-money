@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Field, SelectField } from '@wickermoney/ui-kit'
+import { Button, CategoryOptions, Field, SelectField, orderByParent } from '@wickermoney/ui-kit'
 import { editableMoney, monthPeriod } from '../../shared/index.js'
 import type { Category, MonthLine, WindowDraft } from '../models/index.js'
 
@@ -50,10 +50,13 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
     }
   }, [editing, monthKey])
 
-  // Default the category to the first one, and keep the choice valid if the list changes.
+  // Default the category to the first one the grouped dropdown lists, and keep
+  // the choice valid if the list changes.
   useEffect(() => {
     setCategoryId((current) =>
-      current !== '' && categories.some((c) => c.id === current) ? current : (categories[0]?.id ?? ''),
+      current !== '' && categories.some((c) => c.id === current)
+        ? current
+        : (orderByParent(categories)[0]?.id ?? ''),
     )
   }, [categories])
 
@@ -83,7 +86,7 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
       </p>
       <div className="bud__add">
         <SelectField label="Category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <CategoryOptions categories={categories} />
         </SelectField>
         <Field label="From" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
         <Field label="Through" type="date" value={through} min={start} onChange={(e) => setThrough(e.target.value)} />
