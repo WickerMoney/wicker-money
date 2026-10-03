@@ -26,6 +26,11 @@ export {
 } from './carry.js'
 
 export {
-  statusFor, rankAtRisk, rankBreakdown, AT_RISK_PACE,
+  statusFor, statusAt, rankAtRisk, rankBreakdown, AT_RISK_PACE,
   type Health, type LineStatus, type StatusInput, type MonthSummary,
 } from './pace.js'
+
+export {
+  isDate, addDays, isCalendarMonth, windowProblem, windowElapsed, asOfInMonth, windowMonth,
+  MAX_WINDOW_MONTHS, type WindowMonth, type WindowMonthInput,
+} from './window.js'

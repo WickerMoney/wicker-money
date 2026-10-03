@@ -43,6 +43,13 @@ export interface LineStatus {
   readonly used: number
   /** `used / elapsed`. 1.0 is exactly on pace. Infinity-free: capped at 99. */
   readonly pace: number
+  /**
+   * Fraction of the line's period elapsed, from 0 to 1: the calendar month for
+   * a monthly line, the whole window for a window. The bar's "today" mark sits
+   * here, so the bar and the pace it illustrates are measured against the same
+   * stretch of time.
+   */
+  readonly elapsed: number
   /** The line's condition for the month. */
   readonly health: Health
 }
@@ -74,18 +81,48 @@ export const AT_RISK_PACE = 1.15
  * @param line - The line's money figures for the month.
  * @param monthKey - The `YYYY-MM` month the line belongs to.
  * @param today - The current date as `YYYY-MM-DD`, in the user's zone.
- * @returns The input plus `used`, `pace` (capped at 99) and `health`.
+ * @returns The input plus `used`, `pace` (capped at 99), `elapsed` and `health`.
  * @throws {RangeError} If `monthKey` or any amount is malformed.
  */
 export function statusFor(line: StatusInput, monthKey: string, today: string): LineStatus {
-  const elapsed = elapsedFraction(monthKey, today)
+  return statusAt(line, elapsedFraction(monthKey, today))
+}
+
+/**
+ * Derives a line's usage ratio, pace and health given how far through its
+ * period it is.
+ *
+ * {@link statusFor} measures a calendar month. A window spanning several
+ * months measures its own start and end instead (see `windowElapsed`), so
+ * spending half a holiday budget in October is judged against October to
+ * December rather than against October alone.
+ *
+ * `judgePace: false` keeps `pace` as a number but never lets it decide
+ * `health`, so the line is only ever `over`, `unused` or `on-track`. Windows
+ * use it: a window exists for spending that comes in lumps (the gifts are
+ * bought the first weekend of October), and a dashboard calling that
+ * "at risk" on day two is noise. Running out is still `over`.
+ *
+ * @param line - The line's money figures over the period being judged.
+ * @param elapsed - Fraction of the period elapsed, from 0 to 1.
+ * @param options - `judgePace` (default `true`): whether pace may make a line
+ *   `at-risk` or `ahead`.
+ * @returns The input plus `used`, `pace` (capped at 99), `elapsed` and `health`.
+ * @throws {RangeError} If any amount is malformed.
+ */
+export function statusAt(
+  line: StatusInput,
+  elapsed: number,
+  { judgePace = true }: { readonly judgePace?: boolean } = {},
+): LineStatus {
   const used = ratio(line.spent, line.available)
   // A month that has not started has no pace. Reporting 0 rather than dividing
   // by zero keeps a future month's plan looking like a plan rather than a
   // triumph.
   const pace = elapsed === 0 ? 0 : Math.min(99, used / elapsed)
 
-  return { ...line, used, pace, health: healthOf(line, used, pace, elapsed) }
+  // Treating the period as already over is exactly "judge the total, not the pace".
+  return { ...line, used, pace, elapsed, health: healthOf(line, used, pace, judgePace ? elapsed : 1) }
 }
 
 /**

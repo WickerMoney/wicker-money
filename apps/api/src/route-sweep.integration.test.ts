@@ -106,6 +106,8 @@ const PROTECTED_ROUTES: readonly string[] = [
   'PUT /api/v1/p/wickermoney.budgets/line',
   'DELETE /api/v1/p/wickermoney.budgets/line',
   'GET /api/v1/p/wickermoney.budgets/at-risk',
+  'PUT /api/v1/p/wickermoney.budgets/window',
+  'DELETE /api/v1/p/wickermoney.budgets/window',
 
   'GET /api/v1/settings/config',
   'GET /api/v1/settings/export',

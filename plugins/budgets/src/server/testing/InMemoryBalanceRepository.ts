@@ -1,4 +1,4 @@
-import { monthKeyOf, shiftMonth, type HistoryEntry } from '../../shared/index.js'
+import { isCalendarMonth, monthKeyOf, shiftMonth, type HistoryEntry } from '../../shared/index.js'
 import { CARRY_LOOKBACK_MONTHS } from '../constants.js'
 import type { BalanceRepository } from '../repository/BalanceRepository.js'
 import type { InMemoryBudgetStore } from './InMemoryBudgetStore.js'
@@ -25,6 +25,7 @@ export class InMemoryBalanceRepository implements BalanceRepository {
       .filter(
         (l) =>
           l.userId === this.userId &&
+          isCalendarMonth(l.period_start, l.period_end) &&
           categoryIds.includes(l.category_id) &&
           monthKeyOf(l.period_start) >= earliest &&
           monthKeyOf(l.period_start) <= monthKey,
