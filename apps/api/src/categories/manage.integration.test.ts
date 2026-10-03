@@ -135,6 +135,18 @@ describe('disabling a category', () => {
     expect((picker.json() as Category[]).some((x) => x.id === c.id)).toBe(false)
   })
 
+  it('tells a picker each category\'s kind', async () => {
+    const c = await newCategory('Side gig', 'side-gig')
+    const picker = await h.app.inject({
+      method: 'GET', url: '/api/v1/core/categories/list',
+      headers: asPluginHeaders(user, 'wickermoney.budgets'),
+    })
+    const row = (picker.json() as Array<Record<string, unknown>>).find((x) => x['id'] === c.id)
+    // Exactly these keys: the picker endpoint stays a narrow projection.
+    expect(Object.keys(row ?? {}).sort()).toEqual(['id', 'kind', 'name', 'parent_id'])
+    expect(row?.['kind']).toBe('expense')
+  })
+
   it('takes its children with it', async () => {
     const parent = await newCategory('Hobbies', 'hobbies')
     const child = await newCategory('Model trains', 'model-trains', parent.id)

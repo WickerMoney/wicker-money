@@ -46,7 +46,7 @@ export class KyselyReportRepository implements ReportRepository {
   listEnabledCategories(): Promise<CategoryPick[]> {
     return this.trx
       .selectFrom('core.categories')
-      .select(['id', 'name', 'parent_id'])
+      .select(['id', 'name', 'parent_id', 'kind'])
       .where('is_enabled', '=', true)
       .orderBy('sort_order')
       .orderBy('name')
