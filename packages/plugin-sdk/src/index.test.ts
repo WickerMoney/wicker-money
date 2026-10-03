@@ -125,3 +125,13 @@ describe('checkRemoteEntry', () => {
     expect(checkRemoteEntry('https://plugins.example.com.evil.example/x.js', allowed)).toBeDefined()
   })
 })
+
+describe('money entry point', () => {
+  it('re-exports the /money module from the package root', async () => {
+    const root = await import('./index.js')
+    const money = await import('./money/index.js')
+    for (const [name, value] of Object.entries(money)) {
+      expect(root[name as keyof typeof root], name).toBe(value)
+    }
+  })
+})

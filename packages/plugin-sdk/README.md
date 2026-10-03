@@ -29,9 +29,10 @@ plugin as a Module Federation singleton.
 |---|---|---|
 | `@wickermoney/plugin-sdk/runtime` | Plugin UI code (browser) | Types for the React components a plugin exports (`PluginWidgetProps`, `PluginPageProps`, `PluginContext`, ...), and `adoptPluginStyles` |
 | `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals` |
+| `@wickermoney/plugin-sdk/money` | Anything (browser or Node) | Exact money arithmetic on decimal strings: `addMoney`, `sumMoney`, `compareMoney`, `equalMoney`, `moneyToUnits`, `divideUnits`, ... |
 | `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above, plus the Zod manifest schemas, `parseManifest`, dashboard-range helpers and constants |
 
-Import from `/runtime` (and `/recurrence` if you need it) in plugin UI code.
+Import from `/runtime` (and `/money` or `/recurrence` if you need them) in plugin UI code.
 The package root re-exports the Zod manifest schemas, which add about 85 kB to
 a plugin bundle that never uses them.
 
@@ -61,6 +62,43 @@ Monthly, quarterly and annual items clamp to the end of short months, computed
 from the anchor each time (Jan 31 → Feb 28 → Mar 31). `semimonthly` takes two
 days (`semimonthlyDays`, default `[1, 15]`). An unknown frequency throws rather
 than dropping an item from a forecast.
+
+## Money
+
+Money is `numeric(19,4)` in the database and a decimal string in TypeScript,
+never a `number`. `/money` does the arithmetic exactly, in `bigint` units of
+0.0001, and hands back canonical four-decimal strings.
+
+```ts
+import { addMoney, compareMoney, equalMoney, sumMoney } from '@wickermoney/plugin-sdk/money'
+
+sumMoney(['0.1', '0.2'])              // '0.3000', not 0.30000000000000004
+equalMoney('-81.2000', '-81.20')      // true; `===` would say false
+rows.sort((a, b) => compareMoney(a.total, b.total))
+```
+
+For loops that add up many values, work in units and format once:
+
+```ts
+import { moneyToUnits, unitsToMoney, divideUnits } from '@wickermoney/plugin-sdk/money'
+
+let total = 0n
+for (const row of rows) total += moneyToUnits(row.amount)
+unitsToMoney(total)                           // '1234.5600'
+unitsToMoney(divideUnits(total * 26n, 12n))   // scale, then round once
+```
+
+The rules:
+
+- **Strict input.** A plain decimal string with at most four decimal places.
+  Anything else, including a fifth decimal place, throws `RangeError`. Nothing
+  is silently truncated or rounded, and the API refuses the same input.
+- **Canonical output.** Four decimal places, and never `'-0.0000'`.
+- **One rounding rule.** Only `divideUnits` rounds, half away from zero. That
+  is the API's rule as well, so a plugin and the server agree to the unit.
+- **Not for display.** `unitsToMoney` returns the storage form. Show amounts
+  with the host's `ctx.formatMoney`, and prefill inputs with `editableMoney`
+  (`'450.0000'` → `'450.00'`).
 
 ## A plugin, in brief
 

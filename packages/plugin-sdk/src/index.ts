@@ -61,3 +61,10 @@ export {
 export type {
   DailyBalance, FlowTotals, RecurrenceFrequency, RecurrenceSchedule, RecurringItem, RecurringLeg,
 } from './recurrence/index.js'
+
+export {
+  MONEY_SCALE, MONEY_UNIT, ZERO_MONEY,
+  absMoney, addMoney, compareMoney, divideUnits, editableMoney, equalMoney, isNegativeMoney,
+  isZeroMoney, moneyToUnits, negateMoney, normalizeMoney, subtractMoney, sumMoney, unitsToMoney,
+} from './money/index.js'
+export type { Money } from './money/index.js'
