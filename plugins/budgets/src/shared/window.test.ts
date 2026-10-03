@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addDays, asOfInMonth, isCalendarMonth, isDate, statusAt, windowElapsed, windowMonth, windowProblem,
+  addDays, asOfInMonth, isBudgetable, isCalendarMonth, isDate, statusAt, windowElapsed, windowMonth, windowProblem,
 } from './index.js'
 
 describe('dates', () => {
@@ -118,5 +118,17 @@ describe('status over a period', () => {
 
   it('stops judging pace once the period is over', () => {
     expect(statusAt(line, 1).health).toBe('on-track')
+  })
+})
+
+describe('which categories a budget can carry', () => {
+  it('leaves out income and transfers, which the spend query never counts', () => {
+    expect(isBudgetable({ kind: 'expense' })).toBe(true)
+    expect(isBudgetable({ kind: 'income' })).toBe(false)
+    expect(isBudgetable({ kind: 'transfer' })).toBe(false)
+  })
+
+  it('offers a category from a server that does not send a kind', () => {
+    expect(isBudgetable({})).toBe(true)
   })
 })

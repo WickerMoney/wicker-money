@@ -61,6 +61,23 @@ describe('useBudgetMonth loading', () => {
     })
   })
 
+  it('offers only categories a budget can count, not income or transfers', async () => {
+    const api = makeApi()
+    api.get.mockImplementation((path: string) =>
+      path.startsWith('/core/categories')
+        ? Promise.resolve([
+            { id: 'c1', name: 'Groceries', parent_id: null, kind: 'expense' },
+            { id: 'c2', name: 'Salary', parent_id: null, kind: 'income' },
+            { id: 'c3', name: 'Between accounts', parent_id: null, kind: 'transfer' },
+          ])
+        : Promise.resolve(monthResponse('2026-06')))
+
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+
+    await waitFor(() => expect(result.current.month).not.toBeNull())
+    expect(result.current.categories.map((c) => c.name)).toEqual(['Groceries'])
+  })
+
   it('reports a failed load and shows no month', async () => {
     const api = makeApi()
     serve(api, { '2026-06': Promise.reject(new Error('boom')) })

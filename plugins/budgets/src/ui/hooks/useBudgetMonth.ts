@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
-import { isValidPlan, monthKeyOf, shiftMonth, todayIn } from '../../shared/index.js'
+import { isBudgetable, isValidPlan, monthKeyOf, shiftMonth, todayIn } from '../../shared/index.js'
 import { BUDGETS_API_BASE } from '../../server/constants.js'
 import { monthLabel } from '../helpers/monthLabel.js'
 import type { Category, MonthLine, MonthResponse, WindowDraft } from '../models/index.js'
@@ -10,6 +10,7 @@ export interface BudgetMonth {
   readonly monthKey: string
   /** `null` while a month is loading. */
   readonly month: MonthResponse | null
+  /** Categories that can carry a budget line: enabled, and neither income nor transfer. */
   readonly categories: readonly Category[]
   /** The message currently shown: a failure, or a notice after carrying lines over. */
   readonly message: string | null
@@ -84,7 +85,8 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       ])
       if (signal.aborted) return
       setMonth(loaded)
-      setCategories(cats)
+      // Only categories a budget can count; income and transfers would always read zero.
+      setCategories(cats.filter(isBudgetable))
       setEdits({})
     } catch (e) {
       // A superseded load is not a failure: whoever superseded it reports on the month now shown.

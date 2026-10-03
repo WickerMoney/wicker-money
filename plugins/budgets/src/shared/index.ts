@@ -34,3 +34,5 @@ export {
   isDate, addDays, isCalendarMonth, windowProblem, windowElapsed, asOfInMonth, windowMonth,
   MAX_WINDOW_MONTHS, type WindowMonth, type WindowMonthInput,
 } from './window.js'
+
+export { isBudgetable } from './budgetable.js'
