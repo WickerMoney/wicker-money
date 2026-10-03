@@ -286,3 +286,10 @@ describe('household scenario: Monthly Expenses + Yearly Expenses checking', () =
     expect(totals.outflow).toBe('-2750.0000')           // rent + insurance only
   })
 })
+
+describe('amounts go through the shared money rules', () => {
+  it('refuses more than four decimal places instead of truncating', () => {
+    expect(() => monthlyEquivalent('10.00001', 'monthly')).toThrow(RangeError)
+    expect(() => dailyBalances([], { checking: '1.23456' }, '2026-10-01', '2026-10-02')).toThrow(RangeError)
+  })
+})
