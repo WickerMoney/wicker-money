@@ -1,5 +1,4 @@
-import { absAmount } from '../helpers/absAmount.js'
-import { isNegativeAmount } from '../helpers/isNegativeAmount.js'
+import { absMoney, isNegativeMoney } from '@wickermoney/plugin-sdk/money'
 import { monthLabelLong } from '../helpers/monthLabel.js'
 import type { MonthTotal } from '../models/index.js'
 
@@ -15,7 +14,7 @@ export interface TrendTooltipProps {
 
 /** The readout shown above the hovered or focused month in the income/spending chart. */
 export function TrendTooltip({ month, leftPercent, formatMoney }: TrendTooltipProps) {
-  const down = isNegativeAmount(month.net)
+  const down = isNegativeMoney(month.net)
   return (
     <div className="viz__tip" style={{ left: `${leftPercent}%`, top: 0 }}>
       <span className="viz__tip-label">{monthLabelLong(month.month)}</span>
@@ -29,7 +28,7 @@ export function TrendTooltip({ month, leftPercent, formatMoney }: TrendTooltipPr
       </span>
       <span className={`viz__tip-net${down ? ' is-neg' : ''}`}>
         {down ? 'Down ' : 'Up '}
-        <strong>{formatMoney(absAmount(month.net))}</strong>
+        <strong>{formatMoney(absMoney(month.net))}</strong>
       </span>
     </div>
   )

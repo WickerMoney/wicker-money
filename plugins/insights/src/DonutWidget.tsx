@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import type { PluginWidgetProps } from '@wickermoney/plugin-sdk'
+import { sumMoney } from '@wickermoney/plugin-sdk/money'
 import { Alert, EmptyState, Spinner } from '@wickermoney/ui-kit'
 import { DonutLegend } from './components/DonutLegend.js'
 import { arc } from './helpers/arc.js'
-import { sumAmounts } from './helpers/sumAmounts.js'
 import { topCategories } from './helpers/topCategories.js'
 import { useMonthlySummary } from './hooks/useMonthlySummary.js'
 import './styles.js'
@@ -43,7 +43,7 @@ export default function DonutWidget({ ctx, range }: PluginWidgetProps) {
     )
   }
 
-  const total = sumAmounts(cats.map((c) => c.total))
+  const total = sumMoney(cats.map((c) => c.total))
   // Angles and percentages are geometry, not money, so floats are fine here.
   const totalValue = Number(total)
   const colourFor = (i: number, name: string) =>

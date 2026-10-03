@@ -1,6 +1,5 @@
+import { moneyToUnits, unitsToMoney } from '@wickermoney/plugin-sdk/money'
 import type { MonthTotal, SummaryRow } from '../models/index.js'
-import { formatAmount } from './formatAmount.js'
-import { parseAmount } from './parseAmount.js'
 
 /**
  * Collapses category rows into income and expense per month.
@@ -33,8 +32,8 @@ export function totalsByMonth(
     // A row with no `kind` (from an older server) is treated as expense, which
     // keeps the chart honest about what it cannot classify instead of dropping
     // the amount.
-    if (r.kind === 'income') bucket.income += parseAmount(r.total)
-    else bucket.expense += parseAmount(r.total)
+    if (r.kind === 'income') bucket.income += moneyToUnits(r.total)
+    else bucket.expense += moneyToUnits(r.total)
     acc.set(r.month, bucket)
   }
 
@@ -42,9 +41,9 @@ export function totalsByMonth(
     const b = acc.get(month) ?? { income: 0n, expense: 0n }
     return {
       month,
-      income: formatAmount(b.income),
-      expense: formatAmount(b.expense),
-      net: formatAmount(b.income - b.expense),
+      income: unitsToMoney(b.income),
+      expense: unitsToMoney(b.expense),
+      net: unitsToMoney(b.income - b.expense),
     }
   }
 
