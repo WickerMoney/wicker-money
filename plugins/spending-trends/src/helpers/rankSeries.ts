@@ -1,6 +1,6 @@
+import { unitsToMoney } from '@wickermoney/plugin-sdk/money'
 import type { TrendSeries } from '../models/index.js'
 import type { CollectedSpending } from './collectSpending.js'
-import { formatAmount } from './formatAmount.js'
 import { OTHER_ID } from './OTHER_ID.js'
 
 /**
@@ -26,11 +26,11 @@ export function rankSeries(spending: CollectedSpending, limit: number): TrendSer
     })
 
   const named = ranked.slice(0, limit).map((c) => ({
-    id: c.id, name: c.name, total: formatAmount(c.total), folded: false,
+    id: c.id, name: c.name, total: unitsToMoney(c.total), folded: false,
   }))
   const rest = ranked.slice(limit)
   if (rest.length === 0) return named
 
   const restTotal = rest.reduce((sum, c) => sum + c.total, 0n)
-  return [...named, { id: OTHER_ID, name: 'Other', total: formatAmount(restTotal), folded: true }]
+  return [...named, { id: OTHER_ID, name: 'Other', total: unitsToMoney(restTotal), folded: true }]
 }

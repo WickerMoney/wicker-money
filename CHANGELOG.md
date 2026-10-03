@@ -22,6 +22,20 @@ curated, human-readable version.
   the window's dates still shows as unbudgeted. Pace is measured over the
   window, and only an overdrawn pot marks a window as over. Bunched-up
   spending is expected and never counts as "at risk".
+- **`@wickermoney/plugin-sdk/money`**, a public module for exact money
+  arithmetic on decimal strings (also exported from the package root).
+  It has string helpers (`addMoney`, `sumMoney`, `compareMoney`,
+  `equalMoney`, `isZeroMoney`, `editableMoney`, ...) and a `bigint` layer
+  (`moneyToUnits`, `unitsToMoney`, `divideUnits`) for loops. Input with more
+  than four decimal places throws instead of being truncated. The only
+  rounding is division, half away from zero, the same rule the API uses.
+  Budgets, insights, spending trends and the recurrence module now share it
+  instead of each keeping its own copy.
+
+### Changed
+
+- Budgets refuses a planned amount with more than four decimal places (400)
+  instead of quietly truncating it, the same as the rest of the API.
 
 ### Migrations
 

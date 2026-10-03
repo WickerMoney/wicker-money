@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
+import { ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import { isBudgetable, isValidPlan, monthKeyOf, shiftMonth, todayIn } from '../../shared/index.js'
 import { BUDGETS_API_BASE } from '../../server/constants.js'
 import { monthLabel } from '../helpers/monthLabel.js'
@@ -159,7 +160,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
     setBusy(true); setMessage(null)
     try {
       await api.put(`${BUDGETS_API_BASE}/line`, {
-        month: monthKey, categoryId, planned: '0.0000', rollover: false,
+        month: monthKey, categoryId, planned: ZERO_MONEY, rollover: false,
       })
       await reload(monthKey)
     } catch (e) {

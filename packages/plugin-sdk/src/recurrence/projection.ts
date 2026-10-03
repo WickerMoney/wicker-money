@@ -1,5 +1,7 @@
 import { fromDayNumber, toDayNumber } from './calendar.js'
-import { divideRounded, formatMoney, parseMoney } from './money.js'
+import { divideUnits } from '../money/divideUnits.js'
+import { moneyToUnits } from '../money/moneyToUnits.js'
+import { unitsToMoney } from '../money/unitsToMoney.js'
 import { nextOccurrence, occurrences } from './schedule.js'
 import type {
   DailyBalance, FlowTotals, RecurrenceFrequency, RecurringItem,
@@ -35,14 +37,15 @@ const PER_MONTH: Record<RecurrenceFrequency, readonly [numerator: bigint, denomi
  * @param frequency - How often it occurs.
  * @returns The signed monthly amount as a four-decimal string, rounded half
  *   away from zero. `'0.0000'` for `once`, which has no monthly rate.
- * @throws {RangeError} If `amount` is not a decimal or `frequency` is unknown.
+ * @throws {RangeError} If `amount` is not a decimal with at most four places, or
+ *   `frequency` is unknown.
  */
 export function monthlyEquivalent(amount: string, frequency: RecurrenceFrequency): string {
   if (!Object.hasOwn(PER_MONTH, frequency)) {
     throw new RangeError(`Unknown recurrence frequency: ${JSON.stringify(frequency)}`)
   }
   const [numerator, denominator] = PER_MONTH[frequency]
-  return formatMoney(divideRounded(parseMoney(amount) * numerator, denominator))
+  return unitsToMoney(divideUnits(moneyToUnits(amount) * numerator, denominator))
 }
 
 /**
@@ -54,7 +57,7 @@ export function monthlyEquivalent(amount: string, frequency: RecurrenceFrequency
  * @returns `true` for income.
  */
 function isIncome(item: RecurringItem): boolean {
-  return item.legs.length > 0 && item.legs.every((leg) => parseMoney(leg.amount, 'leg amount') > 0n)
+  return item.legs.length > 0 && item.legs.every((leg) => moneyToUnits(leg.amount, 'leg amount') > 0n)
 }
 
 /**
@@ -114,7 +117,7 @@ export function dailyBalances(
 
   const accounts = new Map<string, bigint>()
   for (const [accountId, balance] of Object.entries(startingBalances)) {
-    accounts.set(accountId, parseMoney(balance, `starting balance for ${accountId}`))
+    accounts.set(accountId, moneyToUnits(balance, `starting balance for ${accountId}`))
   }
 
   // Per account, the money out and the money in on each day offset from
@@ -129,7 +132,7 @@ export function dailyBalances(
   for (const item of items) {
     const dates = occurrences(item, from, to)
     for (const leg of item.legs) {
-      const amount = parseMoney(leg.amount, 'leg amount')
+      const amount = moneyToUnits(leg.amount, 'leg amount')
       const series = (amount < 0n ? outs : ins).get(leg.accountId)
       if (!series) continue
       for (const date of dates) {
@@ -148,7 +151,7 @@ export function dailyBalances(
     for (let offset = 0; offset < last - first; offset += 1) {
       const low = running + (out[offset] ?? 0n)
       running = low + (into[offset] ?? 0n)
-      days.push({ date: fromDayNumber(first + offset), balance: formatMoney(running), low: formatMoney(low) })
+      days.push({ date: fromDayNumber(first + offset), balance: unitsToMoney(running), low: unitsToMoney(low) })
     }
     result.push([accountId, days])
   }
@@ -185,12 +188,12 @@ export function flowTotals(
     const dates = occurrences(item, from, to)
     let perOccurrence = 0n
     for (const leg of item.legs) {
-      const amount = parseMoney(leg.amount, 'leg amount')
+      const amount = moneyToUnits(leg.amount, 'leg amount')
       if (inSet.has(leg.accountId)) perOccurrence += amount
     }
     const total = perOccurrence * BigInt(dates.length)
     if (total > 0n) inflow += total
     else outflow += total
   }
-  return { inflow: formatMoney(inflow), outflow: formatMoney(outflow), net: formatMoney(inflow + outflow) }
+  return { inflow: unitsToMoney(inflow), outflow: unitsToMoney(outflow), net: unitsToMoney(inflow + outflow) }
 }

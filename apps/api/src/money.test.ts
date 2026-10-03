@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addMoney as budgetAdd,
-  compareMoney as budgetCompare,
-  formatMoney as budgetFormat,
-  negateMoney as budgetNegate,
-  parseMoney as budgetParse,
-  subtractMoney as budgetSubtract,
-  sumMoney as budgetSum,
-} from '@wickermoney/plugin-budgets/shared'
+  addMoney as sdkAdd,
+  compareMoney as sdkCompare,
+  divideUnits as sdkDivide,
+  moneyToUnits as sdkToUnits,
+  negateMoney as sdkNegate,
+  normalizeMoney as sdkNormalize,
+  subtractMoney as sdkSubtract,
+  sumMoney as sdkSum,
+  unitsToMoney as sdkFromUnits,
+} from '@wickermoney/plugin-sdk/money'
 import { addMoney, isValidMoney, money, negate, parseMoney, toMoney } from './money.js'
 
 describe('money', () => {
@@ -175,7 +177,7 @@ function randomAmount(rand: () => number): string {
   return rand() < 0.5 && body !== '0' ? `-${body}` : body
 }
 
-describe('agreement with the budgets plugin BigInt helpers (2,000 seeded cases)', () => {
+describe('agreement with the plugin SDK money module (2,000 seeded cases)', () => {
   const rand = seeded(20260919)
   const cases = Array.from({ length: 2000 }, () => ({ a: randomAmount(rand), b: randomAmount(rand) }))
 
@@ -185,40 +187,60 @@ describe('agreement with the budgets plugin BigInt helpers (2,000 seeded cases)'
 
   it('formats identically', () => {
     for (const { a } of cases) {
-      expect(toMoney(a), a).toBe(budgetFormat(budgetParse(a)))
-      expect(parseMoney(a), a).toBe(budgetFormat(budgetParse(a)))
+      expect(toMoney(a), a).toBe(sdkNormalize(a))
+      expect(parseMoney(a), a).toBe(sdkNormalize(a))
     }
   })
 
   it('adds identically', () => {
     for (const { a, b } of cases) {
-      expect(toMoney(money(a).plus(b)), `${a} + ${b}`).toBe(budgetAdd(a, b))
-      expect(addMoney(a, b), `${a} + ${b}`).toBe(budgetAdd(a, b))
+      expect(toMoney(money(a).plus(b)), `${a} + ${b}`).toBe(sdkAdd(a, b))
+      expect(addMoney(a, b), `${a} + ${b}`).toBe(sdkAdd(a, b))
     }
   })
 
   it('subtracts identically', () => {
     for (const { a, b } of cases) {
-      expect(toMoney(money(a).minus(b)), `${a} - ${b}`).toBe(budgetSubtract(a, b))
+      expect(toMoney(money(a).minus(b)), `${a} - ${b}`).toBe(sdkSubtract(a, b))
     }
   })
 
   it('negates identically, including zero', () => {
     for (const { a } of cases) {
-      expect(negate(a), a).toBe(budgetNegate(a))
+      expect(negate(a), a).toBe(sdkNegate(a))
     }
   })
 
   it('compares identically', () => {
     for (const { a, b } of cases) {
-      expect(money(a).comparedTo(b), `${a} <=> ${b}`).toBe(budgetCompare(a, b))
+      expect(money(a).comparedTo(b), `${a} <=> ${b}`).toBe(sdkCompare(a, b))
     }
   })
 
   it('sums a list identically', () => {
     for (let i = 0; i + 5 <= cases.length; i += 5) {
       const values = cases.slice(i, i + 5).map((c) => c.a)
-      expect(addMoney(...values), values.join(',')).toBe(budgetSum(values))
+      expect(addMoney(...values), values.join(',')).toBe(sdkSum(values))
+    }
+  })
+
+  it('divides identically: both round half away from zero', () => {
+    // The SDK's only rounding is divideUnits; decimal.js is set to ROUND_HALF_UP,
+    // which also rounds ties away from zero. Small divisors make ties common.
+    const divisors = [2n, 3n, 4n, 7n, 12n, -2n, -8n]
+    for (const [i, { a }] of cases.entries()) {
+      const d = divisors[i % divisors.length] ?? 2n
+      expect(sdkFromUnits(sdkDivide(sdkToUnits(a), d)), `${a} / ${d}`)
+        .toBe(toMoney(money(a).div(Number(d))))
+    }
+  })
+
+  it('refuses the same malformed input', () => {
+    // The SDK trims surrounding whitespace and has no 15-digit ceiling (it is
+    // also used for totals), so those cases differ by design and are left out.
+    for (const v of ['', '1.', '.5', '+1', '--1', '1,000', '1e3', '0x10', 'NaN', 'Infinity', '1.23456', '1.2.3', '-', '- 1', '１２']) {
+      expect(isValidMoney(v), v).toBe(false)
+      expect(() => sdkToUnits(v), v).toThrow(RangeError)
     }
   })
 

@@ -1,5 +1,5 @@
+import { ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import type { StackSegment, TrendMonth, TrendSeries } from '../models/index.js'
-import { ZERO_AMOUNT } from './ZERO_AMOUNT.js'
 
 /**
  * Lays out one month's bar: a segment per visible series that spent anything.
@@ -33,7 +33,7 @@ export function stackMonth(
   let lastDown = -1
 
   for (const s of visible) {
-    const value = month.values[s.id] ?? ZERO_AMOUNT
+    const value = month.values[s.id] ?? ZERO_MONEY
     const amount = Number(value)
     if (amount === 0) continue
 

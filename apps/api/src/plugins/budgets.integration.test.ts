@@ -154,6 +154,15 @@ describe('planning a month', () => {
     expect(numeric.statusCode).toBe(400)
   })
 
+  it('refuses a fifth decimal place rather than truncating it', async () => {
+    // Truncating would store a plan the user never typed; the core API refuses
+    // the same input.
+    const res = await putLine({
+      month: '2026-03', categoryId: groceries, planned: '400.00001', rollover: false,
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
   it('removes a line, and refuses with 404 once it is gone', async () => {
     await putLine({ month: '2026-06', categoryId: dining, planned: '80.0000', rollover: false })
 

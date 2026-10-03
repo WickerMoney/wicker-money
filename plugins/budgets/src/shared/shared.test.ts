@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { subtractMoney } from '@wickermoney/plugin-sdk/money'
 import {
-  AT_RISK_PACE, addMoney, balanceFor, carryForward, daysInMonth, draftPlannedFrom,
-  editableMoney, elapsedFraction, formatMoney, isMonthKey, isValidPlan, monthKeyOf, monthPeriod,
-  parseMoney, previousMonth, rankAtRisk, rankBreakdown, ratio, shiftMonth, statusFor, subtractMoney,
-  sumMoney, todayIn, totalPlanned, type HistoryEntry,
+  AT_RISK_PACE, balanceFor, carryForward, daysInMonth, draftPlannedFrom,
+  elapsedFraction, isMonthKey, isValidPlan, monthKeyOf, monthPeriod,
+  previousMonth, rankAtRisk, rankBreakdown, ratio, shiftMonth, statusFor,
+  todayIn, totalPlanned, type HistoryEntry,
 } from './index.js'
 
 describe('month periods', () => {
@@ -80,31 +81,8 @@ describe('elapsed fraction', () => {
   })
 })
 
-describe('money as text', () => {
-  it('round-trips the four places the column stores', () => {
-    expect(formatMoney(parseMoney('-81.2000'))).toBe('-81.2000')
-    expect(formatMoney(parseMoney('81.2'))).toBe('81.2000')
-    expect(formatMoney(parseMoney('0'))).toBe('0.0000')
-  })
-
-  it('adds without going through a float', () => {
-    // 0.1 + 0.2 in binary floating point is 0.30000000000000004. Over a month
-    // of grocery rows that is how a budget stops reconciling by a cent nobody
-    // can find.
-    expect(addMoney('0.1000', '0.2000')).toBe('0.3000')
-    expect(sumMoney(['0.1000', '0.2000', '0.3000'])).toBe('0.6000')
-    expect(subtractMoney('100.0000', '33.3300')).toBe('66.6700')
-  })
-
-  it('handles very large amounts that would lose precision as a double', () => {
-    expect(addMoney('99999999999.9999', '0.0001')).toBe('100000000000.0000')
-  })
-
-  it('refuses a value that is not an amount rather than silently yielding NaN', () => {
-    expect(() => parseMoney('abc')).toThrow()
-    expect(() => parseMoney('')).toThrow()
-    expect(() => parseMoney('1,000.00')).toThrow()
-  })
+describe('progress and plan checks', () => {
+  // The arithmetic itself is @wickermoney/plugin-sdk/money and is tested there.
 
   it('treats a zero plan with spending as fully used rather than untouched', () => {
     // Returning 0 would draw an empty bar for a category overspent against a
@@ -118,6 +96,12 @@ describe('money as text', () => {
     expect(isValidPlan('0')).toBe(true)
     expect(isValidPlan('-1.00')).toBe(false)
     expect(isValidPlan('nonsense')).toBe(false)
+  })
+
+  it('refuses a fifth decimal place rather than truncating it', () => {
+    // The API refuses it too. Truncating would store a plan the user never typed.
+    expect(isValidPlan('12.3456')).toBe(true)
+    expect(isValidPlan('12.34567')).toBe(false)
   })
 })
 
@@ -344,28 +328,5 @@ describe('ranking for the dashboard', () => {
     const justUnder = at('Under', '310.0000', '100.0000')
     expect(justUnder.pace).toBeLessThan(AT_RISK_PACE)
     expect(justUnder.health).not.toBe('at-risk')
-  })
-})
-
-describe('the shape a plan is shown in', () => {
-  it('shows two places, not the column\'s four', () => {
-    // `450.0000` in a field a person types into tells them the database's
-    // business rather than their own.
-    expect(editableMoney('450.0000')).toBe('450.00')
-    expect(editableMoney('0.0000')).toBe('0.00')
-    expect(editableMoney('1234.5000')).toBe('1234.50')
-    expect(editableMoney('0.0500')).toBe('0.05')
-  })
-
-  it('keeps real sub-cent precision rather than rounding it away', () => {
-    // Trimming is presentation. Silently turning 0.1234 into 0.12 would change
-    // a number the user entered.
-    expect(editableMoney('0.1234')).toBe('0.1234')
-  })
-
-  it('round-trips through the parser unchanged', () => {
-    for (const v of ['450.0000', '0.0000', '-12.5000', '0.1234']) {
-      expect(parseMoney(editableMoney(v))).toBe(parseMoney(v))
-    }
   })
 })

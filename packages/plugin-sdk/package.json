@@ -26,6 +26,10 @@
     "./recurrence": {
       "types": "./dist/recurrence/index.d.ts",
       "default": "./dist/recurrence/index.js"
+    },
+    "./money": {
+      "types": "./dist/money/index.d.ts",
+      "default": "./dist/money/index.js"
     }
   },
   "files": [

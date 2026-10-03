@@ -1,6 +1,7 @@
+import { compareMoney, subtractMoney, sumMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import {
-  addDays, compareMoney, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
-  subtractMoney, sumMoney, todayIn, windowProblem, type LineStatus,
+  addDays, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
+  todayIn, windowProblem, type LineStatus,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
 import type { BudgetUnitOfWork } from '../repository/BudgetUnitOfWork.js'
@@ -22,7 +23,6 @@ import type { SavedWindow } from './SavedWindow.js'
 import { summarizeMonth } from './summarizeMonth.js'
 import { windowLines } from './windowLines.js'
 import type { WindowInput } from './WindowInput.js'
-import { ZERO_MONEY } from './ZERO_MONEY.js'
 
 /**
  * Business rules for monthly budgets.

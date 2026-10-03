@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { monthsInRange, type PluginWidgetProps } from '@wickermoney/plugin-sdk'
+import { isZeroMoney, sumMoney } from '@wickermoney/plugin-sdk/money'
 import { Alert, EmptyState, Spinner } from '@wickermoney/ui-kit'
 import { TrendGrid } from './components/TrendGrid.js'
 import { TrendLegend } from './components/TrendLegend.js'
@@ -7,10 +8,8 @@ import { TrendMonthMark } from './components/TrendMonthMark.js'
 import { TrendTooltip } from './components/TrendTooltip.js'
 import { labelEvery } from './helpers/labelEvery.js'
 import { monthLabelLong } from './helpers/monthLabel.js'
-import { sumAmounts } from './helpers/sumAmounts.js'
 import { totalsByMonth } from './helpers/totalsByMonth.js'
 import { TREND_LAYOUT } from './helpers/TREND_LAYOUT.js'
-import { ZERO_AMOUNT } from './helpers/ZERO_AMOUNT.js'
 import { useMonthlySummary } from './hooks/useMonthlySummary.js'
 import type { MonthTotal } from './models/index.js'
 import './styles.js'
@@ -53,7 +52,7 @@ export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
 
   // `!== zero`, not `> 0`: a month of pure refunds has a negative expense total
   // and is not an empty month.
-  const active = months.some((m) => m.income !== ZERO_AMOUNT || m.expense !== ZERO_AMOUNT)
+  const active = months.some((m) => !isZeroMoney(m.income) || !isZeroMoney(m.expense))
   if (!active) {
     // Different from having no transactions at all, and worth saying so:
     // otherwise a too-narrow range looks like an empty ledger.
@@ -87,8 +86,8 @@ export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
 
   const hovered = hover === null ? undefined : months[hover]
   const totals = {
-    income: sumAmounts(months.map((m) => m.income)),
-    expense: sumAmounts(months.map((m) => m.expense)),
+    income: sumMoney(months.map((m) => m.income)),
+    expense: sumMoney(months.map((m) => m.expense)),
   }
 
   const describe = (m: MonthTotal): string =>

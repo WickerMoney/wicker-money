@@ -1,5 +1,5 @@
+import { addMoney, subtractMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import { monthKeyOf, monthPeriod, shiftMonth } from './period.js'
-import { addMoney, subtractMoney } from './money.js'
 
 /**
  * Windows: one budget line funded once and spent down over a date range that
@@ -172,8 +172,8 @@ export interface WindowMonth {
  */
 export function windowMonth(input: WindowMonthInput): WindowMonth {
   const first = monthKeyOf(input.start) === input.monthKey
-  const planned = first ? input.funded : '0.0000'
-  const carriedIn = first ? '0.0000' : subtractMoney(input.funded, input.spentBefore)
+  const planned = first ? input.funded : ZERO_MONEY
+  const carriedIn = first ? ZERO_MONEY : subtractMoney(input.funded, input.spentBefore)
   const available = addMoney(planned, carriedIn)
   return {
     planned,

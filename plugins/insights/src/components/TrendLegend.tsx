@@ -1,5 +1,4 @@
-import { isNegativeAmount } from '../helpers/isNegativeAmount.js'
-import { subtractAmounts } from '../helpers/subtractAmounts.js'
+import { isNegativeMoney, subtractMoney } from '@wickermoney/plugin-sdk/money'
 
 /** Props for {@link TrendLegend}. */
 export interface TrendLegendProps {
@@ -16,7 +15,7 @@ export interface TrendLegendProps {
  * also provides the contrast relief the light-mode palette requires.
  */
 export function TrendLegend({ totals, formatMoney }: TrendLegendProps) {
-  const net = subtractAmounts(totals.income, totals.expense)
+  const net = subtractMoney(totals.income, totals.expense)
   return (
     <div className="viz__legend viz__legend--inline">
       <div className="viz__legend-row">
@@ -32,7 +31,7 @@ export function TrendLegend({ totals, formatMoney }: TrendLegendProps) {
       <div className="viz__legend-row">
         <span className="viz__net-key" aria-hidden="true" />
         <span>Net</span>
-        <span className={`viz__legend-value${isNegativeAmount(net) ? ' is-neg' : ''}`}>
+        <span className={`viz__legend-value${isNegativeMoney(net) ? ' is-neg' : ''}`}>
           {formatMoney(net)}
         </span>
       </div>
