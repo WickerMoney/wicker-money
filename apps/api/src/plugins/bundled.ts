@@ -240,4 +240,39 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
       exporters: false,
     },
   },
+  {
+    id: 'wickermoney.forecast',
+    name: 'Forecast',
+    version: '0.1.0',
+    description: 'Each account\'s projected daily balance from its recurring items, with when it would dip below its buffer.',
+    author: 'Wicker',
+    sdkVersion: SDK_MAJOR_VERSION,
+    // The same two read grants as "Until payday", for the same reasons: the
+    // projection is built from recurring items (and their legs) and starts
+    // from an account's balance and buffer, both computed by core. No
+    // transactions: the forecast is what the schedule says, not a guess from
+    // spending history.
+    requiredTables: [
+      { table: 'recurring_items', access: 'read' },
+      { table: 'accounts', access: 'read' },
+    ],
+    permissions: [],
+    remoteEntry: '/plugins/forecast/remoteEntry.js',
+    contributes: {
+      pages: [
+        {
+          path: 'forecast',
+          title: 'Forecast',
+          // First of the plugin pages: it reads straight on from Recurring,
+          // the last core entry, which is where its data is entered.
+          nav: { label: 'Forecast', section: 'main', order: 20 },
+          module: './ForecastPage',
+        },
+      ],
+      widgets: [],
+      // No server half: it reads core's forecast through the SDK client.
+      endpoints: false,
+      exporters: false,
+    },
+  },
 ]

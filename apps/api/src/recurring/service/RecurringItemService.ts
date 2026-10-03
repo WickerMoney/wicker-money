@@ -8,6 +8,10 @@ import { NotFoundError, ValidationError } from '../../errors.js'
 import { addMoney, money, negate, toMoney } from '../../money.js'
 import type { RecurringItemRow } from '../repository/RecurringItemRow.js'
 import { addDays } from './addDays.js'
+import { DEFAULT_FORECAST_HORIZON, type ForecastHorizon } from './FORECAST_HORIZONS.js'
+import { forecastStats } from './forecastStats.js'
+import type { ForecastAccount, ForecastEntry, ForecastView } from './ForecastView.js'
+import { horizonEnd } from './horizonEnd.js'
 import type { OccurrenceView } from './OccurrenceView.js'
 import type { RecurringItemInput } from './RecurringItemInput.js'
 import type { RecurringItemView } from './RecurringItemView.js'
@@ -309,6 +313,82 @@ export class RecurringItemService {
     )
   }
 
+  /**
+   * One account's projected daily balance, today through the horizon, from
+   * its recurring items.
+   *
+   * Built the same way as {@link upcoming}: the projection starts from
+   * today's actual balance and runs from tomorrow, every leg on the account
+   * applies (both sides of a transfer), and each day carries its low point
+   * with outflows clearing before inflows. Breaches and day counts are read
+   * from those lows. Nothing here knows about transactions that have not
+   * happened yet beyond the recurring items, so the line is "what the
+   * schedule says", not a prediction from spending history.
+   *
+   * @param userId - The signed-in user.
+   * @param options - `accountId` picks the account (default: the first
+   *   spendable checking account, then any checking account, then the first
+   *   account); `horizon` how far to look (default {@link DEFAULT_FORECAST_HORIZON}).
+   * @returns The forecast.
+   * @throws {NotFoundError} If `accountId` is not one of the user's active accounts.
+   */
+  forecast(userId: string, options: { accountId?: string; horizon?: ForecastHorizon } = {}): Promise<ForecastView> {
+    const horizon = options.horizon ?? DEFAULT_FORECAST_HORIZON
+    return this.uow.forUser(
+      userId,
+      async (repos) => {
+        const today = await this.today(repos, userId)
+        const from = addDays(today, 1)
+        const through = horizonEnd(today, horizon)
+        const window = { from, through }
+
+        const active = await repos.accounts.listWithBalances(false)
+        const accounts = active.map((a) => ({ accountId: a.id, name: a.name, accountType: a.account_type }))
+        const rows = await repos.recurringItems.list()
+        const hasItems = rows.length > 0
+
+        const chosen = options.accountId === undefined
+          ? defaultForecastAccount(active)
+          : active.find((a) => a.id === options.accountId)
+        if (chosen === undefined) {
+          if (options.accountId !== undefined) throw new NotFoundError('Account')
+          return { today, horizon, window, accounts, account: null, days: [], stats: null, entries: [], hasItems }
+        }
+
+        const cash = chosen.account_type === 'checking' || chosen.account_type === 'savings'
+        const account: ForecastAccount = {
+          accountId: chosen.id, name: chosen.name, accountType: chosen.account_type,
+          balance: toMoney(chosen.balance), buffer: toMoney(chosen.buffer_amount), cash,
+        }
+
+        const touching = rows.filter((row) => row.legs.some((l) => l.account_id === chosen.id))
+        const items = touching.map((row) => ({
+          ...toSchedule(row),
+          legs: row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount })),
+        }))
+        const to = addDays(through, 1)
+        const days = dailyBalances(items, { [chosen.id]: chosen.balance }, from, to)[chosen.id] ?? []
+
+        const entries: ForecastEntry[] = []
+        for (const row of touching) {
+          const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
+          const amount = addMoney(...legs.filter((l) => l.accountId === chosen.id).map((l) => l.amount))
+          for (const date of occurrences(toSchedule(row), from, to)) {
+            entries.push({ itemId: row.id, date, name: row.name, kind: row.kind, amount, legs })
+          }
+        }
+        entries.sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1))
+
+        return {
+          today, horizon, window, accounts, account, days,
+          stats: forecastStats(today, chosen.balance, chosen.buffer_amount, cash, days),
+          entries, hasItems,
+        }
+      },
+      { readOnly: true },
+    )
+  }
+
   /** The user's today in their time zone. */
   private async today(repos: Repositories, userId: string): Promise<string> {
     const timezone = (await repos.reports.findTimezone(userId)) ?? 'UTC'
@@ -347,6 +427,20 @@ export class RecurringItemService {
       throw error
     }
   }
+}
+
+/**
+ * The account a forecast opens on when none is named: the first spendable
+ * checking account (the one "Until payday" counts first), then any checking
+ * account, then any spendable one, then the first account by name.
+ */
+function defaultForecastAccount<T extends { account_type: string; spendable: boolean }>(
+  accounts: readonly T[],
+): T | undefined {
+  return accounts.find((a) => a.account_type === 'checking' && a.spendable)
+    ?? accounts.find((a) => a.account_type === 'checking')
+    ?? accounts.find((a) => a.spendable)
+    ?? accounts[0]
 }
 
 /** Derives an item's view against today. */

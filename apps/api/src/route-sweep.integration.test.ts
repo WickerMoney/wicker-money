@@ -67,6 +67,7 @@ const PROTECTED_ROUTES: readonly string[] = [
   'GET /api/v1/core/recurring-items/list',
   'GET /api/v1/core/recurring-items/occurrences',
   'GET /api/v1/core/recurring-items/upcoming',
+  'GET /api/v1/core/recurring-items/forecast',
 
   'GET /api/v1/onboarding',
   'POST /api/v1/onboarding/preview',
