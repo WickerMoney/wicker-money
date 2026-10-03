@@ -1,3 +1,4 @@
+import { isZeroMoney } from '@wickermoney/plugin-sdk/money'
 import type { MonthLine } from '../models/index.js'
 import { WindowSummary } from './WindowSummary.js'
 
@@ -29,7 +30,7 @@ export function CategoryCell({ line, formatMoney, formatDate }: CategoryCellProp
   return (
     <span>
       {line.categoryName}
-      {line.rollover && line.carriedIn !== '0.0000' ? (
+      {line.rollover && !isZeroMoney(line.carriedIn) ? (
         <>
           <br />
           <span className={`bud__carry${overdrawn ? ' is-negative' : ''}`}>

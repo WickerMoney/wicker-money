@@ -1,4 +1,4 @@
-import { editableMoney } from '../../shared/index.js'
+import { editableMoney, isZeroMoney } from '@wickermoney/plugin-sdk/money'
 import type { MonthLine } from '../models/index.js'
 
 /** Props for {@link PlannedCell}. */
@@ -23,7 +23,7 @@ export function PlannedCell({ line, draftValue, onEditPlan, onSave }: PlannedCel
   // A window's amount belongs to the whole window, so it is changed in the
   // window form rather than inline in one month's row.
   if (line.window != null) {
-    return <span className="bud__num">{line.planned === '0.0000' ? '—' : editableMoney(line.planned)}</span>
+    return <span className="bud__num">{isZeroMoney(line.planned) ? '—' : editableMoney(line.planned)}</span>
   }
   const stored = editableMoney(line.planned)
   const value = draftValue ?? stored

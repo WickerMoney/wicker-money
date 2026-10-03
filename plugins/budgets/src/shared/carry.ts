@@ -1,4 +1,6 @@
-import { addMoney, isNegative, parseMoney, subtractMoney } from './money.js'
+import {
+  addMoney, isNegativeMoney, moneyToUnits, subtractMoney, ZERO_MONEY,
+} from '@wickermoney/plugin-sdk/money'
 
 /**
  * Carry-forward for rollover lines.
@@ -72,7 +74,7 @@ export function carryForward(history: readonly HistoryEntry[]): Balance[] {
 
   for (const entry of history) {
     const carriedIn =
-      pending !== null && isConsecutive(pending.monthKey, entry.monthKey) ? pending.remaining : '0.0000'
+      pending !== null && isConsecutive(pending.monthKey, entry.monthKey) ? pending.remaining : ZERO_MONEY
 
     const available = addMoney(entry.planned, carriedIn)
     const remaining = subtractMoney(available, entry.spent)
@@ -107,7 +109,7 @@ export function balanceFor(
  * @returns `true` if `balance.remaining` is negative.
  */
 export function isOverspent(balance: Balance): boolean {
-  return isNegative(balance.remaining)
+  return isNegativeMoney(balance.remaining)
 }
 
 /**
@@ -139,18 +141,20 @@ function isConsecutive(earlier: string, later: string): boolean {
  * @throws {RangeError} If any `planned` is not a decimal number.
  */
 export function totalPlanned(lines: readonly { planned: string }[]): string {
-  return lines.reduce((total, l) => addMoney(total, l.planned), '0.0000')
+  return lines.reduce((total, l) => addMoney(total, l.planned), ZERO_MONEY)
 }
 
 /**
  * Tests whether a string is acceptable as a planned amount.
  *
  * @param value - Candidate text, e.g. from an input field.
- * @returns `true` if it parses as a decimal number that is not negative; never throws.
+ * @returns `true` if it is a decimal with at most four places that is not
+ *   negative; never throws. A fifth place is refused, as the API refuses it,
+ *   rather than truncated into a plan the user never typed.
  */
 export function isValidPlan(value: string): boolean {
   try {
-    return parseMoney(value) >= 0n
+    return moneyToUnits(value) >= 0n
   } catch {
     return false
   }

@@ -1,4 +1,4 @@
-import { sumMoney } from '../../shared/index.js'
+import { sumMoney } from '@wickermoney/plugin-sdk/money'
 import type { MonthLine } from './MonthLine.js'
 import type { MonthTotals } from './MonthTotals.js'
 import type { UnbudgetedSpend } from './UnbudgetedSpend.js'

@@ -1,6 +1,5 @@
-import { compareMoney } from '../../shared/index.js'
+import { compareMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import { UNKNOWN_CATEGORY } from './UNKNOWN_CATEGORY.js'
-import { ZERO_MONEY } from './ZERO_MONEY.js'
 import type { UnbudgetedSpend } from './UnbudgetedSpend.js'
 
 /**

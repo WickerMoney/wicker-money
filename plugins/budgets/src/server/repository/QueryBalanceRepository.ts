@@ -1,3 +1,4 @@
+import { ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import { monthKeyOf, monthPeriod, shiftMonth, type HistoryEntry } from '../../shared/index.js'
 import { CARRY_LOOKBACK_MONTHS } from '../constants.js'
 import type { BalanceRepository } from './BalanceRepository.js'
@@ -59,7 +60,7 @@ export class QueryBalanceRepository implements BalanceRepository {
       list.push({
         monthKey: key,
         planned: row.planned,
-        spent: spendByMonth.get(`${row.category_id}:${key}`) ?? '0.0000',
+        spent: spendByMonth.get(`${row.category_id}:${key}`) ?? ZERO_MONEY,
         rollover: row.rollover,
       })
       byCategory.set(row.category_id, list)

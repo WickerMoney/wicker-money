@@ -1,4 +1,5 @@
-import { isNegative, parseMoney, ratio } from './money.js'
+import { isNegativeMoney, isZeroMoney } from '@wickermoney/plugin-sdk/money'
+import { ratio } from './ratio.js'
 import { elapsedFraction } from './period.js'
 
 /**
@@ -135,8 +136,8 @@ export function statusAt(
  * @returns The line's {@link Health}.
  */
 function healthOf(line: StatusInput, used: number, pace: number, elapsed: number): Health {
-  if (isNegative(line.remaining)) return 'over'
-  if (parseMoney(line.spent) === 0n) return 'unused'
+  if (isNegativeMoney(line.remaining)) return 'over'
+  if (isZeroMoney(line.spent)) return 'unused'
   // Once the month is done, pace is meaningless — what matters is whether the
   // final number landed inside the plan, and by then it has.
   if (elapsed >= 1) return 'on-track'

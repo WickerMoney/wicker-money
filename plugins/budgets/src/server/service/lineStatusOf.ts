@@ -1,4 +1,5 @@
-import { statusFor, subtractMoney, sumMoney, type LineStatus } from '../../shared/index.js'
+import { subtractMoney, sumMoney } from '@wickermoney/plugin-sdk/money'
+import { statusFor, type LineStatus } from '../../shared/index.js'
 import type { LineFigures } from './LineFigures.js'
 
 /**

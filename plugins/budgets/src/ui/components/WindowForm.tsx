@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, CategoryOptions, Field, SelectField, orderByParent } from '@wickermoney/ui-kit'
-import { editableMoney, monthPeriod } from '../../shared/index.js'
+import { editableMoney } from '@wickermoney/plugin-sdk/money'
+import { monthPeriod } from '../../shared/index.js'
 import type { Category, MonthLine, WindowDraft } from '../models/index.js'
 
 /** Props for {@link WindowForm}. */
