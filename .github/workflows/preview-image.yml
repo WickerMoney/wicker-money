@@ -1,0 +1,175 @@
+name: Preview image
+
+# Builds a test image from any branch and pushes it to
+#   ghcr.io/wickermoney/wicker-money-preview:<branch>
+#   ghcr.io/wickermoney/wicker-money-preview:<branch>-<short sha>
+# for trying a change on a real install before deciding whether to merge it.
+# docker/docker-compose.preview.yml runs one beside the real install.
+#
+# Run it from Actions -> Preview image -> Run workflow, and pick the branch in
+# "Use workflow from". The button only appears once this file is on the default
+# branch; after that, the version of this file on the chosen branch is the one
+# that runs.
+#
+# What it does NOT do, on purpose: publish to npm, create a release, or touch
+# ghcr.io/wickermoney/wicker-money (:latest, :next and the version tags). Preview
+# images go to a separate package, so the real one's tag list stays release-only
+# and a half-finished branch can never be pulled as wicker-money:<anything>.
+# The preview package is private unless you change its visibility.
+#
+# Checks are not re-run here: CI already runs them on the pull request, and a
+# preview is often wanted before a PR exists. The image build itself is the
+# same Dockerfile, so a branch that cannot build fails here too.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: Architectures to build (amd64 for Unraid/Proxmox, arm64 for a Pi or Apple Silicon)
+        type: choice
+        default: amd64
+        options:
+          - amd64
+          - arm64
+          - both
+
+permissions:
+  contents: read
+
+# One preview build per branch at a time; a newer run replaces an older one.
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/wickermoney/wicker-money-preview
+
+jobs:
+  meta:
+    # Never from a fork or the mirror: the image name is this organisation's.
+    if: github.repository == 'wickermoney/wicker-money'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.t.outputs.tag }}
+      short: ${{ steps.t.outputs.short }}
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - id: t
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          # A tag allows [A-Za-z0-9_.-], up to 128 characters, not starting with . or -.
+          tag="$(printf '%s' "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9._-]/-/g' -e 's/^[.-]*//' | cut -c1-100)"
+          if [ -z "$tag" ]; then tag=branch; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - id: m
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          amd='{"runner":"ubuntu-latest","platform":"linux/amd64","slug":"amd64"}'
+          arm='{"runner":"ubuntu-24.04-arm","platform":"linux/arm64","slug":"arm64"}'
+          case "$PLATFORMS" in
+            amd64) list="[$amd]" ;;
+            arm64) list="[$arm]" ;;
+            *)     list="[$amd,$arm]" ;;
+          esac
+          echo "matrix={\"include\":$list}" >> "$GITHUB_OUTPUT"
+
+  # Each architecture builds natively on its own runner (no QEMU, so argon2's
+  # native module builds the same way it does in release.yml) and is pushed by
+  # digest only. The merge job below gives the digests their tags.
+  image:
+    name: Image (${{ matrix.slug }})
+    needs: meta
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.meta.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          # 0.0.0-preview so the running app, /healthz and core.app_deployments
+          # all say plainly that this is not a release.
+          build-args: |
+            VERSION=0.0.0-preview.${{ needs.meta.outputs.short }}
+            GIT_SHA=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=0.0.0-preview.${{ needs.meta.outputs.short }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.description=Preview build of ${{ github.ref_name }}. Not a release.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Shares the CI and release cache for the same architecture, so a
+          # preview of a small change rebuilds only the layers it touched.
+          cache-from: type=gha,scope=${{ matrix.slug }}
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: preview-digests-${{ matrix.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Tag the preview
+    needs: [meta, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: preview-digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE:${{ needs.meta.outputs.tag }}" \
+            -t "$IMAGE:${{ needs.meta.outputs.tag }}-${{ needs.meta.outputs.short }}" \
+            $(printf "$IMAGE@sha256:%s " *)
+      - name: Summary
+        run: |
+          {
+            echo "### Preview image"
+            echo
+            echo '```'
+            echo "$IMAGE:${{ needs.meta.outputs.tag }}"
+            echo "$IMAGE:${{ needs.meta.outputs.tag }}-${{ needs.meta.outputs.short }}"
+            echo '```'
+            echo
+            echo "On the Docker host:"
+            echo
+            echo '```'
+            echo "export PREVIEW_TAG=${{ needs.meta.outputs.tag }}"
+            echo "docker compose -f docker-compose.preview.yml up -d"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
