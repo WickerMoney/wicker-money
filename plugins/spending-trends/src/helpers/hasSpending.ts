@@ -1,5 +1,5 @@
+import { isZeroMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import type { Trend } from '../models/index.js'
-import { ZERO_AMOUNT } from './ZERO_AMOUNT.js'
 
 /**
  * Whether the chart has anything to draw.
@@ -12,5 +12,5 @@ import { ZERO_AMOUNT } from './ZERO_AMOUNT.js'
  * @returns `true` when at least one month has a non-zero amount in some series.
  */
 export function hasSpending(trend: Trend): boolean {
-  return trend.months.some((m) => trend.series.some((s) => (m.values[s.id] ?? ZERO_AMOUNT) !== ZERO_AMOUNT))
+  return trend.months.some((m) => trend.series.some((s) => !isZeroMoney(m.values[s.id] ?? ZERO_MONEY)))
 }

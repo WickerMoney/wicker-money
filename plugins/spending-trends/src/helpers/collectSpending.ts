@@ -1,5 +1,5 @@
+import { moneyToUnits } from '@wickermoney/plugin-sdk/money'
 import type { SummaryRow } from '../models/index.js'
-import { parseAmount } from './parseAmount.js'
 import { UNCATEGORIZED_ID } from './UNCATEGORIZED_ID.js'
 
 /** Spending gathered from summary rows, before any ranking. All amounts are exact `bigint` units. */
@@ -34,7 +34,7 @@ export function collectSpending(rows: readonly SummaryRow[]): CollectedSpending 
   for (const row of rows) {
     if (row.kind === 'income') continue
     const id = row.categoryId ?? UNCATEGORIZED_ID
-    const units = parseAmount(row.total)
+    const units = moneyToUnits(row.total)
     names.set(id, row.categoryName)
     totals.set(id, (totals.get(id) ?? 0n) + units)
     const month = byMonth.get(row.month) ?? new Map<string, bigint>()

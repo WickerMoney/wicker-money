@@ -1,4 +1,4 @@
-import { isNegativeAmount } from '../helpers/isNegativeAmount.js'
+import { isNegativeMoney } from '@wickermoney/plugin-sdk/money'
 import { monthLabelLong } from '../helpers/monthLabelLong.js'
 import type { MonthReadout, TooltipAnchor } from '../models/index.js'
 
@@ -35,7 +35,7 @@ export function StackedTooltip({ readout, anchor, formatMoney }: StackedTooltipP
           <span className="spt__tip-row" key={r.id}>
             <span className="spt__swatch is-solid" style={{ background: r.color, borderColor: r.color }} />
             <span className="spt__tip-name">{r.name}</span>
-            <strong className={isNegativeAmount(r.value) ? 'is-neg' : undefined}>
+            <strong className={isNegativeMoney(r.value) ? 'is-neg' : undefined}>
               {formatMoney(r.value)}
             </strong>
           </span>

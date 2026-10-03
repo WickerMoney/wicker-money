@@ -1,7 +1,6 @@
+import { isZeroMoney, sumMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import type { MonthReadout, ReadoutRow, TrendMonth, TrendSeries } from '../models/index.js'
 import { monthLabelLong } from './monthLabelLong.js'
-import { sumAmounts } from './sumAmounts.js'
-import { ZERO_AMOUNT } from './ZERO_AMOUNT.js'
 
 /**
  * Reads one month back as words: which categories spent what, and the total.
@@ -23,14 +22,14 @@ export function readMonth(
 ): MonthReadout {
   const rows: ReadoutRow[] = []
   for (const s of visible) {
-    const value = month.values[s.id] ?? ZERO_AMOUNT
-    if (value === ZERO_AMOUNT) continue
+    const value = month.values[s.id] ?? ZERO_MONEY
+    if (isZeroMoney(value)) continue
     rows.push({ id: s.id, name: s.name, color: colors.get(s.id) ?? 'currentColor', value })
   }
   // The tooltip reads top of the bar first, like the bar itself.
   rows.reverse()
 
-  const total = sumAmounts(rows.map((r) => r.value))
+  const total = sumMoney(rows.map((r) => r.value))
   const parts = rows.map((r) => `${r.name} ${formatMoney(r.value)}`)
   const detail = parts.length === 0 ? 'no spending' : `${parts.join(', ')}; total ${formatMoney(total)}`
   return { month: month.month, rows, total, description: `${monthLabelLong(month.month)}: ${detail}` }

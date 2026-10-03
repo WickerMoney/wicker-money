@@ -1,5 +1,5 @@
+import { unitsToMoney } from '@wickermoney/plugin-sdk/money'
 import type { TrendSeries } from '../models/index.js'
-import { formatAmount } from './formatAmount.js'
 
 /**
  * Builds one month's value for every series.
@@ -25,7 +25,7 @@ export function monthValues(
   }
   const values: Record<string, string> = {}
   for (const s of series) {
-    values[s.id] = formatAmount(s.folded ? other : (month.get(s.id) ?? 0n))
+    values[s.id] = unitsToMoney(s.folded ? other : (month.get(s.id) ?? 0n))
   }
   return values
 }
