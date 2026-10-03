@@ -32,6 +32,7 @@ const PUBLIC_ROUTES: readonly string[] = [
 const PROTECTED_ROUTES: readonly string[] = [
   'POST /api/v1/auth/change-password',
   'GET /api/v1/auth/me',
+  'PATCH /api/v1/auth/me',
 
   'GET /api/v1/accounts',
   'POST /api/v1/accounts',

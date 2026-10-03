@@ -5,10 +5,13 @@ import { addressRateLimit } from '../helpers/addressRateLimit.js'
 import { createEmailRateLimit } from '../helpers/createEmailRateLimit.js'
 import { setRefreshCookie } from '../helpers/setRefreshCookie.js'
 import { toAuthResponse } from '../helpers/toAuthResponse.js'
-import { credentials } from '../schemas/credentials.js'
+import { registerBody } from '../schemas/registerBody.js'
 
 /**
  * Registers `POST /api/v1/auth/register`: creates an account and signs it in.
+ *
+ * The body may carry the browser's `timezone`; a recognised IANA zone becomes
+ * the account's, anything else leaves the `UTC` default.
  *
  * Responds `201` with the access token and user and sets the refresh cookie,
  * `400` if the body fails validation, `403` (`registration_disabled`) if the
@@ -27,8 +30,8 @@ export function registerRegisterUser(app: FastifyInstance, auth: AuthService): v
       preHandler: createEmailRateLimit(app, auth.policy, 'register'),
     },
     async (request, reply) => {
-      const { email, password } = parseBody(credentials, request.body)
-      const session = await auth.register(email, password)
+      const { email, password, timezone } = parseBody(registerBody, request.body)
+      const session = await auth.register(email, password, timezone)
       setRefreshCookie(reply, auth.policy, session.refreshToken)
       return reply.code(201).send(toAuthResponse(session))
     },

@@ -1,8 +1,10 @@
 import type { Config } from '../config.js'
 import { DuplicateKeyError } from '../data/DuplicateKeyError.js'
 import type { UnitOfWork } from '../data/UnitOfWork.js'
-import { AppError, ConflictError, UnauthorizedError } from '../errors.js'
+import { AppError, ConflictError, NotFoundError, UnauthorizedError, ValidationError } from '../errors.js'
 import { hashPassword, verifyPassword } from './password.js'
+import type { AuthUser } from './service/AuthUser.js'
+import { canonicalTimezone } from './service/canonicalTimezone.js'
 import type { UserIdentity } from './repository/UserIdentity.js'
 import { Semaphore } from './Semaphore.js'
 import type { AuthPolicy } from './service/AuthPolicy.js'
@@ -65,13 +67,18 @@ export class AuthService {
    * worth more than enumeration resistance; the endpoint is rate-limited per
    * address and per email to bound probing.
    *
+   * The time zone is a best guess from the browser, so one the server does not
+   * recognise is ignored (the account keeps the `UTC` default and the user can
+   * set it in Settings) rather than failing a sign-up over it.
+   *
    * @param email - Email address; trimmed and lower-cased.
    * @param password - Plaintext password, hashed with Argon2id before storage.
+   * @param timezone - Optional IANA zone name, normally the browser's own.
    * @returns Tokens and the new user.
    * @throws {AppError} With code `registration_disabled` (403) when registration is turned off.
    * @throws {ConflictError} With code `email_taken` if the email is already registered.
    */
-  async register(email: string, password: string): Promise<AuthSession> {
+  async register(email: string, password: string, timezone?: string): Promise<AuthSession> {
     if (!this.authPolicy.registrationEnabled) {
       throw new AppError('Registration is disabled on this server.', 403, 'registration_disabled')
     }
@@ -89,7 +96,46 @@ export class AuthService {
       throw error
     }
 
+    const zone = timezone === undefined ? undefined : canonicalTimezone(timezone)
+    if (zone !== undefined && zone !== created.timezone) {
+      created = (await this.uow.forUser(created.id, (repos) => repos.users.updateTimezone(created.id, zone))) ?? created
+    }
+
     return this.issue(created)
+  }
+
+  /**
+   * Reads the signed-in user's identity, time zone included.
+   *
+   * @param userId - The authenticated user.
+   * @returns The user.
+   * @throws {NotFoundError} If the account no longer exists.
+   */
+  async me(userId: string): Promise<AuthUser> {
+    const found = await this.uow.forUser(userId, (repos) => repos.users.findIdentity(userId), { readOnly: true })
+    if (found === undefined) throw new NotFoundError('User')
+    return found
+  }
+
+  /**
+   * Sets the time zone that decides where the user's days and months end:
+   * "today" for recurring items and the forecast, and month boundaries in
+   * reports.
+   *
+   * @param userId - The authenticated user.
+   * @param timezone - An IANA zone name; matched case-insensitively and stored canonically.
+   * @returns The user as it now is.
+   * @throws {ValidationError} If the zone is not a known IANA zone.
+   * @throws {NotFoundError} If the account no longer exists.
+   */
+  async setTimezone(userId: string, timezone: string): Promise<AuthUser> {
+    const zone = canonicalTimezone(timezone)
+    if (zone === undefined) {
+      throw new ValidationError(`timezone: "${timezone.slice(0, 64)}" is not a known IANA time zone, such as America/New_York.`)
+    }
+    const updated = await this.uow.forUser(userId, (repos) => repos.users.updateTimezone(userId, zone))
+    if (updated === undefined) throw new NotFoundError('User')
+    return { id: updated.id, email: updated.email, timezone: updated.timezone }
   }
 
   /**

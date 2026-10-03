@@ -349,7 +349,73 @@ describe('access control', () => {
   it('identifies the caller', async () => {
     const user = await createUser(h)
     const res = await h.app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: auth(user) })
-    expect(res.json()).toEqual({ id: user.id, email: user.email })
+    expect(res.json()).toEqual({ id: user.id, email: user.email, timezone: 'UTC' })
+  })
+})
+
+describe('time zone', () => {
+  const patchMe = (user: TestUser, payload: unknown) =>
+    h.app.inject({ method: 'PATCH', url: '/api/v1/auth/me', headers: auth(user), payload: payload as object })
+
+  it('takes a recognised browser zone at registration', async () => {
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email: `tz-${randomUUID()}@example.com`, password: PASSWORD, timezone: 'America/Denver' },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().user.timezone).toBe('America/Denver')
+  })
+
+  it('keeps UTC when registration names a zone the server does not know', async () => {
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email: `tz-${randomUUID()}@example.com`, password: PASSWORD, timezone: 'Mars/Olympus' },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().user.timezone).toBe('UTC')
+  })
+
+  it('updates the zone, canonically spelled, and the next refresh reports it', async () => {
+    const user = await createUser(h)
+    const res = await patchMe(user, { timezone: 'us/pacific' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ id: user.id, email: user.email, timezone: 'America/Los_Angeles' })
+    expect((await me(user.accessToken)).json().timezone).toBe('America/Los_Angeles')
+    const rotated = await refresh(user.refreshToken)
+    expect(rotated.json().user.timezone).toBe('America/Los_Angeles')
+  })
+
+  it('moves "today" for recurring items with it', async () => {
+    const user = await createUser(h)
+    // UTC+14 and UTC-11 are 25 hours apart, so at any instant Kiritimati's
+    // date is one or two days ahead of Pago Pago's.
+    await patchMe(user, { timezone: 'Pacific/Kiritimati' })
+    const ahead = (await h.app.inject({ method: 'GET', url: '/api/v1/recurring-items', headers: auth(user) })).json().today as string
+    await patchMe(user, { timezone: 'Pacific/Pago_Pago' })
+    const behind = (await h.app.inject({ method: 'GET', url: '/api/v1/recurring-items', headers: auth(user) })).json().today as string
+    const days = (Date.parse(ahead) - Date.parse(behind)) / 86_400_000
+    expect(days).toBeGreaterThanOrEqual(1)
+    expect(days).toBeLessThanOrEqual(2)
+  })
+
+  it.each([
+    [{ timezone: 'Nowhere/Special' }],
+    [{ timezone: '+02:00' }],
+    [{ timezone: '' }],
+    [{}],
+    [{ timezone: 'UTC', email: 'someone-else@example.com' }],
+  ])('refuses %j with 400 and changes nothing', async (payload) => {
+    const user = await createUser(h)
+    const res = await patchMe(user, payload)
+    expect(res.statusCode).toBe(400)
+    expect((await me(user.accessToken)).json().timezone).toBe('UTC')
+  })
+
+  it('needs a signed-in user', async () => {
+    const res = await h.app.inject({ method: 'PATCH', url: '/api/v1/auth/me', payload: { timezone: 'UTC' } })
+    expect(res.statusCode).toBe(401)
   })
 })
 

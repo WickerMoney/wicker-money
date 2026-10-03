@@ -4,7 +4,7 @@ import { loadConfig, type Config } from '../config.js'
 import { DuplicateKeyError } from '../data/DuplicateKeyError.js'
 import type { Repositories } from '../data/Repositories.js'
 import type { UnitOfWork } from '../data/UnitOfWork.js'
-import { AppError, ConflictError, UnauthorizedError } from '../errors.js'
+import { AppError, ConflictError, UnauthorizedError, ValidationError } from '../errors.js'
 import type { LoginCandidate } from './repository/LoginCandidate.js'
 import type { NewRefreshToken } from './repository/NewRefreshToken.js'
 import type { NewSession } from './repository/NewSession.js'
@@ -50,6 +50,16 @@ class Store {
       return Promise.resolve({ id: user.id, email, timezone: 'UTC' })
     },
     findForLogin: (email) => Promise.resolve(this.users.find((u) => u.email === email)),
+    findIdentity: (userId) => {
+      const user = this.users.find((u) => u.id === userId)
+      return Promise.resolve(user === undefined ? undefined : { id: user.id, email: user.email, timezone: user.timezone })
+    },
+    updateTimezone: (userId, timezone) => {
+      const user = this.users.find((u) => u.id === userId)
+      if (user === undefined) return Promise.resolve(undefined)
+      user.timezone = timezone
+      return Promise.resolve({ id: user.id, email: user.email, timezone })
+    },
     findPasswordHash: (userId) =>
       Promise.resolve(this.users.find((u) => u.id === userId)?.passwordHash),
     updatePasswordHash: (userId, passwordHash) => {
@@ -287,6 +297,40 @@ describe('AuthService accounts', () => {
     const session = await service.register('a@example.com', PASSWORD)
     expect(await service.resetPassword('nobody@example.com', 'a-reset-passphrase')).toBeUndefined()
     expect(await service.authenticate(session.accessToken)).not.toBeNull()
+  })
+})
+
+describe('AuthService time zone', () => {
+  it('takes the browser time zone at registration, canonically spelled', async () => {
+    const session = await service.register('a@example.com', PASSWORD, 'us/eastern')
+    expect(session.user.timezone).toBe('America/New_York')
+    expect(store.users[0]?.timezone).toBe('America/New_York')
+  })
+
+  it('keeps UTC when registration names no zone or an unknown one, rather than failing', async () => {
+    expect((await service.register('a@example.com', PASSWORD)).user.timezone).toBe('UTC')
+    expect((await service.register('b@example.com', PASSWORD, 'Mars/Olympus')).user.timezone).toBe('UTC')
+    expect((await service.register('c@example.com', PASSWORD, '+05:00')).user.timezone).toBe('UTC')
+  })
+
+  it('sets and reads back the time zone', async () => {
+    const { user } = await service.register('a@example.com', PASSWORD)
+    await expect(service.setTimezone(user.id, 'europe/london')).resolves.toEqual({
+      id: user.id, email: 'a@example.com', timezone: 'Europe/London',
+    })
+    await expect(service.me(user.id)).resolves.toMatchObject({ timezone: 'Europe/London' })
+  })
+
+  it('refuses an unknown zone with a validation error and changes nothing', async () => {
+    const { user } = await service.register('a@example.com', PASSWORD, 'America/Chicago')
+    await expect(service.setTimezone(user.id, 'Nowhere/Special')).rejects.toBeInstanceOf(ValidationError)
+    expect(store.users[0]?.timezone).toBe('America/Chicago')
+  })
+
+  it('the next refresh carries the new zone', async () => {
+    const first = await service.register('a@example.com', PASSWORD)
+    await service.setTimezone(first.user.id, 'Asia/Tokyo')
+    expect((await service.refresh(first.refreshToken)).user.timezone).toBe('Asia/Tokyo')
   })
 })
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { CSRF_HEADERS, api, resumeSession, setAccessToken, setUnauthorizedHandler } from '../api/client.js'
+import { browserTimezone } from '../lib/browserTimezone.js'
 import type { AuthResult } from './AuthResult.js'
 import { AuthCtx } from './authContext.js'
 import type { AuthState } from './AuthState.js'
@@ -53,7 +54,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         adopt(await api.post<AuthResult>('/auth/login', { email, password }, { anonymous: true }))
       },
       register: async (email, password) => {
-        adopt(await api.post<AuthResult>('/auth/register', { email, password }, { anonymous: true }))
+        const timezone = browserTimezone()
+        adopt(await api.post<AuthResult>(
+          '/auth/register',
+          timezone === undefined ? { email, password } : { email, password, timezone },
+          { anonymous: true },
+        ))
+      },
+      setTimezone: async (timezone) => {
+        setUser(await api.patch<CurrentUser>('/auth/me', { timezone }))
       },
       signOut: async () => {
         try {
