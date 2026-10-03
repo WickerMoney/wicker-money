@@ -42,6 +42,10 @@ export class QueryBalanceRepository implements BalanceRepository {
       WHERE category_id = ANY(${categoryIds}::uuid[])
         AND period_start >= ${from}::date
         AND period_start <  ${end}::date
+        -- Monthly lines only. A window has no month-by-month chain to replay;
+        -- it reports its own balance (see shared/window.ts).
+        AND period_start = date_trunc('month', period_start)::date
+        AND period_end = (period_start + interval '1 month')::date
       ORDER BY category_id, period_start
     `
 

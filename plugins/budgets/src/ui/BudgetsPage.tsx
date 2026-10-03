@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { PluginPageProps } from '@wickermoney/plugin-sdk'
 import { Alert, Spinner, Surface } from '@wickermoney/ui-kit'
 import './styles.js'
@@ -7,8 +8,10 @@ import { BudgetLinesTable } from './components/BudgetLinesTable.js'
 import { MonthNavigator } from './components/MonthNavigator.js'
 import { MonthTotals } from './components/MonthTotals.js'
 import { UnbudgetedPanel } from './components/UnbudgetedPanel.js'
+import { WindowForm } from './components/WindowForm.js'
 import { monthLabel } from './helpers/monthLabel.js'
 import { useBudgetMonth } from './hooks/useBudgetMonth.js'
+import type { MonthLine } from './models/index.js'
 
 /**
  * A month of budget, as one editable table.
@@ -31,6 +34,7 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
   const budget = useBudgetMonth(ctx)
   const { month, monthKey } = budget
   const money = ctx.formatMoney
+  const [editingWindow, setEditingWindow] = useState<MonthLine | null>(null)
 
   return (
     <div className="page bud">
@@ -49,7 +53,7 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
         {month === null ? <Spinner label="Loading the month" /> : (
           <>
             <MonthTotals summary={month.summary} formatMoney={money} />
-            {month.draft && month.lines.length > 0 ? (
+            {month.draft && month.lines.some((l) => l.draft) ? (
               <AdoptDraftBanner
                 monthKey={monthKey}
                 busy={budget.busy}
@@ -67,16 +71,22 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
             edits={budget.edits}
             busy={budget.busy}
             formatMoney={money}
+            formatDate={ctx.formatDate}
             onEditPlan={budget.editPlan}
             onSave={(line, planned, rollover) => void budget.save(line, planned, rollover)}
-            onRemove={(line) => void budget.remove(line)}
+            onRemove={(line) => {
+              if (editingWindow?.id === line.id) setEditingWindow(null)
+              void budget.remove(line)
+            }}
+            onEditWindow={setEditingWindow}
           />
 
           <p className="bud__note">
             <strong>Rolls over</strong> makes a line a sinking fund: what is left at the end of the
             month is added to the next one, and overspending is carried too. Leave it off for a
             monthly allowance like groceries. The mark on each bar is today — a line at 80% is
-            fine near the end of the month and a problem near the start.
+            fine near the end of the month and a problem near the start. A <strong>window</strong>{' '}
+            is measured against its own dates instead of the month.
           </p>
 
           <AddLineForm
@@ -84,6 +94,19 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
             lines={month.lines}
             busy={budget.busy}
             onAdd={(categoryId) => void budget.addLine(categoryId)}
+          />
+        </Surface>
+      ) : null}
+
+      {month !== null ? (
+        <Surface title="Windows">
+          <WindowForm
+            categories={budget.categories}
+            monthKey={monthKey}
+            editing={editingWindow}
+            busy={budget.busy}
+            onSave={budget.saveWindow}
+            onCancel={() => setEditingWindow(null)}
           />
         </Surface>
       ) : null}

@@ -10,6 +10,11 @@ export interface LineBarProps {
   readonly monthKey: string
   /** Today's date, `YYYY-MM-DD`; positions the pace mark. */
   readonly today: string
+  /**
+   * Where the pace mark goes, as a fraction of the line's period, when the
+   * period is not the calendar month (a window). Overrides `monthKey`/`today`.
+   */
+  readonly elapsed?: number
   /** Accessible description of the bar. */
   readonly label: string
   /**
@@ -30,9 +35,9 @@ export interface LineBarProps {
  * The fill is capped at 100% of the track so an overspent line stays inside it;
  * the colour, not the geometry, carries "over".
  */
-export function LineBar({ used, health, monthKey, today, label, slim = false }: LineBarProps) {
+export function LineBar({ used, health, monthKey, today, label, slim = false, elapsed: given }: LineBarProps) {
   const fill = Math.max(0, Math.min(1, used))
-  const elapsed = elapsedFraction(monthKey, today)
+  const elapsed = given ?? elapsedFraction(monthKey, today)
 
   return (
     <div

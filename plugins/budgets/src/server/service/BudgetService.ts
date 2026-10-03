@@ -1,5 +1,6 @@
 import {
-  draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown, sumMoney, todayIn,
+  addDays, compareMoney, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
+  subtractMoney, sumMoney, todayIn, windowProblem, type LineStatus,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
 import type { BudgetUnitOfWork } from '../repository/BudgetUnitOfWork.js'
@@ -10,13 +11,17 @@ import { categoryNames } from './categoryNames.js'
 import type { Clock } from './Clock.js'
 import type { DeleteResult } from './DeleteResult.js'
 import { findUnbudgeted } from './findUnbudgeted.js'
+import { isOverlapError } from './isOverlapError.js'
 import type { LineInput } from './LineInput.js'
 import { lineStatusOf } from './lineStatusOf.js'
 import type { MonthLine } from './MonthLine.js'
 import type { MonthReport } from './MonthReport.js'
 import { openingBalances } from './openingBalances.js'
 import type { SavedLine } from './SavedLine.js'
+import type { SavedWindow } from './SavedWindow.js'
 import { summarizeMonth } from './summarizeMonth.js'
+import { windowLines } from './windowLines.js'
+import type { WindowInput } from './WindowInput.js'
 import { ZERO_MONEY } from './ZERO_MONEY.js'
 
 /**
@@ -54,10 +59,20 @@ export class BudgetService {
   getMonth(userId: string, monthKey: string, timezone: string): Promise<MonthReport> {
     return this.uow.run(userId, async (repos) => {
       const nameOf = categoryNames(await repos.categories.list())
+      const today = todayIn(timezone, this.now())
+
+      // Windows are stored lines whatever the month's draft state: they were
+      // planned once for their whole range, not month by month.
+      const windows = await windowLines(repos, monthKey, today, nameOf)
+      const covered = new Set(windows.lines.map((l) => l.categoryId))
 
       const own = await repos.lines.listForMonth(monthKey)
       const draft = own.length === 0
-      const source = draft ? await repos.lines.listForMonth(previousMonth(monthKey)) : own
+      // A draft never proposes a monthly line for a category a window already
+      // covers this month; adopting it would be refused as an overlap anyway.
+      const source = draft
+        ? (await repos.lines.listForMonth(previousMonth(monthKey))).filter((l) => !covered.has(l.category_id))
+        : own
 
       const spend = await repos.spend.byCategory(monthKey)
 
@@ -71,9 +86,7 @@ export class BudgetService {
             source.filter((l) => l.rollover).map((l) => l.category_id),
           )
 
-      const today = todayIn(timezone, this.now())
-
-      const lines: MonthLine[] = source.map((line) => {
+      const monthly: MonthLine[] = source.map((line) => {
         const carriedIn = carried.get(line.category_id) ?? ZERO_MONEY
         const status = lineStatusOf(
           {
@@ -87,10 +100,16 @@ export class BudgetService {
           monthKey,
           today,
         )
-        return { ...status, id: draft ? null : line.id, carriedIn, note: line.note, draft }
+        return { ...status, id: draft ? null : line.id, carriedIn, note: line.note, draft, window: null }
       })
 
-      const unbudgeted = findUnbudgeted(spend, new Set(lines.map((l) => l.categoryId)), nameOf)
+      const lines = [...monthly, ...windows.lines].sort((a, b) => a.categoryId.localeCompare(b.categoryId))
+
+      const unbudgeted = findUnbudgeted(
+        outsideWindows(spend, windows.spentInMonth),
+        new Set(monthly.map((l) => l.categoryId)),
+        nameOf,
+      )
 
       return {
         monthKey,
@@ -119,16 +138,83 @@ export class BudgetService {
   upsertLine(userId: string, input: LineInput): Promise<SavedLine> {
     const { start, end } = monthPeriod(input.monthKey)
     return this.uow.run(userId, async (repos) => {
-      const row = await repos.lines.upsert({
-        categoryId: input.categoryId,
-        periodStart: start,
-        periodEnd: end,
-        planned: input.planned,
-        rollover: input.rollover,
-        note: input.note,
-      })
+      const row = await refuseOverlap(
+        repos.lines.upsert({
+          categoryId: input.categoryId,
+          periodStart: start,
+          periodEnd: end,
+          planned: input.planned,
+          rollover: input.rollover,
+          note: input.note,
+        }),
+        'This category has a window covering part of this month. Change or remove the window instead.',
+      )
       if (row === undefined) throw new BudgetError('The line was not saved.', 500, 'not_saved')
       return { id: row.id, categoryId: row.category_id, planned: row.planned, rollover: row.rollover }
+    })
+  }
+
+  /**
+   * Creates a window, or updates one, when `input.id` is set.
+   *
+   * A window is one budget line over a date range that is not a calendar
+   * month: funded once and spent down. See `shared/window.ts` for how it is
+   * reported month by month.
+   *
+   * @param userId - The signed-in user.
+   * @param input - The validated window.
+   * @returns The stored window.
+   * @throws {BudgetError} `400 bad_window` for dates that do not make a window,
+   *   `404 not_found` when updating a window the caller does not have,
+   *   `409 overlaps` when the category already has a line on any of those days,
+   *   and `500 not_saved` if the write returns no row.
+   */
+  upsertWindow(userId: string, input: WindowInput): Promise<SavedWindow> {
+    const problem = windowProblem(input.start, input.through)
+    if (problem !== null) return Promise.reject(new BudgetError(problem, 400, 'bad_window'))
+
+    const window = {
+      categoryId: input.categoryId,
+      periodStart: input.start,
+      periodEnd: addDays(input.through, 1),
+      planned: input.planned,
+      note: input.note,
+    }
+    return this.uow.run(userId, async (repos) => {
+      const overlap =
+        'This category already has a budget line on some of those days. Remove it, or pick dates that do not overlap.'
+      const row = input.id === null
+        ? await refuseOverlap(repos.lines.insertWindow(window), overlap)
+        : await refuseOverlap(repos.lines.updateWindow(input.id, window), overlap)
+      if (row === undefined) {
+        throw input.id === null
+          ? new BudgetError('The window was not saved.', 500, 'not_saved')
+          : new BudgetError('There is no such window.', 404, 'not_found')
+      }
+      return {
+        id: row.id,
+        categoryId: row.category_id,
+        start: row.period_start,
+        through: addDays(row.period_end, -1),
+        planned: row.planned,
+      }
+    })
+  }
+
+  /**
+   * Removes a window.
+   *
+   * @param userId - The signed-in user.
+   * @param id - The window to remove.
+   * @returns How many rows were removed, always 1.
+   * @throws {BudgetError} `404 not_found` if the caller has no such window,
+   *   which includes another user's and a monthly line's id.
+   */
+  deleteWindow(userId: string, id: string): Promise<DeleteResult> {
+    return this.uow.run(userId, async (repos) => {
+      const removed = await repos.lines.deleteWindow(id)
+      if (removed === 0) throw new BudgetError('There is no such window.', 404, 'not_found')
+      return { removed }
     })
   }
 
@@ -209,10 +295,11 @@ export class BudgetService {
    * @returns The report.
    */
   private async rankMonth(repos: BudgetRepositories, monthKey: string, today: string): Promise<AtRiskReport> {
-    const lines = await repos.lines.listForMonth(monthKey)
-    if (lines.length === 0) return { monthKey, today, planned: false, lines: [] }
-
     const nameOf = categoryNames(await repos.categories.list())
+    const lines = await repos.lines.listForMonth(monthKey)
+    const windows = await windowLines(repos, monthKey, today, nameOf)
+    if (lines.length === 0 && windows.lines.length === 0) return { monthKey, today, planned: false, lines: [] }
+
     const spend = await repos.spend.byCategory(monthKey)
     const carried = await openingBalances(
       repos.balances,
@@ -220,20 +307,31 @@ export class BudgetService {
       lines.filter((l) => l.rollover).map((l) => l.category_id),
     )
 
-    const statuses = lines.map((line) =>
-      lineStatusOf(
-        {
-          categoryId: line.category_id,
-          categoryName: nameOf(line.category_id),
-          planned: line.planned,
-          carriedIn: carried.get(line.category_id) ?? ZERO_MONEY,
-          spent: spend.get(line.category_id) ?? ZERO_MONEY,
-          rollover: line.rollover,
-        },
-        monthKey,
-        today,
+    const statuses = [
+      ...lines.map((line) =>
+        lineStatusOf(
+          {
+            categoryId: line.category_id,
+            categoryName: nameOf(line.category_id),
+            planned: line.planned,
+            carriedIn: carried.get(line.category_id) ?? ZERO_MONEY,
+            spent: spend.get(line.category_id) ?? ZERO_MONEY,
+            rollover: line.rollover,
+          },
+          monthKey,
+          today,
+        ),
       ),
-    )
+      // A dashboard tile shows one window as the whole pot ("630 of 1,500"),
+      // matching its bar, rather than this month's slice of it. It gets the
+      // shared shape only, without the page's extra fields.
+      ...windows.lines.map((l): LineStatus => ({
+        categoryId: l.categoryId, categoryName: l.categoryName,
+        planned: l.window?.funded ?? l.planned, available: l.window?.funded ?? l.available,
+        spent: l.window?.spentToDate ?? l.spent, remaining: l.remaining, rollover: l.rollover,
+        used: l.used, pace: l.pace, elapsed: l.elapsed, health: l.health,
+      })),
+    ]
 
     return {
       monthKey,
@@ -250,4 +348,42 @@ export class BudgetService {
       },
     }
   }
+}
+
+/**
+ * Turns the database's overlap refusal into a `409` the user can act on.
+ *
+ * @param write - The repository write.
+ * @param message - What to tell the user when it overlaps.
+ * @returns Whatever the write returned.
+ * @throws {BudgetError} `409 overlaps` on an exclusion violation; anything else is rethrown.
+ */
+async function refuseOverlap<T>(write: Promise<T>, message: string): Promise<T> {
+  try {
+    return await write
+  } catch (error) {
+    if (isOverlapError(error)) throw new BudgetError(message, 409, 'overlaps')
+    throw error
+  }
+}
+
+/**
+ * The month's spend with each window's share taken out, so what is left is
+ * spending no line covers.
+ *
+ * @param spend - Category id to the month's net spend.
+ * @param windowed - Category id to what that category's windows spent this month.
+ * @returns A new map. Categories whose spend is fully inside a window drop out.
+ */
+function outsideWindows(
+  spend: ReadonlyMap<string, string>,
+  windowed: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const [categoryId, amount] of spend) {
+    const inside = windowed.get(categoryId)
+    const rest = inside === undefined ? amount : subtractMoney(amount, inside)
+    if (compareMoney(rest, ZERO_MONEY) !== 0) out.set(categoryId, rest)
+  }
+  return out
 }

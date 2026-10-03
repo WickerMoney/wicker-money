@@ -61,6 +61,23 @@ describe('useBudgetMonth loading', () => {
     })
   })
 
+  it('offers only categories a budget can count, not income or transfers', async () => {
+    const api = makeApi()
+    api.get.mockImplementation((path: string) =>
+      path.startsWith('/core/categories')
+        ? Promise.resolve([
+            { id: 'c1', name: 'Groceries', parent_id: null, kind: 'expense' },
+            { id: 'c2', name: 'Salary', parent_id: null, kind: 'income' },
+            { id: 'c3', name: 'Between accounts', parent_id: null, kind: 'transfer' },
+          ])
+        : Promise.resolve(monthResponse('2026-06')))
+
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+
+    await waitFor(() => expect(result.current.month).not.toBeNull())
+    expect(result.current.categories.map((c) => c.name)).toEqual(['Groceries'])
+  })
+
   it('reports a failed load and shows no month', async () => {
     const api = makeApi()
     serve(api, { '2026-06': Promise.reject(new Error('boom')) })
@@ -222,6 +239,50 @@ describe('useBudgetMonth actions', () => {
     await act(() => hook.result.current.remove(line))
 
     expect(api.del).toHaveBeenCalledWith(`${BUDGETS_API_BASE}/line?month=2026-06&categoryId=c1`)
+  })
+
+  it('removes a window as a whole, by id, whichever month is shown', async () => {
+    const { api, hook } = await loaded()
+    api.del.mockResolvedValue({ removed: 1 })
+    const window = {
+      ...(line as object),
+      id: 'w1',
+      window: { start: '2026-05-01', through: '2026-07-04', funded: '900.0000', spentToDate: '0.0000' },
+    } as never
+
+    await act(() => hook.result.current.remove(window))
+
+    expect(api.del).toHaveBeenCalledWith(`${BUDGETS_API_BASE}/window?id=w1`)
+  })
+
+  it('saves a window and reports success so the form can clear', async () => {
+    const { api, hook } = await loaded()
+    api.put.mockResolvedValue({})
+    const draft = {
+      id: null, categoryId: 'c1', start: '2026-10-01', through: '2026-12-25', planned: '1500', note: null,
+    }
+
+    let saved = false
+    await act(async () => { saved = await hook.result.current.saveWindow(draft) })
+
+    expect(saved).toBe(true)
+    expect(api.put).toHaveBeenCalledWith(`${BUDGETS_API_BASE}/window`, draft)
+  })
+
+  it('reports a refused window and keeps the form', async () => {
+    const { api, hook } = await loaded()
+    api.put.mockRejectedValue(new Error('This category already has a budget line on some of those days.'))
+
+    let saved = true
+    await act(async () => {
+      saved = await hook.result.current.saveWindow({
+        id: null, categoryId: 'c1', start: '2026-10-01', through: '2026-12-25', planned: '10', note: null,
+      })
+    })
+
+    expect(saved).toBe(false)
+    expect(hook.result.current.message).toMatch(/already has a budget line/)
+    expect(hook.result.current.busy).toBe(false)
   })
 
   it('adopts the previous month and says how many lines came across', async () => {

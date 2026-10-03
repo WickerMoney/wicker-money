@@ -9,6 +9,28 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **Budget windows.** A budget line can now cover a date range instead of a
+  calendar month: one amount for one category, spent down to zero, such as
+  holiday gifts from October 1 through December 25. Add one in the new
+  **Windows** section of the Budgets page. In each month it touches, the
+  window shows what was left coming in, what that month spent, and what is
+  left now. Under the category name it shows "spent so far of funded" for
+  the whole window. The full amount counts toward planned only in the first
+  month, so totals never fund it twice. Spending in that category outside
+  the window's dates still shows as unbudgeted. Pace is measured over the
+  window, and only an overdrawn pot marks a window as over. Bunched-up
+  spending is expected and never counts as "at risk".
+
+### Migrations
+
+- **023_budget_windows** adds the `btree_gist` extension (a trusted
+  extension, so the non-superuser owner can create it) and an exclusion
+  constraint so a category cannot have two budget lines on the same day.
+  It is reversible: `pnpm migrate:down` deletes any windows and drops the
+  constraint, which leaves monthly lines exactly as 0.2.1 had them.
+
 ## [0.2.1] - 2026-10-02
 
 Recurring items, Phase B: the forecast. Also the fix for 0.2.0's known

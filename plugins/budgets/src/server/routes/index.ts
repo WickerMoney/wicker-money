@@ -1,8 +1,10 @@
 import { registerAdoptMonth } from './handlers/adoptMonth.js'
 import { registerDeleteLine } from './handlers/deleteLine.js'
+import { registerDeleteWindow } from './handlers/deleteWindow.js'
 import { registerGetAtRisk } from './handlers/getAtRisk.js'
 import { registerGetMonth } from './handlers/getMonth.js'
 import { registerUpsertLine } from './handlers/upsertLine.js'
+import { registerUpsertWindow } from './handlers/upsertWindow.js'
 import { QueryBudgetUnitOfWork } from '../repository/QueryBudgetUnitOfWork.js'
 import { BudgetService } from '../service/BudgetService.js'
 import type { BudgetRouteDeps } from './helpers/BudgetRouteDeps.js'
@@ -33,4 +35,6 @@ export function registerBudgetRoutes(deps: BudgetRouteDeps): void {
   registerAdoptMonth(deps, service)
   registerDeleteLine(deps, service)
   registerGetAtRisk(deps, service)
+  registerUpsertWindow(deps, service)
+  registerDeleteWindow(deps, service)
 }

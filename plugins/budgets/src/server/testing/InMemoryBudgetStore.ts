@@ -1,3 +1,4 @@
+import { addDays, monthPeriod } from '../../shared/index.js'
 import type { CategoryRow } from '../repository/CategoryRow.js'
 import type { SpendEntry } from './SpendEntry.js'
 import type { StoredLine } from './StoredLine.js'
@@ -56,10 +57,35 @@ export class InMemoryBudgetStore {
       userId,
       category_id: categoryId,
       period_start: `${monthKey}-01`,
-      period_end: `${monthKey}-28`,
+      period_end: monthPeriod(monthKey).end,
       planned,
       rollover: options.rollover ?? false,
       note: options.note ?? null,
+    }
+    this.lines.push(line)
+    return line
+  }
+
+  /**
+   * Adds a stored window without counting it as a write.
+   *
+   * @param userId - The owner.
+   * @param categoryId - The category budgeted.
+   * @param start - First day, `YYYY-MM-DD`.
+   * @param through - Last day, inclusive, `YYYY-MM-DD`.
+   * @param planned - Funded amount as a decimal string.
+   * @returns The stored window.
+   */
+  addWindow(userId: string, categoryId: string, start: string, through: string, planned: string): StoredLine {
+    const line: StoredLine = {
+      id: this.newId(),
+      userId,
+      category_id: categoryId,
+      period_start: start,
+      period_end: addDays(through, 1),
+      planned,
+      rollover: false,
+      note: null,
     }
     this.lines.push(line)
     return line

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
-import { isValidPlan, monthKeyOf, shiftMonth, todayIn } from '../../shared/index.js'
+import { isBudgetable, isValidPlan, monthKeyOf, shiftMonth, todayIn } from '../../shared/index.js'
 import { BUDGETS_API_BASE } from '../../server/constants.js'
 import { monthLabel } from '../helpers/monthLabel.js'
-import type { Category, MonthLine, MonthResponse } from '../models/index.js'
+import type { Category, MonthLine, MonthResponse, WindowDraft } from '../models/index.js'
 
 /** What {@link useBudgetMonth} returns. */
 export interface BudgetMonth {
   readonly monthKey: string
   /** `null` while a month is loading. */
   readonly month: MonthResponse | null
+  /** Categories that can carry a budget line: enabled, and neither income nor transfer. */
   readonly categories: readonly Category[]
   /** The message currently shown: a failure, or a notice after carrying lines over. */
   readonly message: string | null
@@ -27,6 +28,13 @@ export interface BudgetMonth {
   readonly adopt: () => Promise<void>
   /** Adds a zero-plan line for a category. */
   readonly addLine: (categoryId: string) => Promise<void>
+  /**
+   * Creates a window, or saves changes to one.
+   *
+   * @returns `true` once saved, so the form can clear itself; `false` when it
+   *   was refused, with the reason in `message`.
+   */
+  readonly saveWindow: (draft: WindowDraft) => Promise<boolean>
 }
 
 /**
@@ -77,7 +85,8 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       ])
       if (signal.aborted) return
       setMonth(loaded)
-      setCategories(cats)
+      // Only categories a budget can count; income and transfers would always read zero.
+      setCategories(cats.filter(isBudgetable))
       setEdits({})
     } catch (e) {
       // A superseded load is not a failure: whoever superseded it reports on the month now shown.
@@ -120,7 +129,12 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   const remove = useCallback(async (line: MonthLine) => {
     setBusy(true); setMessage(null)
     try {
-      await api.del(`${BUDGETS_API_BASE}/line?month=${monthKey}&categoryId=${line.categoryId}`)
+      // A window is removed as a whole, by id, whichever of its months is shown.
+      await api.del(
+        line.window != null && line.id !== null
+          ? `${BUDGETS_API_BASE}/window?id=${line.id}`
+          : `${BUDGETS_API_BASE}/line?month=${monthKey}&categoryId=${line.categoryId}`,
+      )
       await reload(monthKey)
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Could not remove that line.')
@@ -153,6 +167,22 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
+  const saveWindow = useCallback(async (draft: WindowDraft): Promise<boolean> => {
+    if (!isValidPlan(draft.planned)) {
+      setMessage(`'${draft.planned}' is not an amount.`)
+      return false
+    }
+    setBusy(true); setMessage(null)
+    try {
+      await api.put(`${BUDGETS_API_BASE}/window`, draft)
+      await reload(monthKey)
+      return true
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not save that window.')
+      return false
+    } finally { setBusy(false) }
+  }, [api, monthKey, reload])
+
   const previousMonth = useCallback(() => setMonthKey((k) => shiftMonth(k, -1)), [])
   const nextMonth = useCallback(() => setMonthKey((k) => shiftMonth(k, 1)), [])
   const thisMonth = useCallback(() => setMonthKey(monthKeyOf(todayIn(timezone))), [timezone])
@@ -164,6 +194,6 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   return {
     monthKey, month, categories, message, busy, edits,
     previousMonth, nextMonth, thisMonth, editPlan,
-    save, remove, adopt, addLine,
+    save, remove, adopt, addLine, saveWindow,
   }
 }

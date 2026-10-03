@@ -73,6 +73,12 @@
 
 .bud__add { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 
+/* Windows: one amount spent down across a date range. */
+.bud__window-form { display: flex; flex-direction: column; gap: 10px; }
+.bud__window-title { margin: 0; font-size: 14px; font-weight: 600; }
+.bud__row-actions { display: inline-flex; gap: 6px; flex-wrap: nowrap; }
+.bud__row-actions .wm-btn { white-space: nowrap; }
+
 /* The dashboard widget. Deliberately not a table — four rows, each one thing
    that needs attention, sized to sit beside a chart. */
 /* Dashboard tiles, in the shape of the marketing site's budget tile: a small
