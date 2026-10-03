@@ -23,6 +23,14 @@ export interface RecurringItem {
   /** Income total, a bill's (negative) amount, or what a transfer moves. */
   readonly amount: string
   readonly monthlyEquivalent: string
-  /** Derived by the server against its `today`; `null` once the series has ended. */
+  /**
+   * Derived by the server against its `today`: the next occurrence still to
+   * come (skipped and already-matched ones passed over); `null` once the
+   * series has ended.
+   */
   readonly nextDue: string | null
+  /** Whether a transaction has ever been matched to it; until then nothing is ever late. */
+  readonly tracked: boolean
+  /** Nominal dates of occurrences expected in the last week and not yet matched. */
+  readonly late: readonly string[]
 }
