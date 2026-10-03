@@ -1,0 +1,101 @@
+# A throwaway install for trying a preview image next to your real one.
+#
+# Preview images come from the "Preview image" workflow (Actions -> Preview
+# image -> Run workflow, pick the branch). It pushes
+#   ghcr.io/wickermoney/wicker-money-preview:<branch>
+# where <branch> is the branch name, lowercased, with anything other than
+# letters, digits, ".", "_" and "-" turned into "-" (feat/budget-windows ->
+# feat-budget-windows).
+#
+# Everything here is separate from docker-compose.sample.yml: its own project
+# name, its own database volume, its own network and its own port (8181), so
+# nothing it does can touch your real data. Throwing it away removes all of it:
+#
+#   docker compose -f docker-compose.preview.yml down --volumes
+#
+# Every command below needs PREVIEW_TAG, so export it once per shell:
+#
+#   export PREVIEW_TAG=feat-budget-windows
+#
+# Start it empty:
+#
+#   docker compose -f docker-compose.preview.yml up -d
+#
+# Or start it on a copy of your real data. Take a fresh dump from the real
+# install first. pg_dump only reads, so the real database is untouched. It must
+# run as the bootstrap superuser (POSTGRES_USER in the sample compose), because
+# the tenant tables FORCE row-level security and dump as empty for anyone else:
+#
+#   docker exec <real-postgres-container> pg_dump -U wickermoney -Fc wickermoney > wm.dump
+#   docker compose -f docker-compose.preview.yml up -d postgres migrate
+#   docker compose -f docker-compose.preview.yml exec -T postgres \
+#     pg_restore -U wickermoney -d wickermoney --clean --if-exists < wm.dump
+#   docker compose -f docker-compose.preview.yml up -d
+#
+# The first `up` migrates an empty database, which creates the roles the dump's
+# grants refer to. The restore then replaces every table with the real data.
+# The last `up` re-runs `migrate`, which applies the branch's new migrations to
+# that data. Log in with your real email and password. A different AUTH_SECRET
+# from the real install is fine and recommended: the tenant key is derived
+# from it again on every migrate.
+#
+# The preview package is private by default. Log the Docker host in once with
+# a GitHub token that has read:packages:
+#
+#   echo <token> | docker login ghcr.io -u <github-user> --password-stdin
+
+name: wickermoney-preview
+
+x-env: &db
+  DATABASE_URL: postgresql://wickermoney_app:${PREVIEW_APP_DB_PASSWORD:-preview_app_pw}@postgres:5432/wickermoney
+  APP_DB_PASSWORD: ${PREVIEW_APP_DB_PASSWORD:-preview_app_pw}
+  AUTH_SECRET: ${PREVIEW_AUTH_SECRET:-preview-only-secret-change-me-if-you-expose-this}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wickermoney
+      POSTGRES_USER: wickermoney
+      POSTGRES_PASSWORD: ${PREVIEW_POSTGRES_PASSWORD:-preview_owner_pw}
+    volumes:
+      - preview_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wickermoney -d wickermoney"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: ghcr.io/wickermoney/wicker-money-preview:${PREVIEW_TAG:?set PREVIEW_TAG to the preview image tag}
+    command: ["node", "dist/db/cli.js", "up"]
+    pull_policy: always
+    environment:
+      <<: *db
+      DATABASE_OWNER_URL: postgresql://wickermoney:${PREVIEW_POSTGRES_PASSWORD:-preview_owner_pw}@postgres:5432/wickermoney
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  wickermoney:
+    image: ghcr.io/wickermoney/wicker-money-preview:${PREVIEW_TAG:?set PREVIEW_TAG to the preview image tag}
+    # Always pull, so re-running the workflow and `up -d` picks up the new build.
+    pull_policy: always
+    ports:
+      - "${PREVIEW_PORT:-8181}:8080"
+    environment:
+      <<: *db
+      NODE_ENV: production
+      COOKIE_SECURE: "false"
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+# Not external, on purpose: `down --volumes` is how a preview is thrown away.
+volumes:
+  preview_pg_data:
