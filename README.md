@@ -249,6 +249,17 @@ problem on the 10th, and the *Budget breakdown* dashboard widget ranks by that
 rather than by amount: lines that are over or ahead of pace first, then the rest
 by how much of their budget is used.
 
+**A window** is the exception to one month per line: one amount for one category
+across a date range, spent down to zero, such as holiday gifts from October 1
+through December 25. Add one under **Windows** on the Budgets page. Each month
+it touches shows what was left coming in, what that month spent and what is left
+now, and the line shows "spent so far of funded" for the whole window. The full
+amount counts as planned only in the first month, so totals never fund it twice.
+Lumpy spending is the point of a window, so it is never marked "at risk"; only
+an overdrawn window is "over". Spending in that category outside the window's
+dates still shows as unbudgeted, and a category cannot have a window and a
+monthly line on the same day (migration 023 enforces it).
+
 ### Recurring items and "Until payday"
 
 **Recurring** (in the sidebar, after Transactions) holds the income, bills, debt
@@ -285,9 +296,18 @@ income into any account, or 14 days if none is expected:
   opt in). An account that is not counted is still projected and still warned
   about.
 
-Set each account's buffer and *Safe to spend* on the Accounts page. Matching
-expected items against the transactions that actually landed is not built yet;
-see `ROADMAP.md`.
+Set each account's buffer and *Safe to spend* on the Accounts page.
+
+**Did it land?** Once a paycheck or bill has posted, match the transaction to
+the occurrence it paid, and the widget and the forecast stop counting it as still
+to come. The Recurring page suggests likely matches under **Did these land?**
+(same account and sign, within 5 days and 25% of the amount); nothing is matched
+without a click. Each item's **History** panel lists its recent and coming
+occurrences with what paid each one, and a single occurrence can be skipped,
+moved or given a different amount per account without touching the rest of the
+series. An item you have matched at least once is *tracked*: an occurrence that
+has not arrived is flagged late for up to a week and still counted, on the next
+projected day. Items you never match behave as they did before.
 
 ### Forecast
 
@@ -483,7 +503,9 @@ the database** (`pg_dump -Fc`) before migrating. Migrations only move forward in
 practice: some have no `down` at all (021, in `v0.2.0`, reshapes recurring items
 and adds an enum label PostgreSQL cannot remove), so the way back to an older
 image is restoring that backup. A release with no migrations, such as `v0.2.1`,
-can go back to the previous image as it is.
+can go back to the previous image as it is. `v0.3.0` has one of each kind: 023
+(budget windows) has a `down`, but 024 (recurring occurrences) does not, so
+going back to `v0.2.1` also means restoring the backup.
 
 Then pull the new image and migrate before starting it, exactly as on first
 install (`node dist/db/cli.js up`). With the compose sample, `docker compose pull`
@@ -618,6 +640,16 @@ otherwise fight over them. Set `APP_DB_ROLE` the same way for `pnpm migrate` and
 for the API.
 
 ## Status
+
+**`v0.3.0` — paid / landed matching, budget windows, and the money module.**
+Transactions can be matched to the recurring occurrences they paid (suggested,
+never automatic), single occurrences can be skipped, moved or re-priced, and
+matched items flag late occurrences, so "Until payday" and the forecast stop
+double-counting money that already arrived (migration 024). Budgets gain
+windows: one amount for one category across a date range (migration 023).
+`@wickermoney/plugin-sdk/money` is the one copy of exact decimal-string money
+arithmetic that budgets, insights, spending trends and the recurrence module now
+share; it throws on more than four decimal places instead of truncating.
 
 **`v0.2.1` — recurring items, Phase B: the forecast.** A Forecast page from a
 new bundled plugin, `plugins/forecast`. For one account at a time, it shows a

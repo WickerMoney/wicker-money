@@ -9,6 +9,18 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-03
+
+Paid / landed matching for recurring items, budget windows, and a shared
+money module in `plugin-sdk`. **Back up your database before upgrading:**
+this release has two migrations. 023 can be reverted, but 024 has no `down`
+(dropping it would discard every match and override), so going back to
+0.2.1 means restoring that backup. PostgreSQL 15 or later is required by 024;
+16 is already the documented minimum. See [Upgrading](README.md#upgrading).
+
+One behaviour change for API callers: budgets now refuses a planned amount
+with more than four decimal places (`400`) instead of truncating it.
+
 ### Added
 
 - **Paid / landed matching for recurring items.** Match a transaction to the
@@ -51,14 +63,16 @@ curated, human-readable version.
   rounding is division, half away from zero, the same rule the API uses.
   Budgets, insights, spending trends and the recurrence module now share it
   instead of each keeping its own copy.
+- A hand-run **preview image** workflow (`.github/workflows/preview-image.yml`)
+  that builds a branch into a separate, private
+  `ghcr.io/wickermoney/wicker-money-preview:<branch>` image, plus
+  `docker/docker-compose.preview.yml` to try it beside a real install. See
+  [Trying a branch before it merges](README.md#trying-a-branch-before-it-merges).
 
 ### Changed
 
 - Budgets refuses a planned amount with more than four decimal places (400)
   instead of quietly truncating it, the same as the rest of the API.
-
-### Changed
-
 - Recurring occurrence views (the occurrences list, "Until payday", the
   forecast's entries) carry `nominalDate`, `expectedDate` and `status`, and
   each leg the transaction that settled it. `date` is where the list places
@@ -259,7 +273,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/WickerMoney/wicker-money/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/WickerMoney/wicker-money/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/WickerMoney/wicker-money/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/WickerMoney/wicker-money/releases/tag/v0.1.0
