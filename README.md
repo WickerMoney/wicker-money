@@ -260,12 +260,12 @@ form asks for positive amounts; the kind supplies the sign.
 
 The schedule's start date is an anchor, never shown as "due". The next due date
 is always derived, and "today" is your calendar day in your user's timezone
-(`users.timezone`), worked out on the server — so the page, the widget and any
-plugin agree, and none of them trust the browser clock. There is no setting for
-the timezone yet: it defaults to `UTC`, so west of UTC "today" turns over in the
-evening (8pm in New York in summer). Until Settings can change it, set
-`core.users.timezone` to an IANA name such as `America/New_York` in the
-database. Monthly, quarterly and annual items on the 29th–31st clamp to the last
+(`users.timezone`), worked out on the server — so the page, the widget, the
+forecast and any plugin agree, and none of them trust the browser clock. A new
+account takes the browser's zone when it registers; change it under **Settings
+→ Time zone**. An account created before `v0.2.1` starts on `UTC`, where "today"
+turns over in the evening west of UTC (8pm in New York in summer), and Settings
+offers the browser's zone in one click. Monthly, quarterly and annual items on the 29th–31st clamp to the last
 day of shorter months; semimonthly items store their two days (1st and 15th by
 default). Editing an item rewrites the whole series; to change something from
 now on, end the item and add a new one. The monthly tiles use exact factors
@@ -288,6 +288,30 @@ income into any account, or 14 days if none is expected:
 Set each account's buffer and *Safe to spend* on the Accounts page. Matching
 expected items against the transactions that actually landed is not built yet;
 see `ROADMAP.md`.
+
+### Forecast
+
+**Forecast** (bundled plugin `plugins/forecast`, in the sidebar after Recurring)
+answers "where is this account heading?" Pick an account and a horizon: 30, 60
+or 90 days, 6 months, or the end of the year. The page projects that account's
+balance day by day from its recurring items, starting from today's actual
+balance, using the same rules as "Until payday":
+
+- it is a step chart, because a balance jumps when money moves and is flat in
+  between. On a day with both a bill and a paycheck, the bill clears first, so
+  rent due on payday shows as a dip;
+- zero is a solid line and the account's buffer a dashed one. A banner names
+  the first day the balance drops below either, and the tiles count the days
+  spent below each;
+- transfers move both accounts and are listed in a neutral colour with their
+  direction ("to Savings"). A credit card or loan gets the chart without
+  overdraft or buffer warnings, because a negative balance there is just what
+  is owed.
+
+It projects the **schedule**, not your spending: everyday purchases that are not
+recurring items are not in the line. The numbers come from
+`GET /api/v1/core/recurring-items/forecast`, computed on the server against your
+today.
 
 ### Forgotten password
 
@@ -458,7 +482,8 @@ Read the release's entry in [`CHANGELOG.md`](CHANGELOG.md) first, and **back up
 the database** (`pg_dump -Fc`) before migrating. Migrations only move forward in
 practice: some have no `down` at all (021, in `v0.2.0`, reshapes recurring items
 and adds an enum label PostgreSQL cannot remove), so the way back to an older
-image is restoring that backup.
+image is restoring that backup. A release with no migrations, such as `v0.2.1`,
+can go back to the previous image as it is.
 
 Then pull the new image and migrate before starting it, exactly as on first
 install (`node dist/db/cli.js up`). With the compose sample, `docker compose pull`
@@ -575,6 +600,13 @@ otherwise fight over them. Set `APP_DB_ROLE` the same way for `pnpm migrate` and
 for the API.
 
 ## Status
+
+**`v0.2.1` — recurring items, Phase B: the forecast.** A Forecast page from a
+new bundled plugin, `plugins/forecast`. For one account at a time, it shows a
+step chart of the projected balance from recurring items, the first day it
+dips below zero or its buffer, and what moves the line. Also: your time zone is
+now a setting (Settings, and the browser's zone at sign-up), which fixes
+"today" rolling over in the evening west of UTC. No migrations.
 
 **`v0.2.0` — recurring items, Phase A.** A Recurring page for income, bills,
 debt payments and transfers, modelled as an item plus per-account legs
