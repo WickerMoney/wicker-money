@@ -18,6 +18,8 @@ export interface TransactionsTable {
   /** Links the two legs of one transfer. `null` on everything else. */
   transfer_id: string | null
   is_split: Generated<boolean>
+  /** The recurring occurrence this transaction settles, if it has been matched to one. */
+  recurring_occurrence_id: string | null
   created_at: TimestampWithDefault
   updated_at: TimestampWithDefault
 }
