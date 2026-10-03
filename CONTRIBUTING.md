@@ -62,6 +62,9 @@ or row-level security is silently inert.
   from them.
 - Money is `numeric(19,4)` in PostgreSQL and `string` in TypeScript. Never
   `number`.
+  In plugin and SDK code, do the arithmetic with
+  `@wickermoney/plugin-sdk/money` rather than writing another copy of the
+  helpers.
 
 ## Contribution licensing
 
