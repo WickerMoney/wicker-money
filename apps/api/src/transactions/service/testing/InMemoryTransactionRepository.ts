@@ -260,6 +260,7 @@ export class InMemoryTransactionRepository implements TransactionRepository {
       external_id: null,
       transfer_account_id: null,
       transfer_id: null,
+      recurring_occurrence_id: null,
       is_split: false,
       created_at: now,
       updated_at: now,

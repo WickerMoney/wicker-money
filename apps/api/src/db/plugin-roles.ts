@@ -105,12 +105,15 @@ function privilegesFor(grant: TableGrant): string {
  * Core tables that come with a granted table, at the same access level.
  *
  * A recurring item is its schedule (`recurring_items`) plus where the money
- * lands (`recurring_item_legs`). Neither is usable alone — the legs trigger
- * rejects an item with no legs — so a manifest names one table and gets both,
- * rather than being able to ask for half of an item and fail at runtime.
+ * lands (`recurring_item_legs`) plus what was recorded about single
+ * occurrences (`recurring_occurrences`, `recurring_occurrence_legs`: skipped,
+ * moved, a different amount). None is usable alone — the legs trigger rejects
+ * an item with no legs, and a projection that ignored the occurrences would
+ * disagree with the app's — so a manifest names one table and gets all four,
+ * rather than being able to ask for part of an item and fail at runtime.
  */
 export const COMPANION_TABLES: Readonly<Partial<Record<CoreTableName, readonly string[]>>> = {
-  recurring_items: ['recurring_item_legs'],
+  recurring_items: ['recurring_item_legs', 'recurring_occurrences', 'recurring_occurrence_legs'],
 }
 
 /** What {@link provisionPluginRole} did for one plugin. */

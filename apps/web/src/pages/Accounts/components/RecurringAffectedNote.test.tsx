@@ -6,7 +6,7 @@ import { RecurringAffectedNote } from './RecurringAffectedNote.js'
 function item(id: string, name: string, kind: RecurringItem['kind'], accounts: string[]): RecurringItem {
   return {
     id, name, kind, frequency: 'monthly', seriesStartDate: '2026-01-01', endDate: null, semimonthlyDays: null,
-    categoryId: null, amount: '1.0000', monthlyEquivalent: '1.0000', nextDue: '2026-10-01',
+    categoryId: null, amount: '1.0000', monthlyEquivalent: '1.0000', nextDue: '2026-10-01', tracked: false, late: [],
     legs: accounts.map((accountId, i) => ({ accountId, amount: kind === 'income' ? '1.0000' : i === 0 ? '-1.0000' : '1.0000' })),
   }
 }

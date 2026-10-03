@@ -367,13 +367,13 @@ describe('plugin access', () => {
     expect(res.json().message).toContain("'recurring_items'")
   })
 
-  it('grants the legs along with the items, at the same access level', async () => {
+  it('grants the legs and occurrences along with the items, at the same access level', async () => {
     const privileges = async (role: string) => {
       const r = await sql<{ table: string; sel: boolean; ins: boolean }>`
         SELECT t AS table,
                has_table_privilege(${role}, 'core.' || t, 'SELECT') AS sel,
                has_table_privilege(${role}, 'core.' || t, 'INSERT') AS ins
-        FROM unnest(ARRAY['recurring_items', 'recurring_item_legs']) AS t
+        FROM unnest(ARRAY['recurring_items', 'recurring_item_legs', 'recurring_occurrences', 'recurring_occurrence_legs']) AS t
       `.execute(owner)
       return r.rows
     }
@@ -390,6 +390,8 @@ describe('plugin access', () => {
         expect(await privileges(role)).toEqual([
           { table: 'recurring_items', sel: true, ins: write },
           { table: 'recurring_item_legs', sel: true, ins: write },
+          { table: 'recurring_occurrences', sel: true, ins: write },
+          { table: 'recurring_occurrence_legs', sel: true, ins: write },
         ])
       } finally {
         // Undo exactly what provisioning granted, so the role can go and no

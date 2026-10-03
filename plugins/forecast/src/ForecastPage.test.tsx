@@ -165,4 +165,19 @@ describe('ForecastPage', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Something went wrong.')
     expect(screen.getByText('Monthly Expenses, next 90 days')).toBeTruthy()
   })
+
+  it('keeps an arrived occurrence listed without an amount, and tags a late one', async () => {
+    const data: ForecastResponse = {
+      ...base,
+      entries: [
+        { ...base.entries[0]!, status: 'cleared', nominalDate: '2026-10-04', amount: '0.0000' },
+        { ...base.entries[1]!, status: 'late', nominalDate: '2026-10-01' },
+      ],
+    }
+    render(<ForecastPage ctx={ctxWith(() => data)} />)
+    expect(await screen.findByText('Arrived')).toBeDefined()
+    expect(screen.getByText('Late, due 2026-10-01')).toBeDefined()
+    const paycheck = screen.getByText('Paycheck').closest('tr')
+    expect(paycheck?.querySelector('.fc-num')?.textContent).toBe('—')
+  })
 })

@@ -4,10 +4,23 @@ export interface UpcomingLeg {
   readonly amount: string
 }
 
+/**
+ * Where an occurrence stands (paid / landed matching). Absent from servers
+ * older than matching, which only ever listed what was still to come.
+ */
+export type OccurrenceStatus = 'upcoming' | 'due' | 'late' | 'missed' | 'cleared' | 'skipped' | 'assumed'
+
 /** One occurrence of a recurring item inside the window. */
 export interface UpcomingOccurrence {
   readonly itemId: string
+  /** The day it is projected on; a late one is carried to the window's first day. */
   readonly date: string
+  /** The schedule's date for it; with `itemId`, its identity. */
+  readonly nominalDate?: string
+  /** When it was expected (moved, or the nominal date). */
+  readonly expectedDate?: string
+  readonly status?: OccurrenceStatus
+  readonly moved?: boolean
   readonly name: string
   readonly kind: 'income' | 'bill' | 'debt_payment' | 'transfer'
   readonly categoryId: string | null

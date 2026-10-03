@@ -11,6 +11,26 @@ curated, human-readable version.
 
 ### Added
 
+- **Paid / landed matching for recurring items.** Match a transaction to the
+  occurrence it paid and "Until payday" and the forecast stop counting it as
+  still to come, so a paycheck that lands a day early is no longer counted
+  twice. The Recurring page suggests likely matches under **Did these
+  land?** (nothing is matched without a click), and each item's new
+  **History** panel shows its recent and coming occurrences with what paid
+  each one. From there a single occurrence can be matched, skipped, moved to
+  another date, or given a different amount (per account, so one side of a
+  split paycheck can change), without touching the rest of the series.
+  Once an item has been matched at least once, an occurrence that has not
+  arrived within a week of its date is flagged late and still counted as
+  coming, on the next projected day. Items that are never matched behave
+  exactly as before. The widget and the forecast tag arrived and late
+  occurrences.
+- **Per-occurrence overrides in `@wickermoney/plugin-sdk/recurrence`**:
+  `RecurringItem.overrides` (skip, move, replace the legs of one
+  occurrence, keyed by nominal date), honoured by `dailyBalances`,
+  `flowTotals` and `nextPayday`, plus `scheduledOccurrences` and
+  `nextScheduledOccurrence`. Additive; items without overrides project as
+  before.
 - **Budget windows.** A budget line can now cover a date range instead of a
   calendar month: one amount for one category, spent down to zero, such as
   holiday gifts from October 1 through December 25. Add one in the new
@@ -37,8 +57,24 @@ curated, human-readable version.
 - Budgets refuses a planned amount with more than four decimal places (400)
   instead of quietly truncating it, the same as the rest of the API.
 
+### Changed
+
+- Recurring occurrence views (the occurrences list, "Until payday", the
+  forecast's entries) carry `nominalDate`, `expectedDate` and `status`, and
+  each leg the transaction that settled it. `date` is where the list places
+  the occurrence, which for a late one in a projection is the first
+  projected day; `(itemId, nominalDate)` is its identity. Items carry
+  `tracked` and `late`, and `nextDue` passes over skipped and already-paid
+  occurrences.
+
 ### Migrations
 
+- **024_recurring_occurrences** adds `core.recurring_occurrences` and
+  `core.recurring_occurrence_legs` (row-level security forced, composite
+  keys, in the export, granted with `recurring_items`) and a nullable
+  `core.transactions.recurring_occurrence_id`. Additive, no backfill. Its
+  foreign key uses `ON DELETE SET NULL (column)`, which needs PostgreSQL 15
+  or later; 16 is already the documented minimum.
 - **023_budget_windows** adds the `btree_gist` extension (a trusted
   extension, so the non-superuser owner can create it) and an exclusion
   constraint so a category cannot have two budget lines on the same day.

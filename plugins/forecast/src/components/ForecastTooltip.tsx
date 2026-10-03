@@ -32,7 +32,7 @@ export function ForecastTooltip({
         <span className="fc-tip__row fc-tip__low">Dips to <strong>{formatMoney(low)}</strong> before money arrives</span>
       ) : null}
       {entries.map((e) => (
-        <span key={e.itemId} className="fc-tip__row fc-tip__entry">
+        <span key={`${e.itemId}:${e.nominalDate ?? e.date}`} className="fc-tip__row fc-tip__entry">
           {e.name} <span className={e.kind === 'transfer' ? '' : e.amount.startsWith('-') ? 'fc-neg' : 'fc-pos'}>{formatMoney(e.amount)}</span>
         </span>
       ))}

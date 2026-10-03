@@ -68,6 +68,50 @@ export interface RecurringLeg {
 export interface RecurringItem extends RecurrenceSchedule {
   /** The legs applied on each occurrence. */
   readonly legs: readonly RecurringLeg[]
+  /**
+   * Changes to single occurrences, keyed by nominal date (`YYYY-MM-DD`): the
+   * date the schedule gives, which is what identifies an occurrence even after
+   * it moves. A key that is not one of the schedule's dates is ignored, so an
+   * override left behind by a schedule edit can never invent an occurrence.
+   * `null` or absent when nothing is overridden.
+   */
+  readonly overrides?: Readonly<Record<string, OccurrenceOverride>> | null
+}
+
+/**
+ * How one occurrence differs from its series.
+ *
+ * Every field is optional; an empty object changes nothing. A caller can use
+ * these for anything that makes one occurrence differ: a month the user skips,
+ * a bill that is larger this time, a payment that moved for a holiday, or (as
+ * the Wicker Money API does) money that already arrived and must not be
+ * projected again.
+ */
+export interface OccurrenceOverride {
+  /** `true` drops the occurrence entirely: it is not listed and moves no money. */
+  readonly skipped?: boolean
+  /**
+   * The date it is expected instead of the nominal one, `YYYY-MM-DD`. May be
+   * earlier or later, including outside the range being asked about: an
+   * occurrence is placed where it lands, not where it was scheduled.
+   */
+  readonly date?: string | null
+  /**
+   * The legs applied on this occurrence instead of the item's. An empty list
+   * keeps the occurrence (it still happens on its date) but moves no money,
+   * which is how an occurrence that has already fully posted is expressed.
+   */
+  readonly legs?: readonly RecurringLeg[] | null
+}
+
+/** One occurrence after overrides: when it lands and what it moves. */
+export interface ScheduledOccurrence {
+  /** The schedule's date for it, `YYYY-MM-DD`; its identity. */
+  readonly nominalDate: string
+  /** The date it lands, `YYYY-MM-DD`; the nominal date unless overridden. */
+  readonly date: string
+  /** The legs it applies: the override's if it has any, otherwise the item's. */
+  readonly legs: readonly RecurringLeg[]
 }
 
 /** One day of a projected balance series. */

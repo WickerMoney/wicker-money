@@ -171,6 +171,11 @@ export class KyselyAccountRepository implements AccountRepository {
    *
    * Every other leg on the source is re-pointed. The legs trigger checks the
    * result at commit.
+   *
+   * Per-occurrence amounts follow the same rule: on a split paycheck whose two
+   * legs are summed they are dropped (one month's amount for one side no
+   * longer means anything once the sides are one), and everywhere else they
+   * move with their leg.
    */
   private async moveRecurringLegs(fromId: string, toId: string): Promise<void> {
     await sql`
@@ -179,6 +184,29 @@ export class KyselyAccountRepository implements AccountRepository {
          AND EXISTS (SELECT 1 FROM core.recurring_item_legs f WHERE f.recurring_item_id = i.id AND f.account_id = ${fromId})
          AND EXISTS (SELECT 1 FROM core.recurring_item_legs t WHERE t.recurring_item_id = i.id AND t.account_id = ${toId})
     `.execute(this.trx)
+    await sql`
+      DELETE FROM core.recurring_occurrence_legs ol
+       USING core.recurring_occurrences o
+       WHERE o.id = ol.recurring_occurrence_id
+         AND ol.account_id IN (${fromId}, ${toId})
+         AND EXISTS (SELECT 1 FROM core.recurring_item_legs f WHERE f.recurring_item_id = o.recurring_item_id AND f.account_id = ${fromId})
+         AND EXISTS (SELECT 1 FROM core.recurring_item_legs t WHERE t.recurring_item_id = o.recurring_item_id AND t.account_id = ${toId})
+    `.execute(this.trx)
+    // Anything still on both accounts is left over from an edit; the
+    // target's amount wins so the re-point below cannot collide.
+    await sql`
+      DELETE FROM core.recurring_occurrence_legs f
+       WHERE f.account_id = ${fromId}
+         AND EXISTS (
+           SELECT 1 FROM core.recurring_occurrence_legs t
+            WHERE t.recurring_occurrence_id = f.recurring_occurrence_id AND t.account_id = ${toId}
+         )
+    `.execute(this.trx)
+    await this.trx
+      .updateTable('core.recurring_occurrence_legs')
+      .set({ account_id: toId, updated_at: databaseNow })
+      .where('account_id', '=', fromId)
+      .execute()
     await sql`
       UPDATE core.recurring_item_legs t
          SET amount = t.amount + f.amount, updated_at = now()

@@ -10,6 +10,7 @@ import { OnboardingService } from '../onboarding/service/OnboardingService.js'
 import { PluginService } from '../plugins/service/PluginService.js'
 import { ReportService } from '../core/service/ReportService.js'
 import { RecurringItemService } from '../recurring/service/RecurringItemService.js'
+import { RecurringOccurrenceService } from '../recurring/service/RecurringOccurrenceService.js'
 import { SettingsService } from '../settings/service/SettingsService.js'
 import { TransactionService } from '../transactions/service/TransactionService.js'
 
@@ -35,5 +36,6 @@ export function createServices(db: Db, uow: UnitOfWork, config: Config): Service
     plugins,
     reports: new ReportService(uow),
     recurringItems: new RecurringItemService(uow),
+    recurringOccurrences: new RecurringOccurrenceService(uow),
   }
 }
