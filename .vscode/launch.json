@@ -1,0 +1,43 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API (tsx watch)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@wickermoney/api", "dev"],
+      "autoAttachChildProcesses": true,
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "API (migrate first)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "db: migrate",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@wickermoney/api", "dev"],
+      "autoAttachChildProcesses": true,
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Web (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/apps/web"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack (API + web + plugins + Chrome)",
+      "preLaunchTask": "dev: web + plugins (no api)",
+      "configurations": ["API (tsx watch)", "Web (Chrome)"],
+      "stopAll": true
+    }
+  ]
+}
