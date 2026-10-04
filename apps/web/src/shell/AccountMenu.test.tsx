@@ -9,7 +9,7 @@ const signOut = vi.fn(() => Promise.resolve())
 
 vi.mock('../auth/index.js', () => ({
   useAuth: () => ({
-    user: { id: 'u1', email: 'jeremy@example.com', timezone: 'America/New_York' },
+    user: { id: 'u1', email: 'jeremy@example.com', timezone: 'America/New_York', role: 'owner' },
     signOut,
   }),
 }))

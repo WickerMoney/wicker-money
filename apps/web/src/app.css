@@ -401,3 +401,52 @@
 .txn-recur__find { align-self: flex-start; color: var(--wm-text-muted); }
 .txn-recur__picker { margin-top: 2px; padding: 6px; font-size: 12px; }
 .txn-recur__picker .recur-candidate { grid-template-columns: minmax(0, 1fr) auto; }
+/* Settings: plugins. A list of cards, each with an on/off switch for an
+   owner. Status is always a word; the dot's colour only reinforces it. */
+.settings-anchor { scroll-margin-top: 16px; }
+.plugin-list__intro { margin: 0 0 12px; }
+.plugin-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.plugin-card {
+  display: flex; gap: 16px; align-items: flex-start; justify-content: space-between;
+  padding: 12px 14px; border: 1px solid var(--wm-border); border-radius: var(--wm-radius-sm);
+  background: var(--wm-surface);
+}
+.plugin-card.is-off { background: var(--wm-surface-alt); }
+.plugin-card__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.plugin-card__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.plugin-card__head .tag { margin-left: 0; }
+.plugin-card__name { font-weight: 600; }
+.plugin-card__version { font-size: 12px; color: var(--wm-text-muted); font-family: var(--wm-mono); }
+.plugin-card__desc { margin: 0; }
+.plugin-card__adds { margin: 0; font-size: 12px; color: var(--wm-text-muted); }
+.plugin-card__failure { margin: 0; font-size: 12px; color: var(--wm-negative); font-family: var(--wm-mono); overflow-wrap: anywhere; }
+.plugin-card .wm-alert { margin: 4px 0 0; }
+
+.plugin-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--wm-text-muted); }
+.plugin-status::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--wm-text-muted); }
+.plugin-status--enabled::before { background: var(--wm-positive); }
+.plugin-status--failed { color: var(--wm-negative); }
+.plugin-status--failed::before { background: var(--wm-negative); }
+
+.plugin-switch-wrap { display: flex; align-items: center; gap: 8px; flex: none; padding-top: 2px; }
+.plugin-switch__text { font-size: 12px; color: var(--wm-text-muted); min-width: 3.5em; }
+.plugin-switch {
+  position: relative; width: 38px; height: 22px; padding: 0; flex: none; cursor: pointer;
+  border: 1px solid var(--wm-border); border-radius: 999px; background: var(--wm-surface-alt);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.plugin-switch__thumb {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px;
+  background: var(--wm-text-muted); transition: transform .15s ease, background-color .15s ease;
+}
+.plugin-switch.is-on { background: var(--wm-accent); border-color: var(--wm-accent); }
+.plugin-switch.is-on .plugin-switch__thumb { transform: translateX(16px); background: var(--wm-accent-text); }
+.plugin-switch:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 2px; }
+.plugin-switch:disabled { opacity: .55; cursor: progress; }
+@media (prefers-reduced-motion: reduce) {
+  .plugin-switch, .plugin-switch__thumb { transition: none; }
+}
+
+/* A plugin page whose plugin is switched off or did not load. */
+.plugin-off .wm-empty { padding: 40px 16px; }
+.plugin-off .wm-btn { text-decoration: none; display: inline-block; }

@@ -8,7 +8,7 @@ vi.mock('../api/client.js', () => ({ api: { get: apiGet, post: apiPost } }))
 
 const { buildPluginContext } = await import('./context.js')
 
-const user = { id: 'u1', email: 'demo@example.com', timezone: 'UTC' }
+const user = { id: 'u1', email: 'demo@example.com', timezone: 'UTC', role: 'member' as const }
 
 function manifestWith(tables: { table: string; access: string }[]): PluginManifest {
   return {
