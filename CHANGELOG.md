@@ -9,6 +9,131 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
+The plugin manager, matching from the Transactions page, and form errors
+that show on the field they are about. **Back up your database before
+upgrading:** this release has two migrations, 025 and 026. Both have a
+`down`, so going back to 0.3.0 is `node dist/db/cli.js down` twice with the
+0.4.0 image, then the old image; that discards dismissed suggestions and puts
+the old "everyone is an owner" default back. Node 22.22.2+ (or 24.15+) is
+now required to build from source; the container image is unaffected. See
+[Upgrading](README.md#upgrading).
+
+**Owner and member roles now mean something.** Only the first account on an
+instance is its owner; accounts registered after it are members. Existing
+accounts keep their role, so on an instance where several people registered
+before this release, every one of them is still an owner. See
+[Owners and members](README.md#owners-and-members) for how to check and
+demote.
+
+Two behaviour changes for API callers: `validation_failed` messages are
+reworded (a client that matches on message text needs updating), and
+`GET /api/v1/transactions?uncategorized=true` no longer returns linked
+transfer legs.
+
+### Added
+
+- **Plugin manager.** A **Plugins** section in Settings (`/settings#plugins`)
+  lists every bundled plugin with its version, what it adds and whether it
+  is on, off or failed to load (with the reason). An owner can turn any
+  plugin on or off; the change applies live, with no page reload: its pages,
+  sidebar entry and dashboard widgets appear or disappear. Turning a plugin
+  off deletes nothing: its schema, rows and database role stay, and turning
+  it back on restores everything. Several plugins in the same area can be on
+  together. Other open tabs pick up a change when they regain focus. A
+  member sees the list read-only. Opening a turned-off plugin's page shows
+  "*Name* is turned off" instead of "Not found", with a link to the plugin
+  list for owners.
+- `GET /api/v1/plugins/registry` (every registered plugin, enabled or not,
+  with `status` and `failure`) and `PATCH /api/v1/plugins/:pluginId`
+  (`{ "enabled": boolean }`, idempotent; the response carries `previous`,
+  `changed`, `changedBy` and `changedAt`). Both are owner-only and answer
+  `403 owner_required` to a member. While a plugin is off its own routes
+  answer `404 plugin_disabled`.
+- **Match from the Transactions page.** A Recurring column shows, for each
+  transaction, the occurrence it paid (with Unmatch), a suggested match to
+  confirm with one click, or **Other** to pick a different occurrence. It
+  costs one request per page, not one per row.
+- **Dismiss a suggested match** ("Not this"), on both the Transactions and
+  the Recurring page, so that pair is never suggested again. The same
+  transaction can still be suggested for other occurrences, and a dismissal
+  can be undone. Matching a dismissed pair by hand clears the dismissal;
+  dismissing one leg of a transfer dismisses its partner too.
+- Endpoints: `POST` and `DELETE /api/v1/recurring-items/:id/occurrences/:date/dismissals[/:transactionId]`,
+  `GET /api/v1/recurring-items/transaction-matches?transactionIds=…` (1–200
+  ids) and `GET /api/v1/recurring-items/transaction-matches/:transactionId`.
+  `GET /recurring-items/suggestions` also returns `dismissed`, and each
+  candidate carries `dismissed`. Additive.
+- **Form errors on the field.** Every form in the app and in the bundled
+  plugins (categories and rules, accounts, transactions, recurring items,
+  time zone, sign in and sign up, budgets, CSV import) checks what it can in
+  the browser, with the API's own rules, and shows each error under the
+  field it is about. Anything that is not about one field shows beside the
+  form's button, and focus moves to the first problem. Messages are
+  sentences, not schema paths. A rule's "At least 0" now means no minimum,
+  and the field says so.
+- Every `validation_failed` response carries `issues: { path, message }[]`
+  (never empty; an empty `path` means the request as a whole). Bundled
+  plugin errors may carry `issues` in the same shape.
+- `@wickermoney/ui-kit`: `FormError`, `formErrorsFrom`, `useFormErrors`,
+  `validationIssuesOf`, `NO_FORM_ERRORS`, `hasFormErrors` and their types,
+  and an optional `hint` on `Field` and `SelectField`. Additive.
+- `role` (`owner` or `member`) on the signed-in user, from sign-up, login,
+  refresh and `GET /api/v1/auth/me`.
+- The dev seed (`pnpm seed` in `apps/api`) gives the household persona a matching history: matched,
+  skipped, late, suggested and dismissed occurrences, dated relative to
+  today.
+- The data export has a `recurringMatchDismissals` section.
+- VS Code tasks and launch configurations for the dev loop (dev servers,
+  migrate up and down, seed, local Postgres, and debugging the API, the web
+  app or both).
+
+### Changed
+
+- Only the first account on an instance becomes its owner; later sign-ups
+  are members. Existing accounts are not changed.
+- `validation_failed` messages are reworded, the top-level `message`
+  included (its `path: message` form stays). Per-leg recurring errors now
+  name the leg (`legs.0.amount`), and transfer errors point at `toAccountId`
+  or `amount`.
+- The Transactions pager shows "Page 3 of 25" once the total is known.
+- `SelectField` now wires `aria-describedby` to its error, like `Field`.
+- Building from source needs Node 22.22.2+ or 24.15+ (jsdom 30's range;
+  `pnpm install` refused older versions already). Dependency updates
+  throughout, including jsdom 30, Fastify 5.12.5, Kysely 0.29.6, Vite 8.3.2
+  and Vitest 5.0.3.
+
+### Fixed
+
+- "Only uncategorized" on the Transactions page no longer lists linked
+  transfer legs, which can never take a category, so an empty list now
+  means everything is filed. The query also uses the partial index built
+  for it.
+- When the API serves the app, the saved theme is applied before first
+  paint again. The pre-paint script was inline, which the Content Security
+  Policy (`script-src 'self'`) blocked, so dark-mode users saw a white flash
+  on every load and a CSP error in the console.
+- A form error no longer lands only in an alert at the top of the page,
+  where it could be off-screen (entering `0` as a rule's "At least" seemed to
+  do nothing).
+
+### Migrations
+
+- **025_recurring_match_dismissals** adds
+  `core.recurring_match_dismissals`, one row per dismissed (transaction,
+  item, nominal date) pair, keyed by item and date so it survives the
+  occurrence record being cleaned up. Row-level security forced, composite
+  keys, deleted with the transaction or the item. It also adds
+  `UNIQUE (user_id, id)` on `core.transactions` for the composite key;
+  building it blocks writes (not reads) to transactions for the length of
+  one index build. Reversible.
+- **026_first_user_owner** changes the `core.users.role` default to
+  `member` and has `register_user` make an account the owner only when no
+  owner exists yet, under an advisory lock so two simultaneous first
+  sign-ups cannot both become owner. Existing rows are not touched.
+  Reversible.
+
 ## [0.3.0] - 2026-10-03
 
 Paid / landed matching for recurring items, budget windows, and a shared
@@ -273,7 +398,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/WickerMoney/wicker-money/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/WickerMoney/wicker-money/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/WickerMoney/wicker-money/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/WickerMoney/wicker-money/compare/v0.1.0...v0.2.0

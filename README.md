@@ -137,6 +137,47 @@ when testing the wizard itself:
   along with any parent that pins;
 - everything else goes, and the account is back to a genuine first run.
 
+### Owners and members
+
+The first account on an instance is its **owner**; every account registered
+after it is a **member**. Members use the app normally, with their own data.
+Only an owner can administer the instance, which today means turning plugins
+on and off. The server checks the role on every owner-only request, so
+changing it takes effect on that person's next request, with no sign-out.
+
+There is no screen for changing roles yet. As the database owner
+(`DATABASE_OWNER_URL`):
+
+```sql
+-- who is an owner
+SELECT email, role, created_at FROM core.users ORDER BY created_at;
+
+-- demote one account (or set 'owner' to promote)
+UPDATE core.users SET role = 'member' WHERE email = 'someone@example.com';
+
+-- keep only the earliest account as owner
+UPDATE core.users SET role = 'member'
+WHERE role = 'owner'
+  AND id <> (SELECT id FROM core.users ORDER BY created_at, id LIMIT 1);
+```
+
+Before `v0.4.0` every account was registered as an owner, and upgrading does
+not change existing accounts. If several people signed up on your instance
+before then, check the list above. If every owner is demoted, the next account
+to register becomes the owner. Set `REGISTRATION_ENABLED=false` once the
+accounts you need exist.
+
+### Plugins
+
+**Settings → Plugins** lists every bundled plugin: what it adds, its version,
+and whether it is on, off or failed to load (with the reason). An owner can
+turn any plugin on or off for the whole instance, and the app applies it
+straight away: the plugin's pages, sidebar entry and dashboard widgets appear
+or disappear without a reload, and other open tabs catch up when they regain
+focus. Turning a plugin off deletes nothing. Its tables, rows and database
+role stay, and turning it back on brings everything back. Plugins in the same
+area, such as two budgeting approaches, can be on together.
+
 ### Managing categories
 
 Rename, re-parent, disable or delete from the Categories page.
@@ -308,6 +349,11 @@ moved or given a different amount per account without touching the rest of the
 series. An item you have matched at least once is *tracked*: an occurrence that
 has not arrived is flagged late for up to a week and still counted, on the next
 projected day. Items you never match behave as they did before.
+
+You can also match from the **Transactions** page: its Recurring column shows
+the occurrence a transaction paid (with *Unmatch*), a suggestion to confirm, or
+*Other* to pick an occurrence yourself. *Not this* dismisses a suggestion on
+either page, so that pairing is not offered again, and *Undo* brings it back.
 
 ### Forecast
 
@@ -505,7 +551,10 @@ and adds an enum label PostgreSQL cannot remove), so the way back to an older
 image is restoring that backup. A release with no migrations, such as `v0.2.1`,
 can go back to the previous image as it is. `v0.3.0` has one of each kind: 023
 (budget windows) has a `down`, but 024 (recurring occurrences) does not, so
-going back to `v0.2.1` also means restoring the backup.
+going back to `v0.2.1` also means restoring the backup. `v0.4.0`'s two
+migrations (025 and 026) both have a `down`. After upgrading to `v0.4.0`, read
+[Owners and members](#owners-and-members): accounts registered before it are
+all owners.
 
 Then pull the new image and migrate before starting it, exactly as on first
 install (`node dist/db/cli.js up`). With the compose sample, `docker compose pull`
@@ -627,6 +676,21 @@ What a bundled plugin still does not get:
 - Its own idea of core behaviour. Categorization, for instance, is injected from
   the core rule engine rather than reimplemented.
 
+### When a plugin is turned off
+
+An owner can turn any plugin off from Settings → Plugins. The host unmounts the
+plugin's pages and widgets (a remote already loaded stays in memory but is no
+longer rendered), its own routes answer `404 plugin_disabled`, and a core data
+request carrying its `x-wickermoney-plugin` header gets `403 grant_denied`.
+Its schema, rows and role are kept. Do not assume a plugin's code runs at
+every page load, and do not delete data on unmount.
+
+**Validation errors.** A bundled plugin's server can attach
+`issues: { path, message }[]` to an error, the same shape as the API's
+`validation_failed`, and the host passes it through. On the page, ui-kit's
+`formErrorsFrom` and `useFormErrors` put each issue on its field and render
+the rest with `FormError` beside the submit button.
+
 ### Plugin roles
 
 Each plugin gets a PostgreSQL role, named `<app role>_plugin_<slug>` and granted
@@ -640,6 +704,17 @@ otherwise fight over them. Set `APP_DB_ROLE` the same way for `pnpm migrate` and
 for the API.
 
 ## Status
+
+**`v0.4.0` — the plugin manager, matching from Transactions, and errors on
+the field.** Owners turn plugins on and off from Settings → Plugins, applied
+live without a reload and without touching the plugin's data. Only the first
+account is now an owner; later sign-ups are members (migration 026). Matching
+works from the Transactions page too, and a suggestion can be dismissed and
+the dismissal undone (migration 025). Every form checks what it can in the
+browser and shows each error under its field, backed by a structured
+`issues` list on `validation_failed`. Also: "Only uncategorized" leaves out
+transfer legs, the pager shows "Page N of M", and the theme no longer flashes
+white on load behind the CSP.
 
 **`v0.3.0` — paid / landed matching, budget windows, and the money module.**
 Transactions can be matched to the recurring occurrences they paid (suggested,

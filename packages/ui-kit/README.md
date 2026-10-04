@@ -48,13 +48,23 @@ A federated remote's emitted stylesheet is never requested.
 |---|---|
 | `Surface` | Card/panel with an optional title and header action |
 | `Button` | `variant`: `default`, `primary` or `danger` |
-| `Field`, `SelectField` | Labelled form inputs |
+| `Field`, `SelectField` | Labelled form inputs; optional `hint` and `error` (wires `aria-invalid` and `aria-describedby`) |
+| `FormError` | A form-level error, shown beside the form's submit button |
 | `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align |
 | `Stat` | Label + value; `tone="auto"` colours by sign |
 | `CategoryOptions`, `orderByParent` | Category `<option>` list grouped under parents |
 | `Alert` | Inline error or notice (`role="alert"`) |
 | `EmptyState` | Title, hint and an optional action for empty views |
 | `Spinner` | Loading indicator |
+
+### Form errors
+
+`useFormErrors()` holds a form's errors and, after `show()`, moves focus to the
+first invalid field (or the `FormError`). `formErrorsFrom(error, fields,
+fallback)` maps an API error's `issues: { path, message }[]` to your field
+names and returns anything left over as one form-level message;
+`validationIssuesOf(error)` reads the issues on their own. `NO_FORM_ERRORS`
+and `hasFormErrors` cover the empty case.
 
 Every component's props type is exported alongside it (`SurfaceProps`,
 `TableProps<T>`, ...).
