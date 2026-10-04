@@ -12,7 +12,7 @@ const BROWSER = Intl.DateTimeFormat().resolvedOptions().timeZone
 /** Renders the section under a real-enough auth context whose `setTimezone` updates the user. */
 function mount(start: string, setTimezone = vi.fn(async (z: string) => z)) {
   function Host() {
-    const [user, setUser] = useState<CurrentUser>({ id: 'u1', email: 'a@example.com', timezone: start })
+    const [user, setUser] = useState<CurrentUser>({ id: 'u1', email: 'a@example.com', timezone: start, role: 'owner' })
     const value: AuthState = {
       user, ready: true,
       signIn: vi.fn(), register: vi.fn(), signOut: vi.fn(),

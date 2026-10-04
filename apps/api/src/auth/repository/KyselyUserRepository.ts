@@ -1,5 +1,6 @@
 import { sql } from 'kysely'
 import { translateDuplicateKey } from '../../data/translateDuplicateKey.js'
+import type { UserRole } from '../../db/models/index.js'
 import type { Trx } from '../../db/Trx.js'
 import type { LoginCandidate } from './LoginCandidate.js'
 import type { UserIdentity } from './UserIdentity.js'
@@ -44,6 +45,16 @@ export class KyselyUserRepository implements UserRepository {
       .select(['id', 'email', 'timezone'])
       .where('id', '=', userId)
       .executeTakeFirst()
+  }
+
+  /** @inheritdoc */
+  async findRole(userId: string): Promise<UserRole | undefined> {
+    const row = await this.trx
+      .selectFrom('core.users')
+      .select('role')
+      .where('id', '=', userId)
+      .executeTakeFirst()
+    return row?.role
   }
 
   /** @inheritdoc */

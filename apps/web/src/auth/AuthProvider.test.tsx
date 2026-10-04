@@ -5,7 +5,7 @@ import { AuthProvider } from './AuthProvider.js'
 import { useAuth } from './useAuth.js'
 import type { AuthState } from './AuthState.js'
 
-const USER = { id: 'u1', email: 'a@example.com', timezone: 'UTC' }
+const USER = { id: 'u1', email: 'a@example.com', timezone: 'UTC', role: 'owner' as const }
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
