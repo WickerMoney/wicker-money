@@ -390,3 +390,6 @@
   margin: 0 0 12px; padding: 8px 10px; border-radius: var(--wm-radius-sm);
   background: var(--wm-surface-alt); font-size: 13px;
 }
+
+/* Recurring matching on the Transactions page and dismissed suggestions on the Recurring page. */
+.recur-dismissed { margin-top: var(--wm-gap-sm); }

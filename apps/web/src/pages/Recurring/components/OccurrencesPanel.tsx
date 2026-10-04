@@ -97,6 +97,7 @@ export function OccurrencesPanel({ item, today, currency, accountName, status, a
                               <li key={c.transactionId} className="recur-candidate">
                                 <span>
                                   {c.merchant}, {formatDate(c.date)} <span className="wm-muted">({dayDifferenceText(c.dayDifference)})</span>
+                                  {c.dismissed === true ? <span className="wm-muted recur-sub"> dismissed</span> : null}
                                 </span>
                                 <span>{formatMoney(c.amount, currency)}</span>
                                 <Button disabled={busy} onClick={() => void occ.match(o, c.transactionId)}>Match</Button>
