@@ -176,3 +176,69 @@ describe('registry cache', () => {
     expect(await s.setEnabled('nobody.home', false)).toBe(false)
   })
 })
+
+describe('listing every registered plugin', () => {
+  it('includes disabled plugins and reports each one\'s status', async () => {
+    const s = service()
+    await s.seedBundled()
+    await s.setEnabled('wickermoney.beta', false)
+    const list = await s.listRegistered()
+    expect(list.map((p) => [p.id, p.enabled, p.status, p.failure])).toEqual([
+      ['wickermoney.alpha', true, 'enabled', null],
+      ['wickermoney.beta', false, 'disabled', null],
+    ])
+    expect(list[0]).toMatchObject({ name: 'alpha', version: '1.0.0', bundled: true, description: 'test' })
+  })
+
+  it('marks an enabled plugin that cannot load as failed, with the reason', async () => {
+    const broken = { ...beta, id: 'not-reverse-domain' }
+    const s = service({ bundled: [alpha, broken] })
+    await s.seedBundled()
+    const failed = (await s.listRegistered()).find((p) => p.id === 'not-reverse-domain')
+    expect(failed).toMatchObject({ status: 'failed', enabled: true, name: 'beta' })
+    expect(failed?.failure).toContain('reverse-domain')
+  })
+
+  it('still reports the reason for a disabled plugin that would fail', async () => {
+    const remote = manifest('remote', 'https://plugins.example.com/remoteEntry.js')
+    const s = service({ bundled: [remote] })
+    await s.seedBundled()
+    await s.setEnabled('wickermoney.remote', false)
+    const [only] = await s.listRegistered()
+    expect(only).toMatchObject({ status: 'disabled' })
+    expect(only?.failure).toContain('PLUGIN_REMOTE_ORIGINS')
+  })
+
+  it('falls back to the stored id and version for a row with no manifest', async () => {
+    uow.rows.push({ pluginId: 'ghost.plugin', version: '0.9.0', enabled: false, bundled: false })
+    const ghost = (await service().listRegistered()).find((p) => p.id === 'ghost.plugin')
+    expect(ghost).toMatchObject({
+      name: 'ghost.plugin', version: '0.9.0', description: null, status: 'disabled',
+      failure: 'no manifest found for this plugin id',
+      contributes: { pages: [], widgets: [], endpoints: false },
+    })
+  })
+})
+
+describe('changing whether a plugin is enabled', () => {
+  it('reports the previous state and the plugin as it now is', async () => {
+    const s = service()
+    await s.seedBundled()
+    const change = await s.changeEnabled('wickermoney.alpha', false)
+    expect(change).toMatchObject({ previous: true, plugin: { id: 'wickermoney.alpha', enabled: false, status: 'disabled' } })
+    expect(await s.findEnabled('wickermoney.alpha')).toBeUndefined()
+  })
+
+  it('is idempotent', async () => {
+    const s = service()
+    await s.seedBundled()
+    await s.changeEnabled('wickermoney.alpha', false)
+    expect(await s.changeEnabled('wickermoney.alpha', false)).toMatchObject({ previous: false, plugin: { enabled: false } })
+  })
+
+  it('answers undefined for an id that is not registered', async () => {
+    const s = service()
+    await s.seedBundled()
+    expect(await s.changeEnabled('nobody.home', true)).toBeUndefined()
+  })
+})

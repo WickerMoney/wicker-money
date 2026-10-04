@@ -2,10 +2,17 @@ import { checkRemoteEntry, parseManifest, type PluginManifest } from '@wickermon
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import { BUNDLED_PLUGINS } from '../bundled.js'
 import { DEFAULT_REGISTRY_TTL_MS } from './DEFAULT_REGISTRY_TTL_MS.js'
+import type { EnabledChange } from './EnabledChange.js'
 import type { LoadedPlugin } from './LoadedPlugin.js'
 import type { PluginLoadFailure } from './PluginLoadFailure.js'
 import type { PluginRegistrySnapshot } from './PluginRegistrySnapshot.js'
 import type { PluginServiceOptions } from './PluginServiceOptions.js'
+import type { RegisteredPlugin } from './RegisteredPlugin.js'
+
+/** A manifest that passed every check, or the reason it did not. */
+type Checked =
+  | { readonly manifest: PluginManifest; readonly reason?: undefined }
+  | { readonly manifest?: undefined; readonly reason: string }
 
 /**
  * Plugin registry: which plugins are enabled and whether their manifests are
@@ -113,6 +120,64 @@ export class PluginService {
     return found
   }
 
+  /**
+   * Every registered plugin, enabled or not, for an owner managing the instance.
+   *
+   * Not cached: it is read only from the plugin management page, and an owner
+   * who has just toggled a plugin should see the database, not a cache.
+   * Disabled plugins are validated too, so a manifest that would fail is
+   * visible before anyone switches it on.
+   *
+   * @returns The plugins in id order.
+   */
+  async listRegistered(): Promise<RegisteredPlugin[]> {
+    const rows = await this.uow.forSystem(({ pluginRegistry }) => pluginRegistry.listAll(), { readOnly: true })
+    return rows.map((row) => {
+      const checked = this.check(row.plugin_id)
+      const raw = this.bundled.find((m) => m.id === row.plugin_id)
+      const manifest = checked.manifest
+      return {
+        id: row.plugin_id,
+        // An invalid manifest still usually carries a readable name.
+        name: manifest?.name ?? raw?.name ?? row.plugin_id,
+        description: manifest?.description ?? null,
+        author: manifest?.author ?? null,
+        version: manifest?.version ?? row.version,
+        bundled: row.bundled,
+        enabled: row.enabled,
+        status: !row.enabled ? 'disabled' : manifest === undefined ? 'failed' : 'enabled',
+        failure: checked.reason ?? null,
+        contributes: {
+          pages: manifest?.contributes.pages.map((p) => p.title) ?? [],
+          widgets: manifest?.contributes.widgets.map((w) => w.title) ?? [],
+          endpoints: manifest?.contributes.endpoints ?? false,
+        },
+      }
+    })
+  }
+
+  /**
+   * Switches a plugin on or off and reports the before and after, for an
+   * owner's request and its audit log line.
+   *
+   * Disabling only flips the registry flag. The plugin's schema, rows and
+   * database role are untouched, so switching it back on restores everything
+   * it had.
+   *
+   * @param pluginId - The plugin's manifest id.
+   * @param enabled - The new state.
+   * @returns The previous state and the plugin as it now is, or `undefined`
+   * if no plugin with that id is registered.
+   */
+  async changeEnabled(pluginId: string, enabled: boolean): Promise<EnabledChange | undefined> {
+    const before = (await this.listRegistered()).find((p) => p.id === pluginId)
+    if (before === undefined) return undefined
+    if (!(await this.setEnabled(pluginId, enabled))) return undefined
+    const after = (await this.listRegistered()).find((p) => p.id === pluginId)
+    if (after === undefined) return undefined
+    return { previous: before.enabled, plugin: after }
+  }
+
   /** Forgets the cached registry so the next read goes to the database. */
   clearCache(): void {
     this.generation += 1
@@ -123,30 +188,32 @@ export class PluginService {
   private async readRegistry(): Promise<PluginRegistrySnapshot> {
     const rows = await this.uow.forSystem(({ pluginRegistry }) => pluginRegistry.listEnabled(), { readOnly: true })
 
-    const byId = new Map(this.bundled.map((m) => [m.id, m]))
     const plugins: LoadedPlugin[] = []
     const failures: PluginLoadFailure[] = []
 
     for (const row of rows) {
-      const candidate = byId.get(row.plugin_id)
-      if (candidate === undefined) {
-        // Enabled in the database but absent from the image: a stale row.
-        failures.push({ pluginId: row.plugin_id, reason: 'no manifest found for this plugin id' })
-        continue
-      }
-      const { manifest, error } = parseManifest(candidate)
-      if (manifest === undefined) {
-        failures.push({ pluginId: row.plugin_id, reason: error ?? 'invalid manifest' })
-        continue
-      }
-      const refusal = checkRemoteEntry(manifest.remoteEntry, this.remoteOrigins)
-      if (refusal !== undefined) {
-        failures.push({ pluginId: row.plugin_id, reason: refusal })
-        continue
-      }
-      plugins.push({ manifest, bundled: row.bundled })
+      const { manifest, reason } = this.check(row.plugin_id)
+      if (manifest === undefined) failures.push({ pluginId: row.plugin_id, reason })
+      else plugins.push({ manifest, bundled: row.bundled })
     }
 
     return { plugins, failures }
+  }
+
+  /**
+   * Validates one plugin's manifest and remote entry origin.
+   *
+   * @param pluginId - The registered plugin id.
+   * @returns The validated manifest, or why it cannot be loaded.
+   */
+  private check(pluginId: string): Checked {
+    const candidate = this.bundled.find((m) => m.id === pluginId)
+    // Registered in the database but absent from the image: a stale row.
+    if (candidate === undefined) return { reason: 'no manifest found for this plugin id' }
+    const { manifest, error } = parseManifest(candidate)
+    if (manifest === undefined) return { reason: error ?? 'invalid manifest' }
+    const refusal = checkRemoteEntry(manifest.remoteEntry, this.remoteOrigins)
+    if (refusal !== undefined) return { reason: refusal }
+    return { manifest }
   }
 }

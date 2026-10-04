@@ -30,6 +30,10 @@ export class InMemoryPluginUnitOfWork implements UnitOfWork {
       this.listCalls += 1
       return this.rows.filter((r) => r.enabled).map((r) => ({ plugin_id: r.pluginId, bundled: r.bundled }))
     },
+    listAll: async () =>
+      [...this.rows]
+        .sort((a, b) => a.pluginId.localeCompare(b.pluginId))
+        .map((r) => ({ plugin_id: r.pluginId, version: r.version, enabled: r.enabled, bundled: r.bundled })),
     upsertBundled: async (pluginId, version): Promise<void> => {
       const existing = this.rows.find((r) => r.pluginId === pluginId)
       if (existing === undefined) this.rows.push({ pluginId, version, enabled: true, bundled: true })

@@ -103,6 +103,8 @@ const PROTECTED_ROUTES: readonly string[] = [
   'GET /api/v1/recurring-items/transaction-matches/:transactionId',
 
   'GET /api/v1/plugins',
+  'GET /api/v1/plugins/registry',
+  'PATCH /api/v1/plugins/:pluginId',
 
   'GET /api/v1/p/wickermoney.import-csv/mappings',
   'POST /api/v1/p/wickermoney.import-csv/mappings',

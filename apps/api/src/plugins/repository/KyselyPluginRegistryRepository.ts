@@ -1,6 +1,7 @@
 import type { Trx } from '../../db/Trx.js'
 import type { EnabledPluginRow } from './EnabledPluginRow.js'
 import type { PluginRegistryRepository } from './PluginRegistryRepository.js'
+import type { RegisteredPluginRow } from './RegisteredPluginRow.js'
 
 /** Kysely implementation of {@link PluginRegistryRepository} over a single transaction. */
 export class KyselyPluginRegistryRepository implements PluginRegistryRepository {
@@ -13,6 +14,15 @@ export class KyselyPluginRegistryRepository implements PluginRegistryRepository 
       .selectFrom('core.plugins')
       .select(['plugin_id', 'bundled'])
       .where('enabled', '=', true)
+      .execute()
+  }
+
+  /** @inheritdoc */
+  listAll(): Promise<RegisteredPluginRow[]> {
+    return this.trx
+      .selectFrom('core.plugins')
+      .select(['plugin_id', 'version', 'enabled', 'bundled'])
+      .orderBy('plugin_id')
       .execute()
   }
 

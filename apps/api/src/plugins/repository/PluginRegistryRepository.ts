@@ -1,9 +1,13 @@
 import type { EnabledPluginRow } from './EnabledPluginRow.js'
+import type { RegisteredPluginRow } from './RegisteredPluginRow.js'
 
 /** Persistence operations for the installed-plugin registry. The registry is instance-wide, not per user. */
 export interface PluginRegistryRepository {
   /** @returns Every enabled plugin row, in no particular order. */
   listEnabled(): Promise<EnabledPluginRow[]>
+
+  /** @returns Every registered plugin row, enabled or not, ordered by plugin id. */
+  listAll(): Promise<RegisteredPluginRow[]>
 
   /**
    * Registers a bundled plugin, or refreshes its version if it is already registered.
