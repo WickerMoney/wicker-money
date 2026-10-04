@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import indexHtml from '../../index.html?raw'
+import themeInitScript from '../../public/theme-init.js?raw'
 import { applyTheme } from './applyTheme.js'
 import { isThemePreference } from './ThemePreference.js'
 import { THEME_STORAGE_KEY, readThemePreference, writeThemePreference } from './themeStorage.js'
@@ -56,8 +57,14 @@ describe('isThemePreference', () => {
   })
 })
 
-describe('index.html', () => {
+describe('theme-init.js', () => {
   it('reads the same storage key as the app, so the no-flash script cannot drift', () => {
-    expect(indexHtml).toContain(`'${THEME_STORAGE_KEY}'`)
+    expect(themeInitScript).toContain(`'${THEME_STORAGE_KEY}'`)
+  })
+
+  it('is loaded from index.html as a plain script, not inline, so the CSP allows it', () => {
+    expect(indexHtml).toContain('<script src="/theme-init.js"></script>')
+    // Any inline <script> (one with no src) is blocked by `script-src 'self'`.
+    expect(indexHtml).not.toMatch(/<script(?![^>]*\ssrc=)[^>]*>/)
   })
 })
