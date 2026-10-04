@@ -101,9 +101,9 @@ describe('validateRecurringItem', () => {
 
   describe('refuses', () => {
     it.each<[string, Partial<RecurringItemInput>, RegExp]>([
-      ['an end before the start', { endDate: '2025-12-31' }, /on or after seriesStartDate/],
+      ['an end before the start', { endDate: '2025-12-31' }, /^endDate: Must be on or after the first date\./],
       ['no legs', { legs: [] }, /At least one leg/],
-      ['a zero leg', { legs: [{ accountId: CHECKING, amount: '0.00' }] }, /zero moves nothing/],
+      ['a zero leg', { legs: [{ accountId: CHECKING, amount: '0.00' }] }, /^legs\.0\.amount: Must be more than 0\./],
       ['the same account twice', { kind: 'transfer', legs: [{ accountId: CHECKING, amount: '-1' }, { accountId: CHECKING, amount: '1' }] }, /only once/],
       ['an unknown account', { legs: [{ accountId: '99999999-9999-4999-8999-999999999999', amount: '-1' }] }, /Account not found/],
       ['an archived account', { legs: [{ accountId: OLD, amount: '-1' }] }, /archived/],

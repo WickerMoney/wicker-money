@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildApp } from './app.js'
 import { loadConfig } from './config.js'
 import type { Db } from './db/client.js'
-import { AppError } from './errors.js'
+import { AppError, ValidationError } from './errors.js'
 
 /** Collects everything the server logs so it can be asserted on. */
 function captureLog() {
@@ -82,6 +82,52 @@ describe('the unhandled-error path', () => {
     expect(res.statusCode).toBe(409)
     expect(res.json()).toEqual({ code: 'email_taken', message: 'That email is taken.' })
     expect(lines.join('')).not.toContain('unhandled error')
+
+    await app.close()
+  })
+})
+
+describe('ValidationError', () => {
+  it('reads a leading field into the issue path and keeps the message as written', () => {
+    const error = new ValidationError('legs.1.amount: Must be more than 0.')
+
+    expect(error.message).toBe('legs.1.amount: Must be more than 0.')
+    expect(error.issues).toEqual([{ path: ['legs', 1, 'amount'], message: 'Must be more than 0.' }])
+  })
+
+  it('gives a message with no field one issue with an empty path', () => {
+    const error = new ValidationError('A category cannot be its own parent.')
+
+    expect(error.issues).toEqual([{ path: [], message: 'A category cannot be its own parent.' }])
+  })
+
+  it('does not mistake a capitalised sentence with a colon for a field', () => {
+    const error = new ValidationError('Note: this is not a field.')
+
+    expect(error.issues[0]?.path).toEqual([])
+  })
+
+  it('uses explicit issues when given', () => {
+    const error = new ValidationError('A transfer of nothing is not a transfer.', [
+      { path: ['amount'], message: 'Must be more than 0.' },
+    ])
+
+    expect(error.message).toBe('A transfer of nothing is not a transfer.')
+    expect(error.issues).toEqual([{ path: ['amount'], message: 'Must be more than 0.' }])
+  })
+
+  it('is answered with code, message and issues', async () => {
+    const { stream } = captureLog()
+    const app = appWithFailingRoute(new ValidationError('to: Must be on or after the start of the range.'), stream)
+
+    const res = await app.inject({ method: 'GET', url: '/__throws' })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual({
+      code: 'validation_failed',
+      message: 'to: Must be on or after the start of the range.',
+      issues: [{ path: ['to'], message: 'Must be on or after the start of the range.' }],
+    })
 
     await app.close()
   })

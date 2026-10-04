@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
+import { checkMoney, checkText, fieldErrors, REQUIRED_MESSAGE } from '../../../lib/fieldChecks.js'
 import { formatMoney } from '../../../lib/formatMoney.js'
 import type { Transaction } from '../../../models/index.js'
 import type { TransactionEdit } from '../state/TransactionEdit.js'
@@ -17,8 +19,21 @@ export function useTransactionEditing(
   status: ActionStatus, onChanged: () => Promise<void>,
 ): TransactionEditing {
   const [editing, setEditing] = useState<TransactionEdit | null>(null)
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
+
+  const change = (next: TransactionEdit) => {
+    // A field's message goes once that field changes; the others stay.
+    setErrors((current) => ({
+      form: current.form,
+      fields: Object.fromEntries(Object.entries(current.fields).filter(
+        ([field]) => editing === null || next[field as keyof TransactionEdit] === editing[field as keyof TransactionEdit],
+      )),
+    }))
+    setEditing(next)
+  }
 
   const start = (t: Transaction) => {
+    setErrors(NO_FORM_ERRORS)
     setEditing({
       id: t.id,
       merchant: t.merchant,
@@ -29,7 +44,7 @@ export function useTransactionEditing(
     })
   }
 
-  const cancel = () => setEditing(null)
+  const cancel = () => { setEditing(null); setErrors(NO_FORM_ERRORS) }
 
   const assign = async (id: string, next: string) => {
     status.show(null)
@@ -46,18 +61,29 @@ export function useTransactionEditing(
 
   const save = async () => {
     if (editing === null) return
+    const problems = fieldErrors({
+      merchant: checkText(editing.merchant, 300),
+      notes: editing.notes.trim().length > 1000 ? 'Must be 1000 characters or fewer.' : undefined,
+      // A transfer leg also refuses zero; the server says so beside Save.
+      amount: checkMoney(editing.amount),
+      transactionDate: editing.transactionDate === '' ? REQUIRED_MESSAGE : undefined,
+    })
+    setErrors(problems)
+    if (hasFormErrors(problems)) return
     status.begin()
     try {
       await api.patch(`/transactions/${editing.id}`, {
         merchant: editing.merchant.trim(),
-        amount: editing.amount,
+        amount: editing.amount.trim(),
         transactionDate: editing.transactionDate,
         notes: editing.notes.trim() === '' ? null : editing.notes.trim(),
       })
       setEditing(null)
       await onChanged()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not save that transaction.')
+      setErrors(formErrorsFrom(
+        e, ['merchant', 'notes', 'amount', 'transactionDate'], 'Could not save that transaction.',
+      ))
     } finally { status.end() }
   }
 
@@ -79,5 +105,5 @@ export function useTransactionEditing(
     } finally { status.end() }
   }
 
-  return { editing, change: setEditing, start, cancel, save, remove, assign }
+  return { editing, errors, change, start, cancel, save, remove, assign }
 }

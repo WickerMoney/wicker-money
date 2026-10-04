@@ -1,3 +1,4 @@
+import type { FormErrors } from '@wickermoney/ui-kit'
 import type { Account } from '../../../models/index.js'
 import type { AccountEdit } from './AccountEdit.js'
 
@@ -5,6 +6,12 @@ import type { AccountEdit } from './AccountEdit.js'
 export interface AccountEditing {
   /** The row being edited with its unsaved values, or `null` when none is. */
   readonly editing: AccountEdit | null
+  /**
+   * What is wrong with the row being edited: `fields` keyed `name`,
+   * `currencyCode` and `bufferAmount`, and anything else beside its Save
+   * button.
+   */
+  readonly errors: FormErrors
   /** Replaces the unsaved values of the row being edited. */
   readonly change: (next: AccountEdit) => void
   /** Opens a row for editing its name, type, currency and buffer. */

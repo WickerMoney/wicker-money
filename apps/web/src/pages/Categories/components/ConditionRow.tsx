@@ -3,6 +3,9 @@ import type { ConditionType } from '../../../models/index.js'
 import { CONDITION_TYPES } from '../helpers/conditionTypes.js'
 import type { ConditionDraft } from '../state/ConditionDraft.js'
 
+/** The fields of one condition row that can carry an error. */
+export type ConditionErrors = Partial<Record<'textValue' | 'amountValue' | 'amountMin' | 'amountMax', string>>
+
 /** Props for {@link ConditionRow}. */
 export interface ConditionRowProps {
   /** The draft being edited. */
@@ -11,6 +14,8 @@ export interface ConditionRowProps {
   readonly index: number
   /** `false` for the only remaining row, since a rule needs at least one condition. */
   readonly removable: boolean
+  /** What is wrong with this row's values, by field. */
+  readonly errors?: ConditionErrors
   /** Merges a partial edit into this row. */
   readonly onChange: (patch: Partial<ConditionDraft>) => void
   /** Called to delete this row. */
@@ -18,7 +23,7 @@ export interface ConditionRowProps {
 }
 
 /** One editable condition in the "Add a rule" form. The type picker swaps in the fields that type needs. */
-export function ConditionRow({ condition: c, index, removable, onChange, onRemove }: ConditionRowProps) {
+export function ConditionRow({ condition: c, index, removable, errors = {}, onChange, onRemove }: ConditionRowProps) {
   return (
     <div className="rule-condition-row">
       {index > 0 ? <div className="rule-condition-row__and">and</div> : null}
@@ -32,7 +37,7 @@ export function ConditionRow({ condition: c, index, removable, onChange, onRemov
         || c.conditionType === 'merchant_contains'
         || c.conditionType === 'description_contains' ? (
           <>
-            <Field label="Text" required value={c.textValue}
+            <Field label="Text" required value={c.textValue} error={errors.textValue}
                    onChange={(e) => onChange({ textValue: e.target.value })}
                    placeholder="GROCERY" />
             <label className="check rule-condition-row__case">
@@ -50,7 +55,7 @@ export function ConditionRow({ condition: c, index, removable, onChange, onRemov
               <option value="out">Money out</option>
               <option value="in">Money in</option>
             </SelectField>
-            <Field label="Amount" required inputMode="decimal" value={c.amountValue}
+            <Field label="Amount" required inputMode="decimal" value={c.amountValue} error={errors.amountValue}
                    onChange={(e) => onChange({ amountValue: e.target.value })}
                    placeholder="375.00" />
           </>
@@ -63,10 +68,12 @@ export function ConditionRow({ condition: c, index, removable, onChange, onRemov
               <option value="out">Money out</option>
               <option value="in">Money in</option>
             </SelectField>
-            <Field label="At least" inputMode="decimal" value={c.amountMin}
+            <Field label="At least" inputMode="decimal" value={c.amountMin} error={errors.amountMin}
+                   hint="Empty or 0 means no minimum."
                    onChange={(e) => onChange({ amountMin: e.target.value })}
                    placeholder="(no minimum)" />
-            <Field label="At most" inputMode="decimal" value={c.amountMax}
+            <Field label="At most" inputMode="decimal" value={c.amountMax} error={errors.amountMax}
+                   hint="Empty means no maximum."
                    onChange={(e) => onChange({ amountMax: e.target.value })}
                    placeholder="(no maximum)" />
           </>

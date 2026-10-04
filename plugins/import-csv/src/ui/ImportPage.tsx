@@ -26,7 +26,7 @@ export default function ImportPage({ ctx }: PluginPageProps) {
   const inProgress = flow.stage !== 'choose' && flow.stage !== 'done'
 
   return (
-    <div className="page imp">
+    <div className="page imp" ref={flow.formRef}>
       <h1 className="page__title">Import transactions</h1>
 
       {flow.error !== null ? <Alert>{flow.error}</Alert> : null}
@@ -38,6 +38,7 @@ export default function ImportPage({ ctx }: PluginPageProps) {
         fileName={flow.fileName}
         matchedSource={flow.matchedSource}
         onFile={(file) => void flow.onFile(file)}
+        errors={flow.errors}
       />
 
       {inProgress && flow.csv !== '' ? (
@@ -56,6 +57,7 @@ export default function ImportPage({ ctx }: PluginPageProps) {
           onSourceName={flow.setSourceName}
           preview={flow.preview}
           formatMoney={ctx.formatMoney}
+          errors={flow.errors}
         />
       ) : null}
 
@@ -64,6 +66,7 @@ export default function ImportPage({ ctx }: PluginPageProps) {
         busy={flow.busy}
         accountMissing={flow.accountId === ''}
         onCheck={() => void flow.analyze()}
+        error={flow.stage === 'review' ? null : flow.errors.form}
       />
 
       {flow.stage === 'review' && flow.analysis !== null ? (
@@ -74,6 +77,7 @@ export default function ImportPage({ ctx }: PluginPageProps) {
           formatMoney={ctx.formatMoney}
           busy={flow.busy}
           onCommit={() => void flow.commit()}
+          error={flow.errors.form}
         />
       ) : null}
 

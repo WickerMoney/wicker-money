@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, CategoryOptions, SelectField, orderByParent } from '@wickermoney/ui-kit'
+import {
+  Button, CategoryOptions, FormError, SelectField, orderByParent, useFormErrors, type FormErrors,
+} from '@wickermoney/ui-kit'
 import type { Category, MonthLine } from '../models/index.js'
 
 /** Props for {@link AddLineForm}. */
@@ -8,8 +10,8 @@ export interface AddLineFormProps {
   /** The lines already in the month, so the picker never offers a duplicate. */
   readonly lines: readonly MonthLine[]
   readonly busy: boolean
-  /** Adds a zero-plan line for a category. */
-  readonly onAdd: (categoryId: string) => void
+  /** Adds a zero-plan line for a category; resolves to what went wrong, if anything. */
+  readonly onAdd: (categoryId: string) => Promise<FormErrors>
 }
 
 /**
@@ -18,6 +20,7 @@ export interface AddLineFormProps {
  */
 export function AddLineForm({ categories, lines, busy, onAdd }: AddLineFormProps) {
   const [addCategoryId, setAddCategoryId] = useState('')
+  const form = useFormErrors<HTMLDivElement>()
 
   const taken = useMemo(() => new Set(lines.map((l) => l.categoryId)), [lines])
   // In the order the grouped dropdown shows them, so the default is the first option listed.
@@ -33,17 +36,22 @@ export function AddLineForm({ categories, lines, busy, onAdd }: AddLineFormProps
   }, [addable])
 
   return (
-    <div className="bud__add">
+    <div className="bud__add" ref={form.ref}>
       <SelectField
         label="Add a category"
         value={addCategoryId}
-        onChange={(e) => setAddCategoryId(e.target.value)}
+        error={form.errors.fields['categoryId']}
+        onChange={(e) => { setAddCategoryId(e.target.value); form.clear() }}
       >
         <CategoryOptions categories={categories} exclude={taken} />
       </SelectField>
-      <Button disabled={busy || addCategoryId === ''} onClick={() => onAdd(addCategoryId)}>
+      <Button
+        disabled={busy || addCategoryId === ''}
+        onClick={() => { void onAdd(addCategoryId).then(form.show) }}
+      >
         Add line
       </Button>
+      <FormError message={form.errors.form} />
     </div>
   )
 }

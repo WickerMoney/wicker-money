@@ -5,6 +5,7 @@ import type { BalancePreview } from '../../../models/index.js'
 import { deferred } from '../../../testing/deferred.js'
 import { makeAccount } from '../../../testing/makeAccount.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { validationFailed } from '../../../testing/validationFailed.js'
 import { useOpeningBalanceFix } from './useOpeningBalanceFix.js'
 
 const previewFor = (newBalance: string): BalancePreview => ({
@@ -94,15 +95,29 @@ describe('useOpeningBalanceFix', () => {
     expect(result.current.balancePreview).toBeNull()
   })
 
-  it('keeps Apply unavailable when the typed value is rejected', async () => {
-    vi.spyOn(api, 'post').mockRejectedValue(new Error('not a number'))
+  it('names a value the API would refuse under the field, without asking it', async () => {
+    const post = vi.spyOn(api, 'post')
     const { result, status } = setup()
     act(() => result.current.open(makeAccount()))
 
-    await act(async () => { await result.current.preview('12.') })
+    await act(async () => { await result.current.preview('12.34567') })
 
     expect(result.current.balancePreview).toBeNull()
+    expect(result.current.errors.fields).toEqual({
+      initialBalance: 'Enter an amount like 12.50, with no more than 4 decimal places.',
+    })
+    expect(post).not.toHaveBeenCalled()
     expect(status.show).not.toHaveBeenCalled()
+  })
+
+  it("puts the server's refusal of the previewed value on the field", async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(validationFailed([['initialBalance'], 'Enter an amount like 12.50, with no more than 4 decimal places.']))
+    const { result } = setup()
+    act(() => result.current.open(makeAccount()))
+
+    await act(async () => { await result.current.preview('5') })
+
+    expect(result.current.errors.fields['initialBalance']).toBe('Enter an amount like 12.50, with no more than 4 decimal places.')
   })
 
   it('applies the previewed value, reloads and reports the change', async () => {
@@ -133,7 +148,7 @@ describe('useOpeningBalanceFix', () => {
     expect(post).not.toHaveBeenCalled()
   })
 
-  it('reports a failed apply through the status and stays open', async () => {
+  it('reports a failed apply beside Apply and stays open', async () => {
     vi.spyOn(api, 'post')
       .mockResolvedValueOnce(previewFor('300.00'))
       .mockRejectedValueOnce(new Error('Server said no'))
@@ -143,7 +158,8 @@ describe('useOpeningBalanceFix', () => {
 
     await act(async () => { await result.current.apply() })
 
-    expect(status.show).toHaveBeenCalledWith('Server said no')
+    expect(result.current.errors.form).toBe('Server said no')
+    expect(status.show).not.toHaveBeenCalled()
     expect(reload).not.toHaveBeenCalled()
     expect(result.current.fixing).not.toBeNull()
     expect(status.end).toHaveBeenCalled()

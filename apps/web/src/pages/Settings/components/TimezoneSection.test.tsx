@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { AuthCtx } from '../../../auth/authContext.js'
 import type { AuthState } from '../../../auth/AuthState.js'
 import type { CurrentUser } from '../../../auth/CurrentUser.js'
+import { errorOf } from '../../../testing/errorOf.js'
+import { validationFailed } from '../../../testing/validationFailed.js'
 import { TimezoneSection } from './TimezoneSection.js'
 
 const BROWSER = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -53,6 +55,17 @@ describe('TimezoneSection', () => {
     mount(BROWSER)
     expect(screen.queryByText(/This browser is on/)).toBeNull()
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true)
+  })
+
+  it("puts the server's refusal of the zone on the picker", async () => {
+    mount(BROWSER, vi.fn(async () => {
+      throw validationFailed([['timezone'], '"Asia/Tokyo" is not a time zone this server knows, such as America/New_York.'])
+    }))
+    const other = BROWSER === 'Asia/Tokyo' ? 'Europe/London' : 'Asia/Tokyo'
+    await userEvent.selectOptions(screen.getByLabelText('Time zone'), other)
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => { expect(errorOf('Time zone')).toContain('is not a time zone this server knows') })
   })
 
   it('shows the server error and keeps the old zone', async () => {

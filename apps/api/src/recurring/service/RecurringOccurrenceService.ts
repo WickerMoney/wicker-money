@@ -496,15 +496,19 @@ function checkOverride(
   }
 
   const given = new Map<string, string>()
-  for (const leg of input.legs ?? []) {
+  for (const [i, leg] of (input.legs ?? []).entries()) {
     const itemLeg = row.legs.find((l) => l.account_id === leg.accountId)
-    if (itemLeg === undefined) throw new ValidationError('legs: Each amount must be on an account this item uses.')
-    if (given.has(leg.accountId)) throw new ValidationError('legs: One amount per account.')
+    if (itemLeg === undefined) {
+      throw new ValidationError(`legs.${i}.accountId: Each amount must be on an account this item uses.`)
+    }
+    if (given.has(leg.accountId)) throw new ValidationError(`legs.${i}.accountId: One amount per account.`)
     const amount = money(leg.amount)
-    if (amount.isZero()) throw new ValidationError('legs: An amount cannot be zero. Skip the occurrence instead.')
+    if (amount.isZero()) {
+      throw new ValidationError(`legs.${i}.amount: Must be more than 0. To leave this one out, skip it instead.`)
+    }
     if (amount.isNegative() !== money(itemLeg.amount).isNegative()) {
       throw new ValidationError(
-        `legs: The amount on this account must ${money(itemLeg.amount).isNegative() ? 'leave it (negative)' : 'arrive (positive)'}, as the item's does.`,
+        `legs.${i}.amount: The amount on this account must ${money(itemLeg.amount).isNegative() ? 'leave it (negative)' : 'arrive (positive)'}, as the item's does.`,
       )
     }
     given.set(leg.accountId, leg.amount)

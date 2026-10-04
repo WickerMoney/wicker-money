@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
 import { ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
-import { isBudgetable, isValidPlan, monthKeyOf, shiftMonth, todayIn } from '../../shared/index.js'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
+import {
+  isBudgetable, monthKeyOf, planProblem, shiftMonth, todayIn, windowIssue,
+} from '../../shared/index.js'
 import { BUDGETS_API_BASE } from '../../server/constants.js'
 import { monthLabel } from '../helpers/monthLabel.js'
 import type { Category, MonthLine, MonthResponse, WindowDraft } from '../models/index.js'
@@ -18,6 +21,8 @@ export interface BudgetMonth {
   readonly busy: boolean
   /** Plans being typed and not yet saved, keyed by category id. */
   readonly edits: Readonly<Record<string, string>>
+  /** Why a line's plan was refused, keyed by category id, for showing under that line's field. */
+  readonly planErrors: Readonly<Record<string, string>>
   readonly previousMonth: () => void
   readonly nextMonth: () => void
   readonly thisMonth: () => void
@@ -27,15 +32,21 @@ export interface BudgetMonth {
   readonly remove: (line: MonthLine) => Promise<void>
   /** Saves the previewed lines as this month's budget. */
   readonly adopt: () => Promise<void>
-  /** Adds a zero-plan line for a category. */
-  readonly addLine: (categoryId: string) => Promise<void>
   /**
-   * Creates a window, or saves changes to one.
+   * Adds a zero-plan line for a category.
    *
-   * @returns `true` once saved, so the form can clear itself; `false` when it
-   *   was refused, with the reason in `message`.
+   * @returns What went wrong, for the form to show; no errors once added.
    */
-  readonly saveWindow: (draft: WindowDraft) => Promise<boolean>
+  readonly addLine: (categoryId: string) => Promise<FormErrors>
+  /**
+   * Creates a window, or saves changes to one, after checking it with the
+   * same rules the server uses.
+   *
+   * @returns No errors once saved, so the form can clear itself; otherwise
+   *   the problems by field (`categoryId`, `start`, `through`, `planned`,
+   *   `note`) and anything else as `form`.
+   */
+  readonly saveWindow: (draft: WindowDraft) => Promise<FormErrors>
 }
 
 /**
@@ -65,6 +76,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [edits, setEdits] = useState<Record<string, string>>({})
+  const [planErrors, setPlanErrors] = useState<Record<string, string>>({})
 
   const shownKey = useRef(monthKey)
   const inFlight = useRef<AbortController | null>(null)
@@ -89,6 +101,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       // Only categories a budget can count; income and transfers would always read zero.
       setCategories(cats.filter(isBudgetable))
       setEdits({})
+      setPlanErrors({})
     } catch (e) {
       // A superseded load is not a failure: whoever superseded it reports on the month now shown.
       if (!signal.aborted) throw e
@@ -111,11 +124,20 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
     return () => inFlight.current?.abort()
   }, [load, monthKey])
 
+  const showPlanError = useCallback((categoryId: string, message: string | null) => {
+    setPlanErrors((current) => {
+      const next = { ...current }
+      if (message === null) delete next[categoryId]
+      else next[categoryId] = message
+      return next
+    })
+  }, [])
+
   const save = useCallback(async (line: MonthLine, planned: string, rollover: boolean) => {
-    if (!isValidPlan(planned)) {
-      setMessage(`'${planned}' is not an amount.`)
-      return
-    }
+    // The same rule and words the server uses, shown under the line's field.
+    const problem = planProblem(planned)
+    showPlanError(line.categoryId, problem)
+    if (problem !== null) return
     setBusy(true); setMessage(null)
     try {
       await api.put(`${BUDGETS_API_BASE}/line`, {
@@ -123,9 +145,10 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       })
       await reload(monthKey)
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not save that line.')
+      const errors = formErrorsFrom(e, ['planned'], 'Could not save that line.')
+      showPlanError(line.categoryId, errors.fields['planned'] ?? errors.form)
     } finally { setBusy(false) }
-  }, [api, monthKey, reload])
+  }, [api, monthKey, reload, showPlanError])
 
   const remove = useCallback(async (line: MonthLine) => {
     setBusy(true); setMessage(null)
@@ -155,32 +178,40 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
-  const addLine = useCallback(async (categoryId: string) => {
-    if (categoryId === '') return
+  const addLine = useCallback(async (categoryId: string): Promise<FormErrors> => {
+    if (categoryId === '') return NO_FORM_ERRORS
     setBusy(true); setMessage(null)
     try {
       await api.put(`${BUDGETS_API_BASE}/line`, {
         month: monthKey, categoryId, planned: ZERO_MONEY, rollover: false,
       })
       await reload(monthKey)
+      return NO_FORM_ERRORS
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not add that line.')
+      return formErrorsFrom(e, ['categoryId'], 'Could not add that line.')
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
-  const saveWindow = useCallback(async (draft: WindowDraft): Promise<boolean> => {
-    if (!isValidPlan(draft.planned)) {
-      setMessage(`'${draft.planned}' is not an amount.`)
-      return false
-    }
+  const saveWindow = useCallback(async (draft: WindowDraft): Promise<FormErrors> => {
+    // The server's own rules (shared/), so the browser refuses what it would.
+    const dates = draft.start !== '' && draft.through !== '' ? windowIssue(draft.start, draft.through) : null
+    const checks: Record<string, string> = {}
+    if (draft.categoryId === '') checks['categoryId'] = 'Choose a category.'
+    if (draft.start === '') checks['start'] = 'This cannot be empty.'
+    if (draft.through === '') checks['through'] = 'This cannot be empty.'
+    if (dates !== null) checks[dates.field] = dates.message
+    const planned = planProblem(draft.planned)
+    if (planned !== null) checks['planned'] = planned
+    const problems: FormErrors = { fields: checks, form: null }
+    if (hasFormErrors(problems)) return problems
+
     setBusy(true); setMessage(null)
     try {
       await api.put(`${BUDGETS_API_BASE}/window`, draft)
       await reload(monthKey)
-      return true
+      return NO_FORM_ERRORS
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not save that window.')
-      return false
+      return formErrorsFrom(e, ['categoryId', 'start', 'through', 'planned', 'note'], 'Could not save that window.')
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
@@ -188,12 +219,15 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   const nextMonth = useCallback(() => setMonthKey((k) => shiftMonth(k, 1)), [])
   const thisMonth = useCallback(() => setMonthKey(monthKeyOf(todayIn(timezone))), [timezone])
   const editPlan = useCallback(
-    (categoryId: string, value: string) => setEdits((c) => ({ ...c, [categoryId]: value })),
-    [],
+    (categoryId: string, value: string) => {
+      setEdits((c) => ({ ...c, [categoryId]: value }))
+      showPlanError(categoryId, null)
+    },
+    [showPlanError],
   )
 
   return {
-    monthKey, month, categories, message, busy, edits,
+    monthKey, month, categories, message, busy, edits, planErrors,
     previousMonth, nextMonth, thisMonth, editPlan,
     save, remove, adopt, addLine, saveWindow,
   }

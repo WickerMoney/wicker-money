@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { formErrorsFrom, hasFormErrors, useFormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
+import { checkMoney, checkText, fieldErrors, REQUIRED_MESSAGE } from '../../../lib/fieldChecks.js'
 import type { EntryFields } from '../state/EntryFields.js'
 import type { SpendEntry } from '../state/SpendEntry.js'
 
@@ -17,22 +19,37 @@ export function useSpendEntry(
 ): SpendEntry {
   const [amount, setAmount] = useState('-')
   const [categoryId, setCategoryId] = useState('')
+  const form = useFormErrors()
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    // Zero is allowed, as the API allows it: a $0 receipt is still a record.
+    const problems = fieldErrors({
+      merchant: checkText(fields.merchant, 300),
+      amount: checkMoney(amount),
+      transactionDate: fields.date === '' ? REQUIRED_MESSAGE : undefined,
+    })
+    form.show(problems)
+    if (hasFormErrors(problems)) return
     status.begin()
     try {
       await api.post('/transactions', {
-        accountId: fields.accountId, merchant: fields.merchant, amount,
+        accountId: fields.accountId, merchant: fields.merchant, amount: amount.trim(),
         transactionDate: fields.date,
         ...(categoryId === '' ? {} : { categoryId }),
       })
       fields.setMerchant(''); setAmount('-')
       await onRecorded()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not record the transaction.')
+      form.show(formErrorsFrom(
+        e, ['accountId', 'merchant', 'amount', 'transactionDate', 'categoryId'], 'Could not record the transaction.',
+      ))
     } finally { status.end() }
   }
 
-  return { amount, setAmount, categoryId, setCategoryId, submit }
+  return {
+    amount,
+    setAmount: (next: string) => { setAmount(next); form.clearField('amount') },
+    categoryId, setCategoryId, errors: form.errors, formRef: form.ref, submit,
+  }
 }

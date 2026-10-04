@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
+import { checkMoney, checkText, fieldErrors } from '../../../lib/fieldChecks.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { Account } from '../../../models/index.js'
 import type { AccountEdit } from '../state/AccountEdit.js'
@@ -16,18 +18,40 @@ export function useAccountEditing(
   status: ActionStatus, onChanged: () => Promise<void>,
 ): AccountEditing {
   const [editing, setEditing] = useState<AccountEdit | null>(null)
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
 
   const start = (a: Account) => {
     setEditing({
       id: a.id, name: a.name, accountType: a.accountType,
       currencyCode: a.currencyCode, bufferAmount: a.bufferAmount,
     })
+    setErrors(NO_FORM_ERRORS)
   }
 
-  const cancel = () => setEditing(null)
+  const cancel = () => { setEditing(null); setErrors(NO_FORM_ERRORS) }
+
+  const change = (next: AccountEdit) => {
+    // A field's message goes once that field changes; the others stay.
+    setErrors((current) => ({
+      form: current.form,
+      fields: Object.fromEntries(Object.entries(current.fields).filter(
+        ([field]) => editing === null || next[field as keyof AccountEdit] === editing[field as keyof AccountEdit],
+      )),
+    }))
+    setEditing(next)
+  }
 
   const save = async () => {
     if (editing === null) return
+    const buffer = editing.bufferAmount.trim()
+    const problems = fieldErrors({
+      name: checkText(editing.name, 200),
+      currencyCode: /^[A-Za-z]{3}$/.test(editing.currencyCode.trim()) ? undefined : 'Must be a 3-letter code, like USD.',
+      // An emptied field means no buffer, not an invalid amount.
+      bufferAmount: buffer === '' ? undefined : checkMoney(buffer, 'nonNegative'),
+    })
+    setErrors(problems)
+    if (hasFormErrors(problems)) return
     status.begin()
     try {
       await api.patch(`/accounts/${editing.id}`, {
@@ -40,7 +64,9 @@ export function useAccountEditing(
       setEditing(null)
       await onChanged()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not save that account.')
+      setErrors(formErrorsFrom(
+        e, ['name', 'currencyCode', 'bufferAmount'], 'Could not save that account.',
+      ))
     } finally { status.end() }
   }
 
@@ -56,5 +82,5 @@ export function useAccountEditing(
     } finally { status.end() }
   }
 
-  return { editing, change: setEditing, start, cancel, save, setSpendable }
+  return { editing, errors, change, start, cancel, save, setSpendable }
 }

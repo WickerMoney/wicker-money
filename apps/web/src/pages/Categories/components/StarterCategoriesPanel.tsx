@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Surface } from '@wickermoney/ui-kit'
+import { Button, FormError, Surface } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useOnboarding } from '../../../onboarding/useOnboarding.js'
@@ -23,6 +23,9 @@ export interface StarterCategoriesPanelProps {
 export function StarterCategoriesPanel({ status, onChanged }: StarterCategoriesPanelProps) {
   const { status: onboarding, start, refresh: refreshOnboarding } = useOnboarding()
   const [removeOnReset, setRemoveOnReset] = useState(false)
+  // Shown beside the buttons, not in the page's banner, which is far above
+  // them once the category list is long.
+  const [failure, setFailure] = useState<string | null>(null)
 
   /**
    * What the wizard was told, in the words it used to ask.
@@ -39,6 +42,7 @@ export function StarterCategoriesPanel({ status, onChanged }: StarterCategoriesP
   }, [onboarding])
 
   const resetSetup = async () => {
+    setFailure(null)
     status.begin()
     try {
       const r = await api.post<{ removed: number; kept: string[] }>('/onboarding/reset', {
@@ -55,7 +59,7 @@ export function StarterCategoriesPanel({ status, onChanged }: StarterCategoriesP
               : ''),
       )
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not reset setup.')
+      setFailure(e instanceof Error ? e.message : 'Could not reset setup.')
     } finally { status.end() }
   }
 
@@ -91,6 +95,7 @@ export function StarterCategoriesPanel({ status, onChanged }: StarterCategoriesP
           {status.busy ? 'Working…' : 'Reset setup'}
         </Button>
       </div>
+      <FormError message={failure} />
 
       <label className="check">
         <input

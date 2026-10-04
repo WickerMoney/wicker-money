@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { parseBody } from './parseBody.js'
 
 /** Route params for a resource addressed by a single UUID `:id`. */
-const idParams = z.object({ id: z.string().uuid('id must be a UUID.') })
+const idParams = z.object({ id: z.string().uuid('Must be a valid id.') })
 
 /**
  * Reads and validates the `:id` route parameter.

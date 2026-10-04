@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Stat, Surface } from '@wickermoney/ui-kit'
+import { Button, FormError, Stat, Surface } from '@wickermoney/ui-kit'
 import type { AnalyzeResult } from '../models/index.js'
 import { REVIEW_PAGE_SIZE } from './REVIEW_PAGE_SIZE.js'
 
@@ -11,6 +11,8 @@ export interface ReviewStepProps {
   readonly formatMoney: (value: string) => string
   readonly busy: boolean
   readonly onCommit: () => void
+  /** Why the import was refused, when it is not about one field. */
+  readonly error?: string | null
 }
 
 /**
@@ -28,7 +30,7 @@ export interface ReviewStepProps {
  * hidden.
  */
 export function ReviewStep({
-  analysis, accepted, onAccepted, formatMoney, busy, onCommit,
+  analysis, accepted, onAccepted, formatMoney, busy, onCommit, error = null,
 }: ReviewStepProps) {
   const { summary, rows } = analysis
   const flagged = rows.filter((r) => r.status === 'needs-review')
@@ -114,6 +116,7 @@ export function ReviewStep({
           <span className="imp__hint">Nothing new to import from this file.</span>
         ) : null}
       </div>
+      <FormError message={error} />
     </Surface>
   )
 }

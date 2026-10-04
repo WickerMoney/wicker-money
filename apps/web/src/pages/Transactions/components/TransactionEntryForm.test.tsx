@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
 import { makeAccount } from '../../../testing/makeAccount.js'
 import { makeCategory } from '../../../testing/makeCategory.js'
+import { errorOf } from '../../../testing/errorOf.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { validationFailed } from '../../../testing/validationFailed.js'
 import { TransactionEntryForm } from './TransactionEntryForm.js'
 
 const accounts = [
@@ -85,6 +87,7 @@ describe('recording spending or income', () => {
     const { user } = mount()
 
     await user.type(screen.getByLabelText('Merchant'), 'Cafe')
+    await user.type(screen.getByLabelText('Amount'), '3')
     await user.click(screen.getByRole('button', { name: 'Record' }))
 
     await waitFor(() => { expect(post).toHaveBeenCalled() })
@@ -100,14 +103,28 @@ describe('recording spending or income', () => {
     expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('2026-01-05')
   })
 
-  it('shows the server message and keeps what was typed when recording fails', async () => {
-    vi.spyOn(api, 'post').mockRejectedValue(new Error('Amount is invalid'))
-    const { user, status, onRecorded } = mount()
+  it('refuses the bare minus sign it starts with, under Amount, without sending it', async () => {
+    const post = vi.spyOn(api, 'post')
+    const { user } = mount()
 
     await user.type(screen.getByLabelText('Merchant'), 'Cafe')
     await user.click(screen.getByRole('button', { name: 'Record' }))
 
-    await waitFor(() => { expect(status.show).toHaveBeenCalledWith('Amount is invalid') })
+    expect(errorOf('Amount')).toBe('Enter an amount like 12.50, with no more than 4 decimal places.')
+    expect(document.activeElement).toBe(screen.getByLabelText('Amount'))
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it("puts the server's issue on the field it names and keeps what was typed", async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(validationFailed([['transactionDate'], 'That date is not on the calendar.']))
+    const { user, status, onRecorded } = mount()
+
+    await user.type(screen.getByLabelText('Merchant'), 'Cafe')
+    await user.type(screen.getByLabelText('Amount'), '4.50')
+    await user.click(screen.getByRole('button', { name: 'Record' }))
+
+    await waitFor(() => { expect(errorOf('Date')).toBe('That date is not on the calendar.') })
+    expect(status.show).not.toHaveBeenCalled()
     expect(onRecorded).not.toHaveBeenCalled()
     expect(status.end).toHaveBeenCalled()
     expect((screen.getByLabelText('Merchant') as HTMLInputElement).value).toBe('Cafe')
@@ -181,15 +198,44 @@ describe('moving money between accounts', () => {
     expect(post.mock.calls[0]![1]).not.toHaveProperty('description')
   })
 
-  it('shows the transfer-specific fallback message for a non-Error failure', async () => {
+  it('shows the transfer-specific fallback message for a non-Error failure, beside the button', async () => {
     vi.spyOn(api, 'post').mockRejectedValue('boom')
-    const { user, status } = await toTransfer()
+    const { user } = await toTransfer()
 
     await user.selectOptions(screen.getByLabelText('To account'), 'acc-2')
     await user.type(screen.getByLabelText('Amount'), '10')
     await user.click(screen.getByRole('button', { name: 'Move money' }))
 
-    await waitFor(() => { expect(status.show).toHaveBeenCalledWith('Could not record the transfer.') })
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe('Could not record the transfer.')
+    expect(document.activeElement).toBe(alert)
+  })
+
+  it('refuses a zero transfer under Amount, as the API would', async () => {
+    const post = vi.spyOn(api, 'post')
+    const { user } = await toTransfer()
+
+    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2')
+    await user.type(screen.getByLabelText('Amount'), '0.00')
+    await user.click(screen.getByRole('button', { name: 'Move money' }))
+
+    expect(errorOf('Amount')).toBe('Must be more than 0.')
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it("puts the server's refusal of the destination on To account", async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(
+      validationFailed([['toAccountId'], 'Choose a different account from the one the money leaves.']),
+    )
+    const { user } = await toTransfer()
+
+    await user.selectOptions(screen.getByLabelText('To account'), 'acc-2')
+    await user.type(screen.getByLabelText('Amount'), '10')
+    await user.click(screen.getByRole('button', { name: 'Move money' }))
+
+    await waitFor(() => {
+      expect(errorOf('To account')).toBe('Choose a different account from the one the money leaves.')
+    })
   })
 
   it('keeps the shared fields when switching between the two forms', async () => {

@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type RefObject } from 'react'
+import { formErrorsFrom, useFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { RecurringItem } from '../../../models/index.js'
-import { draftFromItem, emptyDraft, payloadFromDraft } from '../helpers/draft.js'
+import { draftFromItem, emptyDraft, fieldForPath, payloadFromDraft } from '../helpers/draft.js'
 import type { RecurringDraft } from '../state/RecurringDraft.js'
 
 /** What {@link useRecurringEditing} returns. */
@@ -10,6 +11,10 @@ export interface RecurringEditing {
   readonly draft: RecurringDraft
   /** The item being edited, or `null` when the form adds a new one. */
   readonly editing: RecurringItem | null
+  /** What is wrong with the form, by field (see `checkDraft`), and anything else for beside its button. */
+  readonly errors: FormErrors
+  /** Attach to the `<form>`, so focus can move to the first problem. */
+  readonly formRef: RefObject<HTMLFormElement | null>
   readonly change: (patch: Partial<RecurringDraft>) => void
   readonly edit: (item: RecurringItem) => void
   /** Clears the form back to a new, blank item. */
@@ -38,19 +43,28 @@ export function useRecurringEditing(
 ): RecurringEditing {
   const [draft, setDraft] = useState<RecurringDraft>(() => emptyDraft(today, defaultAccountId))
   const [editing, setEditing] = useState<RecurringItem | null>(null)
+  const form = useFormErrors()
+  const { clear: clearErrors, clearField } = form
 
-  const change = useCallback((patch: Partial<RecurringDraft>) => setDraft((d) => ({ ...d, ...patch })), [])
+  const change = useCallback((patch: Partial<RecurringDraft>) => {
+    setDraft((d) => ({ ...d, ...patch }))
+    for (const field of Object.keys(patch)) clearField(field)
+    // Income rows are one array; editing any row clears the rows' messages.
+    patch.splits?.forEach((_, i) => { clearField(`splits.${i}.accountId`); clearField(`splits.${i}.amount`) })
+  }, [clearField])
 
   const reset = useCallback(() => {
     setEditing(null)
     setDraft(emptyDraft(today, defaultAccountId))
-  }, [today, defaultAccountId])
+    clearErrors()
+  }, [today, defaultAccountId, clearErrors])
 
   const edit = useCallback((item: RecurringItem) => {
     setEditing(item)
     setDraft(draftFromItem(item))
+    clearErrors()
     showNotice(null)
-  }, [showNotice])
+  }, [showNotice, clearErrors])
 
   const run = async (work: () => Promise<string>) => {
     status.begin()
@@ -64,8 +78,10 @@ export function useRecurringEditing(
 
   const save = async () => {
     const built = payloadFromDraft(draft)
-    if ('error' in built) { status.show(built.error); return }
-    await run(async () => {
+    if ('errors' in built) { form.show(built.errors); return }
+    form.clear()
+    status.begin()
+    try {
       if (editing === null) {
         await api.post('/recurring-items', built.payload)
       } else {
@@ -73,8 +89,13 @@ export function useRecurringEditing(
       }
       const verb = editing === null ? 'Added' : 'Updated'
       reset()
-      return `${verb} '${built.payload.name}'.`
-    })
+      showNotice(`${verb} '${built.payload.name}'.`)
+      await reload()
+    } catch (e) {
+      // On the field the API names; a rule about the item as a whole (legs
+      // that do not cancel out, say) goes beside the button.
+      form.show(formErrorsFrom(e, fieldForPath(draft), 'Could not save the change.'))
+    } finally { status.end() }
   }
 
   const end = async (item: RecurringItem) => {
@@ -95,5 +116,5 @@ export function useRecurringEditing(
     })
   }
 
-  return { draft, editing, change, edit, reset, save, end, remove }
+  return { draft, editing, errors: form.errors, formRef: form.ref, change, edit, reset, save, end, remove }
 }

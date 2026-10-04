@@ -1,3 +1,5 @@
+import { hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
+import { checkMoney, fieldErrors } from '../../../lib/fieldChecks.js'
 import type { RecurringOccurrence, RecurringItem } from '../../../models/index.js'
 
 /** The "change this one" form for one occurrence. Amounts are typed as positive magnitudes. */
@@ -39,27 +41,57 @@ export function overrideDraftFrom(item: RecurringItem, occurrence: RecurringOccu
   return { nominalDate: occurrence.nominalDate, expectedDate: occurrence.expectedDate, amounts }
 }
 
+/** What the API says about a zero amount on one occurrence. */
+const ZERO_OCCURRENCE = 'Must be more than 0. To leave this one out, skip it instead.'
+
 /**
  * Builds the `PUT .../occurrences/:date` body from the form, giving each
- * amount its leg's sign. Validation beyond "is it a positive number" is the
- * server's.
+ * amount its leg's sign.
+ *
+ * Each amount is checked first with the API's rules (a positive amount,
+ * money through plugin-sdk); problems come back keyed like
+ * {@link OverrideDraft.amounts}, so they can be shown under each field.
+ * Moving too far from the nominal date is the server's to judge; its answer
+ * lands on `expectedDate` through {@link overrideFieldFor}.
  *
  * @param item - The item.
  * @param draft - The form.
- * @returns The body, or an error to show.
+ * @returns The body, or the problems by field.
  */
 export function overridePayload(
   item: RecurringItem,
   draft: OverrideDraft,
-): { payload: { expectedDate: string | null; legs: { accountId: string; amount: string }[] } } | { error: string } {
+): { payload: { expectedDate: string | null; legs: { accountId: string; amount: string }[] } } | { errors: FormErrors } {
+  const checks: Record<string, string | undefined> = {}
   const legs: { accountId: string; amount: string }[] = []
   for (const leg of item.legs) {
-    const typed = (twoSided(item) ? draft.amounts[SHARED_AMOUNT] : draft.amounts[leg.accountId])?.trim() ?? ''
-    if (!/^\d+(\.\d{1,4})?$/.test(typed) || /^0+(\.0+)?$/.test(typed)) {
-      return { error: 'Enter each amount as a positive number, like 125.50.' }
-    }
+    const key = amountKey(item, leg.accountId)
+    const typed = draft.amounts[key]?.trim() ?? ''
+    checks[key] ??= checkMoney(typed, 'positive', ZERO_OCCURRENCE)
     legs.push({ accountId: leg.accountId, amount: leg.amount.startsWith('-') ? `-${typed}` : typed })
   }
+  const errors = fieldErrors(checks)
+  if (hasFormErrors(errors)) return { errors }
   const expectedDate = draft.expectedDate === draft.nominalDate || draft.expectedDate === '' ? null : draft.expectedDate
   return { payload: { expectedDate, legs } }
+}
+
+/**
+ * Maps a path in the API's answer to the override form's field.
+ *
+ * @param item - The item; its legs are sent in order, so `legs.1` is its second leg.
+ * @returns A matcher for `formErrorsFrom`.
+ */
+export function overrideFieldFor(item: RecurringItem): (path: string) => string | undefined {
+  return (path) => {
+    if (path === 'expectedDate') return path
+    const match = /^legs\.(\d+)\.amount$/.exec(path)
+    const leg = match === null ? undefined : item.legs[Number(match[1])]
+    return leg === undefined ? undefined : amountKey(item, leg.accountId)
+  }
+}
+
+/** The amount field a leg is typed in: the shared one for a two-sided item, its own otherwise. */
+function amountKey(item: RecurringItem, accountId: string): string {
+  return twoSided(item) ? SHARED_AMOUNT : accountId
 }

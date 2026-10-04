@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
+import { checkText, fieldErrors } from '../../../lib/fieldChecks.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { Category, CategoryUsage } from '../../../models/index.js'
 import type { CategoryEdit } from '../state/CategoryEdit.js'
@@ -16,15 +18,25 @@ export function useCategoryEditing(
   status: ActionStatus, onChanged: () => Promise<void>,
 ): CategoryEditing {
   const [editing, setEditing] = useState<CategoryEdit | null>(null)
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
 
   const start = (c: Category) => {
     setEditing({ id: c.id, name: c.name, parentId: c.parent_id ?? '', kind: c.kind })
+    setErrors(NO_FORM_ERRORS)
   }
 
-  const cancel = () => setEditing(null)
+  const cancel = () => { setEditing(null); setErrors(NO_FORM_ERRORS) }
+
+  const change = (next: CategoryEdit) => {
+    if (next.name !== editing?.name) setErrors((e) => ({ ...e, fields: {} }))
+    setEditing(next)
+  }
 
   const save = async () => {
     if (editing === null) return
+    const problems = fieldErrors({ name: checkText(editing.name, 100) })
+    setErrors(problems)
+    if (hasFormErrors(problems)) return
     status.begin()
     try {
       await api.patch(`/categories/${editing.id}`, {
@@ -35,7 +47,9 @@ export function useCategoryEditing(
       setEditing(null)
       await onChanged()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not save that category.')
+      // Re-parenting refusals ("cannot be its own parent") are not about the
+      // name, so they land beside the row's Save button.
+      setErrors(formErrorsFrom(e, ['name'], 'Could not save that category.'))
     } finally { status.end() }
   }
 
@@ -77,5 +91,5 @@ export function useCategoryEditing(
     } finally { status.end() }
   }
 
-  return { editing, change: setEditing, start, cancel, save, setEnabled, remove }
+  return { editing, errors, change, start, cancel, save, setEnabled, remove }
 }

@@ -5,6 +5,7 @@ import type { AccountUsage, MigrationPlan, RecurringItem } from '../../../models
 import { deferred } from '../../../testing/deferred.js'
 import { makeAccount } from '../../../testing/makeAccount.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { validationFailed } from '../../../testing/validationFailed.js'
 import { useAccountDeletion } from './useAccountDeletion.js'
 
 const target = makeAccount({ id: 'acc-2', name: 'Savings' })
@@ -149,7 +150,7 @@ describe('resolving a delete that has history', () => {
     expect(result.current.resolving).not.toBeNull()
   })
 
-  it('keeps the panel open and shows the message on a 409 from delete-with-history', async () => {
+  it('keeps the panel open and shows the message in it on a 409 from delete-with-history', async () => {
     const { result, status, reload } = await resolving()
     vi.spyOn(api, 'post').mockRejectedValue(
       Object.assign(new Error('The account changed; the count no longer matches'), { status: 409 }),
@@ -157,10 +158,25 @@ describe('resolving a delete that has history', () => {
 
     await act(async () => { await result.current.deleteWithHistory() })
 
-    expect(status.show).toHaveBeenCalledWith('The account changed; the count no longer matches')
+    expect(result.current.errors.form).toBe('The account changed; the count no longer matches')
+    expect(status.show).not.toHaveBeenCalled()
     expect(reload).not.toHaveBeenCalled()
     expect(result.current.resolving).not.toBeNull()
     expect(status.end).toHaveBeenCalled()
+  })
+
+  it("puts the server's refusal of the target on the target picker", async () => {
+    const { result } = await resolving()
+    vi.spyOn(api, 'post').mockRejectedValue(
+      validationFailed([['toAccountId'], 'Both accounts must use the same currency.']),
+    )
+    act(() => result.current.chooseTarget('acc-2'))
+
+    await act(async () => { await result.current.previewMigrate() })
+
+    expect(result.current.errors).toEqual({
+      fields: { toAccountId: 'Both accounts must use the same currency.' }, form: null,
+    })
   })
 
   it('previews a move to the chosen account', async () => {

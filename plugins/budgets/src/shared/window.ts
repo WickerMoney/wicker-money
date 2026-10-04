@@ -80,26 +80,46 @@ export function isCalendarMonth(start: string, end: string): boolean {
 }
 
 /**
- * Explains what is wrong with a proposed window, if anything.
+ * Explains what is wrong with a proposed window, if anything, and which of
+ * its two dates to show it on.
+ *
+ * Shared by the window form and the server, so the browser refuses exactly
+ * what the API refuses, in the same words.
  *
  * @param start - First day of the window, `YYYY-MM-DD`.
  * @param through - Last day of the window, inclusive, `YYYY-MM-DD`. Inclusive
  *   because that is how people say it ("through December 25"); it is stored
  *   as the half-open end the day after.
- * @returns A sentence safe to show the user, or `null` when the window is acceptable.
+ * @returns The field and a sentence safe to show the user, or `null` when the
+ *   window is acceptable.
  */
-export function windowProblem(start: string, through: string): string | null {
-  if (!isDate(start)) return 'start must be a date as YYYY-MM-DD.'
-  if (!isDate(through)) return 'through must be a date as YYYY-MM-DD.'
-  if (through < start) return 'The window ends before it starts.'
+export function windowIssue(start: string, through: string): { field: 'start' | 'through'; message: string } | null {
+  if (!isDate(start)) return { field: 'start', message: 'Must be a date like 2026-10-01.' }
+  if (!isDate(through)) return { field: 'through', message: 'Must be a date like 2026-12-25.' }
+  if (through < start) return { field: 'through', message: 'The window ends before it starts.' }
   const end = addDays(through, 1)
   if (isCalendarMonth(start, end)) {
-    return 'That window is exactly one calendar month. Add it as a normal line on that month instead.'
+    return {
+      field: 'through',
+      message: 'That window is exactly one calendar month. Add it as a normal line on that month instead.',
+    }
   }
   if (end > monthPeriod(shiftMonth(monthKeyOf(start), MAX_WINDOW_MONTHS)).start) {
-    return `A window can be at most ${MAX_WINDOW_MONTHS} months long.`
+    return { field: 'through', message: `A window can be at most ${MAX_WINDOW_MONTHS} months long.` }
   }
   return null
+}
+
+/**
+ * Explains what is wrong with a proposed window, if anything.
+ *
+ * @param start - First day of the window, `YYYY-MM-DD`.
+ * @param through - Last day of the window, inclusive, `YYYY-MM-DD`.
+ * @returns A sentence safe to show the user, or `null` when the window is acceptable.
+ * @see windowIssue for which date the problem is on.
+ */
+export function windowProblem(start: string, through: string): string | null {
+  return windowIssue(start, through)?.message ?? null
 }
 
 /**

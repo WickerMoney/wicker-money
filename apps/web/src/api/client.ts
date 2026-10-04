@@ -1,3 +1,4 @@
+import { validationIssuesOf } from '@wickermoney/ui-kit'
 import { ApiError } from './ApiError.js'
 import { buildRequestHeaders } from './buildRequestHeaders.js'
 import type { RequestOptions } from './RequestOptions.js'
@@ -67,7 +68,8 @@ export function setUnauthorizedHandler(fn: () => void): void {
 }
 
 /**
- * Converts a failed response into an `ApiError`, using the body's `code` and `message` when it is JSON.
+ * Converts a failed response into an `ApiError`, using the body's `code`, `message` and
+ * `issues` when it is JSON.
  *
  * @param res - A response whose status is not successful.
  * @returns An `ApiError` carrying the HTTP status and error code.
@@ -75,14 +77,16 @@ export function setUnauthorizedHandler(fn: () => void): void {
 async function parseError(res: Response): Promise<ApiError> {
   let code = 'request_failed'
   let message = `Request failed (${res.status})`
+  let issues: ApiError['issues'] = []
   try {
     const body = (await res.json()) as { code?: string; message?: string }
     if (typeof body.code === 'string') code = body.code
     if (typeof body.message === 'string') message = body.message
+    issues = validationIssuesOf(body)
   } catch {
     // Non-JSON error body; the defaults above are fine.
   }
-  return new ApiError(message, res.status, code)
+  return new ApiError(message, res.status, code, issues)
 }
 
 /** Ends the local session and tells the registered handler. */

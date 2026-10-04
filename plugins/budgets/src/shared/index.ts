@@ -18,7 +18,7 @@ export {
 export { ratio } from './ratio.js'
 
 export {
-  carryForward, balanceFor, isOverspent, draftPlannedFrom, totalPlanned, isValidPlan,
+  carryForward, balanceFor, isOverspent, draftPlannedFrom, totalPlanned, isValidPlan, planProblem,
   type Balance, type HistoryEntry,
 } from './carry.js'
 
@@ -28,7 +28,7 @@ export {
 } from './pace.js'
 
 export {
-  isDate, addDays, isCalendarMonth, windowProblem, windowElapsed, asOfInMonth, windowMonth,
+  isDate, addDays, isCalendarMonth, windowProblem, windowIssue, windowElapsed, asOfInMonth, windowMonth,
   MAX_WINDOW_MONTHS, type WindowMonth, type WindowMonthInput,
 } from './window.js'
 

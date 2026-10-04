@@ -9,14 +9,17 @@ export interface ColumnSelectProps {
   readonly onChange: (next: string) => void
   /** Marks the label with `*` and words the empty option as a prompt rather than "not in this file". */
   readonly required?: boolean
+  /** Why the choice was refused, if it was. */
+  readonly error?: string | undefined
 }
 
 /** A column dropdown, with "not in this file" as an explicit choice. */
-export function ColumnSelect({ label, headers, value, onChange, required = false }: ColumnSelectProps) {
+export function ColumnSelect({ label, headers, value, onChange, required = false, error }: ColumnSelectProps) {
   return (
     <SelectField
       label={required ? `${label} *` : label}
       value={value ?? ''}
+      error={error}
       onChange={(e) => onChange(e.target.value)}
     >
       <option value="">{required ? '— choose a column —' : '— not in this file —'}</option>

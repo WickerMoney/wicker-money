@@ -1,3 +1,5 @@
+import { hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
+import { checkMoney, checkText, fieldErrors, REQUIRED_MESSAGE } from '../../../lib/fieldChecks.js'
 import type { RecurringItem } from '../../../models/index.js'
 import type { RecurringDraft } from '../state/RecurringDraft.js'
 
@@ -58,41 +60,120 @@ export function draftFromItem(item: RecurringItem): RecurringDraft {
 }
 
 /**
- * Turns the form into a request body, applying each kind's signs.
+ * Checks the form with the API's rules before it is sent, field by field.
  *
- * Only shape is checked here (something to send for every field the kind
- * needs); the rules themselves — legs netting to zero, a debt payment paying a
- * card or loan, the category's kind — are the API's, and its message is shown
- * as-is, so the two can never disagree.
+ * Mirrors what the API refuses so the person sees it under the field they
+ * typed in: a name, a first date, an end on or after it, two different
+ * semimonthly days, and for each leg an account and an amount above zero
+ * (money through plugin-sdk, so a fifth decimal place is refused here too).
+ * Rules that need the server's data (a debt payment paying a card or loan,
+ * the category's kind) are left to it; its answer lands on the same fields
+ * through {@link fieldForPath}.
+ *
+ * Field names: `name`, `seriesStartDate`, `endDate`, `day2`, `amount`,
+ * `fromAccountId`, `toAccountId`, and `splits.<row>.accountId` /
+ * `splits.<row>.amount` for income.
  *
  * @param draft - The form state.
- * @returns The body, or a message naming what is missing.
+ * @returns The problems, empty when the draft can be sent.
  */
-export function payloadFromDraft(draft: RecurringDraft): { payload: RecurringPayload } | { error: string } {
-  if (draft.name.trim() === '') return { error: 'Give it a name.' }
-  if (draft.seriesStartDate === '') return { error: 'Pick the first date.' }
-
-  let legs: RecurringPayload['legs']
+export function checkDraft(draft: RecurringDraft): FormErrors {
+  const checks: Record<string, string | undefined> = {
+    name: checkText(draft.name, 200),
+    seriesStartDate: draft.seriesStartDate === '' ? 'Pick the first date.' : undefined,
+    endDate: draft.endDate !== '' && draft.seriesStartDate !== '' && draft.endDate < draft.seriesStartDate
+      ? 'Must be on or after the first date.'
+      : undefined,
+    day2: draft.frequency === 'semimonthly' && draft.day1 === draft.day2 ? 'The two days must differ.' : undefined,
+  }
   switch (draft.kind) {
     case 'income': {
-      const filled = draft.splits.filter((s) => s.accountId !== '' || cleaned(s.amount) !== '')
-      if (filled.length === 0 || filled.some((s) => s.accountId === '' || cleaned(s.amount) === '')) {
-        return { error: 'Each part of the income needs an account and an amount.' }
+      const filled = filledSplits(draft)
+      if (filled.length === 0) {
+        checks['splits.0.accountId'] = draft.splits[0]?.accountId === '' ? 'Choose an account.' : undefined
+        checks['splits.0.amount'] = REQUIRED_MESSAGE
       }
-      legs = filled.map((s) => ({ accountId: s.accountId, amount: cleaned(s.amount) }))
+      const seen = new Set<string>()
+      for (const { split, row } of filled) {
+        checks[`splits.${row}.accountId`] = split.accountId === ''
+          ? 'Choose an account.'
+          : seen.has(split.accountId) ? 'Each account may appear only once.' : undefined
+        seen.add(split.accountId)
+        checks[`splits.${row}.amount`] = checkMoney(cleaned(split.amount), 'positive')
+      }
       break
     }
     case 'bill':
-      if (draft.fromAccountId === '' || cleaned(draft.amount) === '') {
-        return { error: 'A bill needs the account that pays it and an amount.' }
-      }
+      checks['fromAccountId'] = draft.fromAccountId === '' ? 'Choose the account that pays it.' : undefined
+      checks['amount'] = checkMoney(cleaned(draft.amount), 'positive')
+      break
+    case 'transfer':
+    case 'debt_payment':
+      checks['fromAccountId'] = draft.fromAccountId === '' ? 'Choose where the money comes from.' : undefined
+      checks['toAccountId'] = draft.toAccountId === ''
+        ? 'Choose where the money goes.'
+        : draft.toAccountId === draft.fromAccountId ? 'Choose a different account from the one the money leaves.' : undefined
+      checks['amount'] = checkMoney(cleaned(draft.amount), 'positive')
+      break
+  }
+  return fieldErrors(checks)
+}
+
+/**
+ * Maps a path in the API's answer to the form field it is about.
+ *
+ * The API names legs by position (`legs.1.amount`); which field a leg came
+ * from depends on the kind: a bill's one leg is "Paid from" and "Amount", a
+ * transfer's legs are From and To sharing one amount, and income's legs are
+ * the filled split rows in order.
+ *
+ * @param draft - The form state the request was built from.
+ * @returns A matcher for `formErrorsFrom`.
+ */
+export function fieldForPath(draft: RecurringDraft): (path: string) => string | undefined {
+  return (path) => {
+    // Only fields the form is showing for this draft; anything else goes
+    // beside the button rather than under a field that is not there.
+    if (path === 'name' || path === 'seriesStartDate') return path
+    if (path === 'endDate') return draft.frequency === 'once' ? undefined : path
+    if (path === 'categoryId') return draft.kind === 'income' || draft.kind === 'bill' ? path : undefined
+    if (path === 'semimonthlyDays') return draft.frequency === 'semimonthly' ? 'day2' : undefined
+    const leg = /^legs\.(\d+)\.(accountId|amount)$/.exec(path)
+    if (leg === null) return undefined
+    const index = Number(leg[1])
+    const field = leg[2] as 'accountId' | 'amount'
+    if (draft.kind === 'income') {
+      const row = filledSplits(draft)[index]?.row
+      return row === undefined ? undefined : `splits.${row}.${field}`
+    }
+    if (draft.kind === 'bill' && index > 0) return undefined
+    if (field === 'amount') return 'amount'
+    return index === 0 ? 'fromAccountId' : 'toAccountId'
+  }
+}
+
+/**
+ * Turns a checked form into a request body, applying each kind's signs.
+ *
+ * Run {@link checkDraft} first: this assumes every field it needs is there.
+ *
+ * @param draft - The form state.
+ * @returns The body, or the problems {@link checkDraft} found.
+ */
+export function payloadFromDraft(draft: RecurringDraft): { payload: RecurringPayload } | { errors: FormErrors } {
+  const errors = checkDraft(draft)
+  if (hasFormErrors(errors)) return { errors }
+
+  let legs: RecurringPayload['legs']
+  switch (draft.kind) {
+    case 'income':
+      legs = filledSplits(draft).map(({ split }) => ({ accountId: split.accountId, amount: cleaned(split.amount) }))
+      break
+    case 'bill':
       legs = [{ accountId: draft.fromAccountId, amount: `-${cleaned(draft.amount)}` }]
       break
     case 'transfer':
     case 'debt_payment':
-      if (draft.fromAccountId === '' || draft.toAccountId === '' || cleaned(draft.amount) === '') {
-        return { error: 'Pick where the money comes from, where it goes, and how much.' }
-      }
       legs = [
         { accountId: draft.fromAccountId, amount: `-${cleaned(draft.amount)}` },
         { accountId: draft.toAccountId, amount: cleaned(draft.amount) },
@@ -112,6 +193,13 @@ export function payloadFromDraft(draft: RecurringDraft): { payload: RecurringPay
       legs,
     },
   }
+}
+
+/** Income rows with anything typed or chosen, with their position in the form. A wholly blank row is ignored. */
+function filledSplits(draft: RecurringDraft): { split: RecurringDraft['splits'][number]; row: number }[] {
+  return draft.splits
+    .map((split, row) => ({ split, row }))
+    .filter(({ split }) => split.accountId !== '' || cleaned(split.amount) !== '')
 }
 
 /** An amount as typed, without spaces, thousands separators or a sign. Text only: never parsed to a number. */

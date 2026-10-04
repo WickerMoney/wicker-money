@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
+import { formErrorsFrom, hasFormErrors, useFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import {
-  defaultDateFormat, mapParsedRows, parseCsv, suggestAmountStyle, suggestColumns,
+  defaultDateFormat, mapParsedRows, mappingIssues, parseCsv, suggestAmountStyle, suggestColumns,
   type AmountStyle, type ColumnMap, type DateFormat, type MapResult, type ParsedCsv, type SourceMapping,
 } from '../../shared/index.js'
 import { IMPORT_API_BASE } from '../../server/constants.js'
@@ -18,7 +19,16 @@ export interface ImportFlow {
   readonly fileName: string
   readonly csv: string
   readonly stage: Stage
+  /** A failure to load the page itself (the account list); shown at the top. */
   readonly error: string | null
+  /**
+   * Why the file, the mapping or a step was refused: `fields` keyed by the
+   * request's own names (`accountId`, `csv`, `sourceName`, `columns.date`...),
+   * shown under each control, and `form` for beside the step's button.
+   */
+  readonly errors: FormErrors
+  /** Attach to the page, so focus can move to the first problem. */
+  readonly formRef: RefObject<HTMLDivElement | null>
   readonly busy: boolean
   /** The file's header names; empty until a file is chosen. */
   readonly headers: readonly string[]
@@ -57,6 +67,13 @@ export interface ImportFlow {
 /** Returned while no file is loaded, so `headers` keeps one identity. */
 const NO_HEADERS: readonly string[] = []
 
+/** Every request field the page has a control for. */
+const FIELDS = [
+  'accountId', 'csv', 'sourceName', 'dateFormat', 'amountStyle',
+  'columns.date', 'columns.merchant', 'columns.amount', 'columns.debit', 'columns.credit',
+  'columns.notes', 'columns.externalId',
+]
+
 /**
  * State and actions for the four-step CSV import flow.
  *
@@ -80,6 +97,8 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
   const [parsed, setParsed] = useState<ParsedCsv | null>(null)
   const [stage, setStage] = useState<Stage>('choose')
   const [error, setError] = useState<string | null>(null)
+  const form = useFormErrors<HTMLDivElement>()
+  const { clear: clearErrors, clearField, show: showErrors } = form
   const [busy, setBusy] = useState(false)
 
   const [sourceName, setSourceName] = useState('')
@@ -166,7 +185,7 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
   }, [parsed, columns, dateFormat, amountStyle, invertAmount])
 
   const onFile = useCallback(async (file: File) => {
-    setError(null)
+    clearErrors()
     commitKey.current = null
     const text = await file.text()
     const parsedFile = parseCsv(text)
@@ -174,7 +193,7 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
     setParsed(parsedFile)
     setFileName(file.name)
     if (parsedFile.headers.length === 0) {
-      setError('That file has no header row.')
+      showErrors({ fields: { csv: 'That file has no header row. Export it again with column names.' }, form: null })
       return
     }
     // A saved mapping wins over the header heuristics: it is what the user
@@ -197,11 +216,24 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       setSourceName((current) => (current === '' ? file.name.replace(/\.csv$/i, '') : current))
     }
     setStage('map')
-  }, [applySaved])
+  }, [applySaved, clearErrors, showErrors])
+
+  /** Checks what the person chose with the server's own rules; shows and returns whether anything is wrong. */
+  const refuse = useCallback((): boolean => {
+    const problems: FormErrors = {
+      fields: Object.fromEntries([
+        ...(accountId === '' ? [['accountId', 'Choose an account.']] : []),
+        ...mappingIssues(mapping).map((i) => [i.path.join('.'), i.message]),
+      ]),
+      form: null,
+    }
+    showErrors(problems)
+    return hasFormErrors(problems)
+  }, [accountId, mapping, showErrors])
 
   const analyze = useCallback(async () => {
+    if (refuse()) return
     setBusy(true)
-    setError(null)
     try {
       const r = await ctx.api.post<AnalyzeResult>(`${IMPORT_API_BASE}/analyze`, {
         accountId, csv, ...mapping,
@@ -211,15 +243,15 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       commitKey.current = null
       setStage('review')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not analyze that file.')
+      showErrors(formErrorsFrom(e, FIELDS, 'Could not analyze that file.'))
     } finally {
       setBusy(false)
     }
-  }, [ctx, accountId, csv, mapping])
+  }, [ctx, accountId, csv, mapping, refuse, showErrors])
 
   const commit = useCallback(async () => {
+    if (refuse()) return
     setBusy(true)
-    setError(null)
     try {
       // Saving the mapping is part of committing, not a separate button: the
       // mapping that produced a successful import is the one worth keeping.
@@ -233,11 +265,11 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       setStage('done')
       setHistoryKey((k) => k + 1)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not import that file.')
+      showErrors(formErrorsFrom(e, FIELDS, 'Could not import that file.'))
     } finally {
       setBusy(false)
     }
-  }, [ctx, accountId, csv, fileName, accepted, mapping])
+  }, [ctx, accountId, csv, fileName, accepted, mapping, refuse, showErrors])
 
   const reset = useCallback(() => {
     commitKey.current = null
@@ -249,14 +281,27 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
     setAccepted(new Set())
     setMatchedSource(null)
     setStage('choose')
-  }, [])
+    clearErrors()
+  }, [clearErrors])
 
   const refreshHistory = useCallback(() => setHistoryKey((k) => k + 1), [])
 
   return {
-    accounts, accountId, setAccountId, fileName, csv, stage, error, busy,
-    headers, columns, setColumns, dateFormat, setDateFormat, amountStyle, setAmountStyle,
-    invertAmount, setInvertAmount, sourceName, setSourceName, preview, analysis,
+    accounts,
+    accountId,
+    setAccountId: (id: string) => { setAccountId(id); clearField('accountId') },
+    fileName, csv, stage, error, errors: form.errors, formRef: form.ref, busy,
+    headers,
+    columns,
+    setColumns: (next: ColumnMap) => {
+      setColumns(next)
+      for (const key of Object.keys(next)) clearField(`columns.${key}`)
+    },
+    dateFormat, setDateFormat, amountStyle, setAmountStyle,
+    invertAmount, setInvertAmount,
+    sourceName,
+    setSourceName: (next: string) => { setSourceName(next); clearField('sourceName') },
+    preview, analysis,
     accepted, setAccepted, result, historyKey, matchedSource,
     onFile, analyze, commit, reset, refreshHistory,
   }

@@ -227,7 +227,7 @@ export class RecurringItemService {
         const today = await this.today(repos, userId)
         const from = range.from ?? today
         const to = range.to ?? addDays(from, DEFAULT_WINDOW_DAYS)
-        if (to < from) throw new ValidationError('to: Must be on or after from.')
+        if (to < from) throw new ValidationError('to: Must be on or after the start of the range.')
         if (to > addDays(from, MAX_WINDOW_DAYS)) {
           throw new ValidationError(`to: The range may cover at most ${MAX_WINDOW_DAYS} days.`)
         }

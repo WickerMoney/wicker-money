@@ -1,7 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { Button, Field, SelectField, Surface } from '@wickermoney/ui-kit'
+import {
+  Button, Field, FormError, SelectField, Surface, formErrorsFrom, hasFormErrors, useFormErrors,
+} from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
+import { checkMoney, checkText, fieldErrors } from '../../../lib/fieldChecks.js'
 import { ACCOUNT_TYPES, SPENDABLE_TYPES } from '../helpers/accountTypes.js'
 
 /** Props for {@link AddAccountForm}. */
@@ -20,6 +23,7 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
   // Follows the type's default (checking on, savings off) until changed by hand.
   const [spendable, setSpendable] = useState(true)
   const canSpend = SPENDABLE_TYPES.includes(type)
+  const form = useFormErrors()
 
   const changeType = (next: string) => {
     setType(next)
@@ -28,25 +32,32 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
 
   const create = async (event: FormEvent) => {
     event.preventDefault()
+    const problems = fieldErrors({ name: checkText(name, 200), initialBalance: checkMoney(opening) })
+    form.show(problems)
+    if (hasFormErrors(problems)) return
     status.begin()
     try {
-      await api.post('/accounts', { name, accountType: type, initialBalance: opening, spendable: canSpend && spendable })
+      await api.post('/accounts', {
+        name, accountType: type, initialBalance: opening.trim(), spendable: canSpend && spendable,
+      })
       setName(''); setOpening('0'); changeType('checking')
       await onCreated()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not create the account.')
+      form.show(formErrorsFrom(e, ['name', 'accountType', 'initialBalance'], 'Could not create the account.'))
     } finally { status.end() }
   }
 
   return (
     <Surface title="Add an account">
-      <form onSubmit={create}>
-        <Field label="Name" required value={name} onChange={(e) => setName(e.target.value)} />
-        <SelectField label="Type" value={type} onChange={(e) => changeType(e.target.value)}>
+      <form onSubmit={create} ref={form.ref} noValidate>
+        <Field label="Name" required value={name} error={form.errors.fields['name']}
+               onChange={(e) => { setName(e.target.value); form.clearField('name') }} />
+        <SelectField label="Type" value={type} error={form.errors.fields['accountType']}
+                     onChange={(e) => changeType(e.target.value)}>
           {ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
         </SelectField>
-        <Field label="Opening balance" inputMode="decimal"
-               value={opening} onChange={(e) => setOpening(e.target.value)} />
+        <Field label="Opening balance" inputMode="decimal" error={form.errors.fields['initialBalance']}
+               value={opening} onChange={(e) => { setOpening(e.target.value); form.clearField('initialBalance') }} />
         {canSpend ? (
           <>
             <label className="check">
@@ -61,6 +72,7 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
         <Button type="submit" variant="primary" disabled={status.busy || name.trim() === ''}>
           {status.busy ? 'Adding…' : 'Add account'}
         </Button>
+        <FormError message={form.errors.form} />
       </form>
     </Surface>
   )

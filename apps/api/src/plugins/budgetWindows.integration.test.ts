@@ -312,6 +312,18 @@ describe('refusing what is not a window', () => {
     expect(codeOf(res)).toBe(code)
   })
 
+  it('names the date a refused window is wrong on', async () => {
+    const res = await putWindow({ categoryId: travel, planned: '10.0000', start: '2035-05-01', through: '2035-05-31' })
+
+    expect(res.json()).toMatchObject({
+      code: 'bad_window',
+      issues: [{
+        path: ['through'],
+        message: 'That window is exactly one calendar month. Add it as a normal line on that month instead.',
+      }],
+    })
+  })
+
   it('refuses a numeric amount rather than coercing it', async () => {
     const res = await putWindow({ categoryId: travel, start: '2035-06-01', through: '2035-07-15', planned: 10 })
     expect(codeOf(res)).toBe('bad_planned')

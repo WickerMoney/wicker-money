@@ -161,6 +161,13 @@ describe('planning a month', () => {
       month: '2026-03', categoryId: groceries, planned: '400.00001', rollover: false,
     })
     expect(res.statusCode).toBe(400)
+    // The plugin names the field; the host passes it on as `issues`, so the
+    // page can show it under that line's plan.
+    expect(res.json()).toEqual({
+      code: 'bad_planned',
+      message: 'planned: Enter an amount like 12.50, with no more than 4 decimal places.',
+      issues: [{ path: ['planned'], message: 'Enter an amount like 12.50, with no more than 4 decimal places.' }],
+    })
   })
 
   it('removes a line, and refuses with 404 once it is gone', async () => {

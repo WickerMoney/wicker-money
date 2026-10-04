@@ -1,3 +1,4 @@
+import { InlineInput } from '../../../forms/InlineInput.js'
 import type { Category } from '../../../models/index.js'
 import type { CategoryEditing } from '../state/CategoryEditing.js'
 
@@ -14,9 +15,9 @@ export function CategoryNameCell({ category: c, row }: CategoryNameCellProps) {
   const { editing } = row
   if (editing?.id === c.id) {
     return (
-      <input
-        className="cat-edit"
+      <InlineInput
         aria-label={`Rename ${c.name}`}
+        error={row.errors.fields['name']}
         value={editing.name}
         autoFocus
         onChange={(e) => row.change({ ...editing, name: e.target.value })}

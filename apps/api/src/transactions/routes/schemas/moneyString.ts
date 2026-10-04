@@ -12,5 +12,5 @@ import { isValidMoney, toMoney } from '../../../money.js'
 export const moneyString = z
   .union([z.string(), z.number()])
   .transform((v) => (typeof v === 'number' ? v.toString() : v))
-  .refine(isValidMoney, 'Must be a decimal with at most 4 decimal places.')
+  .refine(isValidMoney, 'Enter an amount like 12.50, with no more than 4 decimal places.')
   .transform(toMoney)
