@@ -27,7 +27,7 @@ Use the issue templates. For vulnerabilities, do not open an issue; see
 
 ## Development setup
 
-Requires Node 22+ and pnpm 10 (`corepack enable pnpm`).
+Requires Node 22.22.2+ (or 24.15+) and pnpm 10 (`corepack enable pnpm`).
 
 ```bash
 pnpm install

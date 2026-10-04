@@ -24,7 +24,7 @@ See [ROADMAP.md](ROADMAP.md) for what is built and what is planned, and
 
 ## Getting started
 
-Requires Node 22+ and pnpm 10 (`corepack enable pnpm`).
+Requires Node 22.22.2+ (or 24.15+) and pnpm 10 (`corepack enable pnpm`).
 
 ```bash
 pnpm install
