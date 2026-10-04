@@ -30,23 +30,23 @@
     "@fastify/cookie": "^11.1.2",
     "@fastify/helmet": "^13.1.1",
     "@fastify/rate-limit": "^11.2.0",
-    "@fastify/static": "^10.1.4",
+    "@fastify/static": "^10.1.5",
     "@wickermoney/plugin-budgets": "workspace:*",
     "@wickermoney/plugin-import-csv": "workspace:*",
     "@wickermoney/plugin-sdk": "workspace:*",
     "@node-rs/argon2": "^2.2.1",
     "decimal.js": "^10.6.0",
-    "fastify": "^5.12.4",
+    "fastify": "^5.12.5",
     "jose": "^6.2.12",
-    "kysely": "^0.29.5",
-    "pg": "^8.23.0",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.3",
     "@types/pg": "^8.23.1",
-    "tsx": "^4.19.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.3"
   }
 }

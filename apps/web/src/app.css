@@ -390,3 +390,14 @@
   margin: 0 0 12px; padding: 8px 10px; border-radius: var(--wm-radius-sm);
   background: var(--wm-surface-alt); font-size: 13px;
 }
+
+/* Recurring matching on the Transactions page and dismissed suggestions on the Recurring page. */
+.recur-dismissed { margin-top: var(--wm-gap-sm); }
+/* Narrow on purpose: the ledger table already holds seven columns. */
+.txn-recur { display: flex; flex-direction: column; gap: 4px; min-width: 150px; max-width: 210px; font-size: 13px; }
+.txn-recur__suggestion { display: flex; flex-direction: column; gap: 4px; }
+.txn-recur__actions { justify-content: flex-start; align-items: center; flex-wrap: wrap; }
+.txn-recur__actions .wm-btn { padding: 2px 8px; font-size: 12px; white-space: nowrap; }
+.txn-recur__find { align-self: flex-start; color: var(--wm-text-muted); }
+.txn-recur__picker { margin-top: 2px; padding: 6px; font-size: 12px; }
+.txn-recur__picker .recur-candidate { grid-template-columns: minmax(0, 1fr) auto; }

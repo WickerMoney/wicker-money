@@ -3,10 +3,10 @@ import { isThemePreference, type ThemePreference } from './ThemePreference.js'
 /**
  * Where the theme choice is remembered.
  *
- * The inline script in `index.html` reads this same key to apply the theme
- * before first paint, so a change here must be made there too (a test fails if
- * they drift). It is one key per browser rather than one per user, because that
- * script runs before anyone has signed in.
+ * `public/theme-init.js` (loaded from `index.html`) reads this same key to
+ * apply the theme before first paint, so a change here must be made there too
+ * (a test fails if they drift). It is one key per browser rather than one per
+ * user, because that script runs before anyone has signed in.
  */
 export const THEME_STORAGE_KEY = 'wickermoney.theme'
 

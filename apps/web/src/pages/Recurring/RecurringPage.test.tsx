@@ -77,9 +77,13 @@ function occurrencesFor(path: string): readonly RecurringOccurrence[] {
   return path.includes('itemId=mortgage') ? history : []
 }
 
-function serve(list: RecurringItemList, suggestions: MatchSuggestionList['suggestions'] = []) {
+function serve(
+  list: RecurringItemList,
+  suggestions: MatchSuggestionList['suggestions'] = [],
+  dismissed: MatchSuggestionList['dismissed'] = [],
+) {
   return vi.spyOn(api, 'get').mockImplementation(async (path: string) => {
-    if (path.startsWith('/recurring-items/suggestions')) return { today: list.today, suggestions }
+    if (path.startsWith('/recurring-items/suggestions')) return { today: list.today, suggestions, dismissed }
     if (path.startsWith('/recurring-items/occurrences')) return { today: list.today, from: '', to: '', occurrences: occurrencesFor(path) }
     if (path.includes('/candidates')) return candidates
     if (path.startsWith('/recurring-items')) return list
@@ -215,6 +219,29 @@ describe('paid / landed matching', () => {
     await waitFor(() => expect(post).toHaveBeenCalledWith(
       '/recurring-items/mortgage/occurrences/2026-09-30/matches', { transactionId: 't-sep' },
     ))
+  })
+
+  it('dismisses a suggestion so it is not offered again, and undoes a dismissal', async () => {
+    serve(
+      full,
+      [{ occurrence: occurrence({}), accountId: 'chk', candidate: candidates.legs[0]!.candidates[0]! }],
+      [{ occurrence: occurrence({ itemId: 'vac', name: 'Vacation Fund' }), accountId: 'chk',
+        transaction: { id: 't-shop', date: '2026-09-29', amount: '-205.0000', merchant: 'Hardware Store' } }],
+    )
+    const post = vi.spyOn(api, 'post').mockResolvedValue({})
+    const del = vi.spyOn(api, 'del').mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(<RecurringPage />)
+    const panel = (await screen.findByText('Did these land?')).closest('section') as HTMLElement
+
+    await user.click(within(panel).getByRole('button', { name: 'Not Mortgage: BANK MORTGAGE' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith(
+      '/recurring-items/mortgage/occurrences/2026-09-30/dismissals', { transactionId: 't-sep' },
+    ))
+
+    expect(within(panel).getByText(/is not Vacation Fund/)).toBeTruthy()
+    await user.click(within(panel).getByRole('button', { name: 'Undo: Hardware Store is not Vacation Fund' }))
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/recurring-items/vac/occurrences/2026-09-30/dismissals/t-shop'))
   })
 
   it('shows no suggestions panel when there is nothing to confirm', async () => {

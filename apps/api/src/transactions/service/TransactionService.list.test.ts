@@ -175,6 +175,25 @@ describe('TransactionService.list filters', () => {
     expect(ids(await walk({ ...base, categoryId: 'cat-groceries', limit: 2 }))).toEqual(ids(withParent))
   })
 
+  it('leaves transfer legs out of the uncategorized filter, in the rows and the total', async () => {
+    const { legs } = await service.createTransfer(ALICE, {
+      fromAccountId: 'acc-checking', toAccountId: 'acc-savings', amount: '40.00', transactionDate: DATES[0]!,
+    })
+    const legIds = legs.map((l) => l.id)
+    const expected = uow.ledger.transactions.filter(
+      (t) => t.user_id === ALICE && t.category_id === null && t.transfer_id === null,
+    )
+
+    const pages = await walk({ ...base, uncategorizedOnly: true, limit: 4 })
+    const { total } = await service.list(ALICE, { ...base, uncategorizedOnly: true, withTotal: true })
+
+    expect(ids(pages).some((id) => legIds.includes(id))).toBe(false)
+    expect(new Set(ids(pages))).toEqual(new Set(expected.map((t) => t.id)))
+    expect(total).toBe(expected.length)
+    // The legs are still in the unfiltered list.
+    expect(ids(await walk({ ...base, limit: 50 }))).toEqual(expect.arrayContaining(legIds))
+  })
+
   it('takes the filters from the query, not from the cursor', async () => {
     const first = await service.list(ALICE, { ...base, accountId: 'acc-checking', limit: 2 })
 

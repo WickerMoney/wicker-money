@@ -13,11 +13,37 @@ function mount(over: Partial<TransactionPagerProps> = {}) {
 }
 
 describe('TransactionPager', () => {
-  it('shows the total and the page number', () => {
-    mount({ total: 1234, pageNumber: 3 })
+  it('shows the total, the page number and the page count', () => {
+    mount({ total: 1234, limit: 50, pageNumber: 3 })
 
     expect(screen.getByText('1,234 transactions')).toBeTruthy()
-    expect(screen.getByText('Page 3')).toBeTruthy()
+    expect(screen.getByText('Page 3 of 25')).toBeTruthy()
+  })
+
+  it('does not add a page for an exact multiple of the page size', () => {
+    mount({ total: 100, limit: 50, pageNumber: 2 })
+
+    expect(screen.getByText('Page 2 of 2')).toBeTruthy()
+  })
+
+  it('shows only the page number until the total is known', () => {
+    mount({ total: null, pageNumber: 2 })
+
+    expect(screen.getByText('Page 2')).toBeTruthy()
+    expect(screen.queryByText(/ of /)).toBeNull()
+  })
+
+  it('counts no transactions as one page', () => {
+    mount({ total: 0 })
+
+    expect(screen.getByText('Page 1 of 1')).toBeTruthy()
+  })
+
+  it('never shows fewer pages than the one on screen after the total shrinks', () => {
+    // 150 left at 50 per page is 3 pages, but page 4 is still showing.
+    mount({ total: 150, limit: 50, pageNumber: 4, hasPrevious: true, hasNext: false })
+
+    expect(screen.getByText('Page 4 of 4')).toBeTruthy()
   })
 
   it('says so when there are none', () => {

@@ -12,4 +12,5 @@ export const EXPORT_SECTIONS: readonly { readonly key: string; readonly table: E
   { key: 'recurringItemLegs', table: 'recurring_item_legs' },
   { key: 'recurringOccurrences', table: 'recurring_occurrences' },
   { key: 'recurringOccurrenceLegs', table: 'recurring_occurrence_legs' },
+  { key: 'recurringMatchDismissals', table: 'recurring_match_dismissals' },
 ]

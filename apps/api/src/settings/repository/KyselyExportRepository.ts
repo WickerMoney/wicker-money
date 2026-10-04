@@ -20,6 +20,7 @@ const TABLE_REFS: Readonly<Record<ExportTable, ReturnType<typeof sql.table>>> = 
   recurring_item_legs: sql.table('core.recurring_item_legs'),
   recurring_occurrences: sql.table('core.recurring_occurrences'),
   recurring_occurrence_legs: sql.table('core.recurring_occurrence_legs'),
+  recurring_match_dismissals: sql.table('core.recurring_match_dismissals'),
 }
 
 /** Kysely implementation of {@link ExportRepository} over a single transaction. */

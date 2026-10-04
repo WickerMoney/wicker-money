@@ -7,12 +7,15 @@ export const listTransactionsQuery = z.object({
   accountId: z.string().uuid().optional(),
   categoryId: z.string().uuid().optional(),
   /**
-   * When `'true'`, only transactions with no category.
+   * When `'true'`, only transactions with no category, leaving out transfer
+   * legs.
    *
    * This is the triage filter. A fresh import leaves everything uncategorized
    * unless a rule happened to match, so this is the list a person actually
    * works through; without it the only way to find those rows is to read every
-   * page looking for a blank category.
+   * page looking for a blank category. Transfer legs are not in it because
+   * they never take a category, so they would never leave it; an empty list
+   * means everything is filed.
    */
   uncategorized: z.enum(['true', 'false']).optional(),
   from: isoDate.optional(),
