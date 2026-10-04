@@ -26,14 +26,14 @@ export const ruleBody = z
         ctx.addIssue({
           code: 'custom',
           path: ['conditions', i, 'amountMin'],
-          message: 'An amount_range condition needs at least amountMin or amountMax.',
+          message: 'Set a minimum, a maximum, or both.',
         })
       }
       if (c.amountMin != null && c.amountMax != null && money(c.amountMin).greaterThan(money(c.amountMax))) {
         ctx.addIssue({
           code: 'custom',
           path: ['conditions', i, 'amountMax'],
-          message: 'amountMin must be less than or equal to amountMax.',
+          message: 'Cannot be less than the minimum.',
         })
       }
     })

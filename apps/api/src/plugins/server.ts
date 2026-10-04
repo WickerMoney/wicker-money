@@ -8,7 +8,7 @@ import { asPlugin, type Db } from '../db/client.js'
 import { pluginRoleName } from '../db/plugin-roles.js'
 import { resolveCategory, type MatchRule } from '../categories/engine.js'
 import { fetchRulesInResolutionOrder } from '../categories/repository/rules/fetchRulesInResolutionOrder.js'
-import { AppError } from '../errors.js'
+import { AppError, type ValidationIssue } from '../errors.js'
 import { queryRunner } from './queryRunner.js'
 import type { PluginService } from './service/PluginService.js'
 
@@ -25,6 +25,9 @@ class PluginRouteError extends AppError {}
  * should look like a bug, not like a 400 the user is expected to fix.
  *
  * @param error - Whatever a plugin handler threw.
+ * A plugin error may also carry `issues` in the host's `{ path, message }[]`
+ * shape; they are passed on so the plugin's form can show each by its field.
+ *
  * @returns An `AppError` when `error` is one already or carries a numeric
  * `statusCode` and string `code`; otherwise `error` unchanged.
  */
@@ -37,10 +40,33 @@ function toAppError(error: unknown): unknown {
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string'
   ) {
-    const e = error as Error & { statusCode: number; code: string }
-    return new PluginRouteError(e.message, e.statusCode, e.code)
+    const e = error as Error & { statusCode: number; code: string; issues?: unknown }
+    return new PluginRouteError(e.message, e.statusCode, e.code, readIssues(e.issues))
   }
   return error
+}
+
+/**
+ * Keeps a plugin error's field-level issues when they have the host's shape.
+ *
+ * A plugin cannot import {@link ValidationIssue}, so the shape is checked
+ * rather than trusted: anything that is not an array of `{ path, message }`
+ * is dropped instead of being sent to the browser as-is.
+ *
+ * @param value - The `issues` property of a plugin's error, if it had one.
+ * @returns The issues, or `undefined` when there are none worth sending.
+ */
+function readIssues(value: unknown): readonly ValidationIssue[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  const issues: ValidationIssue[] = []
+  for (const item of value as unknown[]) {
+    if (typeof item !== 'object' || item === null) return undefined
+    const { path, message } = item as { path?: unknown; message?: unknown }
+    if (typeof message !== 'string' || !Array.isArray(path)) return undefined
+    if (!path.every((p) => typeof p === 'string' || typeof p === 'number')) return undefined
+    issues.push({ path: path as (string | number)[], message })
+  }
+  return issues
 }
 
 /**

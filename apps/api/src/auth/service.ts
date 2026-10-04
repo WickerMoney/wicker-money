@@ -146,7 +146,7 @@ export class AuthService {
   async setTimezone(userId: string, timezone: string): Promise<AuthUser> {
     const zone = canonicalTimezone(timezone)
     if (zone === undefined) {
-      throw new ValidationError(`timezone: "${timezone.slice(0, 64)}" is not a known IANA time zone, such as America/New_York.`)
+      throw new ValidationError(`timezone: "${timezone.slice(0, 64)}" is not a time zone this server knows, such as America/New_York.`)
     }
     const updated = await this.uow.forUser(userId, (repos) => repos.users.updateTimezone(userId, zone))
     if (updated === undefined) throw new NotFoundError('User')

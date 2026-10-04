@@ -154,7 +154,7 @@ describe('recording one occurrence', () => {
       [bill, { skipped: true, expectedDate: addDays(due, 1) }, 'not expected on any date'],
       [bill, { legs: [{ accountId: savings, amount: '-40.00' }] }, 'account this item uses'],
       [bill, { legs: [{ accountId: checking, amount: '40.00' }] }, 'must leave it'],
-      [bill, { legs: [{ accountId: checking, amount: '0' }] }, 'cannot be zero'],
+      [bill, { legs: [{ accountId: checking, amount: '0' }] }, 'Must be more than 0'],
       [move, { legs: [{ accountId: checking, amount: '-150.00' }] }, 'net to zero'],
     ]
     for (const [id, body, message] of cases) {

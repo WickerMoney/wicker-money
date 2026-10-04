@@ -47,7 +47,7 @@ export function validateRecurringItem(
 ): RecurringItemWrite {
   const endDate = input.endDate ?? null
   if (endDate !== null && endDate < input.seriesStartDate) {
-    throw new ValidationError('endDate: Must be on or after seriesStartDate.')
+    throw new ValidationError('endDate: Must be on or after the first date.')
   }
 
   const semimonthlyDays = checkSemimonthlyDays(input)
@@ -115,13 +115,16 @@ function checkLegs(input: RecurringItemInput, accounts: readonly LegAccount[]): 
 
   const byId = new Map(accounts.map((a) => [a.id, a]))
   const seen = new Set<string>()
-  for (const leg of legs) {
-    if (seen.has(leg.accountId)) throw new ValidationError('legs: Each account may appear only once.')
+  // Each problem names the leg it is on, so a form can put it by that row.
+  for (const [i, leg] of legs.entries()) {
+    if (seen.has(leg.accountId)) throw new ValidationError(`legs.${i}.accountId: Each account may appear only once.`)
     seen.add(leg.accountId)
     const account = byId.get(leg.accountId)
-    if (account === undefined) throw new ValidationError('legs: Account not found.')
-    if (account.archived) throw new ValidationError('legs: That account is archived; restore it or pick another.')
-    if (money(leg.amount).isZero()) throw new ValidationError('legs: An amount of zero moves nothing.')
+    if (account === undefined) throw new ValidationError(`legs.${i}.accountId: Account not found.`)
+    if (account.archived) {
+      throw new ValidationError(`legs.${i}.accountId: That account is archived; restore it or pick another.`)
+    }
+    if (money(leg.amount).isZero()) throw new ValidationError(`legs.${i}.amount: Must be more than 0.`)
   }
 
   const positive = legs.filter((l) => money(l.amount).isPositive())

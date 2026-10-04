@@ -329,7 +329,39 @@ describe('validating a rule body', () => {
     const res = await rejected([{ conditionType: 'amount_range', direction: 'out' }])
     expect(res.statusCode).toBe(400)
     expect(res.json()).toMatchObject({ code: 'validation_failed' })
-    expect((res.json() as { message: string }).message).toContain('at least amountMin or amountMax')
+    expect((res.json() as { message: string }).message).toBe('conditions.0.amountMin: Set a minimum, a maximum, or both.')
+    expect(res.json()).toMatchObject({
+      issues: [{ path: ['conditions', 0, 'amountMin'], message: 'Set a minimum, a maximum, or both.' }],
+    })
+  })
+
+  it('refuses "at least 0" on the field it came from, with a sentence that says what to do instead', async () => {
+    const res = await rejected([{ conditionType: 'amount_range', direction: 'out', amountMin: '0', amountMax: '50' }])
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual({
+      code: 'validation_failed',
+      // The top-level message keeps its `path: message` form for older clients.
+      message: 'conditions.0.amountMin: Must be more than 0. Leave it empty for no minimum.',
+      issues: [{ path: ['conditions', 0, 'amountMin'], message: 'Must be more than 0. Leave it empty for no minimum.' }],
+    })
+  })
+
+  it('reports every bad field at once, each on its own path', async () => {
+    const res = await rejected(
+      [
+        { conditionType: 'merchant_contains', textValue: '   ' },
+        { conditionType: 'amount_exact', direction: 'out', amountValue: '1.23456' },
+      ],
+      { priority: 1.5 },
+    )
+
+    expect(res.statusCode).toBe(400)
+    expect((res.json() as { issues: unknown[] }).issues).toEqual([
+      { path: ['priority'], message: 'Must be a whole number.' },
+      { path: ['conditions', 0, 'textValue'], message: 'This cannot be empty.' },
+      { path: ['conditions', 1, 'amountValue'], message: 'Enter an amount like 12.50, with no more than 4 decimal places.' },
+    ])
   })
 
   it('rejects an amount_range with both bounds explicitly null', async () => {
@@ -339,7 +371,9 @@ describe('validating a rule body', () => {
   it('rejects min greater than max, but accepts min equal to max', async () => {
     const bad = await rejected([{ conditionType: 'amount_range', direction: 'out', amountMin: '20', amountMax: '10' }])
     expect(bad.statusCode).toBe(400)
-    expect((bad.json() as { message: string }).message).toContain('amountMin must be less than or equal to amountMax')
+    expect(bad.json()).toMatchObject({
+      issues: [{ path: ['conditions', 0, 'amountMax'], message: 'Cannot be less than the minimum.' }],
+    })
 
     const ok = await call('POST', '/api/v1/category-rules', {
       categoryId: coffee, conditions: [{ conditionType: 'amount_range', direction: 'out', amountMin: '10', amountMax: '10.00' }],
