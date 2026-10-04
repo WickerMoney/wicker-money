@@ -1,7 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { Button, Field, SelectField, Surface } from '@wickermoney/ui-kit'
+import {
+  Button, Field, FormError, SelectField, Surface, formErrorsFrom, hasFormErrors, useFormErrors,
+} from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
+import { checkText, fieldErrors } from '../../../lib/fieldChecks.js'
 import type { Category } from '../../../models/index.js'
 import { slugify } from '../helpers/slugify.js'
 
@@ -20,9 +23,14 @@ export function AddCategoryForm({ parents, status, onChanged }: AddCategoryFormP
   const [name, setName] = useState('')
   const [newParentId, setNewParentId] = useState('')
   const [newKind, setNewKind] = useState<Category['kind']>('expense')
+  const form = useFormErrors()
 
   const addCategory = async (event: FormEvent) => {
     event.preventDefault()
+    // The slug is made from the name, so a problem with either is the name's.
+    const problems = fieldErrors({ name: checkText(name, 100) })
+    form.show(problems)
+    if (hasFormErrors(problems)) return
     status.begin()
     try {
       await api.post('/categories', {
@@ -34,18 +42,24 @@ export function AddCategoryForm({ parents, status, onChanged }: AddCategoryFormP
       setName('')
       await onChanged()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not add that category.')
+      form.show(formErrorsFrom(
+        e,
+        (path) => (path === 'name' || path === 'slug' ? 'name' : path === 'parentId' || path === 'kind' ? path : undefined),
+        'Could not add that category.',
+      ))
     } finally { status.end() }
   }
 
   return (
     <Surface title="Add a category">
-      <form onSubmit={addCategory}>
-        <Field label="Name" required value={name} onChange={(e) => setName(e.target.value)}
+      <form onSubmit={addCategory} ref={form.ref} noValidate>
+        <Field label="Name" required value={name} error={form.errors.fields['name']}
+               onChange={(e) => { setName(e.target.value); form.clearField('name') }}
                placeholder="Groceries" />
         <SelectField
           label="Under"
           value={newParentId}
+          error={form.errors.fields['parentId']}
           onChange={(e) => setNewParentId(e.target.value)}
         >
           <option value="">Top level</option>
@@ -54,6 +68,7 @@ export function AddCategoryForm({ parents, status, onChanged }: AddCategoryFormP
         <SelectField
           label="Counts as"
           value={newKind}
+          error={form.errors.fields['kind']}
           onChange={(e) => setNewKind(e.target.value as Category['kind'])}
         >
           <option value="expense">Spending</option>
@@ -64,6 +79,7 @@ export function AddCategoryForm({ parents, status, onChanged }: AddCategoryFormP
         <Button type="submit" variant="primary" disabled={status.busy || name.trim() === ''}>
           {status.busy ? 'Saving…' : 'Add category'}
         </Button>
+        <FormError message={form.errors.form} />
       </form>
     </Surface>
   )

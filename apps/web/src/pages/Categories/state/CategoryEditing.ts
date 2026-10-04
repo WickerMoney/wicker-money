@@ -1,3 +1,4 @@
+import type { FormErrors } from '@wickermoney/ui-kit'
 import type { Category } from '../../../models/index.js'
 import type { CategoryEdit } from './CategoryEdit.js'
 
@@ -5,6 +6,8 @@ import type { CategoryEdit } from './CategoryEdit.js'
 export interface CategoryEditing {
   /** The row being edited with its unsaved values, or `null` when none is. */
   readonly editing: CategoryEdit | null
+  /** What is wrong with the row being edited: `fields.name`, and anything else beside its Save button. */
+  readonly errors: FormErrors
   /** Replaces the unsaved values of the row being edited. */
   readonly change: (next: CategoryEdit) => void
   /** Opens a row for editing its name, parent and kind. */

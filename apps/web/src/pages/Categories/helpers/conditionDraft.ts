@@ -1,5 +1,6 @@
 import { newUuid } from '../../../lib/newUuid.js'
 import type { ConditionDraft } from '../state/ConditionDraft.js'
+import { effectiveMin } from './ruleChecks.js'
 
 /**
  * Creates a blank condition row.
@@ -22,8 +23,8 @@ export function newConditionDraft(): ConditionDraft {
 /**
  * Reports whether a draft has been filled in enough to submit.
  *
- * This only avoids sending an obviously empty request on every keystroke. The
- * server remains the authority on validity, for example `amountMin <= amountMax`.
+ * This only keeps the buttons off while a row is blank. Whether the values are
+ * acceptable is `checkRule`'s job, which says so next to the field.
  *
  * @param d - The draft to check.
  * @returns `true` when the fields required by the draft's type are non-blank.
@@ -69,7 +70,8 @@ export function toConditionBody(d: ConditionDraft): Record<string, unknown> {
       return {
         conditionType: d.conditionType,
         direction: d.direction,
-        ...(d.amountMin.trim() !== '' ? { amountMin: d.amountMin.trim() } : {}),
+        // "At least 0" means no minimum; see effectiveMin.
+        ...(effectiveMin(d) !== '' ? { amountMin: effectiveMin(d) } : {}),
         ...(d.amountMax.trim() !== '' ? { amountMax: d.amountMax.trim() } : {}),
       }
   }
