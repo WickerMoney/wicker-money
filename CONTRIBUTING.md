@@ -45,7 +45,7 @@ pnpm test
 | `pnpm test:integration` | API integration tests against a real PostgreSQL |
 
 For a local database, `docker compose -f docker/docker-compose.dev.yml up -d`
-and `cp .env.example .env`. The README covers the database roles in detail; the
+and `cp .env.example .env`. [DEVELOPMENT.md](DEVELOPMENT.md#database) covers the database roles in detail; the
 short version is that the API must connect as a non-owner, non-superuser role
 or row-level security is silently inert.
 

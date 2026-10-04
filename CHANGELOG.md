@@ -192,7 +192,7 @@ with more than four decimal places (`400`) instead of truncating it.
   that builds a branch into a separate, private
   `ghcr.io/wickermoney/wicker-money-preview:<branch>` image, plus
   `docker/docker-compose.preview.yml` to try it beside a real install. See
-  [Trying a branch before it merges](README.md#trying-a-branch-before-it-merges).
+  [Trying a branch before it merges](DEVELOPMENT.md#trying-a-branch-before-it-merges).
 
 ### Changed
 
@@ -276,7 +276,7 @@ Recurring items and the "Until payday" dashboard (Phase A of recurring items).
 Known limitation: "today" comes from `core.users.timezone`, which defaults to
 `UTC` and has no setting yet, so west of UTC the recurring page and widget move
 to tomorrow in the evening. See
-[Recurring items](README.md#recurring-items-and-until-payday) for the
+[Recurring items](DEVELOPMENT.md#recurring-items-and-until-payday) for the
 workaround.
 
 ### Added
