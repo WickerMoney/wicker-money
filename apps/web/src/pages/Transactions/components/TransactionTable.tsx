@@ -2,11 +2,13 @@ import { EmptyState, Spinner, Table } from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { Category, Transaction } from '../../../models/index.js'
 import { useTransactionEditing } from '../hooks/useTransactionEditing.js'
+import type { TransactionMatches } from '../hooks/useTransactionMatches.js'
 import { TransactionActionsCell } from './TransactionActionsCell.js'
 import { TransactionAmountCell } from './TransactionAmountCell.js'
 import { TransactionCategoryCell } from './TransactionCategoryCell.js'
 import { TransactionDateCell } from './TransactionDateCell.js'
 import { TransactionMerchantCell } from './TransactionMerchantCell.js'
+import { TransactionRecurringCell } from './TransactionRecurringCell.js'
 
 /** Props for {@link TransactionTable}. */
 export interface TransactionTableProps {
@@ -20,6 +22,8 @@ export interface TransactionTableProps {
   readonly categoryOptionsFor: (currentId: string | null) => readonly Category[]
   /** Busy flag and error message shared with the page. */
   readonly status: ActionStatus
+  /** Recurring-item matching for the listed rows; the column is left out without it. */
+  readonly matches?: TransactionMatches
   /** Called to select or deselect one row. */
   readonly onToggleSelected: (id: string) => void
   /** Called to select or deselect every listed row. */
@@ -30,10 +34,11 @@ export interface TransactionTableProps {
 
 /**
  * The transaction table, with a selection column, inline editing, inline
- * category assignment and delete.
+ * category assignment, delete and, given `matches`, the recurring item each
+ * row settles or might.
  */
 export function TransactionTable({
-  items, selected, onlyUncategorized, categoryOptionsFor, status,
+  items, selected, onlyUncategorized, categoryOptionsFor, status, matches,
   onToggleSelected, onToggleAllSelected, onChanged,
 }: TransactionTableProps) {
   const row = useTransactionEditing(status, onChanged)
@@ -66,6 +71,8 @@ export function TransactionTable({
           ) },
         { key: 'amt', header: 'Amount', numeric: true,
           render: (t: Transaction) => <TransactionAmountCell transaction={t} row={row} /> },
+        ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
+          render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
         { key: 'actions', header: '',
           render: (t: Transaction) => <TransactionActionsCell transaction={t} row={row} busy={busy} /> },
       ]}
