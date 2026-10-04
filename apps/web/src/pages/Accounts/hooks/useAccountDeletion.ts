@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { NO_FORM_ERRORS, formErrorsFrom, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
@@ -16,6 +17,12 @@ export interface AccountDeletion {
   readonly migratePlan: MigrationPlan | null
   /** Active accounts the history could be moved to. */
   readonly migrateTargets: readonly Account[]
+  /**
+   * Why the last step in the panel was refused: `fields.toAccountId` for the
+   * chosen target, `form` for anything else. Shown in the panel, where the
+   * buttons are, not in the page banner.
+   */
+  readonly errors: FormErrors
   /** Hides the resolution panel without doing anything. */
   readonly dismiss: () => void
   /** Picks the account to move history into, and discards any earlier preview. */
@@ -55,6 +62,7 @@ export function useAccountDeletion(
   const [resolving, setResolving] = useState<DeleteResolution | null>(null)
   const [migrateTargetId, setMigrateTargetId] = useState('')
   const [migratePlan, setMigratePlan] = useState<MigrationPlan | null>(null)
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
 
   const migrateTargets = (accounts ?? []).filter(
     (a) => a.id !== resolving?.account.id && a.archivedAt === null,
@@ -62,9 +70,11 @@ export function useAccountDeletion(
 
   const latestPreview = useLatestRequest()
 
-  const dismiss = () => { latestPreview.cancel(); setResolving(null); setMigratePlan(null) }
+  const dismiss = () => { latestPreview.cancel(); setResolving(null); setMigratePlan(null); setErrors(NO_FORM_ERRORS) }
 
-  const chooseTarget = (id: string) => { latestPreview.cancel(); setMigrateTargetId(id); setMigratePlan(null) }
+  const chooseTarget = (id: string) => {
+    latestPreview.cancel(); setMigrateTargetId(id); setMigratePlan(null); setErrors(NO_FORM_ERRORS)
+  }
 
   const archive = async (a: Account) => {
     status.begin(); showNotice(null)
@@ -98,6 +108,7 @@ export function useAccountDeletion(
       setResolving({ account: a, usage, recurringItems: recurring })
       setMigrateTargetId('')
       setMigratePlan(null)
+      setErrors(NO_FORM_ERRORS)
     } catch (e) {
       status.show(e instanceof Error ? e.message : 'Could not check that account.')
     } finally { status.end() }
@@ -109,7 +120,7 @@ export function useAccountDeletion(
     if (!window.confirm(
       `Delete '${account.name}' AND ${describeUsage(usage)}? This cannot be undone.`,
     )) return
-    status.begin()
+    status.begin(); setErrors(NO_FORM_ERRORS)
     try {
       const result = await api.post<{ deletedTransactions: number; deletedRecurringItems: number }>(
         `/accounts/${account.id}/delete-with-history`, { confirmCount: usage.total },
@@ -122,13 +133,13 @@ export function useAccountDeletion(
           `${result.deletedRecurringItems === 1 ? '' : 's'} with it.`,
       )
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not delete that account.')
+      setErrors(formErrorsFrom(e, [], 'Could not delete that account.'))
     } finally { status.end() }
   }
 
   const previewMigrate = async () => {
     if (resolving === null || migrateTargetId === '') return
-    status.begin(); setMigratePlan(null)
+    status.begin(); setMigratePlan(null); setErrors(NO_FORM_ERRORS)
     try {
       await latestPreview.run(
         (signal) => api.post<MigrationPlan>(
@@ -137,7 +148,7 @@ export function useAccountDeletion(
         setMigratePlan,
       )
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not preview that move.')
+      setErrors(formErrorsFrom(e, ['toAccountId'], 'Could not preview that move.'))
     } finally { status.end() }
   }
 
@@ -148,7 +159,7 @@ export function useAccountDeletion(
       `Move ${resolving.usage.total} row${resolving.usage.total === 1 ? '' : 's'} of history from ` +
         `'${resolving.account.name}' into '${targetName}', then delete '${resolving.account.name}'?`,
     )) return
-    status.begin()
+    status.begin(); setErrors(NO_FORM_ERRORS)
     try {
       await api.post(`/accounts/${resolving.account.id}/migrate`, {
         toAccountId: migrateTargetId,
@@ -160,12 +171,12 @@ export function useAccountDeletion(
       await reload()
       showNotice(`Moved '${from}''s history into '${targetName}' and deleted '${from}'.`)
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not complete that move.')
+      setErrors(formErrorsFrom(e, ['toAccountId'], 'Could not complete that move.'))
     } finally { status.end() }
   }
 
   return {
-    resolving, migrateTargetId, migratePlan, migrateTargets,
+    resolving, migrateTargetId, migratePlan, migrateTargets, errors,
     dismiss, chooseTarget, archive, startDelete, deleteWithHistory, previewMigrate, commitMigrate,
   }
 }

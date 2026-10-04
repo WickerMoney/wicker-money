@@ -1,3 +1,4 @@
+import { InlineInput } from '../../../forms/InlineInput.js'
 import type { Account } from '../../../models/index.js'
 import type { AccountEditing } from '../state/AccountEditing.js'
 
@@ -14,9 +15,9 @@ export function AccountCurrencyCell({ account: a, row }: AccountCurrencyCellProp
   const { editing } = row
   if (editing?.id !== a.id) return <>{a.currencyCode}</>
   return (
-    <input
-      className="cat-edit"
+    <InlineInput
       style={{ width: '4.5em' }}
+      error={row.errors.fields['currencyCode']}
       aria-label={`Currency of ${a.name}`}
       value={editing.currencyCode}
       maxLength={3}

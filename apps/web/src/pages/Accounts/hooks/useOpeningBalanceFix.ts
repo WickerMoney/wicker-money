@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { NO_FORM_ERRORS, formErrorsFrom, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
+import { checkMoney, fieldErrors } from '../../../lib/fieldChecks.js'
 import { formatMoney } from '../../../lib/formatMoney.js'
 import type { Account, BalancePreview } from '../../../models/index.js'
 
@@ -13,6 +15,11 @@ export interface OpeningBalanceFix {
   readonly balanceInput: string
   /** The server's preview of the typed value, or `null` until one arrives. */
   readonly balancePreview: BalancePreview | null
+  /**
+   * What is wrong: `fields.initialBalance` for the typed value, `form` for
+   * anything else, shown beside Apply.
+   */
+  readonly errors: FormErrors
   /** Opens the panel for an account, pre-filled with its current opening balance. */
   readonly open: (account: Account) => void
   /** Closes the panel without saving. */
@@ -45,15 +52,16 @@ export function useOpeningBalanceFix(
   const [fixing, setFixing] = useState<Account | null>(null)
   const [balanceInput, setBalanceInput] = useState('')
   const [balancePreview, setBalancePreview] = useState<BalancePreview | null>(null)
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
 
   const latest = useLatestRequest()
 
   const open = (a: Account) => {
     latest.cancel()
-    setFixing(a); setBalanceInput(a.initialBalance); setBalancePreview(null)
+    setFixing(a); setBalanceInput(a.initialBalance); setBalancePreview(null); setErrors(NO_FORM_ERRORS)
   }
 
-  const cancel = () => { latest.cancel(); setFixing(null); setBalancePreview(null) }
+  const cancel = () => { latest.cancel(); setFixing(null); setBalancePreview(null); setErrors(NO_FORM_ERRORS) }
 
   const preview = async (value: string) => {
     if (fixing === null) return
@@ -61,7 +69,12 @@ export function useOpeningBalanceFix(
     setBalancePreview(null)
     // An empty field must also drop a reply still in flight for the old text.
     latest.cancel()
-    if (value.trim() === '') return
+    if (value.trim() === '') { setErrors(NO_FORM_ERRORS); return }
+    // Checked here first, with the API's rule, so a fifth decimal place is
+    // named under the field instead of leaving Apply silently unavailable.
+    const problems = fieldErrors({ initialBalance: checkMoney(value) })
+    setErrors(problems)
+    if (problems.fields['initialBalance'] !== undefined) return
     try {
       // Typing fires a preview per keystroke and replies can overtake each
       // other; only the answer to the latest value may be shown.
@@ -71,10 +84,9 @@ export function useOpeningBalanceFix(
         ),
         setBalancePreview,
       )
-    } catch {
-      // A half-typed number is expected while the field is still being edited.
-      // Apply stays disabled until a preview lands, so waiting for a valid
-      // value is enough.
+    } catch (e) {
+      // Apply stays disabled until a preview lands; this says why.
+      setErrors(formErrorsFrom(e, ['initialBalance'], 'Could not preview that opening balance.'))
     }
   }
 
@@ -93,9 +105,9 @@ export function useOpeningBalanceFix(
         `'${accountName}''s balance moved from ${formatMoney(currentBalance)} to ${formatMoney(newBalance)}, throughout its history.`,
       )
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not update that opening balance.')
+      setErrors(formErrorsFrom(e, ['initialBalance'], 'Could not update that opening balance.'))
     } finally { status.end() }
   }
 
-  return { fixing, balanceInput, balancePreview, open, cancel, preview, apply }
+  return { fixing, balanceInput, balancePreview, errors, open, cancel, preview, apply }
 }

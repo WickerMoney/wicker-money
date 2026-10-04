@@ -49,6 +49,7 @@ export function AccountsPage() {
           account={fix.fixing}
           balanceInput={fix.balanceInput}
           preview={fix.balancePreview}
+          errors={fix.errors}
           busy={status.busy}
           onInputChange={(value) => void fix.preview(value)}
           onApply={() => void fix.apply()}

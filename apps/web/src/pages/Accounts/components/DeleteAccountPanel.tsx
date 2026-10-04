@@ -1,4 +1,4 @@
-import { Button, SelectField, Surface } from '@wickermoney/ui-kit'
+import { Button, FormError, SelectField, Surface } from '@wickermoney/ui-kit'
 import type { AccountDeletion } from '../hooks/useAccountDeletion.js'
 import { describeUsage } from '../helpers/describeUsage.js'
 import { MigrationPreviewNote } from './MigrationPreviewNote.js'
@@ -20,7 +20,7 @@ export interface DeleteAccountPanelProps {
  * Renders nothing unless a delete is being resolved.
  */
 export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) {
-  const { resolving, migrateTargets, migrateTargetId, migratePlan } = deletion
+  const { resolving, migrateTargets, migrateTargetId, migratePlan, errors } = deletion
   if (resolving === null) return null
   const target = migrateTargets.find((t) => t.id === migrateTargetId)
   const moveTarget = target === undefined ? null : { id: target.id, name: target.name }
@@ -66,6 +66,7 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
               <SelectField
                 label="Move history to"
                 value={migrateTargetId}
+                error={errors.fields['toAccountId']}
                 onChange={(e) => deletion.chooseTarget(e.target.value)}
               >
                 <option value="">Choose an account</option>
@@ -88,6 +89,7 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
         </div>
       </div>
 
+      <FormError message={errors.form} />
       <div className="page__actions">
         <Button disabled={busy} onClick={deletion.dismiss}>Cancel</Button>
       </div>
