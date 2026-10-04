@@ -19,7 +19,7 @@ export function useTheme(): ThemeState {
   const [preference, setState] = useState<ThemePreference>(readThemePreference)
 
   // Applied in an effect so the document matches the state on first render too,
-  // covering the case where the inline script in index.html did not run.
+  // covering the case where public/theme-init.js did not run.
   useEffect(() => { applyTheme(preference) }, [preference])
 
   const setPreference = useCallback((next: ThemePreference) => {
