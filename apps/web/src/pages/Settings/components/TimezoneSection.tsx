@@ -1,5 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { Alert, Button, SelectField, Surface } from '@wickermoney/ui-kit'
+import {
+  Button, FormError, NO_FORM_ERRORS, SelectField, Surface, formErrorsFrom, type FormErrors,
+} from '@wickermoney/ui-kit'
 import { useAuth } from '../../../auth/index.js'
 import { browserTimezone } from '../../../lib/browserTimezone.js'
 import { timezoneOptions } from '../../../lib/timezoneOptions.js'
@@ -21,17 +23,20 @@ export function TimezoneSection() {
   const zones = useMemo(() => timezoneOptions(current), [current])
   const [choice, setChoice] = useState(current)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
   const [saved, setSaved] = useState(false)
 
   const save = async (zone: string) => {
-    setBusy(true); setError(null); setSaved(false)
+    setBusy(true); setErrors(NO_FORM_ERRORS); setSaved(false)
     try {
       await setTimezone(zone)
       setChoice(zone)
       setSaved(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the time zone.')
+      // Every choice in the list is a zone the server knows, so there is
+      // nothing to check before sending; the server's answer goes on the
+      // picker, or beside Save when it is not about the zone.
+      setErrors(formErrorsFrom(e, ['timezone'], 'Could not save the time zone.'))
     } finally {
       setBusy(false)
     }
@@ -59,12 +64,12 @@ export function TimezoneSection() {
           <Button onClick={() => { void save(browser) }} disabled={busy}>Use {browser.replaceAll('_', ' ')}</Button>
         </p>
       ) : null}
-      {error !== null ? <Alert>{error}</Alert> : null}
       <form className="tz-form" onSubmit={onSubmit}>
         <SelectField
           label="Time zone"
           value={choice}
-          onChange={(e) => { setChoice(e.target.value); setSaved(false) }}
+          error={errors.fields['timezone']}
+          onChange={(e) => { setChoice(e.target.value); setSaved(false); setErrors(NO_FORM_ERRORS) }}
           disabled={busy}
         >
           {zones.map((z) => <option key={z} value={z}>{z.replaceAll('_', ' ')}</option>)}
@@ -74,6 +79,7 @@ export function TimezoneSection() {
         </Button>
         {saved && choice === current ? <span className="wm-muted" role="status">Saved.</span> : null}
       </form>
+      <FormError message={errors.form} />
     </Surface>
   )
 }
