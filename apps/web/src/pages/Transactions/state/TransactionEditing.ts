@@ -1,3 +1,4 @@
+import type { FormErrors } from '@wickermoney/ui-kit'
 import type { Transaction } from '../../../models/index.js'
 import type { TransactionEdit } from './TransactionEdit.js'
 
@@ -5,6 +6,12 @@ import type { TransactionEdit } from './TransactionEdit.js'
 export interface TransactionEditing {
   /** The row being edited with its unsaved values, or `null` when none is. */
   readonly editing: TransactionEdit | null
+  /**
+   * What is wrong with the row being edited: `fields` keyed `merchant`,
+   * `notes`, `amount` and `transactionDate`, and `form` for anything else,
+   * shown at the end of the row next to its Save button.
+   */
+  readonly errors: FormErrors
   /** Replaces the unsaved values of the row being edited. */
   readonly change: (next: TransactionEdit) => void
   /** Opens a row for editing amount, merchant, date and notes. */

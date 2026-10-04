@@ -1,4 +1,6 @@
-import { Button, CategoryOptions, SelectField } from '@wickermoney/ui-kit'
+import {
+  Button, CategoryOptions, FormError, NO_FORM_ERRORS, SelectField, formErrorsFrom, type FormErrors,
+} from '@wickermoney/ui-kit'
 import { useState } from 'react'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -31,8 +33,10 @@ export function TriageBar({
   onlyUncategorized, onOnlyUncategorizedChange, selectedIds, enabledCategories, status, onApplied,
 }: TriageBarProps) {
   const [bulkCategoryId, setBulkCategoryId] = useState('')
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
 
   const assignSelected = async () => {
+    setErrors(NO_FORM_ERRORS)
     status.begin()
     try {
       const r = await api.post<{ updated: number }>('/transactions/categorize', {
@@ -42,7 +46,7 @@ export function TriageBar({
       await onApplied()
       status.show(`${r.updated} transaction${r.updated === 1 ? '' : 's'} updated.`)
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not update those transactions.')
+      setErrors(formErrorsFrom(e, ['categoryId'], 'Could not update those transactions.'))
     } finally { status.end() }
   }
 
@@ -57,7 +61,8 @@ export function TriageBar({
       {selectedIds.size > 0 ? (
         <>
           <SelectField label={`Set ${selectedIds.size} to`} value={bulkCategoryId}
-                       onChange={(e) => setBulkCategoryId(e.target.value)}>
+                       error={errors.fields['categoryId']}
+                       onChange={(e) => { setBulkCategoryId(e.target.value); setErrors(NO_FORM_ERRORS) }}>
             <CategoryOptions
               categories={enabledCategories}
               placeholder={{ value: '', label: '— clear category —' }}
@@ -66,6 +71,7 @@ export function TriageBar({
           <Button variant="primary" disabled={status.busy} onClick={() => void assignSelected()}>
             {status.busy ? 'Applying…' : 'Apply'}
           </Button>
+          <FormError message={errors.form} />
         </>
       ) : null}
     </div>

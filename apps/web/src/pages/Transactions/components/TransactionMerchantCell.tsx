@@ -1,3 +1,4 @@
+import { InlineInput } from '../../../forms/InlineInput.js'
 import type { Transaction } from '../../../models/index.js'
 import type { TransactionEditing } from '../state/TransactionEditing.js'
 
@@ -15,14 +16,14 @@ export function TransactionMerchantCell({ transaction: t, row }: TransactionMerc
   if (editing?.id !== t.id) return <>{t.merchant}</>
   return (
     <div className="txn-edit">
-      <input
-        className="cat-edit" aria-label={`Merchant for ${t.merchant}`}
+      <InlineInput
+        aria-label={`Merchant for ${t.merchant}`} error={row.errors.fields['merchant']}
         value={editing.merchant} autoFocus
         onChange={(e) => row.change({ ...editing, merchant: e.target.value })}
         onKeyDown={(e) => { if (e.key === 'Escape') row.cancel() }}
       />
-      <input
-        className="cat-edit" aria-label={`Notes for ${t.merchant}`}
+      <InlineInput
+        aria-label={`Notes for ${t.merchant}`} error={row.errors.fields['notes']}
         value={editing.notes} placeholder="Notes (optional)"
         onChange={(e) => row.change({ ...editing, notes: e.target.value })}
         onKeyDown={(e) => { if (e.key === 'Escape') row.cancel() }}

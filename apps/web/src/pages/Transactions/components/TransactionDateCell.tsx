@@ -1,3 +1,4 @@
+import { InlineInput } from '../../../forms/InlineInput.js'
 import type { Transaction } from '../../../models/index.js'
 import type { TransactionEditing } from '../state/TransactionEditing.js'
 
@@ -14,8 +15,8 @@ export function TransactionDateCell({ transaction: t, row }: TransactionDateCell
   const { editing } = row
   if (editing?.id !== t.id) return <>{t.transaction_date}</>
   return (
-    <input
-      type="date" className="cat-edit" aria-label={`Date for ${t.merchant}`}
+    <InlineInput
+      type="date" aria-label={`Date for ${t.merchant}`} error={row.errors.fields['transactionDate']}
       value={editing.transactionDate}
       onChange={(e) => row.change({ ...editing, transactionDate: e.target.value })}
       onKeyDown={(e) => { if (e.key === 'Escape') row.cancel() }}

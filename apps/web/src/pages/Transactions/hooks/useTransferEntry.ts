@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
+import { formErrorsFrom, hasFormErrors, useFormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
+import { checkMoney, fieldErrors, REQUIRED_MESSAGE } from '../../../lib/fieldChecks.js'
 import type { EntryFields } from '../state/EntryFields.js'
 import type { TransferEntry } from '../state/TransferEntry.js'
 
@@ -17,24 +19,43 @@ export function useTransferEntry(
 ): TransferEntry {
   const [toAccountId, setToAccountId] = useState('')
   const [amount, setAmount] = useState('')
+  const form = useFormErrors()
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    const problems = fieldErrors({
+      toAccountId: toAccountId === '' ? 'Choose the account the money goes to.' : undefined,
+      // The API refuses zero ("a transfer of nothing") and a negative amount:
+      // which account it leaves is what sets the direction.
+      amount: checkMoney(amount, 'positive'),
+      transactionDate: fields.date === '' ? REQUIRED_MESSAGE : undefined,
+      description: fields.merchant.trim().length > 300 ? 'Must be 300 characters or fewer.' : undefined,
+    })
+    form.show(problems)
+    if (hasFormErrors(problems)) return
     status.begin()
     try {
       await api.post('/transactions/transfer', {
         fromAccountId: fields.accountId,
         toAccountId,
-        amount,
+        amount: amount.trim(),
         transactionDate: fields.date,
         ...(fields.merchant.trim() === '' ? {} : { description: fields.merchant.trim() }),
       })
       setAmount(''); fields.setMerchant('')
       await onRecorded()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not record the transfer.')
+      form.show(formErrorsFrom(
+        e, ['fromAccountId', 'toAccountId', 'amount', 'transactionDate', 'description'], 'Could not record the transfer.',
+      ))
     } finally { status.end() }
   }
 
-  return { toAccountId, setToAccountId, amount, setAmount, submit }
+  return {
+    toAccountId,
+    setToAccountId: (id: string) => { setToAccountId(id); form.clearField('toAccountId') },
+    amount,
+    setAmount: (next: string) => { setAmount(next); form.clearField('amount') },
+    errors: form.errors, formRef: form.ref, submit,
+  }
 }
