@@ -72,6 +72,21 @@ describe('an authenticated request', () => {
     await expect(api.post('/accounts', {})).rejects.toMatchObject({ status: 409, code: 'conflict', message: 'Name taken' })
   })
 
+  it('keeps the field-level issues of a validation failure', async () => {
+    setAccessToken('tok-1')
+    const issues = [{ path: ['conditions', 0, 'amountMin'], message: 'Must be more than 0. Leave it empty for no minimum.' }]
+    route(() => json({ code: 'validation_failed', message: 'conditions.0.amountMin: Must be more than 0.', issues }, 400))
+
+    await expect(api.post('/category-rules', {})).rejects.toMatchObject({ status: 400, code: 'validation_failed', issues })
+  })
+
+  it('has no issues when the body carries none', async () => {
+    setAccessToken('tok-1')
+    route(() => json({ code: 'conflict', message: 'Name taken' }, 409))
+
+    await expect(api.post('/accounts', {})).rejects.toMatchObject({ issues: [] })
+  })
+
   it('passes an abort signal through to fetch', async () => {
     setAccessToken('tok-1')
     route(() => json({}))
