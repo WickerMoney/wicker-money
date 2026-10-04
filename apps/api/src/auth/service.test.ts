@@ -60,6 +60,8 @@ class Store {
       user.timezone = timezone
       return Promise.resolve({ id: user.id, email: user.email, timezone })
     },
+    findRole: (userId) =>
+      Promise.resolve(this.users.some((u) => u.id === userId) ? 'owner' : undefined),
     findPasswordHash: (userId) =>
       Promise.resolve(this.users.find((u) => u.id === userId)?.passwordHash),
     updatePasswordHash: (userId, passwordHash) => {
@@ -316,9 +318,16 @@ describe('AuthService time zone', () => {
   it('sets and reads back the time zone', async () => {
     const { user } = await service.register('a@example.com', PASSWORD)
     await expect(service.setTimezone(user.id, 'europe/london')).resolves.toEqual({
-      id: user.id, email: 'a@example.com', timezone: 'Europe/London',
+      id: user.id, email: 'a@example.com', timezone: 'Europe/London', role: 'owner',
     })
     await expect(service.me(user.id)).resolves.toMatchObject({ timezone: 'Europe/London' })
+  })
+
+  it('reports the role the repository holds, with every identity it returns', async () => {
+    const { user } = await service.register('a@example.com', PASSWORD)
+    expect(user.role).toBe('owner')
+    expect((await service.login('a@example.com', PASSWORD)).user.role).toBe('owner')
+    await expect(service.me(user.id)).resolves.toMatchObject({ role: 'owner' })
   })
 
   it('refuses an unknown zone with a validation error and changes nothing', async () => {

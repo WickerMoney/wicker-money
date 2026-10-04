@@ -4,7 +4,7 @@ import type { AuthService } from '../../service.js'
 /**
  * Registers `GET /api/v1/auth/me`: the signed-in user's identity.
  *
- * Responds `200` with `{ id, email, timezone }` and `401` if the request is
+ * Responds `200` with `{ id, email, timezone, role }` and `401` if the request is
  * not authenticated. The time zone is read fresh, not taken from the token,
  * so a change made in another tab shows up here at once.
  *

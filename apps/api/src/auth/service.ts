@@ -1,6 +1,7 @@
 import type { Config } from '../config.js'
 import { DuplicateKeyError } from '../data/DuplicateKeyError.js'
 import type { UnitOfWork } from '../data/UnitOfWork.js'
+import type { UserRole } from '../db/models/index.js'
 import { AppError, ConflictError, NotFoundError, UnauthorizedError, ValidationError } from '../errors.js'
 import { hashPassword, verifyPassword } from './password.js'
 import type { AuthUser } from './service/AuthUser.js'
@@ -114,7 +115,21 @@ export class AuthService {
   async me(userId: string): Promise<AuthUser> {
     const found = await this.uow.forUser(userId, (repos) => repos.users.findIdentity(userId), { readOnly: true })
     if (found === undefined) throw new NotFoundError('User')
-    return found
+    return this.withRole(found)
+  }
+
+  /**
+   * Reads what the signed-in user may do on this instance.
+   *
+   * Read fresh on every call rather than carried in the access token, so a
+   * demotion takes effect on the next request instead of when the token
+   * expires.
+   *
+   * @param userId - The authenticated user.
+   * @returns The account's role, or `undefined` if the account no longer exists.
+   */
+  roleOf(userId: string): Promise<UserRole | undefined> {
+    return this.uow.forUser(userId, (repos) => repos.users.findRole(userId), { readOnly: true })
   }
 
   /**
@@ -135,7 +150,7 @@ export class AuthService {
     }
     const updated = await this.uow.forUser(userId, (repos) => repos.users.updateTimezone(userId, zone))
     if (updated === undefined) throw new NotFoundError('User')
-    return { id: updated.id, email: updated.email, timezone: updated.timezone }
+    return this.withRole(updated)
   }
 
   /**
@@ -334,7 +349,23 @@ export class AuthService {
       accessToken,
       refreshToken,
       expiresInSeconds: this.config.AUTH_ACCESS_TTL_SECONDS,
-      user: { id: user.id, email: user.email, timezone: user.timezone },
+      user: await this.withRole(user),
     }
+  }
+
+  /**
+   * Adds the account's role to its identity for the client.
+   *
+   * A separate read rather than a column on the pre-authentication functions'
+   * results, so those functions keep their signatures. It costs one primary-key
+   * lookup per sign-in, refresh and profile read.
+   *
+   * @param user - The account's identity.
+   * @returns The identity with its role; `member` if the account vanished
+   * mid-request, the answer that grants nothing.
+   */
+  private async withRole(user: UserIdentity): Promise<AuthUser> {
+    const role = (await this.roleOf(user.id)) ?? 'member'
+    return { id: user.id, email: user.email, timezone: user.timezone, role }
   }
 }

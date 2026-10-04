@@ -1,3 +1,4 @@
+import type { UserRole } from '../../db/models/index.js'
 import type { LoginCandidate } from './LoginCandidate.js'
 import type { UserIdentity } from './UserIdentity.js'
 
@@ -32,6 +33,12 @@ export interface UserRepository {
    * @returns The account's identity, or `undefined` if it does not exist.
    */
   findIdentity(userId: string): Promise<UserIdentity | undefined>
+
+  /**
+   * @param userId - The current user.
+   * @returns What the account may do on this instance, or `undefined` if it does not exist.
+   */
+  findRole(userId: string): Promise<UserRole | undefined>
 
   /**
    * @param userId - The current user.
