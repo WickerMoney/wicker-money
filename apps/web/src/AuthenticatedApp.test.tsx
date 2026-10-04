@@ -1,4 +1,5 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
@@ -81,6 +82,8 @@ function mount(at: string) {
   )
 }
 
+const primaryNav = () => screen.getByRole('navigation', { name: 'Primary' })
+
 beforeEach(() => {
   enabled = new Set([BUDGETS.id, INSIGHTS.id])
   isOwner = true
@@ -101,6 +104,33 @@ beforeEach(() => {
 })
 
 afterEach(() => { vi.restoreAllMocks() })
+
+describe('switching a plugin off from Settings', () => {
+  it('removes its navigation entry and dashboard widget without a reload, and brings them back', async () => {
+    mount('/')
+    expect(await screen.findByText('wickermoney.budgets ./AtRiskWidget content')).toBeTruthy()
+    expect(within(primaryNav()).getByRole('link', { name: 'Budgets' })).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('link', { name: 'Settings' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Enable Budgets' }))
+
+    await waitFor(() => { expect(within(primaryNav()).queryByRole('link', { name: 'Budgets' })).toBeNull() })
+    expect(apiPatch).toHaveBeenCalledWith('/plugins/wickermoney.budgets', { enabled: false })
+    expect(loadPluginRegistry).toHaveBeenCalledTimes(2)
+
+    await userEvent.click(within(primaryNav()).getByRole('link', { name: 'Dashboard' }))
+    expect(await screen.findByText('wickermoney.insights ./TrendWidget content')).toBeTruthy()
+    expect(screen.queryByText('Budget breakdown')).toBeNull()
+    expect(screen.queryByText('wickermoney.budgets ./AtRiskWidget content')).toBeNull()
+
+    // And on again: everything returns.
+    await userEvent.click(screen.getByRole('link', { name: 'Settings' }))
+    await userEvent.click(await screen.findByRole('switch', { name: 'Enable Budgets' }))
+    await waitFor(() => { expect(within(primaryNav()).getByRole('link', { name: 'Budgets' })).toBeTruthy() })
+    await userEvent.click(within(primaryNav()).getByRole('link', { name: 'Budgets' }))
+    expect(await screen.findByText('wickermoney.budgets ./BudgetsPage content')).toBeTruthy()
+  })
+})
 
 describe("a switched-off plugin's page", () => {
   it('turns into a friendly "turned off" state when the plugin goes away while it is open', async () => {
