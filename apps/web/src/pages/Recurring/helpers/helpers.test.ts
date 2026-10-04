@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { RecurringItem } from '../../../models/index.js'
 import { describeSchedule } from './describeSchedule.js'
-import { draftFromItem, emptyDraft, payloadFromDraft } from './draft.js'
+import type { RecurringDraft } from '../state/RecurringDraft.js'
+import { draftFromItem, emptyDraft, fieldForPath, payloadFromDraft } from './draft.js'
 import { groupItems } from './groupItems.js'
 import { dayLabel } from './ordinal.js'
 import { previewDates } from './previewDates.js'
@@ -49,14 +50,42 @@ describe('payloadFromDraft', () => {
     expect('payload' in semi && semi.payload.semimonthlyDays).toEqual([15, 31])
   })
 
-  it.each([
-    ['no name', { name: '' }, /name/],
-    ['a bill with no amount', { name: 'x', amount: '' }, /account that pays it/],
-    ['a transfer with no destination', { name: 'x', kind: 'transfer' as const, amount: '5' }, /where it goes/],
-    ['an income row missing its amount', { name: 'x', kind: 'income' as const, splits: [{ accountId: 'chk', amount: '' }] }, /account and an amount/],
-  ])('reports %s', (_, patch, message) => {
+  it.each<[string, Partial<RecurringDraft>, Record<string, string>]>([
+    ['no name', { name: '', amount: '5' }, { name: 'This cannot be empty.' }],
+    ['a bill with no amount', { name: 'x', amount: '' }, { amount: 'This cannot be empty.' }],
+    ['a bill of zero', { name: 'x', amount: '0.00' }, { amount: 'Must be more than 0.' }],
+    ['a fifth decimal place', { name: 'x', amount: '9.99999' }, { amount: 'Enter an amount like 12.50, with no more than 4 decimal places.' }],
+    ['a transfer with no destination', { name: 'x', kind: 'transfer', amount: '5' }, { toAccountId: 'Choose where the money goes.' }],
+    ['a transfer to the account it leaves', { name: 'x', kind: 'transfer', toAccountId: 'chk', amount: '5' },
+      { toAccountId: 'Choose a different account from the one the money leaves.' }],
+    ['an income row missing its amount', { name: 'x', kind: 'income', splits: [{ accountId: 'chk', amount: '' }] },
+      { 'splits.0.amount': 'This cannot be empty.' }],
+    ['an end before the start', { name: 'x', amount: '5', endDate: '2026-01-01' }, { endDate: 'Must be on or after the first date.' }],
+    ['two equal semimonthly days', { name: 'x', amount: '5', frequency: 'semimonthly', day1: '15', day2: '15' },
+      { day2: 'The two days must differ.' }],
+  ])('reports %s on its field', (_, patch, fields) => {
     const built = payloadFromDraft({ ...emptyDraft(TODAY, 'chk'), ...patch })
-    expect('error' in built && built.error).toMatch(message)
+    expect('errors' in built && built.errors).toEqual({ fields, form: null })
+  })
+})
+
+describe('fieldForPath', () => {
+  it("maps the API's legs to the fields they were typed in", () => {
+    const transfer = fieldForPath({ ...emptyDraft(TODAY, 'chk'), kind: 'transfer' })
+    expect(transfer('legs.0.accountId')).toBe('fromAccountId')
+    expect(transfer('legs.1.accountId')).toBe('toAccountId')
+    expect(transfer('legs.1.amount')).toBe('amount')
+    expect(transfer('legs')).toBeUndefined()
+
+    // A blank middle row is not sent, so the second leg is the third row.
+    const income = fieldForPath({
+      ...emptyDraft(TODAY), kind: 'income',
+      splits: [{ accountId: 'chk', amount: '1' }, { accountId: '', amount: '' }, { accountId: 'sav', amount: '2' }],
+    })
+    expect(income('legs.1.amount')).toBe('splits.2.amount')
+    expect(income('semimonthlyDays')).toBeUndefined()
+    expect(fieldForPath({ ...emptyDraft(TODAY), frequency: 'semimonthly' })('semimonthlyDays')).toBe('day2')
+    expect(fieldForPath({ ...emptyDraft(TODAY), kind: 'transfer' })('categoryId')).toBeUndefined()
   })
 })
 

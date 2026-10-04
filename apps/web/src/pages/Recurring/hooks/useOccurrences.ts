@@ -21,10 +21,15 @@ export interface Occurrences {
   readonly closeMatches: () => void
   readonly match: (occurrence: RecurringOccurrence, transactionId: string) => Promise<void>
   readonly unmatch: (occurrence: RecurringOccurrence, transactionId: string) => Promise<void>
-  /** Replaces what is recorded about one occurrence (skip, move, amounts). */
+  /**
+   * Replaces what is recorded about one occurrence (skip, move, amounts).
+   * A failure goes to `onError` when given (a form showing it by its
+   * fields), otherwise to the page's message.
+   */
   readonly record: (
     occurrence: RecurringOccurrence,
     body: { skipped?: boolean; expectedDate?: string | null; legs?: { accountId: string; amount: string }[] | null },
+    onError?: (error: unknown) => void,
   ) => Promise<boolean>
 }
 
@@ -75,14 +80,15 @@ export function useOccurrences(
 
   const url = (o: RecurringOccurrence) => `/recurring-items/${o.itemId}/occurrences/${o.nominalDate}`
 
-  const run = async (work: () => Promise<void>): Promise<boolean> => {
+  const run = async (work: () => Promise<void>, onError?: (error: unknown) => void): Promise<boolean> => {
     status.begin()
     try {
       await work()
       await Promise.all([reload(), afterChange()])
       return true
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not save the change.')
+      if (onError !== undefined) onError(e)
+      else status.show(e instanceof Error ? e.message : 'Could not save the change.')
       return false
     } finally { status.end() }
   }
@@ -105,6 +111,6 @@ export function useOccurrences(
       if (await run(() => api.post(`${url(o)}/matches`, { transactionId }))) setCandidates(null)
     },
     unmatch: async (o, transactionId) => { await run(() => api.del(`${url(o)}/matches/${transactionId}`)) },
-    record: (o, body) => run(() => api.put(url(o), body)),
+    record: (o, body, onError) => run(() => api.put(url(o), body), onError),
   }
 }

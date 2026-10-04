@@ -1,5 +1,7 @@
-import type { FormEvent } from 'react'
-import { Button, CategoryOptions, Field, SelectField, Surface, orderByParent } from '@wickermoney/ui-kit'
+import type { FormEvent, RefObject } from 'react'
+import {
+  Button, CategoryOptions, Field, FormError, SelectField, Surface, orderByParent, type FormErrors,
+} from '@wickermoney/ui-kit'
 import { formatDate } from '../../../lib/formatDate.js'
 import type { Account, Category, RecurringItem } from '../../../models/index.js'
 import { FREQUENCIES, FREQUENCY_LABELS, KINDS, KIND_LABELS } from '../helpers/labels.js'
@@ -17,6 +19,10 @@ export interface RecurringItemFormProps {
   /** The server's today; the preview counts from it. */
   readonly today: string
   readonly busy: boolean
+  /** What is wrong, by field name (see `checkDraft`), and anything else for beside the button. */
+  readonly errors: FormErrors
+  /** Attached to the `<form>`, so focus can move to the first problem. */
+  readonly formRef?: RefObject<HTMLFormElement | null>
   readonly onChange: (patch: Partial<RecurringDraft>) => void
   readonly onSubmit: () => void
   readonly onCancel: () => void
@@ -36,8 +42,13 @@ const LIABILITIES = new Set(['credit_card', 'loan'])
  * between your own accounts.
  */
 export function RecurringItemForm({
-  draft, editing, accounts, categories, today, busy, onChange, onSubmit, onCancel,
+  draft, editing, accounts, categories, today, busy, errors, formRef, onChange, onSubmit, onCancel,
 }: RecurringItemFormProps) {
+  const err = (field: string) => errors.fields[field]
+  /** Replaces one income row. */
+  const changeSplit = (index: number, patch: Partial<RecurringDraft['splits'][number]>) => {
+    onChange({ splits: draft.splits.map((s, i) => (i === index ? { ...s, ...patch } : s)) })
+  }
   const submit = (event: FormEvent) => { event.preventDefault(); onSubmit() }
   const preview = previewDates(draft, today)
   const wantedKind = draft.kind === 'income' ? 'income' : 'expense'
@@ -56,8 +67,9 @@ export function RecurringItemForm({
 
   return (
     <Surface title={editing === null ? 'Add a recurring item' : `Edit '${editing.name}'`}>
-      <form onSubmit={submit}>
-        <Field label="Name" required value={draft.name} onChange={(e) => onChange({ name: e.target.value })} />
+      <form onSubmit={submit} ref={formRef} noValidate>
+        <Field label="Name" required value={draft.name} error={err('name')}
+               onChange={(e) => onChange({ name: e.target.value })} />
         <SelectField label="Kind" value={draft.kind}
                      onChange={(e) => onChange({ kind: e.target.value as RecurringDraft['kind'], categoryId: '' })}>
           {KINDS.map((k) => <option key={k} value={k}>{KIND_LABELS[k]}</option>)}
@@ -69,11 +81,12 @@ export function RecurringItemForm({
             {draft.splits.map((split, index) => (
               <div className="recur-legs__row" key={index}>
                 <SelectField label={`Account ${index + 1}`} value={split.accountId}
-                             onChange={(e) => onChange({ splits: draft.splits.map((s, i) => i === index ? { ...s, accountId: e.target.value } : s) })}>
+                             error={err(`splits.${index}.accountId`)}
+                             onChange={(e) => changeSplit(index, { accountId: e.target.value })}>
                   {accountOptions(accounts)}
                 </SelectField>
-                <Field label="Amount" inputMode="decimal" value={split.amount}
-                       onChange={(e) => onChange({ splits: draft.splits.map((s, i) => i === index ? { ...s, amount: e.target.value } : s) })} />
+                <Field label="Amount" inputMode="decimal" value={split.amount} error={err(`splits.${index}.amount`)}
+                       onChange={(e) => changeSplit(index, { amount: e.target.value })} />
                 {draft.splits.length > 1 ? (
                   <Button aria-label={`Remove account ${index + 1}`}
                           onClick={() => onChange({ splits: draft.splits.filter((_, i) => i !== index) })}>
@@ -89,16 +102,18 @@ export function RecurringItemForm({
         ) : (
           <>
             <SelectField label={draft.kind === 'bill' ? 'Paid from' : 'From'} value={draft.fromAccountId}
+                         error={err('fromAccountId')}
                          onChange={(e) => onChange({ fromAccountId: e.target.value })}>
               {accountOptions(accounts)}
             </SelectField>
             {draft.kind !== 'bill' ? (
               <SelectField label={draft.kind === 'debt_payment' ? 'Pays (card or loan)' : 'To'} value={draft.toAccountId}
+                           error={err('toAccountId')}
                            onChange={(e) => onChange({ toAccountId: e.target.value })}>
                 {accountOptions(destinations)}
               </SelectField>
             ) : null}
-            <Field label="Amount" inputMode="decimal" value={draft.amount}
+            <Field label="Amount" inputMode="decimal" value={draft.amount} error={err('amount')}
                    onChange={(e) => onChange({ amount: e.target.value })} />
           </>
         )}
@@ -112,20 +127,22 @@ export function RecurringItemForm({
             <SelectField label="First day" value={draft.day1} onChange={(e) => onChange({ day1: e.target.value })}>
               {DAYS.slice(0, 27).map((d) => <option key={d} value={d}>{dayLabel(d)}</option>)}
             </SelectField>
-            <SelectField label="Second day" value={draft.day2} onChange={(e) => onChange({ day2: e.target.value })}>
+            <SelectField label="Second day" value={draft.day2} error={err('day2')}
+                         onChange={(e) => onChange({ day2: e.target.value })}>
               {DAYS.map((d) => <option key={d} value={d}>{dayLabel(d)}</option>)}
             </SelectField>
           </div>
         ) : null}
         <Field label={draft.frequency === 'once' ? 'Date' : 'First date'} type="date" required
-               value={draft.seriesStartDate} onChange={(e) => onChange({ seriesStartDate: e.target.value })} />
+               value={draft.seriesStartDate} error={err('seriesStartDate')}
+               onChange={(e) => onChange({ seriesStartDate: e.target.value })} />
         {draft.frequency !== 'once' ? (
-          <Field label="Last date (optional)" type="date" value={draft.endDate}
+          <Field label="Last date (optional)" type="date" value={draft.endDate} error={err('endDate')}
                  onChange={(e) => onChange({ endDate: e.target.value })} />
         ) : null}
 
         {hasCategory ? (
-          <SelectField label="Category (optional)" value={draft.categoryId}
+          <SelectField label="Category (optional)" value={draft.categoryId} error={err('categoryId')}
                        onChange={(e) => onChange({ categoryId: e.target.value })}>
             <CategoryOptions categories={pickable} placeholder={{ value: '', label: 'None' }} />
           </SelectField>
@@ -148,6 +165,7 @@ export function RecurringItemForm({
           </Button>
           {editing !== null ? <Button disabled={busy} onClick={onCancel}>Cancel</Button> : null}
         </div>
+        <FormError message={errors.form} />
       </form>
     </Surface>
   )
