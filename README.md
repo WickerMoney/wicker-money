@@ -5,6 +5,15 @@
   </picture>
 </h1>
 
+[![CI](https://github.com/wickermoney/wicker-money/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wickermoney/wicker-money/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/wickermoney/wicker-money?sort=semver&label=release)](https://github.com/wickermoney/wicker-money/releases/latest)
+[![Container image](https://img.shields.io/badge/ghcr.io-wicker--money-2e500d?logo=docker&logoColor=white)](https://github.com/wickermoney/wicker-money/pkgs/container/wicker-money)
+[![plugin-sdk on npm](https://img.shields.io/npm/v/%40wickermoney%2Fplugin-sdk?label=plugin-sdk&logo=npm)](https://www.npmjs.com/package/@wickermoney/plugin-sdk)
+[![ui-kit on npm](https://img.shields.io/npm/v/%40wickermoney%2Fui-kit?label=ui-kit&logo=npm)](https://www.npmjs.com/package/@wickermoney/ui-kit)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-wickermoney.dev-2e500d)](https://wickermoney.dev)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
+
 Self-hostable personal finance, rebuilt as a thin core plus installable plugins.
 
 The core owns identity, money movement and the app shell. Everything that
