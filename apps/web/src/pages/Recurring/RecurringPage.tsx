@@ -97,8 +97,11 @@ function Workspace({ list, accounts, categories, status, reload, showNotice }: W
     <>
       <RecurringSummary summary={list.summary} currency={currency} />
       <SuggestionsPanel
-        suggestions={suggested.suggestions} currency={currency} accountName={accountName} busy={status.busy}
+        suggestions={suggested.suggestions} dismissed={suggested.dismissed}
+        currency={currency} accountName={accountName} busy={status.busy}
         onConfirm={(s) => void suggested.confirm(s)}
+        onDismiss={(s) => void suggested.dismiss(s)}
+        onUndismiss={(d) => void suggested.undismiss(d)}
       />
       <div className="page__split recur-split">
         <div className="page">

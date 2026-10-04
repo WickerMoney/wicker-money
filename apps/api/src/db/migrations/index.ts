@@ -24,6 +24,7 @@ import * as m021 from './021_recurring_item_legs.js'
 import * as m022 from './022_account_spendable.js'
 import * as m023 from './023_budget_windows.js'
 import * as m024 from './024_recurring_occurrences.js'
+import * as m025 from './025_recurring_match_dismissals.js'
 
 /**
  * The complete, ordered set of schema migrations, keyed by migration name.
@@ -58,6 +59,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '022_account_spendable': m022,
   '023_budget_windows': m023,
   '024_recurring_occurrences': m024,
+  '025_recurring_match_dismissals': m025,
 }
 
 /** Kysely {@link MigrationProvider} that serves the fixed {@link MIGRATIONS} set. */

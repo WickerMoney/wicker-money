@@ -3,9 +3,10 @@ import type { Trx } from '../../db/Trx.js'
 import type { Database } from '../../db/models/index.js'
 import { databaseNow } from '../../accounts/repository/databaseNow.js'
 import type { CandidateTransactionRow } from './CandidateTransactionRow.js'
+import type { DismissalRow } from './DismissalRow.js'
 import type { OccurrenceLinkRow } from './OccurrenceLinkRow.js'
 import type { OccurrenceRecordRow } from './OccurrenceRecordRow.js'
-import type { OccurrenceFilter, RecurringOccurrenceRepository } from './RecurringOccurrenceRepository.js'
+import type { DismissalFilter, OccurrenceFilter, RecurringOccurrenceRepository } from './RecurringOccurrenceRepository.js'
 
 /** The most candidates one matching query returns; a few weeks on a few accounts is far below it. */
 const MAX_CANDIDATES = 500
@@ -180,6 +181,50 @@ export class KyselyRecurringOccurrenceRepository implements RecurringOccurrenceR
       .set({ recurring_occurrence_id: occurrenceId, updated_at: databaseNow })
       .where('id', 'in', [...transactionIds])
       .execute()
+  }
+
+  /** @inheritdoc */
+  async findRecordsById(ids: readonly string[]): Promise<{ id: string; recurring_item_id: string; nominal_date: string }[]> {
+    if (ids.length === 0) return []
+    return this.trx
+      .selectFrom('core.recurring_occurrences')
+      .select(['id', 'recurring_item_id', 'nominal_date'])
+      .where('id', 'in', [...ids])
+      .execute()
+  }
+
+  /** @inheritdoc */
+  async listDismissals(filter: DismissalFilter): Promise<DismissalRow[]> {
+    if (filter.transactionIds !== undefined && filter.transactionIds.length === 0) return []
+    let query = this.trx
+      .selectFrom('core.recurring_match_dismissals')
+      .select(['transaction_id', 'recurring_item_id', 'nominal_date'])
+    if (filter.transactionIds !== undefined) query = query.where('transaction_id', 'in', [...filter.transactionIds])
+    if (filter.itemId !== undefined) query = query.where('recurring_item_id', '=', filter.itemId)
+    if (filter.from !== undefined) query = query.where('nominal_date', '>=', filter.from)
+    if (filter.to !== undefined) query = query.where('nominal_date', '<', filter.to)
+    return query.orderBy('recurring_item_id').orderBy('nominal_date').orderBy('transaction_id').execute()
+  }
+
+  /** @inheritdoc */
+  async addDismissal(userId: string, transactionId: string, itemId: string, nominalDate: string): Promise<void> {
+    await this.trx
+      .insertInto('core.recurring_match_dismissals')
+      .values({ user_id: userId, transaction_id: transactionId, recurring_item_id: itemId, nominal_date: nominalDate })
+      .onConflict((oc) => oc.columns(['transaction_id', 'recurring_item_id', 'nominal_date']).doNothing())
+      .execute()
+  }
+
+  /** @inheritdoc */
+  async removeDismissals(transactionIds: readonly string[], itemId: string, nominalDate: string): Promise<number> {
+    if (transactionIds.length === 0) return 0
+    const result = await this.trx
+      .deleteFrom('core.recurring_match_dismissals')
+      .where('transaction_id', 'in', [...transactionIds])
+      .where('recurring_item_id', '=', itemId)
+      .where('nominal_date', '=', nominalDate)
+      .executeTakeFirst()
+    return Number(result.numDeletedRows)
   }
 }
 

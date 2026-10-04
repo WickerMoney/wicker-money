@@ -6,7 +6,10 @@ export type { CategoryKind } from './CategoryKind.js'
 export type { CategoryUsage } from './CategoryUsage.js'
 export type { ConditionType } from './ConditionType.js'
 export type { ConfigInfo } from './ConfigInfo.js'
-export type { MatchCandidate, MatchSuggestion, MatchSuggestionList, OccurrenceCandidates } from './MatchCandidate.js'
+export type {
+  DismissedSuggestion, MatchCandidate, MatchSuggestion, MatchSuggestionList, OccurrenceCandidates,
+  TransactionCandidate, TransactionCandidates, TransactionMatchList, TransactionMatchSummary,
+} from './MatchCandidate.js'
 export type { MigrationPlan } from './MigrationPlan.js'
 export type { OccurrenceStatus } from './OccurrenceStatus.js'
 export type { RecurrenceFrequency } from './RecurrenceFrequency.js'

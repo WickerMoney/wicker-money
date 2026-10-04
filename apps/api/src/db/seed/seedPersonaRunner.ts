@@ -6,6 +6,7 @@ import { budgetLineDefsFor, createBudgetLines } from './seedBudgets.js'
 import { createImportCsvFixtures } from './seedImportCsv.js'
 import type { Persona } from './seedPersonas.js'
 import { createRecurringItems, recurringItemDefsFor } from './seedRecurringItems.js'
+import { seedRecurringMatches } from './seedRecurringMatches.js'
 import { seedFrom, SeedRng } from './seedRng.js'
 import { createRules, ruleDefsFor } from './seedRules.js'
 import { seedLightHistory, seedMonthlyHistory, seedSpecialFixtures } from './seedTransactions.js'
@@ -85,9 +86,12 @@ export async function runPersona(ctx: RunContext, persona: Persona): Promise<Run
     await createRecurringItems(ctx.db, userId, recurringItemDefsFor('second'), accountIds, slugToId)
     await createBudgetLines(ctx.db, userId, budgetLineDefsFor('second'), slugToId)
   } else if (persona.key === 'household') {
-    // Recurring items only: balances are the opening balances, which is all
-    // the upcoming widget and forecast need to project from.
+    // Recurring items, plus just the transactions that show matching: cleared,
+    // late, skipped, a suggestion to confirm and a dismissed one. Balances are
+    // otherwise the opening balances, which is all the upcoming widget and
+    // forecast need to project from.
     await createRecurringItems(ctx.db, userId, recurringItemDefsFor('household'), accountIds, slugToId)
+    await seedRecurringMatches(ctx.services, userId, accountIds, slugToId)
   }
 
   return 'created'

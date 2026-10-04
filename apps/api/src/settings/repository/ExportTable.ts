@@ -10,3 +10,4 @@ export type ExportTable =
   | 'recurring_item_legs'
   | 'recurring_occurrences'
   | 'recurring_occurrence_legs'
+  | 'recurring_match_dismissals'
