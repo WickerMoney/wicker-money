@@ -1,0 +1,82 @@
+{
+  // Run via Ctrl+Shift+P -> "Tasks: Run Task". "dev: all" is the default build task (Ctrl+Shift+B).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: all",
+      "detail": "pnpm dev - api + web + plugins in watch mode (turbo)",
+      "type": "shell",
+      "command": "pnpm dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "turbo",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activesBegin": true, "beginsPattern": "Running dev in", "endsPattern": "ready in \\d+" }
+      },
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "panel": "dedicated", "group": "dev" }
+    },
+    {
+      "label": "dev: web + plugins (no api)",
+      "detail": "Used by the 'Full stack' debug config so the debugger owns the API process",
+      "type": "shell",
+      "command": "pnpm turbo run dev --filter=!@wickermoney/api",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "turbo",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activesBegin": true, "beginsPattern": "Running dev in", "endsPattern": "ready in \\d+" }
+      },
+      "presentation": { "panel": "dedicated", "group": "dev" }
+    },
+    {
+      "label": "build: api (+deps)",
+      "detail": "migrate runs from apps/api/dist, so it needs a fresh build",
+      "type": "shell",
+      "command": "pnpm turbo run build --filter=@wickermoney/api...",
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "db: migrate",
+      "detail": "Build api, then apply pending migrations as DATABASE_OWNER_URL",
+      "type": "shell",
+      "command": "pnpm --filter @wickermoney/api migrate",
+      "dependsOn": "build: api (+deps)",
+      "problemMatcher": []
+    },
+    {
+      "label": "db: migrate down (one step)",
+      "detail": "Reverts the most recent migration",
+      "type": "shell",
+      "command": "pnpm --filter @wickermoney/api migrate:down",
+      "dependsOn": "build: api (+deps)",
+      "problemMatcher": []
+    },
+    {
+      "label": "db: seed",
+      "type": "shell",
+      "command": "pnpm --filter @wickermoney/api seed",
+      "problemMatcher": []
+    },
+    {
+      "label": "db: seed (reset)",
+      "type": "shell",
+      "command": "pnpm --filter @wickermoney/api seed:reset",
+      "problemMatcher": []
+    },
+    {
+      "label": "db: local postgres up (docker)",
+      "detail": "Only if .env points at localhost instead of the homelab DB",
+      "type": "shell",
+      "command": "docker compose -f docker/docker-compose.dev.yml up -d --wait",
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: migrate + run all",
+      "detail": "Apply migrations, then start everything",
+      "dependsOrder": "sequence",
+      "dependsOn": ["db: migrate", "dev: all"],
+      "problemMatcher": []
+    }
+  ]
+}
