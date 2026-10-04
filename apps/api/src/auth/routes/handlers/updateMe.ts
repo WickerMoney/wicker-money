@@ -8,7 +8,7 @@ import { updateMeBody } from '../schemas/updateMeBody.js'
  * Only `timezone` can change: an IANA name, matched case-insensitively and
  * stored in its canonical spelling.
  *
- * Responds `200` with `{ id, email, timezone }`, `400` if the body fails
+ * Responds `200` with `{ id, email, timezone, role }`, `400` if the body fails
  * validation or names an unknown zone, and `401` if the request is not
  * authenticated.
  *

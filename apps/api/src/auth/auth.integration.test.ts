@@ -349,7 +349,8 @@ describe('access control', () => {
   it('identifies the caller', async () => {
     const user = await createUser(h)
     const res = await h.app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: auth(user) })
-    expect(res.json()).toEqual({ id: user.id, email: user.email, timezone: 'UTC' })
+    // Which role depends on who registered first; migration 026's suite covers that.
+    expect(res.json()).toEqual({ id: user.id, email: user.email, timezone: 'UTC', role: expect.stringMatching(/^(owner|member)$/) })
   })
 })
 
@@ -381,7 +382,9 @@ describe('time zone', () => {
     const user = await createUser(h)
     const res = await patchMe(user, { timezone: 'us/pacific' })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ id: user.id, email: user.email, timezone: 'America/Los_Angeles' })
+    expect(res.json()).toEqual({
+      id: user.id, email: user.email, timezone: 'America/Los_Angeles', role: expect.stringMatching(/^(owner|member)$/),
+    })
     expect((await me(user.accessToken)).json().timezone).toBe('America/Los_Angeles')
     const rotated = await refresh(user.refreshToken)
     expect(rotated.json().user.timezone).toBe('America/Los_Angeles')
