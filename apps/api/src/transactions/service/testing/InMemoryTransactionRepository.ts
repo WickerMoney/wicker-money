@@ -68,7 +68,7 @@ export class InMemoryTransactionRepository implements TransactionRepository {
     return this.visible().filter(
       (t) =>
         (criteria.accountId === undefined || t.account_id === criteria.accountId) &&
-        (criteria.uncategorizedOnly !== true || t.category_id === null) &&
+        (criteria.uncategorizedOnly !== true || (t.category_id === null && t.transfer_id === null)) &&
         (criteria.categoryId === undefined || (t.category_id !== null && categoryIds.has(t.category_id))) &&
         (criteria.from === undefined || t.transaction_date >= criteria.from) &&
         (criteria.to === undefined || t.transaction_date <= criteria.to) &&
