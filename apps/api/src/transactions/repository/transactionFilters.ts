@@ -19,7 +19,14 @@ export function transactionFilters(criteria: TransactionFilterCriteria) {
   return (eb: ExpressionBuilder<Database, 'core.transactions'>) => {
     const clauses = []
     if (criteria.accountId !== undefined) clauses.push(eb('account_id', '=', criteria.accountId))
-    if (criteria.uncategorizedOnly === true) clauses.push(eb('category_id', 'is', null))
+    if (criteria.uncategorizedOnly === true) {
+      // A transfer leg can never take a category (TRANSFER_HAS_NO_CATEGORY),
+      // so without this every transfer would sit in the triage list forever.
+      // Spelling out `transfer_id IS NULL` also lets the planner use the
+      // partial index `ix_transactions_uncategorized`, whose predicate is
+      // exactly these two clauses.
+      clauses.push(eb('category_id', 'is', null), eb('transfer_id', 'is', null))
+    }
     if (criteria.categoryId !== undefined) {
       // A parent matches everything under it. Picking "Food" and seeing only
       // what was filed directly against Food, rather than Groceries, Takeout

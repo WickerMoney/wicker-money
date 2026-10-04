@@ -4,7 +4,7 @@ export interface TransactionFilterCriteria {
   readonly accountId?: string
   /** Only transactions filed under this category or any of its children. */
   readonly categoryId?: string
-  /** When true, only transactions with no category. */
+  /** When true, only transactions with no category that still need one: transfer legs are left out. */
   readonly uncategorizedOnly?: boolean
   /** Earliest transaction date, inclusive, as `YYYY-MM-DD`. */
   readonly from?: string

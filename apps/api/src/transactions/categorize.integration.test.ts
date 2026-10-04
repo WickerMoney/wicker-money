@@ -61,6 +61,28 @@ describe('the uncategorized filter', () => {
     expect(items.some((t) => t.id === bare)).toBe(true)
     expect(items.every((t) => t.category_id === null)).toBe(true)
   })
+
+  it('leaves out transfer legs, which never take a category', async () => {
+    const savings = await h.app.inject({
+      method: 'POST', url: '/api/v1/accounts', headers: auth(user),
+      payload: { name: 'Savings', accountType: 'savings', openingBalance: '0.00' },
+    })
+    const created = await post<{ legs: Array<{ id: string }> }>('/api/v1/transactions/transfer', {
+      fromAccountId: accountId, toAccountId: (savings.json() as { id: string }).id,
+      amount: '25.00', transactionDate: '2026-03-04',
+    })
+    const legIds = created.legs.map((l) => l.id)
+    expect(legIds).toHaveLength(2)
+
+    const res = await h.app.inject({
+      method: 'GET', url: '/api/v1/transactions?uncategorized=true&limit=200&withTotal=true', headers: auth(user),
+    })
+    const body = res.json() as { items: Array<{ id: string; transfer_id: string | null }>; total: number }
+
+    expect(body.items.some((t) => legIds.includes(t.id))).toBe(false)
+    expect(body.items.every((t) => t.transfer_id === null)).toBe(true)
+    expect(body.total).toBe(body.items.length)
+  })
 })
 
 describe('bulk categorize', () => {
