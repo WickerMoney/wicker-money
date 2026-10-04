@@ -63,7 +63,7 @@ export const PERSONAS: readonly Persona[] = [
     key: 'household',
     email: `household@${SEED_EMAIL_DOMAIN}`,
     password: 'SeedHousehold!2026',
-    description: 'Two incomes, a split paycheck, Monthly + Yearly Expenses checking and sinking funds: recurring items only.',
+    description: 'Two incomes, a split paycheck, Monthly + Yearly Expenses checking and sinking funds: recurring items, with matched, late, skipped, suggested and dismissed occurrences.',
     onboard: true,
     situations: ['homeowner', 'vehicle', 'dental-vision'],
   },
