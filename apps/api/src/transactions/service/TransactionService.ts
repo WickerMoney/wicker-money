@@ -148,12 +148,19 @@ export class TransactionService {
    */
   async createTransfer(userId: string, input: NewTransfer): Promise<TransferCreated> {
     if (input.fromAccountId === input.toAccountId) {
-      throw new ValidationError('A transfer needs two different accounts.')
+      throw new ValidationError('A transfer needs two different accounts.', [
+        { path: ['toAccountId'], message: 'Choose a different account from the one the money leaves.' },
+      ])
     }
     const amount = money(input.amount)
-    if (amount.isZero()) throw new ValidationError('A transfer of nothing is not a transfer.')
+    if (amount.isZero()) {
+      throw new ValidationError('A transfer of nothing is not a transfer.', [
+        { path: ['amount'], message: 'Must be more than 0.' },
+      ])
+    }
     if (amount.isNegative()) {
-      throw new ValidationError('Give a positive amount — which account it leaves is what sets the direction.')
+      const message = 'Give a positive amount — which account it leaves is what sets the direction.'
+      throw new ValidationError(message, [{ path: ['amount'], message }])
     }
 
     try {

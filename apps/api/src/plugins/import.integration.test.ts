@@ -509,6 +509,22 @@ describe('saved mappings', () => {
     })
     expect(res.statusCode).toBe(400)
   })
+
+  it('names each refused part of a mapping, so the page can show it on that control', async () => {
+    const res = await h.app.inject({
+      method: 'POST', url: `${BASE}/mappings`, headers: headers(user),
+      payload: { ...MAPPING, sourceName: '  ', columns: { date: 'Date' } },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toMatchObject({
+      code: 'import_failed',
+      issues: [
+        { path: ['sourceName'], message: 'Give this file’s layout a name, so it can be used again.' },
+        { path: ['columns', 'merchant'], message: 'Choose the description column.' },
+      ],
+    })
+  })
 })
 
 describe('request size limits', () => {

@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { Button, Field, Spinner, Surface } from '@wickermoney/ui-kit'
+import {
+  Button, Field, FormError, NO_FORM_ERRORS, Spinner, Surface, formErrorsFrom, type FormErrors,
+} from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { formatDate } from '../../../lib/formatDate.js'
 import { formatMoney } from '../../../lib/formatMoney.js'
 import type { RecurringItem, RecurringOccurrence } from '../../../models/index.js'
 import { dayDifferenceText, statusLabel } from '../helpers/occurrenceLabels.js'
-import { overrideDraftFrom, overridePayload, SHARED_AMOUNT, type OverrideDraft } from '../helpers/overrideDraft.js'
+import {
+  overrideDraftFrom, overrideFieldFor, overridePayload, SHARED_AMOUNT, type OverrideDraft,
+} from '../helpers/overrideDraft.js'
 import { useOccurrences } from '../hooks/useOccurrences.js'
 
 /** Props for {@link OccurrencesPanel}. */
@@ -27,14 +31,20 @@ export interface OccurrencesPanelProps {
  */
 export function OccurrencesPanel({ item, today, currency, accountName, status, afterChange, onClose }: OccurrencesPanelProps) {
   const occ = useOccurrences(item, today, status, afterChange)
-  const [draft, setDraft] = useState<OverrideDraft | null>(null)
+  const [draft, setDraftState] = useState<OverrideDraft | null>(null)
+  // The "Change" form's problems, shown under its fields and beside its Save.
+  const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
   const busy = status.busy
+  const setDraft = (next: OverrideDraft | null) => { setDraftState(next); setErrors(NO_FORM_ERRORS) }
 
   const save = async (o: RecurringOccurrence) => {
     if (draft === null) return
     const built = overridePayload(item, draft)
-    if ('error' in built) { status.show(built.error); return }
-    if (await occ.record(o, built.payload)) setDraft(null)
+    if ('errors' in built) { setErrors(built.errors); return }
+    const saved = await occ.record(o, built.payload, (e) => {
+      setErrors(formErrorsFrom(e, overrideFieldFor(item), 'Could not save the change.'))
+    })
+    if (saved) setDraft(null)
   }
 
   return (
@@ -114,16 +124,18 @@ export function OccurrencesPanel({ item, today, currency, accountName, status, a
                 {editing !== null ? (
                   <form className="recur-override" onSubmit={(e) => { e.preventDefault(); void save(o) }}>
                     <Field label="Expected on" type="date" value={editing.expectedDate}
+                           error={errors.fields['expectedDate']}
                            onChange={(e) => setDraft({ ...editing, expectedDate: e.target.value })} />
                     {Object.keys(editing.amounts).map((key) => (
                       <Field key={key} label={key === SHARED_AMOUNT ? 'Amount' : `Amount, ${accountName(key)}`}
-                             inputMode="decimal" value={editing.amounts[key] ?? ''}
+                             inputMode="decimal" value={editing.amounts[key] ?? ''} error={errors.fields[key]}
                              onChange={(e) => setDraft({ ...editing, amounts: { ...editing.amounts, [key]: e.target.value } })} />
                     ))}
                     <div className="recur-actions">
                       <Button type="submit" variant="primary" disabled={busy}>Save</Button>
                       <Button disabled={busy} onClick={() => setDraft(null)}>Cancel</Button>
                     </div>
+                    <FormError message={errors.form} />
                   </form>
                 ) : null}
 

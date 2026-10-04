@@ -43,7 +43,8 @@ export interface AppDeps {
  * route modules. Does not start listening.
  *
  * Errors that are {@link AppError}s are returned as `{ code, message }` with
- * their status. Anything else is logged in full (including PostgreSQL
+ * their status, plus `issues` (`{ path, message }[]`) when the error carries
+ * them; every `validation_failed` response does. Anything else is logged in full (including PostgreSQL
  * diagnostic fields) and returned to the client as an opaque 500
  * `internal_error`. `GET /healthz` reports liveness and the running version;
  * `GET /readyz` also queries the database and reports the plugin SDK major
@@ -77,7 +78,11 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
-      return reply.code(error.statusCode).send({ code: error.code, message: error.message })
+      return reply.code(error.statusCode).send({
+        code: error.code,
+        message: error.message,
+        ...(error.issues === undefined ? {} : { issues: error.issues }),
+      })
     }
     // Client mistakes that Fastify itself detects (malformed JSON, oversized or
     // unsupported bodies, rate limiting) carry a 4xx `statusCode`. They are the

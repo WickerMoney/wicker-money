@@ -174,7 +174,7 @@ describe('RecurringItemService: occurrences', () => {
 
   it('refuses a reversed or oversized range', async () => {
     const service = serviceOver([], 'UTC', now)
-    await expect(service.occurrences('u', { from: '2026-10-02', to: '2026-10-01' })).rejects.toThrow(/on or after from/)
+    await expect(service.occurrences('u', { from: '2026-10-02', to: '2026-10-01' })).rejects.toThrow(/on or after the start of the range/)
     await expect(service.occurrences('u', { from: '2026-01-01', to: '2027-12-31' })).rejects.toThrow(/at most 400 days/)
   })
 })

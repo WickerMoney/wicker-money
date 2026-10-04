@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { NO_FORM_ERRORS } from '@wickermoney/ui-kit'
 import type { Category, MonthLine, MonthResponse } from '../models/index.js'
 import { BudgetLinesTable } from './BudgetLinesTable.js'
 import { WindowForm } from './WindowForm.js'
@@ -81,7 +82,7 @@ describe('the window form', () => {
   ]
 
   it('starts a new window on the first of the month shown and sends what was typed', async () => {
-    const onSave = vi.fn().mockResolvedValue(true)
+    const onSave = vi.fn().mockResolvedValue(NO_FORM_ERRORS)
     render(
       <WindowForm categories={categories} monthKey="2026-10" editing={null} busy={false} onSave={onSave} onCancel={vi.fn()} />,
     )
@@ -104,7 +105,7 @@ describe('the window form', () => {
   })
 
   it('prefills from the window being edited and saves it by id', async () => {
-    const onSave = vi.fn().mockResolvedValue(true)
+    const onSave = vi.fn().mockResolvedValue(NO_FORM_ERRORS)
     const onCancel = vi.fn()
     render(
       <WindowForm categories={categories} monthKey="2026-11" editing={gifts} busy={false} onSave={onSave} onCancel={onCancel} />,
@@ -117,5 +118,39 @@ describe('the window form', () => {
 
     await vi.waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: 'w1', note: 'Christmas' })))
     await vi.waitFor(() => expect(onCancel).toHaveBeenCalled())
+  })
+
+  it("shows the shared window rule's refusal under Through, without saving", async () => {
+    const onSave = vi.fn()
+    render(
+      <WindowForm categories={categories} monthKey="2026-11" editing={null} busy={false} onSave={onSave} onCancel={vi.fn()} />,
+    )
+    fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-11-30' } })
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '200' } })
+    onSave.mockResolvedValue({
+      fields: { through: 'That window is exactly one calendar month. Add it as a normal line on that month instead.' },
+      form: null,
+    })
+
+    fireEvent.click(screen.getByText('Add window'))
+
+    await vi.waitFor(() => {
+      const through = screen.getByLabelText('Through')
+      expect(through.getAttribute('aria-invalid')).toBe('true')
+      expect(document.getElementById(through.getAttribute('aria-describedby') ?? '')?.textContent)
+        .toMatch(/exactly one calendar month/)
+    })
+    expect(document.activeElement).toBe(screen.getByLabelText('Through'))
+  })
+
+  it("shows a refusal that is not about one field beside the buttons", async () => {
+    const onSave = vi.fn().mockResolvedValue({ fields: {}, form: 'This category already has a budget line on some of those days.' })
+    render(
+      <WindowForm categories={categories} monthKey="2026-11" editing={gifts} busy={false} onSave={onSave} onCancel={vi.fn()} />,
+    )
+
+    fireEvent.click(screen.getByText('Save window'))
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/already has a budget line/)
   })
 })

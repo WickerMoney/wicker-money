@@ -34,6 +34,9 @@
   border: 1px solid var(--wm-border); border-radius: 6px;
 }
 .bud__plan.is-dirty { border-color: var(--wm-accent); }
+.bud__plan[aria-invalid="true"] { border-color: var(--wm-negative); }
+/* A plan input and the reason it was refused, stacked in the cell. */
+.bud__plan-cell { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 
 /* A bar, not a chart: one value against one limit. The 2px surface gap keeps
    the fill from touching the track's edge so the two never read as one block,

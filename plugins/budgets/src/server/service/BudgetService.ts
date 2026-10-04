@@ -1,7 +1,7 @@
 import { compareMoney, subtractMoney, sumMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import {
   addDays, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
-  todayIn, windowProblem, type LineStatus,
+  todayIn, windowIssue, type LineStatus,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
 import type { BudgetUnitOfWork } from '../repository/BudgetUnitOfWork.js'
@@ -170,8 +170,10 @@ export class BudgetService {
    *   and `500 not_saved` if the write returns no row.
    */
   upsertWindow(userId: string, input: WindowInput): Promise<SavedWindow> {
-    const problem = windowProblem(input.start, input.through)
-    if (problem !== null) return Promise.reject(new BudgetError(problem, 400, 'bad_window'))
+    const issue = windowIssue(input.start, input.through)
+    if (issue !== null) {
+      return Promise.reject(new BudgetError(issue.message, 400, 'bad_window', [{ path: [issue.field], message: issue.message }]))
+    }
 
     const window = {
       categoryId: input.categoryId,

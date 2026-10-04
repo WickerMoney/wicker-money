@@ -7,7 +7,9 @@ import type {
   MatchSuggestionList, OccurrenceCandidates, RecurringItem, RecurringItemList, RecurringOccurrence,
 } from '../../models/index.js'
 import { makeAccount } from '../../testing/makeAccount.js'
+import { errorOf } from '../../testing/errorOf.js'
 import { makeCategory } from '../../testing/makeCategory.js'
+import { validationFailed } from '../../testing/validationFailed.js'
 import { RecurringPage } from './RecurringPage.js'
 
 const accounts = [
@@ -205,7 +207,79 @@ describe('the form', () => {
   })
 })
 
+describe('errors on the add/edit form', () => {
+  it('refuses a zero bill under Amount and a missing name under Name, without sending', async () => {
+    serve(full)
+    const post = vi.spyOn(api, 'post')
+    const user = userEvent.setup()
+    render(<RecurringPage />)
+    await screen.findByRole('button', { name: 'Add item' })
+
+    await user.type(screen.getByLabelText('Amount'), '0')
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
+
+    expect(errorOf('Name')).toBe('This cannot be empty.')
+    expect(errorOf('Amount')).toBe('Must be more than 0.')
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'))
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it("puts the API's refusal of a leg on the field it was typed in", async () => {
+    serve(full)
+    vi.spyOn(api, 'post').mockRejectedValue(
+      validationFailed([['legs', 0, 'accountId'], 'That account is archived; restore it or pick another.']),
+    )
+    const user = userEvent.setup()
+    render(<RecurringPage />)
+    await screen.findByRole('button', { name: 'Add item' })
+
+    await user.type(screen.getByLabelText('Name'), 'Phones')
+    await user.type(screen.getByLabelText('Amount'), '85')
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
+
+    await waitFor(() => { expect(errorOf('Paid from')).toBe('That account is archived; restore it or pick another.') })
+  })
+})
+
 describe('paid / landed matching', () => {
+  async function changeMortgage() {
+    const user = userEvent.setup()
+    render(<RecurringPage />)
+    const row = (await screen.findByText('Mortgage')).closest('tr') as HTMLElement
+    await user.click(within(row).getByRole('button', { name: 'History' }))
+    await screen.findByText('Upcoming')
+    await user.click(screen.getByRole('button', { name: 'Change' }))
+    return user
+  }
+
+  it('refuses a zero amount on one occurrence under its field, pointing at Skip', async () => {
+    serve(full)
+    const put = vi.spyOn(api, 'put')
+    const user = await changeMortgage()
+    const amount = screen.getByLabelText('Amount, Monthly Expenses')
+
+    await user.clear(amount)
+    await user.type(amount, '0')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(errorOf('Amount, Monthly Expenses')).toBe('Must be more than 0. To leave this one out, skip it instead.')
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it("puts the API's refusal of a move on Expected on", async () => {
+    serve(full)
+    vi.spyOn(api, 'put').mockRejectedValue(
+      validationFailed([['expectedDate'], 'An occurrence can move at most 31 days from 2026-09-30.']),
+    )
+    const user = await changeMortgage()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(errorOf('Expected on')).toBe('An occurrence can move at most 31 days from 2026-09-30.')
+    })
+  })
+
   it('offers suggested matches and records one only when asked', async () => {
     serve(full, [{ occurrence: occurrence({}), accountId: 'chk', candidate: candidates.legs[0]!.candidates[0]! }])
     const post = vi.spyOn(api, 'post').mockResolvedValue(occurrence({ status: 'cleared' }))

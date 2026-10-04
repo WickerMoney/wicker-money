@@ -133,6 +133,7 @@ function Workspace({ list, accounts, categories, status, reload, showNotice }: W
           <RecurringItemForm
             draft={editing.draft} editing={editing.editing}
             accounts={active} categories={categories} today={list.today} busy={status.busy}
+            errors={editing.errors} formRef={editing.formRef}
             onChange={editing.change} onSubmit={() => void editing.save()} onCancel={editing.reset}
           />
         )}

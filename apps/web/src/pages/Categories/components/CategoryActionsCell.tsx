@@ -1,4 +1,4 @@
-import { Button } from '@wickermoney/ui-kit'
+import { Button, FormError } from '@wickermoney/ui-kit'
 import type { Category } from '../../../models/index.js'
 import type { CategoryEditing } from '../state/CategoryEditing.js'
 
@@ -16,10 +16,13 @@ export interface CategoryActionsCellProps {
 export function CategoryActionsCell({ category: c, row, busy }: CategoryActionsCellProps) {
   if (row.editing?.id === c.id) {
     return (
-      <div className="page__actions page__actions--tight">
-        <Button variant="primary" disabled={busy} onClick={() => void row.save()}>Save</Button>
-        <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
-      </div>
+      <>
+        <div className="page__actions page__actions--tight">
+          <Button variant="primary" disabled={busy} onClick={() => void row.save()}>Save</Button>
+          <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
+        </div>
+        <FormError message={row.errors.form} />
+      </>
     )
   }
   return (

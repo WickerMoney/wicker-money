@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Button, CategoryOptions, Field, SelectField, orderByParent } from '@wickermoney/ui-kit'
+import {
+  Button, CategoryOptions, Field, FormError, SelectField, hasFormErrors, orderByParent, useFormErrors,
+  type FormErrors,
+} from '@wickermoney/ui-kit'
 import { editableMoney } from '@wickermoney/plugin-sdk/money'
 import { monthPeriod } from '../../shared/index.js'
 import type { Category, MonthLine, WindowDraft } from '../models/index.js'
@@ -12,8 +15,8 @@ export interface WindowFormProps {
   /** The window being edited, or `null` to add a new one. */
   readonly editing: MonthLine | null
   readonly busy: boolean
-  /** Saves the window. Resolves `true` once it is stored. */
-  readonly onSave: (draft: WindowDraft) => Promise<boolean>
+  /** Checks and saves the window. Resolves to its problems, or to none once it is stored. */
+  readonly onSave: (draft: WindowDraft) => Promise<FormErrors>
   /** Leaves edit mode without saving. */
   readonly onCancel: () => void
 }
@@ -32,6 +35,8 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
   const [through, setThrough] = useState('')
   const [planned, setPlanned] = useState('')
   const [note, setNote] = useState('')
+  const form = useFormErrors<HTMLDivElement>()
+  const { clear: clearErrors, clearField } = form
 
   // Prefill from the window being edited, or reset to a blank window starting
   // this month. Deliberately not keyed on `categories`: the list is reloaded
@@ -49,7 +54,8 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
       setPlanned('')
       setNote('')
     }
-  }, [editing, monthKey])
+    clearErrors()
+  }, [editing, monthKey, clearErrors])
 
   // Default the category to the first one the grouped dropdown lists, and keep
   // the choice valid if the list changes.
@@ -64,7 +70,7 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
   const ready = categoryId !== '' && start !== '' && through !== '' && planned.trim() !== ''
 
   const submit = async () => {
-    const saved = await onSave({
+    const errors = await onSave({
       id: editing?.id ?? null,
       categoryId,
       start,
@@ -72,6 +78,8 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
       planned: planned.trim(),
       note: note.trim() === '' ? null : note.trim(),
     })
+    form.show(errors)
+    const saved = !hasFormErrors(errors)
     if (saved && editing !== null) onCancel()
     else if (saved) { setThrough(''); setPlanned(''); setNote('') }
   }
@@ -85,25 +93,32 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
         A window is one amount spent down across a date range, like holiday gifts from October 1
         through December 25. It is funded once, and each month shows what is left.
       </p>
-      <div className="bud__add">
-        <SelectField label="Category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+      <div className="bud__add" ref={form.ref}>
+        <SelectField label="Category" value={categoryId} error={form.errors.fields['categoryId']}
+                     onChange={(e) => { setCategoryId(e.target.value); clearField('categoryId') }}>
           <CategoryOptions categories={categories} />
         </SelectField>
-        <Field label="From" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-        <Field label="Through" type="date" value={through} min={start} onChange={(e) => setThrough(e.target.value)} />
+        <Field label="From" type="date" value={start} error={form.errors.fields['start']}
+               onChange={(e) => { setStart(e.target.value); clearField('start') }} />
+        <Field label="Through" type="date" value={through} min={start} error={form.errors.fields['through']}
+               onChange={(e) => { setThrough(e.target.value); clearField('through') }} />
         <Field
           label="Amount"
           inputMode="decimal"
           placeholder="1500.00"
+          hint="0 is allowed: a window with nothing set aside yet."
           value={planned}
-          onChange={(e) => setPlanned(e.target.value)}
+          error={form.errors.fields['planned']}
+          onChange={(e) => { setPlanned(e.target.value); clearField('planned') }}
         />
-        <Field label="Note" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+        <Field label="Note" value={note} maxLength={300} error={form.errors.fields['note']}
+               onChange={(e) => { setNote(e.target.value); clearField('note') }} />
         <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
           {editing !== null ? 'Save window' : 'Add window'}
         </Button>
         {editing !== null ? <Button disabled={busy} onClick={onCancel}>Cancel</Button> : null}
       </div>
+      <FormError message={form.errors.form} />
     </div>
   )
 }

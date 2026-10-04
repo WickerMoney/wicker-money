@@ -1,3 +1,4 @@
+import { InlineInput } from '../../../forms/InlineInput.js'
 import { formatMoney } from '../../../lib/formatMoney.js'
 import type { Account } from '../../../models/index.js'
 import { SPENDABLE_TYPES } from '../helpers/accountTypes.js'
@@ -29,9 +30,9 @@ export function AccountBufferCell({ account: a, row }: AccountBufferCellProps) {
   }
   if (!SPENDABLE_TYPES.includes(editing.accountType)) return <span className="acct-na">—</span>
   return (
-    <input
-      className="cat-edit"
+    <InlineInput
       style={{ width: '7em' }}
+      error={row.errors.fields['bufferAmount']}
       inputMode="decimal"
       aria-label={`Buffer for ${a.name}`}
       title={BUFFER_HINT}

@@ -12,6 +12,8 @@ export interface BudgetLinesTableProps {
   readonly month: MonthResponse
   /** Plans being typed and not yet saved, keyed by category id. */
   readonly edits: Readonly<Record<string, string>>
+  /** Why a line's plan was refused, keyed by category id. Optional so a read-only table needs none. */
+  readonly planErrors?: Readonly<Record<string, string>>
   readonly busy: boolean
   readonly formatMoney: (value: string) => string
   /** Formats a `YYYY-MM-DD` date for display. */
@@ -30,7 +32,7 @@ export interface BudgetLinesTableProps {
  * pace bar, a status and the rollover setting.
  */
 export function BudgetLinesTable({
-  month, edits, busy, formatMoney: money, formatDate, onEditPlan, onSave, onRemove, onEditWindow,
+  month, edits, planErrors = {}, busy, formatMoney: money, formatDate, onEditPlan, onSave, onRemove, onEditWindow,
 }: BudgetLinesTableProps) {
   if (month.lines.length === 0) {
     return (
@@ -54,7 +56,10 @@ export function BudgetLinesTable({
           header: 'Planned',
           numeric: true,
           render: (l: MonthLine) => (
-            <PlannedCell line={l} draftValue={edits[l.categoryId]} onEditPlan={onEditPlan} onSave={onSave} />
+            <PlannedCell
+              line={l} draftValue={edits[l.categoryId]} error={planErrors[l.categoryId]}
+              onEditPlan={onEditPlan} onSave={onSave}
+            />
           ),
         },
         {

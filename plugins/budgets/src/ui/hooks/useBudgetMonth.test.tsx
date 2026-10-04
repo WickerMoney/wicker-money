@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import type { FormErrors } from '@wickermoney/ui-kit'
 import { BUDGETS_API_BASE } from '../../server/constants.js'
 import type { Category, MonthResponse } from '../models/index.js'
 import { deferred } from '../testing/deferred.js'
@@ -213,23 +214,42 @@ describe('useBudgetMonth actions', () => {
     expect(monthCalls(api)).toHaveLength(2)
   })
 
-  it('refuses a plan that is not an amount without calling the server', async () => {
+  it('refuses a plan the server would refuse, on that line, without calling it', async () => {
     const { api, hook } = await loaded()
 
-    await act(() => hook.result.current.save(line, 'abc', false))
+    await act(() => hook.result.current.save(line, '12.34567', false))
 
     expect(api.put).not.toHaveBeenCalled()
-    expect(hook.result.current.message).toBe("'abc' is not an amount.")
+    expect(hook.result.current.planErrors).toEqual({
+      c1: 'Enter an amount like 12.50, with no more than 4 decimal places.',
+    })
+    expect(hook.result.current.message).toBeNull()
   })
 
-  it('shows the server\'s message when a save fails, and stops being busy', async () => {
+  it('clears a line\'s error once its plan is edited again', async () => {
+    const { hook } = await loaded()
+    await act(() => hook.result.current.save(line, '-5', false))
+    expect(hook.result.current.planErrors).toEqual({ c1: 'Cannot be negative.' })
+
+    act(() => hook.result.current.editPlan('c1', '5'))
+
+    expect(hook.result.current.planErrors).toEqual({})
+  })
+
+  it('puts the server\'s refusal on the line, and stops being busy', async () => {
     const { api, hook } = await loaded()
-    api.put.mockRejectedValue(new Error('nope'))
+    api.put.mockRejectedValue(Object.assign(new Error('planned: Cannot be negative.'), {
+      issues: [{ path: ['planned'], message: 'Cannot be negative.' }],
+    }))
 
     await act(() => hook.result.current.save(line, '10', false))
 
-    expect(hook.result.current.message).toBe('nope')
+    expect(hook.result.current.planErrors).toEqual({ c1: 'Cannot be negative.' })
     expect(hook.result.current.busy).toBe(false)
+
+    api.put.mockRejectedValue(new Error('nope'))
+    await act(() => hook.result.current.save(line, '10', false))
+    expect(hook.result.current.planErrors).toEqual({ c1: 'nope' })
   })
 
   it('removes a line by month and category', async () => {
@@ -262,10 +282,10 @@ describe('useBudgetMonth actions', () => {
       id: null, categoryId: 'c1', start: '2026-10-01', through: '2026-12-25', planned: '1500', note: null,
     }
 
-    let saved = false
-    await act(async () => { saved = await hook.result.current.saveWindow(draft) })
+    let errors: FormErrors | null = null
+    await act(async () => { errors = await hook.result.current.saveWindow(draft) })
 
-    expect(saved).toBe(true)
+    expect(errors).toEqual({ fields: {}, form: null })
     expect(api.put).toHaveBeenCalledWith(`${BUDGETS_API_BASE}/window`, draft)
   })
 
@@ -273,16 +293,51 @@ describe('useBudgetMonth actions', () => {
     const { api, hook } = await loaded()
     api.put.mockRejectedValue(new Error('This category already has a budget line on some of those days.'))
 
-    let saved = true
+    let errors: FormErrors | null = null
     await act(async () => {
-      saved = await hook.result.current.saveWindow({
+      errors = await hook.result.current.saveWindow({
         id: null, categoryId: 'c1', start: '2026-10-01', through: '2026-12-25', planned: '10', note: null,
       })
     })
 
-    expect(saved).toBe(false)
-    expect(hook.result.current.message).toMatch(/already has a budget line/)
+    expect(errors).toEqual({ fields: {}, form: 'This category already has a budget line on some of those days.' })
     expect(hook.result.current.busy).toBe(false)
+  })
+
+  it('checks a window with the server\'s rules before sending it', async () => {
+    const { api, hook } = await loaded()
+
+    let errors: FormErrors | null = null
+    await act(async () => {
+      errors = await hook.result.current.saveWindow({
+        id: null, categoryId: 'c1', start: '2026-12-25', through: '2026-10-01', planned: '1.23456', note: null,
+      })
+    })
+
+    expect(errors).toEqual({
+      fields: {
+        through: 'The window ends before it starts.',
+        planned: 'Enter an amount like 12.50, with no more than 4 decimal places.',
+      },
+      form: null,
+    })
+    expect(api.put).not.toHaveBeenCalled()
+  })
+
+  it('puts the server\'s refusal of a window on its field', async () => {
+    const { api, hook } = await loaded()
+    api.put.mockRejectedValue(Object.assign(new Error('x'), {
+      issues: [{ path: ['categoryId'], message: 'Choose a category.' }],
+    }))
+
+    let errors: FormErrors | null = null
+    await act(async () => {
+      errors = await hook.result.current.saveWindow({
+        id: null, categoryId: 'c1', start: '2026-10-01', through: '2026-12-25', planned: '10', note: null,
+      })
+    })
+
+    expect(errors).toEqual({ fields: { categoryId: 'Choose a category.' }, form: null })
   })
 
   it('adopts the previous month and says how many lines came across', async () => {

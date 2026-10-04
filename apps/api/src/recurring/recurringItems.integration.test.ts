@@ -133,10 +133,10 @@ describe('creating', () => {
     ['an archived account', { legs: [{ accountId: 'archived', amount: '-1' }] }, /archived/],
     ["another user's account", { legs: [{ accountId: 'bobChecking', amount: '-1' }] }, /Account not found/],
     ['semimonthly days that collide in February', { frequency: 'semimonthly', semimonthlyDays: [28, 31] }, /27 or less/],
-    ['an end before the start', { endDate: '2024-01-01' }, /on or after seriesStartDate/],
+    ['an end before the start', { endDate: '2024-01-01' }, /on or after the first date/],
     ['an unknown frequency', { frequency: 'fortnightly' }, /frequency/],
     ['an unknown kind', { kind: 'expense' }, /kind/],
-    ['a non-date', { seriesStartDate: '2026-02-30' }, /real calendar date/],
+    ['a non-date', { seriesStartDate: '2026-02-30' }, /not on the calendar/],
     ['too many decimal places', { legs: [{ accountId: 'checking', amount: '-1.23456' }] }, /4 decimal places/],
   ])('refuses %s with a 400 that says why', async (_, over, message) => {
     // Account keys are resolved here, after beforeAll has created them.
@@ -147,6 +147,17 @@ describe('creating', () => {
     expect(res.statusCode, res.body).toBe(400)
     expect(res.json().code).toBe('validation_failed')
     expect(res.json().message).toMatch(message)
+  })
+
+  it('puts a refusal from the service on the leg it is about', async () => {
+    const res = await create(bill({ legs: [{ accountId: acct.checking, amount: '0' }] }))
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual({
+      code: 'validation_failed',
+      message: 'legs.0.amount: Must be more than 0.',
+      issues: [{ path: ['legs', 0, 'amount'], message: 'Must be more than 0.' }],
+    })
   })
 
   it('refuses an income item filed under an expense category', async () => {

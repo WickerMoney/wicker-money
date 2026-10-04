@@ -15,7 +15,7 @@ export const categoryBody = z.object({
     .string()
     .trim()
     .toLowerCase()
-    .pipe(z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be kebab-case.')),
+    .pipe(z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Use only lowercase letters, numbers and hyphens.')),
   parentId: z.string().uuid().nullish(),
   icon: z.string().max(50).nullish(),
   sortOrder: z.number().int().default(0),

@@ -17,9 +17,8 @@ import { money } from '../../money.js'
 export function assertTransferAmountKeepsDirection(currentAmount: string, nextAmount: string): void {
   const next = money(nextAmount)
   if (next.isZero() || next.isNegative() !== money(currentAmount).isNegative()) {
-    throw new ValidationError(
-      'A transfer leg keeps its direction: the amount must stay non-zero and keep its sign. ' +
-        'To reverse a transfer, delete it and record a new one.',
-    )
+    const message = 'A transfer leg keeps its direction: the amount must stay non-zero and keep its sign. ' +
+      'To reverse a transfer, delete it and record a new one.'
+    throw new ValidationError(message, [{ path: ['amount'], message }])
   }
 }

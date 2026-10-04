@@ -21,28 +21,49 @@ export interface TransactionFiltersFormProps {
   readonly onClear: () => void
 }
 
-/** The search, date, account, category and sort controls above the transaction list. */
+/** The longest search the API accepts. */
+const MAX_SEARCH = 200
+
+/**
+ * The search, date, account, category and sort controls above the transaction list.
+ *
+ * A search longer than the API accepts is named under the field and not
+ * applied. A "To" before "From" is applied as chosen (it simply matches
+ * nothing) but says so under "To", so an empty list is not a mystery.
+ */
 export function TransactionFiltersForm({
   filters, accounts, enabledCategories, busy, onChange, onClear,
 }: TransactionFiltersFormProps) {
   // Typed text is held locally and only applied on submit, so each keystroke
   // does not trigger a request.
   const [search, setSearch] = useState(filters.search)
+  const [searchError, setSearchError] = useState<string | undefined>(undefined)
+  const rangeError = filters.from !== '' && filters.to !== '' && filters.to < filters.from
+    ? 'Must be on or after From.'
+    : undefined
 
   return (
     <form
       className="txn__filters"
-      onSubmit={(e) => { e.preventDefault(); onChange({ search }) }}
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (search.trim().length > MAX_SEARCH) {
+          setSearchError(`Must be ${MAX_SEARCH} characters or fewer.`)
+          return
+        }
+        onChange({ search })
+      }}
     >
       <Field
         label="Search merchant"
         value={search}
         placeholder="COFFEE"
-        onChange={(e) => setSearch(e.target.value)}
+        error={searchError}
+        onChange={(e) => { setSearch(e.target.value); setSearchError(undefined) }}
       />
       <Field label="From" type="date" value={filters.from}
              onChange={(e) => onChange({ from: e.target.value })} />
-      <Field label="To" type="date" value={filters.to}
+      <Field label="To" type="date" value={filters.to} error={rangeError}
              onChange={(e) => onChange({ to: e.target.value })} />
       <SelectField label="Account" value={filters.accountId}
                    onChange={(e) => onChange({ accountId: e.target.value })}>
@@ -73,7 +94,7 @@ export function TransactionFiltersForm({
         <Button
           type="button"
           disabled={busy}
-          onClick={() => { setSearch(''); onClear() }}
+          onClick={() => { setSearch(''); setSearchError(undefined); onClear() }}
         >
           Clear
         </Button>

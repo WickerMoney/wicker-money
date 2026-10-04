@@ -11,7 +11,7 @@ import { UUID_PATTERN } from './UUID_PATTERN.js'
  */
 export function requireUuid(value: unknown, field: string): string {
   if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
-    throw new BudgetError(`${field} must be a category id.`, 400, 'bad_category')
+    throw BudgetError.field(field, 'Choose a category.', 'bad_category')
   }
   return value
 }

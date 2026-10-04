@@ -1,4 +1,4 @@
-import { isDate, isValidPlan } from '../../../shared/index.js'
+import { isDate, planProblem } from '../../../shared/index.js'
 import { BudgetError } from '../../service/BudgetError.js'
 import type { WindowInput } from '../../service/WindowInput.js'
 import { readRecord } from './readRecord.js'
@@ -23,20 +23,20 @@ export function readWindowInput(body: unknown): WindowInput {
   const planned = b['planned']
   // Numbers are refused, not coerced, for the same reason as on a monthly line:
   // a float has already lost precision by the time it arrives.
-  if (typeof planned !== 'string' || !isValidPlan(planned)) {
-    throw new BudgetError('planned must be an amount as a string, and not negative.', 400, 'bad_planned')
-  }
+  if (typeof planned !== 'string') throw BudgetError.field('planned', 'Must be an amount, sent as text.', 'bad_planned')
+  const problem = planProblem(planned)
+  if (problem !== null) throw BudgetError.field('planned', problem, 'bad_planned')
   const start = b['start']
   const through = b['through']
   if (typeof start !== 'string' || !isDate(start)) {
-    throw new BudgetError('start must be a date as YYYY-MM-DD.', 400, 'bad_date')
+    throw BudgetError.field('start', 'Must be a date like 2026-10-01.', 'bad_date')
   }
   if (typeof through !== 'string' || !isDate(through)) {
-    throw new BudgetError('through must be a date as YYYY-MM-DD.', 400, 'bad_date')
+    throw BudgetError.field('through', 'Must be a date like 2026-12-25.', 'bad_date')
   }
   const note = b['note']
   if (note !== undefined && note !== null && typeof note !== 'string') {
-    throw new BudgetError('note must be text.', 400, 'bad_note')
+    throw BudgetError.field('note', 'Must be text.', 'bad_note')
   }
   const id = b['id']
 

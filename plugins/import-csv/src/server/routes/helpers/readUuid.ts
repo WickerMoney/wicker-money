@@ -10,7 +10,7 @@ import { ImportError } from '../../service/ImportError.js'
  */
 export function readUuid(value: unknown, field: string): string {
   if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
-    throw new ImportError(`${field} must be a UUID.`)
+    throw ImportError.field([field], field === 'accountId' ? 'Choose an account.' : 'Must be a valid id.')
   }
   return value
 }

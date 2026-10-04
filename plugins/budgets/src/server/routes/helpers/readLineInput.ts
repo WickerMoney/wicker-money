@@ -1,4 +1,4 @@
-import { isValidPlan } from '../../../shared/index.js'
+import { planProblem } from '../../../shared/index.js'
 import { BudgetError } from '../../service/BudgetError.js'
 import type { LineInput } from '../../service/LineInput.js'
 import { readRecord } from './readRecord.js'
@@ -20,16 +20,12 @@ export function readLineInput(body: unknown): LineInput {
   // Numbers are refused rather than coerced. A float that arrived as JSON has
   // already lost whatever precision it was going to lose, and accepting it here
   // would put that loss in the database where it is permanent.
-  if (typeof planned !== 'string' || !isValidPlan(planned)) {
-    throw new BudgetError(
-      'planned must be an amount as a string, and not negative.',
-      400,
-      'bad_planned',
-    )
-  }
+  if (typeof planned !== 'string') throw BudgetError.field('planned', 'Must be an amount, sent as text.', 'bad_planned')
+  const problem = planProblem(planned)
+  if (problem !== null) throw BudgetError.field('planned', problem, 'bad_planned')
   const note = b['note']
   if (note !== undefined && note !== null && typeof note !== 'string') {
-    throw new BudgetError('note must be text.', 400, 'bad_note')
+    throw BudgetError.field('note', 'Must be text.', 'bad_note')
   }
 
   return {

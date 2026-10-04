@@ -1,4 +1,4 @@
-import { Button, Field, Surface } from '@wickermoney/ui-kit'
+import { Button, Field, FormError, Surface, type FormErrors } from '@wickermoney/ui-kit'
 import { formatMoney } from '../../../lib/formatMoney.js'
 import type { Account, BalancePreview } from '../../../models/index.js'
 
@@ -10,6 +10,8 @@ export interface FixOpeningBalancePanelProps {
   readonly balanceInput: string
   /** `null` until the server has previewed the typed value. */
   readonly preview: BalancePreview | null
+  /** What is wrong with the typed value, or with applying it. */
+  readonly errors: FormErrors
   /** `true` while a request is in flight; disables the controls. */
   readonly busy: boolean
   /** Called as the typed value changes. */
@@ -27,7 +29,7 @@ export interface FixOpeningBalancePanelProps {
  * changing the opening figure moves every balance the account has ever reported.
  */
 export function FixOpeningBalancePanel({
-  account, balanceInput, preview, busy, onInputChange, onApply, onCancel,
+  account, balanceInput, preview, errors, busy, onInputChange, onApply, onCancel,
 }: FixOpeningBalancePanelProps) {
   return (
     <Surface title={`Fix opening balance for '${account.name}'`}>
@@ -41,6 +43,7 @@ export function FixOpeningBalancePanel({
       <Field
         label="New opening balance" inputMode="decimal" autoFocus
         value={balanceInput}
+        error={errors.fields['initialBalance']}
         onChange={(e) => onInputChange(e.target.value)}
       />
       {preview !== null ? (
@@ -57,6 +60,7 @@ export function FixOpeningBalancePanel({
         </Button>
         <Button disabled={busy} onClick={onCancel}>Cancel</Button>
       </div>
+      <FormError message={errors.form} />
     </Surface>
   )
 }

@@ -11,6 +11,7 @@ export {
   parseMoney, type AmountStyle, type DateFormat,
 } from './fields.js'
 export { mapParsedRows } from './mapParsedRows.js'
+export { MAX_SOURCE_NAME, mappingIssues, type MappingIssue } from './mappingIssues.js'
 export {
   mapRows, suggestAmountStyle, suggestColumns,
   type ColumnMap, type MapResult, type MappedRow, type RowError, type SourceMapping,

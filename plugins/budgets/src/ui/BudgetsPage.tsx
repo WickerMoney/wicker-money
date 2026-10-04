@@ -69,6 +69,7 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
           <BudgetLinesTable
             month={month}
             edits={budget.edits}
+            planErrors={budget.planErrors}
             busy={budget.busy}
             formatMoney={money}
             formatDate={ctx.formatDate}
@@ -93,7 +94,7 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
             categories={budget.categories}
             lines={month.lines}
             busy={budget.busy}
-            onAdd={(categoryId) => void budget.addLine(categoryId)}
+            onAdd={budget.addLine}
           />
         </Surface>
       ) : null}

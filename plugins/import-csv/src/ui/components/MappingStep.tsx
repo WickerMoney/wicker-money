@@ -1,4 +1,4 @@
-import { Alert, Field, SelectField, Surface } from '@wickermoney/ui-kit'
+import { Alert, Field, SelectField, Surface, type FormErrors } from '@wickermoney/ui-kit'
 import type { AmountStyle, ColumnMap, DateFormat, MapResult } from '../../shared/index.js'
 import { ColumnSelect } from './ColumnSelect.js'
 
@@ -18,6 +18,8 @@ export interface MappingStepProps {
   readonly onSourceName: (next: string) => void
   readonly preview: MapResult | null
   readonly formatMoney: (value: string) => string
+  /** Why a choice was refused, keyed `sourceName`, `dateFormat`, `amountStyle` or `columns.<name>`. */
+  readonly errors?: FormErrors
 }
 
 /**
@@ -33,18 +35,20 @@ export function MappingStep(p: MappingStepProps) {
   const set = (patch: Partial<ColumnMap>) => p.onColumns({ ...p.columns, ...patch })
   const rows = p.preview?.rows.slice(0, 8) ?? []
   const errors = p.preview?.errors ?? []
+  const fieldError = (field: string) => p.errors?.fields[field]
 
   return (
     <Surface title="2 · Columns and formats">
       <div className="imp__grid">
         <ColumnSelect label="Date" headers={p.headers} value={p.columns.date}
-                      onChange={(v) => set({ date: v })} required />
+                      onChange={(v) => set({ date: v })} required error={fieldError('columns.date')} />
         <ColumnSelect label="Description" headers={p.headers} value={p.columns.merchant}
-                      onChange={(v) => set({ merchant: v })} required />
+                      onChange={(v) => set({ merchant: v })} required error={fieldError('columns.merchant')} />
 
         <SelectField
           label="Date format *"
           value={p.dateFormat}
+          error={fieldError('dateFormat')}
           onChange={(e) => p.onDateFormat(e.target.value as DateFormat)}
         >
           {p.dateFormats.map((f) => (
@@ -55,6 +59,7 @@ export function MappingStep(p: MappingStepProps) {
         <SelectField
           label="Amount columns"
           value={p.amountStyle}
+          error={fieldError('amountStyle')}
           onChange={(e) => p.onAmountStyle(e.target.value as AmountStyle)}
         >
           <option value="signed">One signed amount column</option>
@@ -63,22 +68,22 @@ export function MappingStep(p: MappingStepProps) {
 
         {p.amountStyle === 'signed' ? (
           <ColumnSelect label="Amount" headers={p.headers} value={p.columns.amount}
-                        onChange={(v) => set({ amount: v })} required />
+                        onChange={(v) => set({ amount: v })} required error={fieldError('columns.amount')} />
         ) : (
           <>
             <ColumnSelect label="Debit (money out)" headers={p.headers} value={p.columns.debit}
-                          onChange={(v) => set({ debit: v })} />
+                          onChange={(v) => set({ debit: v })} error={fieldError('columns.debit')} />
             <ColumnSelect label="Credit (money in)" headers={p.headers} value={p.columns.credit}
-                          onChange={(v) => set({ credit: v })} />
+                          onChange={(v) => set({ credit: v })} error={fieldError('columns.credit')} />
           </>
         )}
 
         <ColumnSelect label="Notes" headers={p.headers} value={p.columns.notes}
-                      onChange={(v) => set({ notes: v })} />
+                      onChange={(v) => set({ notes: v })} error={fieldError('columns.notes')} />
         <ColumnSelect label="Transaction ID" headers={p.headers} value={p.columns.externalId}
-                      onChange={(v) => set({ externalId: v })} />
+                      onChange={(v) => set({ externalId: v })} error={fieldError('columns.externalId')} />
 
-        <Field label="Remember as" value={p.sourceName}
+        <Field label="Remember as" value={p.sourceName} error={fieldError('sourceName')}
                onChange={(e) => p.onSourceName(e.target.value)}
                placeholder="e.g. Chase Checking" />
       </div>

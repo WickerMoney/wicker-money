@@ -127,6 +127,25 @@ describe('recording a transfer', () => {
       amount: '25.00', transactionDate: '2026-04-13',
     })
     expect(res.statusCode).toBe(400)
+    // The service's refusal names the field it is about, so the form can put
+    // it under "To account" rather than in a banner.
+    expect(res.json()).toEqual({
+      code: 'validation_failed',
+      message: 'A transfer needs two different accounts.',
+      issues: [{ path: ['toAccountId'], message: 'Choose a different account from the one the money leaves.' }],
+    })
+  })
+
+  it('refuses a transfer of zero on the amount', async () => {
+    const res = await transfer({
+      fromAccountId: checking, toAccountId: savings,
+      amount: '0', transactionDate: '2026-04-13',
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toMatchObject({
+      message: 'A transfer of nothing is not a transfer.',
+      issues: [{ path: ['amount'], message: 'Must be more than 0.' }],
+    })
   })
 
   it('refuses an account that is not yours', async () => {

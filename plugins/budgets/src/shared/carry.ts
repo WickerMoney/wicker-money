@@ -145,17 +145,34 @@ export function totalPlanned(lines: readonly { planned: string }[]): string {
 }
 
 /**
+ * Says what is wrong with a planned amount, in the words the page and the
+ * server both use, so a plan refused in the browser reads the same as one
+ * refused by the API.
+ *
+ * Zero is a plan ("nothing budgeted"), so it is allowed; a negative plan is
+ * not. A fifth decimal place is refused rather than truncated into a plan the
+ * user never typed.
+ *
+ * @param value - Candidate text, e.g. from an input field.
+ * @returns A sentence about the field, or `null` when the plan is acceptable; never throws.
+ */
+export function planProblem(value: string): string | null {
+  if (value.trim() === '') return 'This cannot be empty. Enter 0 for no plan.'
+  let units: bigint
+  try {
+    units = moneyToUnits(value)
+  } catch {
+    return 'Enter an amount like 12.50, with no more than 4 decimal places.'
+  }
+  return units < 0n ? 'Cannot be negative.' : null
+}
+
+/**
  * Tests whether a string is acceptable as a planned amount.
  *
  * @param value - Candidate text, e.g. from an input field.
- * @returns `true` if it is a decimal with at most four places that is not
- *   negative; never throws. A fifth place is refused, as the API refuses it,
- *   rather than truncated into a plan the user never typed.
+ * @returns `true` when {@link planProblem} finds nothing wrong; never throws.
  */
 export function isValidPlan(value: string): boolean {
-  try {
-    return moneyToUnits(value) >= 0n
-  } catch {
-    return false
-  }
+  return planProblem(value) === null
 }

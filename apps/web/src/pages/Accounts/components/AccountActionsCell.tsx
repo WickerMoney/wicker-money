@@ -1,4 +1,4 @@
-import { Button } from '@wickermoney/ui-kit'
+import { Button, FormError } from '@wickermoney/ui-kit'
 import type { Account } from '../../../models/index.js'
 import type { AccountEditing } from '../state/AccountEditing.js'
 
@@ -24,10 +24,13 @@ export function AccountActionsCell({
 }: AccountActionsCellProps) {
   if (row.editing?.id === a.id) {
     return (
-      <div className="page__actions page__actions--tight">
-        <Button variant="primary" disabled={busy} onClick={() => void row.save()}>Save</Button>
-        <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
-      </div>
+      <>
+        <div className="page__actions page__actions--tight">
+          <Button variant="primary" disabled={busy} onClick={() => void row.save()}>Save</Button>
+          <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
+        </div>
+        <FormError message={row.errors.form} />
+      </>
     )
   }
   return (

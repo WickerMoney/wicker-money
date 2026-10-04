@@ -273,6 +273,9 @@
   color: var(--wm-text); background: var(--wm-surface);
   border: 1px solid var(--wm-accent); border-radius: 6px;
 }
+.cat-edit[aria-invalid="true"] { border-color: var(--wm-negative); }
+/* An inline editor and its error message, stacked inside one table cell. */
+.inline-input { display: flex; flex-direction: column; gap: 2px; }
 .cat-off { opacity: .55; }
 .page__actions--tight { margin-bottom: 0; gap: 6px; }
 
