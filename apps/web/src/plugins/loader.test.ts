@@ -8,7 +8,8 @@ const apiGet = vi.fn()
 vi.mock('@module-federation/runtime', () => ({ init, registerRemotes, loadRemote }))
 vi.mock('../api/client.js', () => ({ api: { get: apiGet } }))
 
-const { loadPluginRegistry, loadPluginModule } = await import('./loader.js')
+// Re-imported per test: the loader remembers which remotes it registered.
+let { loadPluginRegistry, loadPluginModule } = await import('./loader.js')
 
 function manifest(overrides: Record<string, unknown> = {}) {
   return {
@@ -23,7 +24,9 @@ function manifest(overrides: Record<string, unknown> = {}) {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.resetModules()
+  ;({ loadPluginRegistry, loadPluginModule } = await import('./loader.js'))
   registerRemotes.mockReset()
   loadRemote.mockReset()
   apiGet.mockReset()
@@ -60,6 +63,19 @@ describe('loadPluginRegistry', () => {
     expect(plugins.map((p) => p.id)).toEqual(['wickermoney.insights'])
     expect(failures).toHaveLength(1)
     expect(failures[0]?.pluginId).toBe('broken.plugin')
+    expect(registerRemotes).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers a remote once however often the registry is fetched', async () => {
+    apiGet.mockResolvedValue({ plugins: [manifest()] })
+    await loadPluginRegistry()
+    // Switched off: the next fetch leaves it out.
+    apiGet.mockResolvedValue({ plugins: [] })
+    expect((await loadPluginRegistry()).plugins).toEqual([])
+    // Switched on again: listed and returned, but not registered a second time.
+    apiGet.mockResolvedValue({ plugins: [manifest()] })
+    expect((await loadPluginRegistry()).plugins.map((p) => p.id)).toEqual(['wickermoney.insights'])
+
     expect(registerRemotes).toHaveBeenCalledTimes(1)
   })
 

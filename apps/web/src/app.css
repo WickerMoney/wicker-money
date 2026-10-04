@@ -401,3 +401,6 @@
 .txn-recur__find { align-self: flex-start; color: var(--wm-text-muted); }
 .txn-recur__picker { margin-top: 2px; padding: 6px; font-size: 12px; }
 .txn-recur__picker .recur-candidate { grid-template-columns: minmax(0, 1fr) auto; }
+/* A plugin page whose plugin is switched off or did not load. */
+.plugin-off .wm-empty { padding: 40px 16px; }
+.plugin-off .wm-btn { text-decoration: none; display: inline-block; }
