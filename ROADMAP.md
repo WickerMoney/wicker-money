@@ -4,7 +4,7 @@ Wicker Money is pre-1.0 and has a single maintainer. This is direction, not a
 promise: items move, shrink or disappear, and there are no dates.
 
 **Now** is what the next release is working toward. The current release is
-`v0.2.1`; see `CHANGELOG.md` for what each tag contains.
+`v0.3.0`; see `CHANGELOG.md` for what each tag contains.
 
 ## Shipped
 
@@ -14,18 +14,17 @@ promise: items move, shrink or disappear, and there are no dates.
 | M2 | The shell and the first plugin: Module Federation host, dashboard widgets from plugins, scoped plugin client |
 | M3 | Import and categorization: CSV import, category rules with preview, triage tools |
 | M4 (`v0.1.0`) | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
+| `v0.3.0` | Recurring items, the fast follow: paid / landed matching (suggested matches to confirm, per-occurrence skip, move and amount, late occurrences carried forward on matched items), so "Until payday" and the forecast stop counting what already arrived. Also budget windows (one amount for one category across a date range, such as holiday gifts from October 1 to December 25) and a shared exact-money module in `plugin-sdk` (`/money`) |
 | `v0.2.1` | Recurring items, Phase B: a Forecast page (bundled plugin) showing each account's projected daily balance from its recurring items over 30/60/90 days, 6 months or to year end. It has a step chart with zero and buffer lines, a first-breach banner, stat tiles, and what moves the line. Also a time zone setting, with the browser's zone taken at sign-up |
 | `v0.2.0` | Recurring items, Phase A: a Recurring page for income, bills, debt payments and transfers (items plus per-account legs), the "Until payday" dashboard widget with per-account shortfall warnings and a choice of which accounts count toward safe to spend, buffers editable on the Accounts page, the `plugin-sdk` recurrence module, and transfer `externalId` for duplicate-safe imports |
 
 ## Now
 
-The fast follow to recurring items:
+Rounding out matching:
 
-- Paid / landed matching for "Until payday" and the forecast (in review):
-  transactions matched to occurrences, suggested matches to confirm,
-  per-occurrence skip, move and amount, and late occurrences carried
-  forward on items that are matched. Follow-ups: matching from the
-  Transactions page, dismissing a suggestion, and seed data that shows it.
+- Match from the Transactions page, not only from the Recurring page.
+- Dismiss a suggested match so it stops being offered.
+- Seed data that shows matched, skipped and late occurrences.
 
 ## Next
 
