@@ -3,6 +3,7 @@ import { Surface } from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { ReferenceData } from '../hooks/useReferenceData.js'
 import type { TransactionList } from '../hooks/useTransactionList.js'
+import { useTransactionMatches } from '../hooks/useTransactionMatches.js'
 import { categoryOptionsFor } from '../helpers/categoryOptionsFor.js'
 import { TransactionFiltersForm } from './TransactionFiltersForm.js'
 import { TransactionPager } from './TransactionPager.js'
@@ -23,6 +24,7 @@ export interface TransactionsPanelProps {
 export function TransactionsPanel({ list, reference, status }: TransactionsPanelProps) {
   const { accounts, categories, enabledCategories } = reference
   const { filters, items } = list
+  const matches = useTransactionMatches(items, status)
 
   const optionsFor = useCallback(
     (currentId: string | null) => categoryOptionsFor(categories, enabledCategories, currentId),
@@ -55,6 +57,7 @@ export function TransactionsPanel({ list, reference, status }: TransactionsPanel
         onlyUncategorized={filters.onlyUncategorized}
         categoryOptionsFor={optionsFor}
         status={status}
+        matches={matches}
         onToggleSelected={list.toggleSelected}
         onToggleAllSelected={list.toggleAllSelected}
         onChanged={list.reload}

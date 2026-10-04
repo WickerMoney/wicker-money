@@ -1,9 +1,22 @@
 import type { CandidateTransactionRow } from './CandidateTransactionRow.js'
+import type { DismissalRow } from './DismissalRow.js'
 import type { OccurrenceLinkRow } from './OccurrenceLinkRow.js'
 import type { OccurrenceRecordRow } from './OccurrenceRecordRow.js'
 
 /** Which recorded occurrences to read. Both bounds are on the nominal date. */
 export interface OccurrenceFilter {
+  /** Only this item's. */
+  readonly itemId?: string
+  /** Nominal date on or after, `YYYY-MM-DD`. */
+  readonly from?: string
+  /** Nominal date before, `YYYY-MM-DD`. */
+  readonly to?: string
+}
+
+/** Which dismissals to read. Every given condition must hold. */
+export interface DismissalFilter {
+  /** Only dismissals of these transactions. */
+  readonly transactionIds?: readonly string[]
   /** Only this item's. */
   readonly itemId?: string
   /** Nominal date on or after, `YYYY-MM-DD`. */
@@ -128,4 +141,40 @@ export interface RecurringOccurrenceRepository {
    * @param occurrenceId - The occurrence's row, or `null` to unlink.
    */
   setLink(transactionIds: readonly string[], occurrenceId: string | null): Promise<void>
+
+  /**
+   * Reads occurrence rows by id: which item and nominal date each one is.
+   *
+   * @param ids - Occurrence row ids, as `transactions.recurring_occurrence_id` holds them.
+   * @returns The ones visible to this user.
+   */
+  findRecordsById(ids: readonly string[]): Promise<{ id: string; recurring_item_id: string; nominal_date: string }[]>
+
+  /**
+   * Lists dismissed suggestions.
+   *
+   * @param filter - Which ones.
+   * @returns Dismissals ordered by item, nominal date, then transaction.
+   */
+  listDismissals(filter: DismissalFilter): Promise<DismissalRow[]>
+
+  /**
+   * Records that a transaction is not an occurrence. Doing it twice is a no-op.
+   *
+   * @param userId - Owner.
+   * @param transactionId - The transaction.
+   * @param itemId - The occurrence's item.
+   * @param nominalDate - The occurrence's nominal date.
+   */
+  addDismissal(userId: string, transactionId: string, itemId: string, nominalDate: string): Promise<void>
+
+  /**
+   * Forgets dismissals of an occurrence, so the transactions can be suggested for it again.
+   *
+   * @param transactionIds - The transactions.
+   * @param itemId - The occurrence's item.
+   * @param nominalDate - The occurrence's nominal date.
+   * @returns How many were deleted.
+   */
+  removeDismissals(transactionIds: readonly string[], itemId: string, nominalDate: string): Promise<number>
 }
