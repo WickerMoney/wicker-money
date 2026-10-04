@@ -14,7 +14,7 @@ import { MAX_CSV_BYTES } from './MAX_CSV_BYTES.js'
  */
 export function readCsv(body: { csv?: unknown }): string {
   if (typeof body.csv !== 'string' || body.csv.trim() === '') {
-    throw new ImportError('csv must be a non-empty string.')
+    throw ImportError.field(['csv'], 'Choose a file with at least one row.')
   }
   // Every UTF-8 character is at least one byte, so a string with more
   // characters than the limit is too large without measuring it.

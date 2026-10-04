@@ -22,16 +22,16 @@ describe('readCsv', () => {
   })
 
   it('refuses a missing csv', () => {
-    expect(messageOf(() => readCsv({}))).toBe('csv must be a non-empty string.')
+    expect(messageOf(() => readCsv({}))).toBe('csv: Choose a file with at least one row.')
   })
 
   it('refuses a csv that is not a string', () => {
-    expect(messageOf(() => readCsv({ csv: 42 }))).toBe('csv must be a non-empty string.')
-    expect(messageOf(() => readCsv({ csv: ['a'] }))).toBe('csv must be a non-empty string.')
+    expect(messageOf(() => readCsv({ csv: 42 }))).toBe('csv: Choose a file with at least one row.')
+    expect(messageOf(() => readCsv({ csv: ['a'] }))).toBe('csv: Choose a file with at least one row.')
   })
 
   it('refuses blank text', () => {
-    expect(messageOf(() => readCsv({ csv: '  \n\t ' }))).toBe('csv must be a non-empty string.')
+    expect(messageOf(() => readCsv({ csv: '  \n\t ' }))).toBe('csv: Choose a file with at least one row.')
   })
 
   it('accepts a file exactly at the limit', () => {
@@ -59,8 +59,8 @@ describe('request readers', () => {
   const accountId = '5b0b8a0e-8d0b-4f0e-9d0e-0a8d0b4f0e9d'
 
   it('treats a missing body as a validation error, not a crash', () => {
-    expect(messageOf(() => readAnalyzeRequest(undefined))).toBe('accountId must be a UUID.')
-    expect(messageOf(() => readCommitRequest(null))).toBe('accountId must be a UUID.')
+    expect(messageOf(() => readAnalyzeRequest(undefined))).toBe('accountId: Choose an account.')
+    expect(messageOf(() => readCommitRequest(null))).toBe('accountId: Choose an account.')
   })
 
   it('defaults the commit file name and accepted rows', () => {

@@ -70,6 +70,8 @@ describe('useImportFlow preview', () => {
 
 type Body = Record<string, unknown>
 
+const ACCOUNTS = [{ id: '00000000-0000-4000-8000-000000000001', name: 'Checking' }]
+
 /** A context whose `post` records commit bodies and fails them as told. */
 function commitContext(failures: number) {
   let remaining = failures
@@ -86,7 +88,7 @@ function commitContext(failures: number) {
     }
     return {}
   })
-  const get = vi.fn(async (path: string) => (path.endsWith('/mappings') ? { mappings: [] } : { accounts: [] }))
+  const get = vi.fn(async (path: string) => (path.endsWith('/mappings') ? { mappings: [] } : { accounts: ACCOUNTS }))
   return { ctx: { api: { get, post } } as unknown as PluginContext, commits }
 }
 
@@ -122,7 +124,7 @@ describe('useImportFlow commit idempotency key', () => {
     await act(async () => {
       await result.current.commit()
     })
-    expect(result.current.error).toBe('network down')
+    expect(result.current.errors.form).toBe('network down')
     await act(async () => {
       await result.current.commit()
     })
@@ -173,5 +175,44 @@ describe('useImportFlow commit idempotency key', () => {
       await result.current.commit()
     })
     expect(commits[1]?.['idempotencyKey']).not.toBe(commits[0]?.['idempotencyKey'])
+  })
+})
+
+describe('useImportFlow errors', () => {
+  it('refuses a source name the server would refuse, on that field, without sending', async () => {
+    const { ctx } = commitContext(0)
+    const { result } = renderHook(() => useImportFlow(ctx))
+    await waitFor(() => expect(result.current.accountId).not.toBe(''))
+    await act(async () => { await result.current.onFile(new File([CSV], 'march.csv', { type: 'text/csv' })) })
+    act(() => result.current.setSourceName('x'.repeat(121)))
+
+    await act(async () => { await result.current.analyze() })
+
+    expect(result.current.errors.fields).toEqual({ sourceName: 'Must be 120 characters or fewer.' })
+    expect(ctx.api.post).not.toHaveBeenCalled()
+  })
+
+  it("puts the server's refusal on the control it names", async () => {
+    const { ctx } = commitContext(0)
+    vi.mocked(ctx.api.post).mockRejectedValueOnce(Object.assign(new Error('columns.merchant: Choose the description column.'), {
+      issues: [{ path: ['columns', 'merchant'], message: 'Choose the description column.' }],
+    }))
+    const { result } = renderHook(() => useImportFlow(ctx))
+    await waitFor(() => expect(result.current.accountId).not.toBe(''))
+    await act(async () => { await result.current.onFile(new File([CSV], 'march.csv', { type: 'text/csv' })) })
+
+    await act(async () => { await result.current.analyze() })
+
+    expect(result.current.errors).toEqual({ fields: { 'columns.merchant': 'Choose the description column.' }, form: null })
+  })
+
+  it('names a file with no header row under the file input', async () => {
+    const { ctx } = commitContext(0)
+    const { result } = renderHook(() => useImportFlow(ctx))
+
+    await act(async () => { await result.current.onFile(new File([''], 'empty.csv', { type: 'text/csv' })) })
+
+    expect(result.current.errors.fields['csv']).toMatch(/no header row/)
+    expect(result.current.error).toBeNull()
   })
 })
