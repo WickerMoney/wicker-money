@@ -76,6 +76,27 @@ describe('complete', () => {
     expect(uow.state.categories).toHaveLength(first.created)
   })
 
+  it('adds only entries the catalog gained since the last run, and leaves renamed ones alone', async () => {
+    // An install set up before Memberships and Domains / web hosting existed:
+    // simulate it by removing those two after a full run.
+    await service.complete(USER, ['tech'])
+    uow.state.categories = uow.state.categories.filter(
+      (c) => c.slug !== 'memberships' && c.slug !== 'domains-web-hosting',
+    )
+    const before = uow.state.categories.length
+    const groceries = uow.state.categories.find((c) => c.slug === 'groceries')
+    if (groceries === undefined) throw new Error('expected groceries in the starter set')
+    groceries.name = 'Food shopping'
+
+    await service.reset(USER, false)
+    const again = await service.complete(USER, ['tech'])
+
+    expect(again.created).toBe(2)
+    expect(again.skipped).toBe(before)
+    expect(uow.state.categories).toHaveLength(before + 2)
+    expect(uow.state.categories.find((c) => c.slug === 'groceries')?.name).toBe('Food shopping')
+  })
+
   it('is atomic: if recording the answers fails, no category is left behind', async () => {
     uow.failMarkOnboarded = new Error('database went away')
     await expect(service.complete(USER, ['pets'])).rejects.toThrow('database went away')

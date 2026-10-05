@@ -9,6 +9,16 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **Two new starter categories.** **Memberships** (under Subscriptions) is
+  in everyone's base set, for store and shopping memberships such as
+  Costco or Amazon Prime. **Domains / web hosting** (under Technology) is
+  added when you tick the setup question about smart home, networking,
+  gaming or web hosting, which now says that it covers hosting.
+  Already set up? Open **Categories → Run setup again** to add new starter
+  categories; your existing categories are kept.
+
 ## [0.4.0] - 2026-10-04
 
 The plugin manager, matching from the Transactions page, and form errors
