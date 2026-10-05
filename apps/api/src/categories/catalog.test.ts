@@ -140,6 +140,28 @@ describe('selectForSituations', () => {
     expect(selectForSituations(['home-services']).map((e) => e.slug)).toContain('lawn-care')
   })
 
+  it('offers a place for store and shopping memberships to everyone', () => {
+    // Costco, BJ's or Amazon Prime are not a self-employed thing, and the
+    // gym line under Personal care is not where they belong either.
+    const base = selectForSituations(['always'])
+    const memberships = base.find((e) => e.slug === 'memberships')
+    expect(memberships?.parent).toBe('subscriptions')
+    expect(base.some((e) => e.slug === 'subscriptions' && e.parent === null)).toBe(true)
+  })
+
+  it('adds domains and web hosting only for people who said they spend on tech', () => {
+    expect(selectForSituations(['always']).map((e) => e.slug)).not.toContain('domains-web-hosting')
+
+    const tech = selectForSituations(['tech'])
+    const hosting = tech.find((e) => e.slug === 'domains-web-hosting')
+    expect(hosting?.parent).toBe('technology')
+    expect(tech.some((e) => e.slug === 'technology' && e.parent === null)).toBe(true)
+
+    // No other answer reaches it.
+    const others = SITUATIONS.filter((s) => s !== 'tech')
+    expect(selectForSituations(others).map((e) => e.slug)).not.toContain('domains-web-hosting')
+  })
+
   it('orders every parent before any child, so parent_id can resolve', () => {
     const picked = selectForSituations([...SITUATIONS])
     const seen = new Set<string>()

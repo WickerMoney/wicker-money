@@ -139,6 +139,42 @@ describe('resetting setup', () => {
     expect(status.situations).toEqual([])
   })
 
+  it('adds new catalog entries on "Run setup again" without touching what is there', async () => {
+    // An account set up before Memberships and Domains / web hosting were in
+    // the catalog: build it by running setup and deleting those two.
+    const user = await createUser(h)
+    await post('/api/v1/onboarding/complete', { situations: ['tech'] }, user)
+    const cats = await get<Array<{ id: string; slug: string; name: string }>>('/api/v1/categories', user)
+    for (const slug of ['memberships', 'domains-web-hosting']) {
+      const c = cats.find((x) => x.slug === slug)
+      expect(c).toBeDefined()
+      const del = await h.app.inject({ method: 'DELETE', url: `/api/v1/categories/${c?.id}`, headers: auth(user) })
+      expect(del.statusCode).toBe(204)
+    }
+    const groceries = cats.find((x) => x.slug === 'groceries')
+    const renamed = await h.app.inject({
+      method: 'PATCH', url: `/api/v1/categories/${groceries?.id}`, headers: auth(user),
+      payload: { name: 'Food shopping' },
+    })
+    expect(renamed.statusCode).toBe(200)
+    const before = await categorySlugs(user)
+
+    // What the Categories page does: reset with "remove unused" unticked,
+    // then finish the wizard again.
+    const reset = await post<{ removed: number }>('/api/v1/onboarding/reset', {}, user)
+    expect(reset.removed).toBe(0)
+    const again = await post<{ created: number; skipped: number }>(
+      '/api/v1/onboarding/complete', { situations: ['tech'] }, user,
+    )
+
+    expect(again.created).toBe(2)
+    expect(again.skipped).toBe(before.length)
+    const after = await categorySlugs(user)
+    expect(after.filter((s) => !before.includes(s)).sort()).toEqual(['domains-web-hosting', 'memberships'])
+    const rows = await get<Array<{ slug: string; name: string }>>('/api/v1/categories', user)
+    expect(rows.find((r) => r.slug === 'groceries')?.name).toBe('Food shopping')
+  })
+
   it('removes the starter categories when asked, for a clean re-run', async () => {
     const user = await createUser(h)
     await post('/api/v1/onboarding/complete', { situations: ['pets'] }, user)
