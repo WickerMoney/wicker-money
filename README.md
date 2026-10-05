@@ -276,14 +276,17 @@ previous image without restoring that backup depends on the release:
 
 | Release | Migrations | Going back to the previous image |
 |---|---|---|
+| `v0.4.1` | none | Run the old image as it is |
 | `v0.4.0` | 025, 026 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one |
 | `v0.3.0` | 023 (has a `down`), 024 (no `down`) | Restore the backup |
 | `v0.2.1` | none | Run the old image as it is |
 | `v0.2.0` | 021 (no `down`: it adds an enum label PostgreSQL cannot remove), 022 | Restore the backup |
 
 After upgrading to `v0.4.0`, read [Owners and members](#owners-and-members):
-accounts registered before it are all owners. Per-release notes are also on
-the docs site under [Upgrading](https://wickermoney.dev/docs/self-hosting/upgrading).
+accounts registered before it are all owners. After upgrading to `v0.4.1`,
+open **Categories → Run setup again** to add the new starter categories to an
+account that is already set up; existing categories are kept. Per-release
+notes are also on the docs site under [Upgrading](https://wickermoney.dev/docs/self-hosting/upgrading).
 
 ## Running an instance
 
@@ -349,11 +352,12 @@ Argon2id digest with the application's own parameters by hand.
 
 ## Status
 
-**`v0.4.0`** is the current release: the plugin manager, owner and member
-roles, matching from the Transactions page, and form errors shown on the field
-they are about. Wicker Money is pre-1.0 with a single maintainer, so the plugin
-API can still change between minor versions. [CHANGELOG.md](CHANGELOG.md) has
-every release and [ROADMAP.md](ROADMAP.md) what is next.
+**`v0.4.1`** is the current release. It adds two starter categories
+(Memberships, and Domains / web hosting) to `v0.4.0`: the plugin manager, owner
+and member roles, matching from the Transactions page, and form errors shown on
+the field they are about. Wicker Money is pre-1.0 with a single maintainer, so
+the plugin API can still change between minor versions.
+[CHANGELOG.md](CHANGELOG.md) has every release and [ROADMAP.md](ROADMAP.md) what is next.
 
 ## License
 
