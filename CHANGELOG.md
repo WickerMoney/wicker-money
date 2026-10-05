@@ -9,6 +9,12 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-05
+
+Two new starter categories. No migrations: upgrading and going back to
+0.4.0 are both just a change of image. The new categories are not added to
+existing accounts automatically; see the note below.
+
 ### Added
 
 - **Two new starter categories.** **Memberships** (under Subscriptions) is
@@ -408,7 +414,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/WickerMoney/wicker-money/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/WickerMoney/wicker-money/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/WickerMoney/wicker-money/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/WickerMoney/wicker-money/compare/v0.2.0...v0.2.1
