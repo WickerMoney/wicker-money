@@ -1,5 +1,5 @@
 import { segmentPath } from '../helpers/segmentPath.js'
-import { TREND_LAYOUT } from '../helpers/TREND_LAYOUT.js'
+import { TREND_LAYOUT, type TrendLayout } from '../helpers/TREND_LAYOUT.js'
 import type { StackSegment } from '../models/index.js'
 
 /** Props for {@link StackedMonthMark}. */
@@ -19,6 +19,8 @@ export interface StackedMonthMarkProps {
   readonly description: string
   readonly onActivate: () => void
   readonly onDeactivate: () => void
+  /** The drawing box; the full design width when omitted. */
+  readonly layout?: TrendLayout
 }
 
 /**
@@ -29,9 +31,9 @@ export interface StackedMonthMarkProps {
  * and a keyboard has to be able to reach them.
  */
 export function StackedMonthMark({
-  segments, colors, x, barWidth, active, label, description, onActivate, onDeactivate,
+  segments, colors, x, barWidth, active, label, description, onActivate, onDeactivate, layout = TREND_LAYOUT,
 }: StackedMonthMarkProps) {
-  const { height, pad, radius } = TREND_LAYOUT
+  const { height, pad, radius } = layout
   const plotHeight = height - pad.top - pad.bottom
   return (
     <g

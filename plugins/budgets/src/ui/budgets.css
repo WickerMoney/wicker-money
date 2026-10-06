@@ -75,6 +75,14 @@
 .bud__note { font-size: 12px; color: var(--wm-text-muted); line-height: 1.5; margin: 0; }
 
 .bud__add { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+/* The window form: every control starts on the same line (top-aligned, not
+   bottom-aligned, so a hint or error under one field cannot push the others
+   out of line) and fields share the row evenly. */
+.bud__add--aligned { align-items: flex-start; }
+.bud__add--aligned > .wm-field { flex: 1 1 150px; min-width: 0; margin-bottom: 0; }
+.bud__add--aligned > .bud__add-action { flex: none; }
+.bud__add--aligned .wm-field__control, .bud__add--aligned .wm-btn { min-height: 36px; box-sizing: border-box; }
+.bud__add-buttons { display: flex; gap: 8px; }
 
 /* Windows: one amount spent down across a date range. */
 .bud__window-form { display: flex; flex-direction: column; gap: 10px; }
@@ -86,8 +94,22 @@
    that needs attention, sized to sit beside a chart. */
 /* Dashboard tiles, in the shape of the marketing site's budget tile: a small
    uppercase label, spent "of" available in the mono face, and a slim bar. */
-.budw { display: flex; flex-direction: column; gap: 10px; }
-.budw__tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+/* height:100% lets the widget fill a card the dashboard has stretched to match its
+   neighbour; where the card is not stretched it is simply as tall as its content. */
+.budw { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+/* Tiles: a plain single column by default (before measuring, and wherever the
+   browser cannot observe sizes). Once measured (.is-flowing) the viewport is a box
+   the card sizes, and the tiles fill it column by column -- see tileFlow(). The
+   grid is absolutely positioned so it never props the card open: the card's height
+   comes from its neighbour, and the tiles adapt to it, not the other way round. */
+.budw__tiles { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+.budw__viewport.is-flowing { position: relative; flex: 1 1 auto; min-height: var(--budw-min, 0); }
+.budw__viewport.is-flowing .budw__tiles {
+  position: absolute; inset: 0; overflow-y: auto; align-content: start;
+  grid-auto-flow: column;
+  grid-template-columns: repeat(var(--budw-cols, 1), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--budw-rows, 1), auto);
+}
 .budw__tile {
   border: 1px solid var(--wm-border); border-radius: var(--wm-radius-sm);
   padding: 14px 16px; background: var(--wm-surface); min-width: 0;

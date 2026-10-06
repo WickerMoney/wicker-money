@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { Button, EmptyState, Field, Stat, Surface, Table } from './index.js'
+import { Button, EmptyState, Field, IconButton, Stat, Surface, Table } from './index.js'
 
 describe('Surface', () => {
   it('renders children', () => {
@@ -26,6 +26,22 @@ describe('Button', () => {
   it('allows an explicit submit', () => {
     render(<Button type="submit">Go</Button>)
     expect(screen.getByRole('button', { name: 'Go' }).getAttribute('type')).toBe('submit')
+  })
+})
+
+describe('IconButton', () => {
+  it('is named by its label, which is also its tooltip, and hides the drawing from readers', () => {
+    render(<IconButton icon="edit" label="Edit" />)
+    const button = screen.getByRole('button', { name: 'Edit' })
+    expect(button.getAttribute('title')).toBe('Edit')
+    expect(button.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+  })
+  it('defaults to type=button and passes clicks and disabled through', () => {
+    render(<IconButton icon="delete" label="Delete" variant="danger" disabled />)
+    const button = screen.getByRole('button', { name: 'Delete' })
+    expect(button.getAttribute('type')).toBe('button')
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect(button.className).toContain('wm-btn--danger')
   })
 })
 
@@ -69,5 +85,17 @@ describe('Table', () => {
     )
     expect(screen.getByText('Nothing yet')).toBeDefined()
     expect(screen.queryByRole('table')).toBeNull()
+  })
+  it('puts a class on its scroller and tags each cell with its column and, for a text header, its label', () => {
+    const cols = [
+      { key: 'name', header: 'Name', render: (r: { name: string }) => r.name },
+      { key: 'sel', header: <input type="checkbox" aria-label="all" />, render: () => 'x' },
+      { key: 'act', header: '', render: () => 'y' },
+    ]
+    const { container } = render(<Table className="stack" columns={cols} rows={[{ name: 'A' }]} rowKey={(r) => r.name} />)
+    expect(container.querySelector('.wm-table__scroll.stack')).not.toBeNull()
+    const cells = Array.from(container.querySelectorAll('tbody td'))
+    expect(cells.map((c) => c.getAttribute('data-col'))).toEqual(['name', 'sel', 'act'])
+    expect(cells.map((c) => c.getAttribute('data-label'))).toEqual(['Name', null, null])
   })
 })

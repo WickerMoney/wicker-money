@@ -1,6 +1,6 @@
 import { bar } from '../helpers/bar.js'
 import { monthLabel } from '../helpers/monthLabel.js'
-import { TREND_LAYOUT } from '../helpers/TREND_LAYOUT.js'
+import { TREND_LAYOUT, type TrendLayout } from '../helpers/TREND_LAYOUT.js'
 import type { MonthTotal } from '../models/index.js'
 
 /** Props for {@link TrendMonthMark}. */
@@ -21,6 +21,8 @@ export interface TrendMonthMarkProps {
   readonly description: string
   readonly onActivate: () => void
   readonly onDeactivate: () => void
+  /** The drawing box; the full design width when omitted. */
+  readonly layout?: TrendLayout
 }
 
 /**
@@ -31,9 +33,9 @@ export interface TrendMonthMarkProps {
  * and a keyboard has to be able to reach them.
  */
 export function TrendMonthMark({
-  month, x, barWidth, zeroY, scale, active, labelled, description, onActivate, onDeactivate,
+  month, x, barWidth, zeroY, scale, active, labelled, description, onActivate, onDeactivate, layout = TREND_LAYOUT,
 }: TrendMonthMarkProps) {
-  const { height, pad, radius } = TREND_LAYOUT
+  const { height, pad, radius } = layout
   const plotHeight = height - pad.top - pad.bottom
   const r = Math.min(radius, barWidth / 2)
   // Income is plotted upward and expense downward, but the sign has the final

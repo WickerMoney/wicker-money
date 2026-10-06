@@ -91,9 +91,10 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
       </h3>
       <p className="bud__note">
         A window is one amount spent down across a date range, like holiday gifts from October 1
-        through December 25. It is funded once, and each month shows what is left.
+        through December 25. It is funded once, and each month shows what is left. The amount can
+        be 0 for a window with nothing set aside yet.
       </p>
-      <div className="bud__add" ref={form.ref}>
+      <div className="bud__add bud__add--aligned" ref={form.ref}>
         <SelectField label="Category" value={categoryId} error={form.errors.fields['categoryId']}
                      onChange={(e) => { setCategoryId(e.target.value); clearField('categoryId') }}>
           <CategoryOptions categories={categories} />
@@ -106,17 +107,23 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
           label="Amount"
           inputMode="decimal"
           placeholder="1500.00"
-          hint="0 is allowed: a window with nothing set aside yet."
           value={planned}
           error={form.errors.fields['planned']}
           onChange={(e) => { setPlanned(e.target.value); clearField('planned') }}
         />
         <Field label="Note" value={note} maxLength={300} error={form.errors.fields['note']}
                onChange={(e) => { setNote(e.target.value); clearField('note') }} />
-        <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
-          {editing !== null ? 'Save window' : 'Add window'}
-        </Button>
-        {editing !== null ? <Button disabled={busy} onClick={onCancel}>Cancel</Button> : null}
+        {/* The empty label gives the buttons the same top offset as the inputs, so
+            they line up with them whatever errors or hints appear under a field. */}
+        <div className="wm-field bud__add-action">
+          <span className="wm-field__label" aria-hidden="true">&nbsp;</span>
+          <div className="bud__add-buttons">
+            <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
+              {editing !== null ? 'Save window' : 'Add window'}
+            </Button>
+            {editing !== null ? <Button disabled={busy} onClick={onCancel}>Cancel</Button> : null}
+          </div>
+        </div>
       </div>
       <FormError message={form.errors.form} />
     </div>

@@ -31,11 +31,14 @@ export function AccountOutlook({ accounts, formatMoney, formatDate }: AccountOut
               {a.name}
               {isCounted(a) ? null : <span className="upc-tag">not counted</span>}
             </th>
-            <td className="upc-num">
-              {formatMoney(a.lowest.balance)}
-              <span className="upc-muted"> · {formatDate(a.lowest.date)}</span>
+            <td className="upc-num" data-label="Lowest point">
+              {/* One element, so on phones the label sits left and the figure and its date stay together. */}
+              <span>
+                {formatMoney(a.lowest.balance)}
+                <span className="upc-muted"> · {formatDate(a.lowest.date)}</span>
+              </span>
             </td>
-            <td className={`upc-num ${a.short ? 'upc-neg' : ''}`}>{formatMoney(a.headroom)}</td>
+            <td className={`upc-num ${a.short ? 'upc-neg' : ''}`} data-label="Room above buffer">{formatMoney(a.headroom)}</td>
           </tr>
         ))}
       </tbody>

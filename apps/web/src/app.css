@@ -106,6 +106,11 @@
 .slot--primary > .slot-item > .wm-surface { height: 100%; }
 .slot--secondary { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .slot-item { min-width: 0; }
+/* A widget's card is a column, so a widget can fill the card's height (a card
+   stretched beside a taller neighbour) instead of leaving the space blank. Widgets
+   that do not ask for it are unaffected: the body is only as tall as its content. */
+.slot-item > .wm-surface { display: flex; flex-direction: column; }
+.slot-item > .wm-surface > .wm-surface__body { flex: 1 1 auto; min-height: 0; }
 
 .plugin-error {
   border: 1px solid var(--wm-border); border-left: 3px solid var(--wm-negative);
@@ -120,6 +125,9 @@
   border: 1px solid var(--wm-border);
 }
 .form-hint { font-size: 12px; color: var(--wm-text-muted); margin: -4px 0 8px; }
+
+/* The transactions select-all for phones; the phone block below turns it on. */
+.txn-select-all { display: none; }
 
 /* The phone top bar and drawer scrim exist only below the breakpoint. */
 .shell__bar, .shell__scrim { display: none; }
@@ -196,11 +204,68 @@
   .wm-btn { min-height: 40px; }
   .page__title { font-size: 18px; }
   .page__head { gap: 8px; }
-  .range { max-width: 100%; }
-  .range__option { padding: 8px 12px; font-size: 13px; }
   .settings-facts > div { grid-template-columns: 1fr; gap: 0; }
   .plugin-card { flex-direction: column; gap: 10px; }
   .txn__filter-actions, .txn__pager-controls { flex-wrap: wrap; }
+  /* Icon buttons are tapped as often as text ones: same 40px floor. */
+  .wm-icon-btn, .wm-icon-slot { width: 40px; height: 40px; }
+  /* Pager: "Per page" on its own line, then Previous / page / Next across one row, not Next orphaned below. */
+  .txn__pager-controls .wm-field { flex: 1 0 100%; }
+  .txn__pager-controls .wm-btn { flex: none; }
+  .txn__page { flex: 1; text-align: center; }
+  /* Transactions: each row becomes a card instead of a seven-column table that
+     scrolls sideways. Checkbox, merchant and amount share the top line; the date,
+     category, recurring match and buttons stack under the merchant. Cells are
+     placed by their column key (data-col), so the desktop table is unchanged. */
+  .txn-select-all { display: flex; align-items: center; gap: 8px; padding: 4px 4px 10px; font-size: 13px; color: var(--wm-text-muted); }
+  .txn-table .wm-table, .txn-table .wm-table tbody { display: block; }
+  .txn-table .wm-table thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .txn-table .wm-table tr {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; row-gap: 6px;
+    align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--wm-border);
+  }
+  .txn-table .wm-table td { display: block; min-width: 0; padding: 0; border: 0; }
+  .txn-table td[data-col="sel"] { grid-column: 1; grid-row: 1; }
+  .txn-table td[data-col="merchant"] { grid-column: 2; grid-row: 1; overflow-wrap: anywhere; }
+  .txn-table td[data-col="amt"] { grid-column: 3; grid-row: 1; text-align: right; }
+  .txn-table td[data-col="date"], .txn-table td[data-col="cat"], .txn-table td[data-col="recur"] { grid-column: 2 / -1; }
+  .txn-table td[data-col="date"] { font-size: 12px; color: var(--wm-text-muted); }
+  .txn-table td[data-col="actions"] { grid-column: 2 / -1; justify-self: end; }
+  .txn-table .cat-cell { width: 100%; }
+  .txn-table .cat-cell__select { flex: 1; min-width: 0; }
+  .txn-table .txn-recur { max-width: none; }
+  /* .tbl-cards: any table that is better as a card per row on a phone. The first
+     cell is the card's title, every other cell is a "label: value" line (the label
+     is the column header, from data-label), and the last cell, if it has no
+     header, is the row's buttons. Used by Recurring and Accounts. */
+  .tbl-cards .wm-table, .tbl-cards .wm-table tbody { display: block; }
+  .tbl-cards .wm-table thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .tbl-cards .wm-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px;
+    padding: 12px 4px; border-bottom: 1px solid var(--wm-border);
+  }
+  .tbl-cards .wm-table td { display: block; min-width: 0; padding: 0; border: 0; }
+  .tbl-cards .wm-table td:first-child { font-weight: 600; }
+  .tbl-cards .wm-table td[data-label]:not(:first-child) {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  }
+  .tbl-cards .wm-table td[data-label]:not(:first-child)::before {
+    content: attr(data-label); flex: none; font-size: 12px; font-weight: 600; color: var(--wm-text-muted);
+    font-family: var(--wm-font);
+  }
+  .tbl-cards .wm-table td:not([data-label]):last-child { justify-self: end; padding-top: 4px; }
+  .tbl-cards .wm-table td.wm-num { text-align: right; }
+  /* Categories reuse the card layout: name (with its arrow) as the title, "Under"
+     and "Counts as" as label/value lines, buttons at the end. The slug is only
+     useful on a wide screen. */
+  .cat-table.tbl-cards .wm-table td[data-col="slug"] { display: none; }
+  .cat-table.tbl-cards .wm-table td[data-col="actions"] { justify-self: start; }
+  .disclosure--icon { width: 40px; height: 40px; }
+  .disclosure--header { min-height: 44px; }
   /* Text-style buttons in table rows: a taller hit area without a taller look. */
   .recur-link { padding: 10px 4px; margin: -10px -4px; }
   .cat-cell__select { min-height: 40px; }
@@ -261,10 +326,52 @@
 
 .wm-muted { color: var(--wm-text-muted); }
 
-/* Children are indented rather than nested in a tree widget: the list is read
-   far more often than it is restructured, and indentation carries the
-   relationship without a disclosure control on every row. */
-.cat-child { padding-left: 18px; }
+/* Parents are accordions; their children are indented under the parent's name
+   (arrow width plus gap), so the names line up whether the arrow is there or not. */
+.cat-parent { display: inline-flex; align-items: center; gap: 6px; }
+.cat-child { padding-left: 30px; }
+
+/* Accordions: category parents (arrow on the row) and rule groups (arrow header).
+   The arrow is a real button with aria-expanded; the chevron only turns. */
+.disclosure {
+  display: inline-flex; align-items: center; gap: 8px; padding: 0; font: inherit;
+  color: var(--wm-text-muted); background: transparent; border: 0; cursor: pointer;
+}
+.disclosure:hover { color: var(--wm-text); }
+.disclosure:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 2px; }
+.disclosure__chevron { flex: none; transition: transform .15s ease; }
+.disclosure[aria-expanded="true"] .disclosure__chevron { transform: rotate(90deg); }
+.disclosure--icon { flex: none; justify-content: center; width: 24px; height: 24px; border-radius: var(--wm-radius-sm); }
+.disclosure--icon:hover { background: var(--wm-surface-alt); }
+.disclosure--spacer { flex: none; width: 24px; height: 24px; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .disclosure__chevron { transition: none; } }
+
+.acc-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px 12px; margin-bottom: 10px;
+}
+.acc-toolbar:empty { display: none; }
+.acc-toolbar__summary { font-size: 13px; }
+.acc-toolbar__actions { display: flex; gap: 6px; margin-left: auto; }
+.acc-toolbar__actions .wm-btn { padding: 4px 10px; font-size: 12px; }
+
+.acc {
+  display: flex; flex-direction: column; margin-bottom: 14px;
+  border: 1px solid var(--wm-border); border-radius: var(--wm-radius-sm);
+}
+.acc__group + .acc__group { border-top: 1px solid var(--wm-border); }
+.acc__heading { margin: 0; font-size: inherit; font-weight: inherit; }
+.disclosure--header { width: 100%; padding: 10px 12px; text-align: left; color: var(--wm-text); }
+.disclosure--header:hover { background: var(--wm-surface-alt); }
+.acc__title { font-weight: 600; }
+.acc__count {
+  display: inline-block; padding: 0 7px; border: 1px solid var(--wm-border); border-radius: 999px;
+  font-size: 11px; font-weight: 500; line-height: 18px; color: var(--wm-text-muted);
+  background: var(--wm-surface-alt); font-variant-numeric: tabular-nums;
+}
+.disclosure--header .acc__count { margin-left: auto; }
+.acc__panel { padding: 0 12px 8px; border-top: 1px solid var(--wm-border); }
+.acc__panel[hidden] { display: none; }
 
 /* First-run setup.
 
@@ -370,13 +477,18 @@
 }
 .txn__filter-actions { display: flex; gap: 8px; align-items: flex-end; }
 
+/* Everything in the pager sits on one centre line: the count, "Per page" with its
+   select beside it (not stacked above it), Previous, the page number and Next.
+   Stacked, the select's label made it taller than the buttons and the row
+   aligned to the wrong edge. */
 .txn__pager {
-  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--wm-border);
 }
 .txn__count { font-size: 13px; color: var(--wm-text-muted); }
-.txn__pager-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
-.txn__page { font-size: 13px; color: var(--wm-text-muted); padding-bottom: 6px; }
+.txn__pager-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.txn__pager-controls .wm-field { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 0; }
+.txn__page { font-size: 13px; color: var(--wm-text-muted); }
 
 /* The dashboard's time range: a segmented control, not a dropdown. Six options
    that get switched between while reading a chart should be one click each,
@@ -400,6 +512,13 @@
 .range__option:hover { color: var(--wm-text); }
 .range__option.is-on {
   color: var(--wm-accent-text, #fff); background: var(--wm-accent);
+}
+
+/* After the base rules above, so these win at equal specificity. */
+@media (max-width: 560px) {
+  /* Six options never fit one row on a phone: an even 3 x 2 grid instead of a ragged wrap. */
+  .range { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; border-radius: 16px; }
+  .range__option { padding: 10px 6px; min-height: 40px; font-size: 13px; text-align: center; }
 }
 
 /* Settings: About section's plain fact list. */

@@ -49,40 +49,52 @@ export function TransactionTable({
   const allSelected = items.length > 0 && items.every((t) => selected.has(t.id))
 
   return (
-    <Table
-      columns={[
-        { key: 'sel',
-          header: (
-            <input type="checkbox" checked={allSelected} aria-label="Select all shown"
-                   onChange={onToggleAllSelected} />
-          ),
-          render: (t: Transaction) => (
-            <input type="checkbox" checked={selected.has(t.id)}
-                   aria-label={`Select ${t.merchant}`}
-                   onChange={() => onToggleSelected(t.id)} />
-          ) },
-        { key: 'date', header: 'Date',
-          render: (t: Transaction) => <TransactionDateCell transaction={t} row={row} /> },
-        { key: 'merchant', header: 'Merchant',
-          render: (t: Transaction) => <TransactionMerchantCell transaction={t} row={row} /> },
-        { key: 'cat', header: 'Category',
-          render: (t: Transaction) => (
-            <TransactionCategoryCell transaction={t} row={row} categoryOptionsFor={categoryOptionsFor} />
-          ) },
-        { key: 'amt', header: 'Amount', numeric: true,
-          render: (t: Transaction) => <TransactionAmountCell transaction={t} row={row} /> },
-        ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
-          render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
-        { key: 'actions', header: '',
-          render: (t: Transaction) => <TransactionActionsCell transaction={t} row={row} busy={busy} /> },
-      ]}
-      rows={items}
-      rowKey={(t) => t.id}
-      empty={
-        onlyUncategorized
-          ? <EmptyState title="Nothing uncategorized" hint="Every transaction has a category." />
-          : <EmptyState title="Nothing matches" hint="Widen the dates, clear the filters, or record a transaction." />
-      }
-    />
+    <>
+      {/* Phones only (see app.css): the header row, and the select-all in it, is
+          hidden when rows become cards, so the same control is offered here. */}
+      {items.length > 0 ? (
+        <label className="txn-select-all">
+          <input type="checkbox" checked={allSelected} aria-label="Select all on this page"
+                 onChange={onToggleAllSelected} />
+          <span>Select all on this page</span>
+        </label>
+      ) : null}
+      <Table
+        className="txn-table"
+        columns={[
+          { key: 'sel',
+            header: (
+              <input type="checkbox" checked={allSelected} aria-label="Select all shown"
+                     onChange={onToggleAllSelected} />
+            ),
+            render: (t: Transaction) => (
+              <input type="checkbox" checked={selected.has(t.id)}
+                     aria-label={`Select ${t.merchant}`}
+                     onChange={() => onToggleSelected(t.id)} />
+            ) },
+          { key: 'date', header: 'Date',
+            render: (t: Transaction) => <TransactionDateCell transaction={t} row={row} /> },
+          { key: 'merchant', header: 'Merchant',
+            render: (t: Transaction) => <TransactionMerchantCell transaction={t} row={row} /> },
+          { key: 'cat', header: 'Category',
+            render: (t: Transaction) => (
+              <TransactionCategoryCell transaction={t} row={row} categoryOptionsFor={categoryOptionsFor} />
+            ) },
+          { key: 'amt', header: 'Amount', numeric: true,
+            render: (t: Transaction) => <TransactionAmountCell transaction={t} row={row} /> },
+          ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
+            render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
+          { key: 'actions', header: '',
+            render: (t: Transaction) => <TransactionActionsCell transaction={t} row={row} busy={busy} /> },
+        ]}
+        rows={items}
+        rowKey={(t) => t.id}
+        empty={
+          onlyUncategorized
+            ? <EmptyState title="Nothing uncategorized" hint="Every transaction has a category." />
+            : <EmptyState title="Nothing matches" hint="Widen the dates, clear the filters, or record a transaction." />
+        }
+      />
+    </>
   )
 }

@@ -1,4 +1,4 @@
-import { TREND_LAYOUT } from '../helpers/TREND_LAYOUT.js'
+import { TREND_LAYOUT, type TrendLayout } from '../helpers/TREND_LAYOUT.js'
 
 /** Props for {@link TrendGrid}. */
 export interface TrendGridProps {
@@ -8,14 +8,16 @@ export interface TrendGridProps {
   readonly y: (value: number) => number
   /** Formats a decimal-string amount for display. */
   readonly formatMoney: (value: string) => string
+  /** The drawing box; the full design width when omitted. */
+  readonly layout?: TrendLayout
 }
 
 /**
  * The horizontal grid: one line per tick with its label, the zero line drawn
  * heavier than the rest because it is where every bar starts.
  */
-export function TrendGrid({ ticks, y, formatMoney }: TrendGridProps) {
-  const { width, pad } = TREND_LAYOUT
+export function TrendGrid({ ticks, y, formatMoney, layout = TREND_LAYOUT }: TrendGridProps) {
+  const { width, pad } = layout
   return (
     <>
       {ticks.map((t) => (

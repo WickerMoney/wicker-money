@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Alert } from '@wickermoney/ui-kit'
+import { useExpandedGroups } from '../../disclosure/index.js'
 import { useActionStatus } from '../../hooks/useActionStatus.js'
 import { AddCategoryForm } from './components/AddCategoryForm.js'
 import { AddRuleForm } from './components/AddRuleForm.js'
@@ -22,6 +23,8 @@ import { useCategoryData } from './hooks/useCategoryData.js'
 export function CategoriesPage() {
   const status = useActionStatus()
   const { categories, rules, reload } = useCategoryData(status)
+  // Owned here so adding a child can open its parent in the table beside the form.
+  const groups = useExpandedGroups()
 
   /** Top-level categories, the only legal parents. */
   const parents = useMemo(
@@ -37,8 +40,13 @@ export function CategoriesPage() {
       <StarterCategoriesPanel status={status} onChanged={reload} />
 
       <div className="page__split">
-        <CategoriesPanel categories={categories} parents={parents} status={status} onChanged={reload} />
-        <AddCategoryForm parents={parents} status={status} onChanged={reload} />
+        <CategoriesPanel categories={categories} parents={parents} status={status} onChanged={reload} groups={groups} />
+        <AddCategoryForm
+          parents={parents}
+          status={status}
+          onChanged={reload}
+          onCreated={(parentId) => { if (parentId !== null) groups.expand(parentId) }}
+        />
       </div>
 
       <RulesPanel rules={rules} categories={categories} status={status} onChanged={reload} />

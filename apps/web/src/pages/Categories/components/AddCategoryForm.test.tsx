@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/ApiError.js'
 import { api } from '../../../api/client.js'
 import { errorOf } from '../../../testing/errorOf.js'
+import { makeCategory } from '../../../testing/makeCategory.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
 import { validationFailed } from '../../../testing/validationFailed.js'
 import { AddCategoryForm } from './AddCategoryForm.js'
@@ -47,5 +48,34 @@ describe('AddCategoryForm', () => {
     await user.click(screen.getByRole('button', { name: 'Add category' }))
 
     expect((await screen.findByRole('alert')).textContent).toBe("You already have a category called 'Food'.")
+  })
+
+  it('tells the page which parent a new category went under, so it can open it', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({})
+    const onCreated = vi.fn()
+    const food = makeCategory({ id: 'food', name: 'Food' })
+    render(<AddCategoryForm parents={[food]} status={makeStatus()} onChanged={async () => {}} onCreated={onCreated} />)
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('Name'), 'Dining')
+    await user.selectOptions(screen.getByLabelText('Under'), 'food')
+    await user.click(screen.getByRole('button', { name: 'Add category' }))
+    await waitFor(() => { expect(onCreated).toHaveBeenCalledWith('food') })
+
+    await user.type(screen.getByLabelText('Name'), 'Pets')
+    await user.selectOptions(screen.getByLabelText('Under'), '')
+    await user.click(screen.getByRole('button', { name: 'Add category' }))
+    await waitFor(() => { expect(onCreated).toHaveBeenLastCalledWith(null) })
+  })
+
+  it('does not report a category that failed to save', async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(new ApiError('Nope.', 409, 'conflict'))
+    const onCreated = vi.fn()
+    render(<AddCategoryForm parents={[]} status={makeStatus()} onChanged={async () => {}} onCreated={onCreated} />)
+
+    await userEvent.setup().type(screen.getByLabelText('Name'), 'Food')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Add category' }))
+    await screen.findByRole('alert')
+    expect(onCreated).not.toHaveBeenCalled()
   })
 })
