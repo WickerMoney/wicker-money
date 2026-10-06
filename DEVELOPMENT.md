@@ -527,6 +527,18 @@ repository check, so a tag pushed to a fork or mirror publishes nothing.
 Pull requests also build the image (without pushing it), so a broken Dockerfile
 fails before a tag does.
 
+### The `:edge` image
+
+Every merge to `main` runs `.github/workflows/edge-image.yml`, which publishes
+`ghcr.io/wickermoney/wicker-money:edge` plus `:edge-<short sha>` (amd64 and
+arm64). It runs `ci.yml` first as a reusable workflow, so a red `main` publishes
+nothing. `:edge` is not a release: it never takes `:latest` or `:next`, publishes
+no npm packages and creates no GitHub release, and the app reports its version as
+`0.0.0-edge.<sha>`. Merging a migration moves `:edge` onto it immediately, so back
+up the database before pulling `:edge`, and pin `:edge-<short sha>` to stay on one
+build. To re-publish by hand, use **Actions → Edge image → Run workflow** on
+`main`; any other branch is refused (use the preview image below for those).
+
 ### Trying a branch before it merges
 
 `.github/workflows/preview-image.yml` builds an image from any branch on

@@ -1,0 +1,142 @@
+name: Edge image
+
+# Every merge to main publishes
+#   ghcr.io/wickermoney/wicker-money:edge
+#   ghcr.io/wickermoney/wicker-money:edge-<short sha>
+# for people who want to run what is on main without waiting for a tag.
+#
+# :edge moves with every merge. It is not a release: it never takes :latest or
+# :next, it publishes no npm packages and creates no GitHub release, and a
+# migration on main reaches :edge before it reaches a tagged version. Pin
+# :edge-<short sha> to stay on one build, and take a database backup before
+# pulling :edge.
+#
+# main must be green first: ci.yml runs as the `verify` job (the same pattern
+# release.yml uses for tags). That is a second CI run per merge, but its image
+# build shares the gha layer cache with this workflow's builds.
+#
+# Re-run it by hand from Actions -> Edge image -> Run workflow on main. It
+# refuses any other ref, so a branch can never be published as :edge (use
+# preview-image.yml for branches).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer merge replaces an older run that has not tagged yet. Tags only move
+# in the last job, so cancelling earlier jobs never leaves :edge half-updated.
+concurrency:
+  group: edge-image
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/wickermoney/wicker-money
+
+jobs:
+  meta:
+    # Never from a fork or the mirror (the image name is this organisation's),
+    # and never from a branch picked in the manual-run dropdown.
+    if: github.repository == 'wickermoney/wicker-money' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      short: ${{ steps.s.outputs.short }}
+    steps:
+      - id: s
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: meta
+    uses: ./.github/workflows/ci.yml
+
+  # Each architecture builds natively on its own runner (no QEMU, so argon2's
+  # native module builds the same way it does in release.yml) and is pushed by
+  # digest only. The merge job below gives the digests their tags.
+  image:
+    name: Image (${{ matrix.slug }})
+    needs: [meta, verify]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            slug: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            slug: arm64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          # 0.0.0-edge.<sha> so the running app, /healthz and
+          # core.app_deployments say plainly that this is not a release.
+          build-args: |
+            VERSION=0.0.0-edge.${{ needs.meta.outputs.short }}
+            GIT_SHA=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=0.0.0-edge.${{ needs.meta.outputs.short }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.description=Edge build of main. Not a release.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.slug }}
+          cache-to: type=gha,scope=${{ matrix.slug }},mode=max
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: edge-digests-${{ matrix.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Tag the edge image
+    needs: [meta, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: edge-digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE:edge" \
+            -t "$IMAGE:edge-${{ needs.meta.outputs.short }}" \
+            $(printf "$IMAGE@sha256:%s " *)
+      - name: Inspect
+        run: docker buildx imagetools inspect "$IMAGE:edge"
