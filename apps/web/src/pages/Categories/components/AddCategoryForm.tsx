@@ -16,10 +16,16 @@ export interface AddCategoryFormProps {
   readonly status: ActionStatus
   /** Called after a category is created so the list can be re-read. */
   readonly onChanged: () => Promise<void>
+  /**
+   * Called once a category is created, with the parent it went under (`null`
+   * for a top-level one), so the page can open that parent and the new row is
+   * not left hidden inside a collapsed group.
+   */
+  readonly onCreated?: (parentId: string | null) => void
 }
 
 /** A form that creates one category. The slug is derived from the name, never typed. */
-export function AddCategoryForm({ parents, status, onChanged }: AddCategoryFormProps) {
+export function AddCategoryForm({ parents, status, onChanged, onCreated }: AddCategoryFormProps) {
   const [name, setName] = useState('')
   const [newParentId, setNewParentId] = useState('')
   const [newKind, setNewKind] = useState<Category['kind']>('expense')
@@ -33,13 +39,15 @@ export function AddCategoryForm({ parents, status, onChanged }: AddCategoryFormP
     if (hasFormErrors(problems)) return
     status.begin()
     try {
+      const parentId = newParentId === '' ? null : newParentId
       await api.post('/categories', {
         name: name.trim(),
         slug: slugify(name),
-        parentId: newParentId === '' ? null : newParentId,
+        parentId,
         kind: newKind,
       })
       setName('')
+      onCreated?.(parentId)
       await onChanged()
     } catch (e) {
       form.show(formErrorsFrom(

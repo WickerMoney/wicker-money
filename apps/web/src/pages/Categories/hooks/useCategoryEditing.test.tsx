@@ -40,3 +40,31 @@ describe('renaming a category inline', () => {
     expect(status.show).not.toHaveBeenCalled()
   })
 })
+
+describe('moving a category under a parent', () => {
+  it('reports the parent it was saved under, so the page can open it', async () => {
+    vi.spyOn(api, 'patch').mockResolvedValue({})
+    const onMovedUnder = vi.fn()
+    const hook = renderHook(() => useCategoryEditing(makeStatus(), async () => {}, onMovedUnder))
+    act(() => hook.result.current.start(makeCategory({ id: 'kid', name: 'Dining', parent_id: null })))
+    act(() => hook.result.current.change({ ...hook.result.current.editing!, parentId: 'food' }))
+
+    await act(() => hook.result.current.save())
+
+    expect(onMovedUnder).toHaveBeenCalledWith('food')
+  })
+
+  it('reports nothing for a top-level category, or a save that failed', async () => {
+    const onMovedUnder = vi.fn()
+    const hook = renderHook(() => useCategoryEditing(makeStatus(), async () => {}, onMovedUnder))
+    act(() => hook.result.current.start(makeCategory({ id: 'a', name: 'Food', parent_id: null })))
+    vi.spyOn(api, 'patch').mockResolvedValueOnce({})
+    await act(() => hook.result.current.save())
+
+    act(() => hook.result.current.start(makeCategory({ id: 'b', name: 'Kid', parent_id: 'food' })))
+    vi.spyOn(api, 'patch').mockRejectedValueOnce(validationFailed([[], 'Refused.']))
+    await act(() => hook.result.current.save())
+
+    expect(onMovedUnder).not.toHaveBeenCalled()
+  })
+})

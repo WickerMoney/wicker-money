@@ -12,10 +12,12 @@ import type { CategoryEditing } from '../state/CategoryEditing.js'
  *
  * @param status - Busy flag and error message shared with the page.
  * @param onChanged - Called after any change so the list can be re-read.
+ * @param onMovedUnder - Called with the parent a saved category now sits under, so
+ *   the page can open it instead of leaving the row hidden in a collapsed group.
  * @returns The row being edited and the actions on rows.
  */
 export function useCategoryEditing(
-  status: ActionStatus, onChanged: () => Promise<void>,
+  status: ActionStatus, onChanged: () => Promise<void>, onMovedUnder?: (parentId: string) => void,
 ): CategoryEditing {
   const [editing, setEditing] = useState<CategoryEdit | null>(null)
   const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
@@ -45,6 +47,7 @@ export function useCategoryEditing(
         kind: editing.kind,
       })
       setEditing(null)
+      if (editing.parentId !== '') onMovedUnder?.(editing.parentId)
       await onChanged()
     } catch (e) {
       // Re-parenting refusals ("cannot be its own parent") are not about the

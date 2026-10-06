@@ -1,4 +1,4 @@
-import { Button, Surface, Table } from '@wickermoney/ui-kit'
+import { IconButton, Surface, Table } from '@wickermoney/ui-kit'
 import { formatDate } from '../../../lib/formatDate.js'
 import type { RecurringItem } from '../../../models/index.js'
 import { describeSchedule } from '../helpers/describeSchedule.js'
@@ -36,6 +36,7 @@ export function RecurringSection({
   return (
     <Surface title={title}>
       <Table
+        className="tbl-cards"
         columns={[
           { key: 'name', header: 'Name', render: (i: RecurringItem) => (
             <div>
@@ -69,13 +70,13 @@ export function RecurringSection({
               ? <span className="wm-muted">one-off</span>
               : <AmountCell value={i.monthlyEquivalent} kind={i.kind} currency={currency} /> },
           { key: 'actions', header: '', render: (i: RecurringItem) => (
-            <div className="recur-actions">
-              <Button disabled={busy} onClick={() => onHistory(i)}>History</Button>
-              <Button disabled={busy} onClick={() => onEdit(i)}>Edit</Button>
+            <div className="wm-row-actions">
+              <IconButton icon="history" label="History" disabled={busy} onClick={() => onHistory(i)} />
+              <IconButton icon="edit" label="Edit" disabled={busy} onClick={() => onEdit(i)} />
               {i.nextDue !== null && i.frequency !== 'once'
-                ? <Button disabled={busy} onClick={() => onEnd(i)}>End</Button>
-                : null}
-              <Button variant="danger" disabled={busy} onClick={() => onDelete(i)}>Delete</Button>
+                ? <IconButton icon="end" label="End" disabled={busy} onClick={() => onEnd(i)} />
+                : <span className="wm-icon-slot" aria-hidden="true" />}
+              <IconButton icon="delete" label="Delete" variant="danger" disabled={busy} onClick={() => onDelete(i)} />
             </div>
           ) },
         ]}

@@ -51,6 +51,7 @@ export function AccountsPanel({
 
       {accounts === null ? <Spinner /> : (
         <Table
+          className="tbl-cards"
           columns={[
             { key: 'name', header: 'Name',
               render: (a: Account) => <AccountNameCell account={a} row={row} /> },

@@ -1,4 +1,4 @@
-import { Button, FormError } from '@wickermoney/ui-kit'
+import { Button, FormError, IconButton } from '@wickermoney/ui-kit'
 import type { Account } from '../../../models/index.js'
 import type { AccountEditing } from '../state/AccountEditing.js'
 
@@ -18,14 +18,14 @@ export interface AccountActionsCellProps {
   readonly onDelete: (account: Account) => void
 }
 
-/** A row's buttons, or Save and Cancel while the row is being edited. */
+/** A row's icon buttons, or Save and Cancel while the row is being edited. */
 export function AccountActionsCell({
   account: a, row, busy, onFixOpeningBalance, onArchive, onDelete,
 }: AccountActionsCellProps) {
   if (row.editing?.id === a.id) {
     return (
       <>
-        <div className="page__actions page__actions--tight">
+        <div className="wm-row-actions">
           <Button variant="primary" disabled={busy} onClick={() => void row.save()}>Save</Button>
           <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
         </div>
@@ -34,13 +34,13 @@ export function AccountActionsCell({
     )
   }
   return (
-    <div className="page__actions page__actions--tight">
-      <Button disabled={busy} onClick={() => row.start(a)}>Edit</Button>
-      <Button disabled={busy} onClick={() => onFixOpeningBalance(a)}>Fix opening balance</Button>
+    <div className="wm-row-actions">
+      <IconButton icon="edit" label="Edit" disabled={busy} onClick={() => row.start(a)} />
+      <IconButton icon="balance" label="Fix opening balance" disabled={busy} onClick={() => onFixOpeningBalance(a)} />
       {a.archivedAt === null ? (
-        <Button disabled={busy} onClick={() => onArchive(a)}>Archive</Button>
-      ) : null}
-      <Button variant="danger" disabled={busy} onClick={() => onDelete(a)}>Delete</Button>
+        <IconButton icon="archive" label="Archive" disabled={busy} onClick={() => onArchive(a)} />
+      ) : <span className="wm-icon-slot" aria-hidden="true" />}
+      <IconButton icon="delete" label="Delete" variant="danger" disabled={busy} onClick={() => onDelete(a)} />
     </div>
   )
 }
