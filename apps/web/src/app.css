@@ -121,13 +121,90 @@
 }
 .form-hint { font-size: 12px; color: var(--wm-text-muted); margin: -4px 0 8px; }
 
+/* The phone top bar and drawer scrim exist only below the breakpoint. */
+.shell__bar, .shell__scrim { display: none; }
+
+/* Phone layout (and a narrow desktop window, which gets the same thing).
+
+   The sidebar becomes a drawer: one element, so the links, account menu and
+   gear are the same ones the desktop shows. Closed, it is off-screen AND
+   visibility:hidden, so its links are not in the tab order; the visibility
+   change is delayed until the slide finishes so it still animates out. */
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; grid-template-areas: "top" "nav" "main"; }
-  .shell__nav { flex-direction: row; flex-wrap: wrap; border-right: none;
-                border-bottom: 1px solid var(--wm-border); }
-  .shell__brand { padding: 4px 8px; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "bar" "main"; grid-template-rows: auto 1fr; }
+
+  .shell__bar {
+    grid-area: bar; position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 8px; min-height: 52px;
+    padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top));
+    padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right));
+    background: var(--wm-surface); border-bottom: 1px solid var(--wm-border);
+  }
+  .shell__bar-logo { height: 28px; width: auto; }
+  .shell__menu-btn {
+    flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0;
+    color: var(--wm-text); background: transparent; cursor: pointer;
+    border: 0; border-radius: var(--wm-radius-sm);
+  }
+  .shell__menu-btn:hover { background: var(--wm-surface-alt); }
+  .shell__menu-btn:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 1px; }
+
+  .shell__nav {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; height: auto; align-self: stretch;
+    width: min(300px, 86vw); padding: 14px 10px; padding-bottom: max(14px, env(safe-area-inset-bottom));
+    border-right: 1px solid var(--wm-border); box-shadow: var(--wm-shadow);
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform .2s ease, visibility 0s linear .2s;
+    outline: none;
+  }
+  .is-nav-open .shell__nav { transform: none; visibility: visible; transition: transform .2s ease; }
+  .shell__scrim {
+    position: fixed; inset: 0; z-index: 30; display: block;
+    background: rgb(9 12 16 / 55%); opacity: 0; pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .is-nav-open .shell__scrim { opacity: 1; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) {
+    .shell__nav, .is-nav-open .shell__nav, .shell__scrim { transition: none; }
+  }
+
+  /* Fingers, not cursors: 44px rows in the drawer. */
+  .shell__link { padding: 12px 12px; }
+  .shell__gear { width: 44px; height: 44px; }
+  .account__trigger { padding: 10px 8px; }
+  .account__item { padding: 12px 8px; }
+  .account__segment { width: 40px; height: 36px; }
+
+  .shell__main { padding: 14px 12px; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .shell__failures { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); max-width: none; }
   .page__split { grid-template-columns: minmax(0, 1fr); }
   .slot--primary { grid-template-columns: minmax(0, 1fr); }
+
+  /* A wide table inside a card scrolls inside the card. Without this a table a
+     plugin did not wrap (the dashboard's account table) pushes the whole page
+     sideways, and the browser zooms out to fit it. Applies to plugin pages too,
+     which render inside .shell__main. */
+  .shell__main .wm-surface__body { overflow-x: auto; }
+  /* The native checkbox is 13px; the row checkboxes and filters are tapped a lot. */
+  .shell__main input[type="checkbox"] { width: 20px; height: 20px; }
+}
+
+/* Small phones. Inputs at 16px stop iOS Safari zooming the page on focus,
+   which would otherwise shift the layout mid-recording. */
+@media (max-width: 560px) {
+  .wm-field__control, .cat-cell__select, .cat-edit { font-size: 16px; }
+  .wm-btn { min-height: 40px; }
+  .page__title { font-size: 18px; }
+  .page__head { gap: 8px; }
+  .range { max-width: 100%; }
+  .range__option { padding: 8px 12px; font-size: 13px; }
+  .settings-facts > div { grid-template-columns: 1fr; gap: 0; }
+  .plugin-card { flex-direction: column; gap: 10px; }
+  .txn__filter-actions, .txn__pager-controls { flex-wrap: wrap; }
+  /* Text-style buttons in table rows: a taller hit area without a taller look. */
+  .recur-link { padding: 10px 4px; margin: -10px -4px; }
+  .cat-cell__select { min-height: 40px; }
+  .recur-status--button { min-height: 32px; }
 }
 
 /* Inline category assignment in the transactions table. A select rather than a

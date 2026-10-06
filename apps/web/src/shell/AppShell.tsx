@@ -1,7 +1,10 @@
-import { NavLink, Outlet } from 'react-router'
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
+import { useEscapeKey } from '../hooks/useEscapeKey.js'
 import { AccountMenu } from './AccountMenu.js'
 import { GearIcon } from './icons/GearIcon.js'
+import { MenuIcon } from './icons/MenuIcon.js'
 import { CORE_NAV } from './coreNav.js'
 import { NavLinks } from './NavLinks.js'
 import { navEntriesFor } from './navEntriesFor.js'
@@ -24,15 +27,59 @@ export interface AppShellProps {
  * The account menu and a Settings gear are pinned to the bottom of the sidebar,
  * so they stay put however long the plugin navigation above them grows. Any
  * plugin settings pages are listed just above them.
+ *
+ * On a phone the sidebar becomes a drawer: a compact top bar carries the logo
+ * and a menu button, and the same navigation slides in over the page. The
+ * drawer is one element restyled by CSS rather than a second copy of the
+ * links, so desktop and phone cannot drift apart. It closes on navigation,
+ * Escape and a tap on the scrim, and the page behind it is `inert` while it is
+ * open so focus cannot wander into content the scrim is covering.
  */
 export function AppShell({ plugins }: AppShellProps) {
   const mainNav = navEntriesFor(plugins, 'main')
   const reportsNav = navEntriesFor(plugins, 'reports')
   const settingsNav = navEntriesFor(plugins, 'settings')
 
+  const { pathname } = useLocation()
+  const [navOpen, setNavOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const navRef = useRef<HTMLElement>(null)
+
+  const closeNav = useCallback(() => {
+    setNavOpen(false)
+    menuButtonRef.current?.focus()
+  }, [])
+  useEscapeKey(navOpen, closeNav)
+
+  // Following a link closes the drawer. Focus is left where the navigation put
+  // it (the new page) rather than pulled back to the menu button. The route
+  // effect covers navigation from anywhere; the click handler covers a tap on
+  // the link for the page you are already on, which changes no route.
+  useEffect(() => { setNavOpen(false) }, [pathname])
+  const onNavClick = useCallback((e: MouseEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest('a') !== null) setNavOpen(false)
+  }, [])
+
+  // Moves focus into the drawer when it opens, so a keyboard or screen reader
+  // user lands in the navigation rather than behind the scrim.
+  useEffect(() => {
+    if (navOpen) navRef.current?.focus()
+  }, [navOpen])
+
   return (
-    <div className="shell">
-      <aside className="shell__nav">
+    <div className={`shell${navOpen ? ' is-nav-open' : ''}`}>
+      <header className="shell__bar" inert={navOpen}>
+        <button ref={menuButtonRef} type="button" className="shell__menu-btn"
+                aria-label="Menu" aria-expanded={navOpen} aria-controls="shell-nav"
+                onClick={() => { setNavOpen((o) => !o) }}>
+          <MenuIcon />
+        </button>
+        <img className="shell__bar-logo shell__brand-logo--light" src="/brand/wordmark-light.png" alt="Wicker Money" />
+        <img className="shell__bar-logo shell__brand-logo--dark" src="/brand/wordmark-dark.png" alt="Wicker Money" />
+      </header>
+      <div className="shell__scrim" aria-hidden="true" onClick={closeNav} />
+
+      <aside id="shell-nav" ref={navRef} tabIndex={-1} className="shell__nav" onClick={onNavClick}>
         <div className="shell__brand">
           <img className="shell__brand-logo shell__brand-logo--light" src="/brand/wordmark-light.png" alt="Wicker Money" />
           <img className="shell__brand-logo shell__brand-logo--dark" src="/brand/wordmark-dark.png" alt="Wicker Money" />
@@ -75,7 +122,7 @@ export function AppShell({ plugins }: AppShellProps) {
         </div>
       </aside>
 
-      <main className="shell__main">
+      <main className="shell__main" inert={navOpen}>
         <Outlet />
       </main>
     </div>
