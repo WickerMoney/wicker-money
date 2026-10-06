@@ -1,4 +1,4 @@
-import { TREND_LAYOUT } from '../helpers/TREND_LAYOUT.js'
+import { TREND_LAYOUT, type TrendLayout } from '../helpers/TREND_LAYOUT.js'
 
 /** Props for {@link TrendGrid}. */
 export interface TrendGridProps {
@@ -10,6 +10,8 @@ export interface TrendGridProps {
   readonly scale: (value: number) => number
   /** Formats a decimal-string amount for display. */
   readonly formatMoney: (value: string) => string
+  /** The drawing box; the full design width when omitted. */
+  readonly layout?: TrendLayout
 }
 
 /**
@@ -19,8 +21,8 @@ export interface TrendGridProps {
  * Labels show magnitudes, since the side of the zero line already says which way
  * the money went.
  */
-export function TrendGrid({ ticks, zeroY, scale, formatMoney }: TrendGridProps) {
-  const { width, pad } = TREND_LAYOUT
+export function TrendGrid({ ticks, zeroY, scale, formatMoney, layout = TREND_LAYOUT }: TrendGridProps) {
+  const { width, pad } = layout
   return (
     <>
       {ticks.map((t) => {

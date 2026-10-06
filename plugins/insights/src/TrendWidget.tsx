@@ -9,12 +9,11 @@ import { TrendTooltip } from './components/TrendTooltip.js'
 import { labelEvery } from './helpers/labelEvery.js'
 import { monthLabelLong } from './helpers/monthLabel.js'
 import { totalsByMonth } from './helpers/totalsByMonth.js'
-import { TREND_LAYOUT } from './helpers/TREND_LAYOUT.js'
+import { trendLayout } from './helpers/TREND_LAYOUT.js'
+import { useElementWidth } from './hooks/useElementWidth.js'
 import { useMonthlySummary } from './hooks/useMonthlySummary.js'
 import type { MonthTotal } from './models/index.js'
 import './styles.js'
-
-const { width: W, height: H, pad: PAD, barGap: BAR_GAP } = TREND_LAYOUT
 
 /**
  * A dashboard widget charting income against expense, month by month.
@@ -41,6 +40,10 @@ const { width: W, height: H, pad: PAD, barGap: BAR_GAP } = TREND_LAYOUT
 export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
   const { rows, loading, error } = useMonthlySummary(ctx, range?.months ?? 12)
   const [hover, setHover] = useState<number | null>(null)
+  // Drawn at the width it is shown at; see trendLayout. Called before the early returns.
+  const [chart, setChart] = useState<HTMLDivElement | null>(null)
+  const layout = trendLayout(useElementWidth(chart))
+  const { width: W, height: H, pad: PAD, barGap: BAR_GAP } = layout
 
   if (loading) return <Spinner label="Loading spending" />
   if (error !== null) return <Alert>{error}</Alert>
@@ -95,7 +98,7 @@ export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
     `${ctx.formatMoney(m.expense)} out, ${ctx.formatMoney(m.net)} net`
 
   return (
-    <div className="viz viz--trend">
+    <div className="viz viz--trend" ref={setChart}>
       <TrendLegend totals={totals} formatMoney={ctx.formatMoney} />
 
       <svg
@@ -108,6 +111,7 @@ export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
           zeroY={zeroY}
           scale={scale}
           formatMoney={ctx.formatMoney}
+          layout={layout}
         />
         {months.map((m, i) => (
           <TrendMonthMark
@@ -122,6 +126,7 @@ export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
             description={describe(m)}
             onActivate={() => setHover(i)}
             onDeactivate={() => setHover(null)}
+            layout={layout}
           />
         ))}
       </svg>
