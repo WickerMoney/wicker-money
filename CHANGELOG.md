@@ -9,13 +9,85 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-06
+
+Phone layouts, a tidier UI and a round of accessibility and matching fixes. No
+migrations, and the API, plugin SDK and ui-kit changes are additive only, so
+upgrading and going back to 0.4.1 are both just a change of image. One
+start-up check is stricter; see **Changed**.
+
 ### Added
 
+- **Phone navigation.** Below 860px the sidebar is a drawer opened from a
+  menu button. Tapping a link, including the current page's, closes it.
+- **Card layouts on phones.** Transactions, Accounts, Recurring and
+  Categories show one card per row at 560px and below, with a "Select all on
+  this page" checkbox on Transactions. The dashboard time range is a 3 x 2
+  grid and the Transactions pager is a single centred line.
+- **Collapsible Categories and Rules.** Parents are accordion rows with a
+  child count, and rules are grouped by category, each with Expand all /
+  Collapse all. Both start collapsed; a parent opens by itself when you add or
+  move a child under it.
+- **Icon row actions.** Edit, Delete, Archive and similar actions on
+  Transactions, Categories, Rules, Accounts and Recurring are icon buttons
+  that never wrap, with the label as tooltip and accessible name.
 - **`:edge` image.** Every merge to `main` now publishes
   `ghcr.io/wickermoney/wicker-money:edge` (and `:edge-<short sha>`) after CI
   passes, for running `main` without waiting for a tag. It is not a release and
   never takes `:latest` or `:next`. See the "The `:edge` image" section of
   [DEVELOPMENT.md](DEVELOPMENT.md).
+
+### Changed
+
+- **The production start-up check also refuses `change-me`, `change_me` and
+  the quickstart's `CHANGE_ME`** in `DATABASE_URL` or `AUTH_SECRET`, as it
+  already did `changeme`, `testpw` and `_dev_password`, and now ignores case.
+  Those placeholders are publicly known, so an instance
+  running on one now stops at start-up (the `migrate` step too, since the image
+  runs in production mode) instead of carrying on with a guessable signing
+  secret. The error says what to do. **Only an instance that was given a
+  placeholder is affected;** the quickstart tells you to generate real values.
+  If yours was, before pulling `0.4.2`:
+  1. In `.env`, set `AUTH_SECRET` to the output of `openssl rand -base64 48`.
+     If `APP_DB_PASSWORD` was left as `CHANGE_ME` (or another placeholder), set
+     it to `openssl rand -hex 24` (letters and digits only: it goes inside a
+     URL). `POSTGRES_PASSWORD`, the owner password, is not checked and does not
+     change this way; see the docs page if you want to rotate it too.
+  2. Run `docker compose pull && docker compose up -d`. The `migrate` service
+     runs first and reinstalls the tenant key from the new `AUTH_SECRET` and
+     sets the app role's new password.
+  3. Everyone signs in again if `AUTH_SECRET` changed; nothing else is lost.
+
+  Not using the sample compose? See
+  [Placeholder credentials](https://wickermoney.dev/docs/self-hosting/upgrading#placeholder-credentials).
+- **`docker-compose.sample.yml` passes `REGISTRATION_ENABLED` and
+  `TRUST_PROXY` through** to the app, with the app's own defaults. The README
+  already told you to set them, but the sample did not forward them, so
+  setting them in `.env` did nothing.
+
+### Fixed
+
+- **Accessibility.** Each page sets its own browser tab title, there is a
+  "Skip to content" link, and focus moves to the page after you navigate
+  (not on first load). The sign-in and not-found pages have a heading, and a
+  loading spinner announces its label. The light-mode warning colour was
+  3.6:1 on the page background and is now 5.9:1, and archived or disabled
+  names are no longer faded to 55% opacity.
+- **Recurring matching.** Candidate transactions for matching were capped at
+  500 across all accounts, oldest first, and included transactions that already
+  settle another occurrence, so on a long ledger the newest transactions could be
+  dropped. The cap is now per account, keeps the newest, and leaves linked
+  transactions out.
+- **Performance.** The Transactions page no longer runs the suggestion lookup
+  for a page whose rows are all matched already, and the Spending trends chart
+  no longer recomputes its layout every time you hover a bar.
+- **Budgets.** The window form no longer aligns to the Amount hint's height,
+  and the dashboard breakdown fills one column to the card's height before
+  spilling into a second, instead of leaving a blank card.
+- **Insights and Spending trends** charts are drawn at the container's width
+  instead of a fixed 1200px, so their labels are readable on phones.
+- **Upcoming** account outlook stacks as cards on phones, and the Forecast
+  range buttons and Spending chips have 40px touch targets.
 
 ## [0.4.1] - 2026-10-05
 
@@ -422,7 +494,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/WickerMoney/wicker-money/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/WickerMoney/wicker-money/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/WickerMoney/wicker-money/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/WickerMoney/wicker-money/compare/v0.2.1...v0.3.0
