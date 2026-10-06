@@ -6,8 +6,9 @@ import { readMonth } from '../helpers/readMonth.js'
 import { stackExtent } from '../helpers/stackExtent.js'
 import { stackMonth } from '../helpers/stackMonth.js'
 import { tooltipAnchor } from '../helpers/tooltipAnchor.js'
-import { TREND_LAYOUT } from '../helpers/TREND_LAYOUT.js'
+import { trendLayout } from '../helpers/TREND_LAYOUT.js'
 import { valueToY } from '../helpers/valueToY.js'
+import { useElementWidth } from '../hooks/useElementWidth.js'
 import type { Trend } from '../models/index.js'
 import { StackedMonthMark } from './StackedMonthMark.js'
 import { StackedTooltip } from './StackedTooltip.js'
@@ -42,6 +43,9 @@ export interface TrendChartProps {
  */
 export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: TrendChartProps) {
   const [hover, setHover] = useState<number | null>(null)
+  // The plot is drawn at the width it is shown at; see trendLayout.
+  const [plot, setPlot] = useState<HTMLDivElement | null>(null)
+  const layout = trendLayout(useElementWidth(plot))
   const visible = trend.series.filter((s) => !hidden.has(s.id))
   if (visible.length === 0) {
     return (
@@ -51,10 +55,10 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
     )
   }
 
-  const { width, height, pad, barFill } = TREND_LAYOUT
+  const { width, height, pad, barFill } = layout
   const { maxUp, maxDown } = stackExtent(trend.months, visible)
   const scale = niceScale(maxUp, maxDown)
-  const y = valueToY(scale)
+  const y = valueToY(scale, layout)
   const slot = (width - pad.left - pad.right) / trend.months.length
   const barWidth = Math.max(slot * barFill, 1)
   const every = labelEvery(trend.months.length)
@@ -63,13 +67,13 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
   const barX = (i: number): number => pad.left + i * slot + (slot - barWidth) / 2
 
   return (
-    <div className="spt__plot">
+    <div className="spt__plot" ref={setPlot}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label={`Spending by category, month by month (${rangeLabel})`}
       >
-        <TrendGrid ticks={scale.ticks} y={y} formatMoney={formatMoney} />
+        <TrendGrid ticks={scale.ticks} y={y} formatMoney={formatMoney} layout={layout} />
         {trend.months.map((m, i) => (
           <StackedMonthMark
             key={m.month}
@@ -82,6 +86,7 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
             description={readouts[i]?.description ?? ''}
             onActivate={() => setHover(i)}
             onDeactivate={() => setHover(null)}
+            layout={layout}
           />
         ))}
       </svg>

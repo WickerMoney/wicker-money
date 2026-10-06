@@ -36,6 +36,7 @@
   font: inherit; font-size: 12px; line-height: 1.4; cursor: pointer;
 }
 .spt__chip:hover { background: var(--wm-surface-alt); }
+@media (max-width: 560px) { .spt__chip { min-height: 40px; } }
 .spt__chip:focus-visible { outline: 2px solid var(--wm-text); outline-offset: 2px; }
 .spt__chip.is-off { color: var(--spt-ink-muted); }
 .spt__chip.is-off > span:nth-child(2) { text-decoration: line-through; }
