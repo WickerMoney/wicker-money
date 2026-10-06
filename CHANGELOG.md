@@ -9,6 +9,14 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **`:edge` image.** Every merge to `main` now publishes
+  `ghcr.io/wickermoney/wicker-money:edge` (and `:edge-<short sha>`) after CI
+  passes, for running `main` without waiting for a tag. It is not a release and
+  never takes `:latest` or `:next`. See the "The `:edge` image" section of
+  [DEVELOPMENT.md](DEVELOPMENT.md).
+
 ## [0.4.1] - 2026-10-05
 
 Two new starter categories. No migrations: upgrading and going back to
