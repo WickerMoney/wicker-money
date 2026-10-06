@@ -60,6 +60,18 @@
 .upc-list__what { display: flex; flex-direction: column; min-width: 0; }
 .upc-list__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Phones: each account is a small card (name, then its two figures as label: value
+   rows) instead of a three-column table that scrolls sideways inside the card. */
+@media (max-width: 560px) {
+  .upc-accounts, .upc-accounts tbody { display: block; }
+  .upc-accounts thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .upc-accounts tr { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--wm-border); }
+  .upc-accounts th, .upc-accounts td { padding: 0; border: 0; }
+  .upc-accounts td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .upc-accounts td::before { content: attr(data-label); flex: none; font-size: 12px; color: var(--wm-text-muted); font-family: var(--wm-font); }
+  .upc-link { padding: 12px 0; }
+}
+
 @media (max-width: 480px) {
   .upc-list__item { grid-template-columns: minmax(0, 1fr) auto; }
   .upc-list__date { grid-column: 1 / -1; }
