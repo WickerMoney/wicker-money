@@ -27,6 +27,12 @@
 }
 .wm-btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
 .wm-btn--danger { color: var(--wm-negative); }
+/* Icon-only buttons: square and fixed, so a column of them lines up whatever the row holds. */
+.wm-icon-btn, .wm-icon-slot { flex: none; width: 32px; height: 32px; padding: 0; }
+/* An empty place where a row's button would be, so the buttons after it do not shift left. */
+.wm-icon-slot { display: block; }
+/* A row's buttons on one line. Never wraps: a wrapped pair is what made Edit sit above Delete. */
+.wm-row-actions { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 6px; }
 
 .wm-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--wm-gap-sm); }
 .wm-field__label { font-size: 12px; font-weight: 600; color: var(--wm-text-muted); }

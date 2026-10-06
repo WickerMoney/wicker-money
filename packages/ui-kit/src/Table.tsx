@@ -25,6 +25,13 @@ export interface TableProps<T> {
   readonly rowKey: (row: T) => string
   /** Rendered instead of the table when `rows` is empty. */
   readonly empty?: ReactNode
+  /**
+   * An extra class on the table's scroller, for a page that restyles its table
+   * (the transactions list turns into stacked cards on phones). Cells carry
+   * `data-col` with their column key, and `data-label` with their header when it
+   * is text, so that CSS can place them and label them.
+   */
+  readonly className?: string
 }
 
 /**
@@ -33,15 +40,15 @@ export interface TableProps<T> {
  * Wrapped in its own horizontal scroller so that a wide table does not force the
  * whole page to scroll sideways on a narrow screen.
  */
-export function Table<T>({ columns, rows, rowKey, empty }: TableProps<T>) {
+export function Table<T>({ columns, rows, rowKey, empty, className }: TableProps<T>) {
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>
   return (
-    <div className="wm-table__scroll">
+    <div className={className === undefined ? 'wm-table__scroll' : `wm-table__scroll ${className}`}>
       <table className="wm-table">
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className={c.numeric === true ? 'wm-num' : undefined}>{c.header}</th>
+              <th key={c.key} data-col={c.key} className={c.numeric === true ? 'wm-num' : undefined}>{c.header}</th>
             ))}
           </tr>
         </thead>
@@ -49,7 +56,12 @@ export function Table<T>({ columns, rows, rowKey, empty }: TableProps<T>) {
           {rows.map((row) => (
             <tr key={rowKey(row)}>
               {columns.map((c) => (
-                <td key={c.key} className={c.numeric === true ? 'wm-num' : undefined}>
+                <td
+                  key={c.key}
+                  data-col={c.key}
+                  data-label={typeof c.header === 'string' && c.header !== '' ? c.header : undefined}
+                  className={c.numeric === true ? 'wm-num' : undefined}
+                >
                   {c.render(row)}
                 </td>
               ))}
