@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { axisLabel } from '../helpers/axisLabel.js'
 import { labelEvery } from '../helpers/labelEvery.js'
 import { niceScale } from '../helpers/niceScale.js'
@@ -45,9 +45,31 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
   const [hover, setHover] = useState<number | null>(null)
   // The plot is drawn at the width it is shown at; see trendLayout.
   const [plot, setPlot] = useState<HTMLDivElement | null>(null)
-  const layout = trendLayout(useElementWidth(plot))
-  const visible = trend.series.filter((s) => !hidden.has(s.id))
-  if (visible.length === 0) {
+  const measured = useElementWidth(plot)
+  const layout = useMemo(() => trendLayout(measured), [measured])
+  const visible = useMemo(() => trend.series.filter((s) => !hidden.has(s.id)), [trend.series, hidden])
+
+  // Everything below depends on the data and the width, not on which bar is
+  // under the pointer, so hovering re-renders the marks without recomputing it.
+  const chart = useMemo(() => {
+    if (visible.length === 0) return null
+    const { width, pad, barFill } = layout
+    const { maxUp, maxDown } = stackExtent(trend.months, visible)
+    const scale = niceScale(maxUp, maxDown)
+    const y = valueToY(scale, layout)
+    const slot = (width - pad.left - pad.right) / trend.months.length
+    return {
+      scale,
+      barWidth: Math.max(slot * barFill, 1),
+      slot,
+      every: labelEvery(trend.months.length),
+      y,
+      readouts: trend.months.map((m) => readMonth(m, visible, colors, formatMoney)),
+      segments: trend.months.map((m) => stackMonth(m, visible, y)),
+    }
+  }, [trend.months, visible, layout, colors, formatMoney])
+
+  if (chart === null) {
     return (
       <p className="spt__hint" role="status">
         Every category is hidden. Turn one back on above.
@@ -55,14 +77,8 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
     )
   }
 
-  const { width, height, pad, barFill } = layout
-  const { maxUp, maxDown } = stackExtent(trend.months, visible)
-  const scale = niceScale(maxUp, maxDown)
-  const y = valueToY(scale, layout)
-  const slot = (width - pad.left - pad.right) / trend.months.length
-  const barWidth = Math.max(slot * barFill, 1)
-  const every = labelEvery(trend.months.length)
-  const readouts = trend.months.map((m) => readMonth(m, visible, colors, formatMoney))
+  const { width, height, pad } = layout
+  const { scale, y, slot, barWidth, every, readouts, segments } = chart
   const active = hover === null ? undefined : readouts[hover]
   const barX = (i: number): number => pad.left + i * slot + (slot - barWidth) / 2
 
@@ -77,7 +93,7 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
         {trend.months.map((m, i) => (
           <StackedMonthMark
             key={m.month}
-            segments={stackMonth(m, visible, y)}
+            segments={segments[i] ?? []}
             colors={colors}
             x={barX(i)}
             barWidth={barWidth}
