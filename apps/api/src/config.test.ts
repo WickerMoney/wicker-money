@@ -125,13 +125,32 @@ describe('production refuses development credentials', () => {
     ['DATABASE_URL', 'postgresql://app:wickermoney_dev_password@db:5432/wickermoney'],
     ['DATABASE_URL', 'postgresql://app:testpw@db:5432/wickermoney'],
     ['DATABASE_URL', 'postgresql://app:changeme@db:5432/wickermoney'],
+    ['DATABASE_URL', 'postgresql://app:change-me@db:5432/wickermoney'],
+    ['DATABASE_URL', 'postgresql://wickermoney_app:CHANGE_ME@postgres:5432/wickermoney'],
+    ['DATABASE_URL', 'postgresql://app:ChangeMe@db:5432/wickermoney'],
     ['AUTH_SECRET', 'changeme-changeme-changeme-changeme-changeme'],
+    ['AUTH_SECRET', 'change-me-to-a-long-random-string-before-going-live'],
+    ['AUTH_SECRET', 'change_me_to_a_long_random_string_before_going_live'],
     ['AUTH_SECRET', 'a-secret-ending-in-_dev_password-and-long-enough'],
   ])('refuses %s containing a development marker (%s)', (name, value) => {
     const message = failure({ ...production, [name]: value })
     expect(message).toContain(name)
     expect(message).toContain('development credential')
     expect(message).toContain('NODE_ENV=production')
+  })
+
+  it('says how to fix each offender and where to read more, without echoing the value', () => {
+    const secret = 'change-me-to-a-long-random-string-before-going-live'
+    const message = failure({ ...production, AUTH_SECRET: secret })
+    expect(message).toContain('openssl rand -base64 48')
+    expect(message).toContain('re-run migrations')
+    expect(message).toContain('wickermoney.dev/docs/self-hosting/upgrading#placeholder-credentials')
+    expect(message).not.toContain(secret)
+    expect(message).not.toContain('APP_DB_PASSWORD')
+
+    const database = failure({ ...production, DATABASE_URL: 'postgresql://app:change-me@db:5432/wickermoney' })
+    expect(database).toContain('APP_DB_PASSWORD')
+    expect(database).not.toContain('openssl')
   })
 
   it('names every offender', () => {

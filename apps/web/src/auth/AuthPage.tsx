@@ -56,7 +56,7 @@ export function AuthPage() {
   return (
     <main className="auth">
       <div className="auth__panel">
-        <Surface title={mode === 'signin' ? 'Sign in to Wicker Money' : 'Create your account'}>
+        <Surface level={1} title={mode === 'signin' ? 'Sign in to Wicker Money' : 'Create your account'}>
           <form onSubmit={submit} ref={form.ref} noValidate>
             <Field label="Email" type="email" autoComplete="email" required
                    value={email} error={form.errors.fields['email']}

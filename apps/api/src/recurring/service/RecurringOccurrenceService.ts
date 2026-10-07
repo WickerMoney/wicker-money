@@ -200,7 +200,11 @@ export class RecurringOccurrenceService {
         return found === undefined ? null : toOccurrenceView(found.row, found.state, found.state.expectedDate)
       }
 
-      const { suggestions } = await findSuggestions(repos, today)
+      // Suggestions are for transactions that settle nothing yet; a page of
+      // rows that are all linked has none to find, and finding them costs about
+      // a dozen queries.
+      const wantsSuggestions = txs.some((t) => t.recurring_occurrence_id === null)
+      const { suggestions } = wantsSuggestions ? await findSuggestions(repos, today) : { suggestions: [] }
       const suggestionFor = new Map(suggestions.map((s) => [s.candidate.transactionId, s]))
 
       const transactions: TransactionMatchSummary[] = []
