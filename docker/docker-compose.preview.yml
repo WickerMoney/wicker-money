@@ -7,6 +7,12 @@
 # letters, digits, ".", "_" and "-" turned into "-" (feat/budget-windows ->
 # feat-budget-windows).
 #
+# The defaults below (database passwords and signing secret) are known values,
+# fine for a throwaway on a trusted network. Anyone who can reach port 8181
+# with them can sign in as any user, so set PREVIEW_AUTH_SECRET,
+# PREVIEW_APP_DB_PASSWORD and PREVIEW_POSTGRES_PASSWORD before exposing a
+# preview beyond your LAN, or put real data in it.
+#
 # Everything here is separate from docker-compose.sample.yml: its own project
 # name, its own database volume, its own network and its own port (8181), so
 # nothing it does can touch your real data. Throwing it away removes all of it:
@@ -49,7 +55,7 @@ name: wickermoney-preview
 x-env: &db
   DATABASE_URL: postgresql://wickermoney_app:${PREVIEW_APP_DB_PASSWORD:-preview_app_pw}@postgres:5432/wickermoney
   APP_DB_PASSWORD: ${PREVIEW_APP_DB_PASSWORD:-preview_app_pw}
-  AUTH_SECRET: ${PREVIEW_AUTH_SECRET:-preview-only-secret-change-me-if-you-expose-this}
+  AUTH_SECRET: ${PREVIEW_AUTH_SECRET:-preview-only-secret-set-PREVIEW_AUTH_SECRET-if-you-expose-this}
 
 services:
   postgres:
@@ -87,7 +93,9 @@ services:
     environment:
       <<: *db
       NODE_ENV: production
-      COOKIE_SECURE: "false"
+      # Plain HTTP on the LAN needs this off; set PREVIEW_COOKIE_SECURE=true
+      # behind HTTPS.
+      COOKIE_SECURE: "${PREVIEW_COOKIE_SECURE:-false}"
       LOG_LEVEL: info
     depends_on:
       postgres:
