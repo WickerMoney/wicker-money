@@ -89,6 +89,17 @@
 .account__item:hover,
 .account__item:focus-visible { background: var(--wm-surface-alt); }
 .shell__main { grid-area: main; padding: 18px; min-width: 0; }
+/* <main> takes focus after navigation (and from the skip link) so keyboard
+   users start at the new page. It is a landmark, not a control, so it gets no ring. */
+.shell__main:focus { outline: none; }
+/* First stop in the tab order: hidden until it is focused. */
+.shell__skip {
+  position: fixed; top: 8px; left: 8px; z-index: 100;
+  padding: 8px 14px; border-radius: var(--wm-radius-sm);
+  background: var(--wm-accent); color: var(--wm-accent-text); font-weight: 600;
+  transform: translateY(-200%);
+}
+.shell__skip:focus { transform: none; outline: 2px solid var(--wm-text); outline-offset: 2px; }
 .shell__failures { position: fixed; bottom: 12px; right: 12px; max-width: 420px; z-index: 5; }
 
 .page { display: flex; flex-direction: column; gap: var(--wm-gap); min-width: 0; }
@@ -460,7 +471,7 @@
 .cat-edit[aria-invalid="true"] { border-color: var(--wm-negative); }
 /* An inline editor and its error message, stacked inside one table cell. */
 .inline-input { display: flex; flex-direction: column; gap: 2px; }
-.cat-off { opacity: .55; }
+.cat-off { color: var(--wm-text-muted); }
 .page__actions--tight { margin-bottom: 0; gap: 6px; }
 
 /* Stacked inputs inside one table cell while a transaction row is being

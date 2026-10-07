@@ -62,3 +62,47 @@ describe('AppShell phone drawer', () => {
     expect(menuButton().getAttribute('aria-expanded')).toBe('false')
   })
 })
+
+describe('AppShell accessibility', () => {
+  it('sets the tab title from the route and updates it on navigation', async () => {
+    renderShell()
+    expect(document.title).toBe('Dashboard - Wicker Money')
+    await userEvent.click(screen.getByRole('link', { name: 'Accounts' }))
+    expect(document.title).toBe('Accounts - Wicker Money')
+  })
+
+  it('does not move focus on the first render', () => {
+    renderShell()
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it('moves focus to the page after navigating', async () => {
+    renderShell()
+    await userEvent.click(screen.getByRole('link', { name: 'Accounts' }))
+    expect(document.activeElement).toBe(main())
+  })
+
+  it('has a skip link that is first in the tab order and focuses the page', async () => {
+    renderShell()
+    await userEvent.tab()
+    const skip = screen.getByRole('link', { name: 'Skip to content' })
+    expect(document.activeElement).toBe(skip)
+    await userEvent.keyboard('{Enter}')
+    expect(document.activeElement).toBe(main())
+  })
+
+  it('waits for the phone drawer to close before moving focus to the page', async () => {
+    renderShell()
+    await userEvent.click(menuButton())
+    await userEvent.click(screen.getByRole('link', { name: 'Accounts' }))
+    expect(menuButton().getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(main())
+  })
+
+  it('does not steal focus from the menu button when the drawer closes on Escape', async () => {
+    renderShell()
+    await userEvent.click(menuButton())
+    await userEvent.keyboard('{Escape}')
+    expect(document.activeElement).toBe(menuButton())
+  })
+})
