@@ -125,12 +125,16 @@ export interface RecurringOccurrenceRepository {
   findTransferRows(transferId: string): Promise<CandidateTransactionRow[]>
 
   /**
-   * Lists transactions on some accounts in a date range, for matching.
+   * Lists the unlinked transactions on some accounts in a date range, for
+   * matching. A transaction already settling an occurrence is not a candidate
+   * for another, so it is left out here rather than filtered afterwards.
+   *
+   * The cap applies to each account separately and keeps the newest rows.
    *
    * @param accountIds - Accounts to look on.
    * @param from - First date, inclusive.
    * @param through - Last date, inclusive.
-   * @returns Transactions ordered by date, then id; at most a few hundred.
+   * @returns Transactions ordered by date, then id; at most a few hundred per account.
    */
   findCandidates(accountIds: readonly string[], from: string, through: string): Promise<CandidateTransactionRow[]>
 

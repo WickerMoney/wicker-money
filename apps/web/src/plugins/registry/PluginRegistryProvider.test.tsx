@@ -28,7 +28,7 @@ describe('PluginRegistryProvider', () => {
       .mockResolvedValueOnce(registry('a.one', 'a.two'))
       .mockResolvedValueOnce(registry('a.one'))
     render(<PluginRegistryProvider load={load}><Probe /></PluginRegistryProvider>)
-    expect(screen.getByRole('status', { name: 'Loading plugins' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('Loading plugins')
     await waitFor(() => { expect(shown('plugins')).toBe('a.one,a.two') })
 
     await userEvent.click(screen.getByRole('button', { name: 'refresh' }))

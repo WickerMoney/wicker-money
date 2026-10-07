@@ -168,6 +168,6 @@ describe("a switched-off plugin's page", () => {
 
   it('leaves addresses outside /p/ to the ordinary not-found page', async () => {
     mount('/nowhere')
-    expect(await screen.findByText('Not found.')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Page not found' })).toBeTruthy()
   })
 })
