@@ -8,8 +8,12 @@ import type { OccurrenceLinkRow } from './OccurrenceLinkRow.js'
 import type { OccurrenceRecordRow } from './OccurrenceRecordRow.js'
 import type { DismissalFilter, OccurrenceFilter, RecurringOccurrenceRepository } from './RecurringOccurrenceRepository.js'
 
-/** The most candidates one matching query returns; a few weeks on a few accounts is far below it. */
-const MAX_CANDIDATES = 500
+/**
+ * The most candidates one matching query returns for one account. Per account,
+ * so a busy account cannot crowd out a quiet one; a few weeks of one account's
+ * transactions is far below it.
+ */
+export const MAX_CANDIDATES_PER_ACCOUNT = 500
 
 /** Transaction columns matching reads. */
 const CANDIDATE_COLUMNS = [
@@ -18,8 +22,14 @@ const CANDIDATE_COLUMNS = [
 
 /** Kysely implementation of {@link RecurringOccurrenceRepository} over a single transaction. */
 export class KyselyRecurringOccurrenceRepository implements RecurringOccurrenceRepository {
-  /** @param trx - The transaction all queries run on. */
-  constructor(protected readonly trx: Trx) {}
+  /**
+   * @param trx - The transaction all queries run on.
+   * @param maxCandidatesPerAccount - The cap {@link findCandidates} applies to each account; a test seam.
+   */
+  constructor(
+    protected readonly trx: Trx,
+    private readonly maxCandidatesPerAccount: number = MAX_CANDIDATES_PER_ACCOUNT,
+  ) {}
 
   /** @inheritdoc */
   async listRecords(filter: OccurrenceFilter): Promise<OccurrenceRecordRow[]> {
@@ -160,17 +170,24 @@ export class KyselyRecurringOccurrenceRepository implements RecurringOccurrenceR
 
   /** @inheritdoc */
   async findCandidates(accountIds: readonly string[], from: string, through: string): Promise<CandidateTransactionRow[]> {
-    if (accountIds.length === 0) return []
-    return this.trx
-      .selectFrom('core.transactions')
-      .select(CANDIDATE_COLUMNS)
-      .where('account_id', 'in', [...accountIds])
-      .where('transaction_date', '>=', from)
-      .where('transaction_date', '<=', through)
-      .orderBy('transaction_date')
-      .orderBy('id')
-      .limit(MAX_CANDIDATES)
-      .execute()
+    const found: CandidateTransactionRow[] = []
+    // One query per account (there are few, and they share one connection
+    // anyway), newest first, so a cap drops the oldest rows rather than the
+    // ones about to be settled. Linked transactions are never candidates.
+    for (const accountId of new Set(accountIds)) {
+      found.push(...await this.trx
+        .selectFrom('core.transactions')
+        .select(CANDIDATE_COLUMNS)
+        .where('account_id', '=', accountId)
+        .where('recurring_occurrence_id', 'is', null)
+        .where('transaction_date', '>=', from)
+        .where('transaction_date', '<=', through)
+        .orderBy('transaction_date', 'desc')
+        .orderBy('id', 'desc')
+        .limit(this.maxCandidatesPerAccount)
+        .execute())
+    }
+    return found.sort((a, b) => compare(a.transaction_date, b.transaction_date) || compare(a.id, b.id))
   }
 
   /** @inheritdoc */
@@ -235,4 +252,9 @@ function matches(eb: ExpressionBuilder<Database & { o: Database['core.recurring_
   if (filter.from !== undefined) conditions.push(eb('o.nominal_date', '>=', filter.from))
   if (filter.to !== undefined) conditions.push(eb('o.nominal_date', '<', filter.to))
   return eb.and(conditions)
+}
+
+/** String order. */
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
 }
