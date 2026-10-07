@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
+import { useDocumentTitle } from '../hooks/useDocumentTitle.js'
 import { useEscapeKey } from '../hooks/useEscapeKey.js'
 import { AccountMenu } from './AccountMenu.js'
 import { GearIcon } from './icons/GearIcon.js'
@@ -8,6 +9,7 @@ import { MenuIcon } from './icons/MenuIcon.js'
 import { CORE_NAV } from './coreNav.js'
 import { NavLinks } from './NavLinks.js'
 import { navEntriesFor } from './navEntriesFor.js'
+import { pageTitleFor } from './pageTitleFor.js'
 
 /** Props for {@link AppShell}. */
 export interface AppShellProps {
@@ -34,6 +36,12 @@ export interface AppShellProps {
  * links, so desktop and phone cannot drift apart. It closes on navigation,
  * Escape and a tap on the scrim, and the page behind it is `inert` while it is
  * open so focus cannot wander into content the scrim is covering.
+ *
+ * Each route sets its own browser tab title, and a "Skip to content" link is
+ * the first thing in the tab order. After navigating, focus moves to the page
+ * (`<main>`) so keyboard and screen reader users start at the new content
+ * rather than back in the sidebar; the first render is left alone so a fresh
+ * page load does not scroll or steal focus.
  */
 export function AppShell({ plugins }: AppShellProps) {
   const mainNav = navEntriesFor(plugins, 'main')
@@ -44,6 +52,11 @@ export function AppShell({ plugins }: AppShellProps) {
   const [navOpen, setNavOpen] = useState(false)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const navRef = useRef<HTMLElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  const focusMainPending = useRef(false)
+  const firstRoute = useRef(true)
+
+  useDocumentTitle(pageTitleFor(pathname, plugins))
 
   const closeNav = useCallback(() => {
     setNavOpen(false)
@@ -56,6 +69,19 @@ export function AppShell({ plugins }: AppShellProps) {
   // effect covers navigation from anywhere; the click handler covers a tap on
   // the link for the page you are already on, which changes no route.
   useEffect(() => { setNavOpen(false) }, [pathname])
+
+  // Hands focus to the new page after navigation. The page is `inert` while the
+  // drawer is open, so on a phone this waits until the drawer has closed.
+  useEffect(() => {
+    if (firstRoute.current) { firstRoute.current = false; return }
+    focusMainPending.current = true
+  }, [pathname])
+  useEffect(() => {
+    if (focusMainPending.current && !navOpen) {
+      focusMainPending.current = false
+      mainRef.current?.focus({ preventScroll: true })
+    }
+  }, [pathname, navOpen])
   const onNavClick = useCallback((e: MouseEvent<HTMLElement>) => {
     if ((e.target as HTMLElement).closest('a') !== null) setNavOpen(false)
   }, [])
@@ -66,8 +92,14 @@ export function AppShell({ plugins }: AppShellProps) {
     if (navOpen) navRef.current?.focus()
   }, [navOpen])
 
+  const skipToContent = useCallback((e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault()
+    mainRef.current?.focus()
+  }, [])
+
   return (
     <div className={`shell${navOpen ? ' is-nav-open' : ''}`}>
+      <a className="shell__skip" href="#main" onClick={skipToContent}>Skip to content</a>
       <header className="shell__bar" inert={navOpen}>
         <button ref={menuButtonRef} type="button" className="shell__menu-btn"
                 aria-label="Menu" aria-expanded={navOpen} aria-controls="shell-nav"
@@ -122,7 +154,7 @@ export function AppShell({ plugins }: AppShellProps) {
         </div>
       </aside>
 
-      <main className="shell__main" inert={navOpen}>
+      <main id="main" ref={mainRef} tabIndex={-1} className="shell__main" inert={navOpen}>
         <Outlet />
       </main>
     </div>

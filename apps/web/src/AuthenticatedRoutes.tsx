@@ -16,6 +16,7 @@ import { pluginRoutes } from './plugins/PluginRoutes.js'
 import { usePluginRegistry } from './plugins/registry/index.js'
 import { useCachedContextFor } from './plugins/useCachedContextFor.js'
 import { AppShell } from './shell/AppShell.js'
+import { NotFound } from './pages/NotFound.js'
 
 /**
  * The shell and every core and plugin route, built from the current plugin
@@ -70,7 +71,7 @@ export function AuthenticatedRoutes() {
           {pluginRoutes(plugins, contextFor)}
           {/* Ranked below every plugin's own, more specific page route. */}
           <Route path="p/:pluginId/*" element={<PluginUnavailable />} />
-          <Route path="*" element={<div className="page">Not found.</div>} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </OnboardingProvider>
