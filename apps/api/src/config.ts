@@ -116,8 +116,16 @@ const schema = z.object({
 /** Validated application configuration, with defaults applied. */
 export type Config = z.infer<typeof schema>
 
-/** Substrings that identify the throwaway credentials shipped for local development. */
-const DEV_CREDENTIAL_MARKERS = ['_dev_password', 'testpw', 'changeme']
+/** Where the start-up error sends someone whose credentials were refused. */
+const PLACEHOLDER_CREDENTIALS_DOCS = 'https://wickermoney.dev/docs/self-hosting/upgrading#placeholder-credentials'
+
+/**
+ * Lowercase substrings that identify the throwaway credentials shipped for
+ * local development, and the placeholders (`change-me`, and the quickstart's
+ * `CHANGE_ME`) an operator is meant to replace before going live. Matched
+ * without regard to case.
+ */
+const DEV_CREDENTIAL_MARKERS = ['_dev_password', 'testpw', 'changeme', 'change-me', 'change_me']
 
 /**
  * Parses and validates configuration from environment variables.
@@ -138,11 +146,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     const offenders = [
       ['DATABASE_URL', parsed.data.DATABASE_URL],
       ['AUTH_SECRET', parsed.data.AUTH_SECRET],
-    ].filter(([, value]) => DEV_CREDENTIAL_MARKERS.some((m) => (value ?? '').includes(m)))
+    ].filter(([, value]) => DEV_CREDENTIAL_MARKERS.some((m) => (value ?? '').toLowerCase().includes(m)))
     if (offenders.length > 0) {
+      const names = offenders.map(([k]) => k)
+      const howToFix = [
+        names.includes('AUTH_SECRET')
+          ? '  AUTH_SECRET: generate one with `openssl rand -base64 48`, then re-run migrations.'
+          : null,
+        names.includes('DATABASE_URL')
+          ? '  DATABASE_URL: set a new APP_DB_PASSWORD (and the same password in DATABASE_URL), then re-run migrations.'
+          : null,
+      ].filter((line) => line !== null)
       throw new Error(
-        `Invalid configuration:\n  ${offenders.map(([k]) => k).join(', ')} contain a development ` +
-          `credential. Refusing to start with NODE_ENV=production.`,
+        `Invalid configuration:\n  ${names.join(', ')} contain a development ` +
+          `credential. Refusing to start with NODE_ENV=production.\n\n` +
+          `Placeholder values are publicly known or easy to guess, so anyone could forge a sign-in or reach the database. ` +
+          `Replace them with real secrets:\n${howToFix.join('\n')}\n` +
+          `Steps and what to expect: ${PLACEHOLDER_CREDENTIALS_DOCS}`,
       )
     }
   }
