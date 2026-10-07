@@ -83,3 +83,9 @@
   background: var(--wm-surface-alt); border-radius: var(--wm-radius-sm);
   padding: 10px 12px; font-size: 13px;
 }
+
+/* Text for assistive technology only. */
+.wm-visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
