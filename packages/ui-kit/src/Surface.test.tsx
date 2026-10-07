@@ -17,4 +17,14 @@ describe('Surface', () => {
     render(<Surface>body</Surface>)
     expect(screen.queryByRole('heading')).toBeNull()
   })
+
+  it('renders the title as an h2 by default', () => {
+    render(<Surface title="Net worth">body</Surface>)
+    expect(screen.getByRole('heading', { level: 2, name: 'Net worth' })).toBeDefined()
+  })
+
+  it('renders the title as an h1 when it is the page', () => {
+    render(<Surface title="Sign in" level={1}>body</Surface>)
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeDefined()
+  })
 })
