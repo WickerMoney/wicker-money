@@ -3,6 +3,8 @@ import './components.css'
 
 export { Surface } from './Surface.js'
 export type { SurfaceProps } from './Surface.js'
+export { Dialog } from './Dialog.js'
+export type { DialogProps } from './Dialog.js'
 export { Button } from './Button.js'
 export type { ButtonProps } from './Button.js'
 export { IconButton } from './IconButton.js'

@@ -82,6 +82,19 @@ describe('recording spending or income', () => {
     expect(status.end).toHaveBeenCalled()
   })
 
+  it('says it worked and puts the cursor back on the merchant, ready for the next entry', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({})
+    const { user } = mount()
+    expect(screen.queryByRole('status')).toBeNull()
+
+    await user.type(screen.getByLabelText('Merchant'), 'Cafe')
+    await user.type(screen.getByLabelText('Amount'), '4')
+    await user.click(screen.getByRole('button', { name: 'Record' }))
+
+    expect((await screen.findByRole('status')).textContent).toMatch(/Recorded/)
+    expect(document.activeElement).toBe(screen.getByLabelText('Merchant'))
+  })
+
   it('leaves the category out so the rules can choose it', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({})
     const { user } = mount()

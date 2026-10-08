@@ -104,6 +104,7 @@
 
 .page { display: flex; flex-direction: column; gap: var(--wm-gap); min-width: 0; }
 .page__title { margin: 0; font-size: 20px; font-weight: 650; }
+.page__header { display: flex; align-items: center; justify-content: space-between; gap: var(--wm-gap-sm); }
 .page__split { display: grid; gap: var(--wm-gap); grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 
 .slot { display: grid; gap: var(--wm-gap); min-width: 0; }
@@ -473,10 +474,6 @@
 .inline-input { display: flex; flex-direction: column; gap: 2px; }
 .cat-off { color: var(--wm-text-muted); }
 .page__actions--tight { margin-bottom: 0; gap: 6px; }
-
-/* Stacked inputs inside one table cell while a transaction row is being
-   edited (merchant+notes, or a transfer's amount plus its sync hint). */
-.txn-edit { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
 
 /* Transactions filters and pager. The filter row wraps rather than scrolling:
    on a narrow window a horizontally scrolling filter bar hides controls behind
