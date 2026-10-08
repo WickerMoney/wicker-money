@@ -89,3 +89,33 @@
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip-path: inset(50%); white-space: nowrap;
 }
+
+/* Dialog: a right-hand drawer on a desktop window, a full-screen sheet on a
+   phone. Height is dvh so the on-screen keyboard does not push Save off the
+   bottom, and the body scrolls on its own while the header stays put. */
+.wm-dialog {
+  position: fixed; inset: 0 0 0 auto; margin: 0; padding: 0;
+  width: min(460px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh;
+  color: var(--wm-text); background: var(--wm-surface);
+  border: 0; border-left: 1px solid var(--wm-border); box-shadow: var(--wm-shadow);
+}
+.wm-dialog[open] { display: flex; flex-direction: column; }
+.wm-dialog::backdrop { background: rgb(9 12 16 / 55%); }
+.wm-dialog__header {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--wm-gap-sm);
+  padding: 12px var(--wm-gap); padding-top: max(12px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--wm-border);
+}
+.wm-dialog__title { margin: 0; font-size: 16px; font-weight: 650; }
+.wm-dialog__close { flex: none; width: 36px; height: 36px; padding: 0; font-size: 20px; line-height: 1; }
+.wm-dialog__body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--wm-gap);
+  padding-bottom: max(var(--wm-gap), env(safe-area-inset-bottom));
+}
+/* Cancel and Save at the foot of a dialog's form. */
+.wm-dialog__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: var(--wm-gap-sm); }
+/* The page behind a modal dialog does not scroll. */
+body:has(.wm-dialog[open]) { overflow: hidden; }
+@media (max-width: 560px) {
+  .wm-dialog { width: 100vw; border-left: 0; }
+}
