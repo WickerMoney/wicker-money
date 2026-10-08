@@ -6,8 +6,7 @@ import type { TransactionMatches } from '../hooks/useTransactionMatches.js'
 import { TransactionActionsCell } from './TransactionActionsCell.js'
 import { TransactionAmountCell } from './TransactionAmountCell.js'
 import { TransactionCategoryCell } from './TransactionCategoryCell.js'
-import { TransactionDateCell } from './TransactionDateCell.js'
-import { TransactionMerchantCell } from './TransactionMerchantCell.js'
+import { TransactionEditDialog } from './TransactionEditDialog.js'
 import { TransactionRecurringCell } from './TransactionRecurringCell.js'
 
 /** Props for {@link TransactionTable}. */
@@ -33,9 +32,9 @@ export interface TransactionTableProps {
 }
 
 /**
- * The transaction table, with a selection column, inline editing, inline
- * category assignment, delete and, given `matches`, the recurring item each
- * row settles or might.
+ * The transaction table, with a selection column, inline category assignment,
+ * delete and, given `matches`, the recurring item each row settles or might.
+ * A row's Edit button opens {@link TransactionEditDialog}.
  */
 export function TransactionTable({
   items, selected, onlyUncategorized, categoryOptionsFor, status, matches,
@@ -50,6 +49,7 @@ export function TransactionTable({
 
   return (
     <>
+      <TransactionEditDialog row={row} busy={busy} />
       {/* Phones only (see app.css): the header row, and the select-all in it, is
           hidden when rows become cards, so the same control is offered here. */}
       {items.length > 0 ? (
@@ -73,15 +73,15 @@ export function TransactionTable({
                      onChange={() => onToggleSelected(t.id)} />
             ) },
           { key: 'date', header: 'Date',
-            render: (t: Transaction) => <TransactionDateCell transaction={t} row={row} /> },
+            render: (t: Transaction) => t.transaction_date },
           { key: 'merchant', header: 'Merchant',
-            render: (t: Transaction) => <TransactionMerchantCell transaction={t} row={row} /> },
+            render: (t: Transaction) => t.merchant },
           { key: 'cat', header: 'Category',
             render: (t: Transaction) => (
               <TransactionCategoryCell transaction={t} row={row} categoryOptionsFor={categoryOptionsFor} />
             ) },
           { key: 'amt', header: 'Amount', numeric: true,
-            render: (t: Transaction) => <TransactionAmountCell transaction={t} row={row} /> },
+            render: (t: Transaction) => <TransactionAmountCell transaction={t} /> },
           ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
             render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
           { key: 'actions', header: '',

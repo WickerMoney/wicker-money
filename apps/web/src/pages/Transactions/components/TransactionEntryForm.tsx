@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { EmptyState, Surface } from '@wickermoney/ui-kit'
+import { useRef, useState } from 'react'
+import { EmptyState } from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { Account, Category } from '../../../models/index.js'
 import { useEntryFields } from '../hooks/useEntryFields.js'
@@ -23,7 +23,7 @@ export interface TransactionEntryFormProps {
 }
 
 /**
- * A form that records either a spending/income transaction or a transfer
+ * A form, shown in a dialog, that records either a spending/income transaction or a transfer
  * between two of the user's accounts.
  *
  * The two are separate modes because a transfer is two linked rows, not a
@@ -35,17 +35,27 @@ export function TransactionEntryForm({
   accounts, enabledCategories, status, onRecorded,
 }: TransactionEntryFormProps) {
   const [mode, setMode] = useState<EntryMode>('spend')
+  const [justRecorded, setJustRecorded] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  // The form stays open after an entry (it is how a batch gets typed in), so
+  // say it worked and put the cursor back on the first field for the next one.
+  const afterRecorded = async () => {
+    await onRecorded()
+    setJustRecorded(true)
+    root.current?.querySelector('input')?.focus()
+  }
   const fields = useEntryFields(accounts)
-  const spend = useSpendEntry(fields, status, onRecorded)
-  const transfer = useTransferEntry(fields, status, onRecorded)
+  const spend = useSpendEntry(fields, status, afterRecorded)
+  const transfer = useTransferEntry(fields, status, afterRecorded)
 
   return (
-    <Surface title={mode === 'transfer' ? 'Move money' : 'Record a transaction'}>
+    <div ref={root}>
       {accounts.length === 0 ? (
         <EmptyState title="Add an account first" hint="Transactions belong to an account." />
       ) : (
         <>
-          <EntryModeToggle mode={mode} onChange={setMode} />
+          <EntryModeToggle mode={mode} onChange={(next) => { setMode(next); setJustRecorded(false) }} />
+          {justRecorded ? <p className="form-hint" role="status">Recorded. Add another, or close this.</p> : null}
           {mode === 'transfer' ? (
             <TransferForm accounts={accounts} fields={fields} entry={transfer} busy={status.busy} />
           ) : (
@@ -56,6 +66,6 @@ export function TransactionEntryForm({
           )}
         </>
       )}
-    </Surface>
+    </div>
   )
 }
