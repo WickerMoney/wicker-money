@@ -557,6 +557,28 @@ deleting the package version in the organization's package settings removes
 the image. The preview package is private by default, so the Docker host
 needs a `docker login ghcr.io` with a token that has `read:packages`.
 
+### Pruning old images
+
+Two workflows keep `ghcr.io/wickermoney` from growing without bound. Both are
+dry runs until the repository variable `GHCR_CLEANUP_LIVE` is `true`, and both
+need a `GHCR_CLEANUP_TOKEN` secret (a classic PAT with `delete:packages`, or a
+GitHub App token with `packages: write`); `GITHUB_TOKEN` cannot use the tag
+wildcards.
+
+- `package-cleanup.yml` runs daily on `wicker-money`. It never deletes
+  `:latest`, `:next`, `:edge` or a stable version tag. It deletes `:edge-<short sha>`
+  tags older than 14 days (keeping the newest 10), prerelease tags such as
+  `0.5.0-rc.1` older than 60 days, and untagged versions older than 7 days. The
+  untagged rule also covers `wicker-money-preview`. Per-arch images that a kept
+  manifest list points at are protected, so a multi-arch pull keeps working.
+- `preview-cleanup.yml` deletes a branch's `wicker-money-preview` tags when its
+  pull request is closed or the branch is deleted, and sweeps weekly for
+  previews whose branch is gone or that are older than 30 days. Its tag
+  sanitiser must match the one in `preview-image.yml`.
+
+To check a change to either file, run it from **Actions → Run workflow** with
+`GHCR_CLEANUP_LIVE` unset and read the "would delete" list before going live.
+
 ## Screenshots
 
 The images in the README live in [`docs/screenshots/`](docs/screenshots), one

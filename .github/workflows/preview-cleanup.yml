@@ -1,0 +1,135 @@
+name: Preview cleanup
+
+# Removes ghcr.io/wickermoney/wicker-money-preview versions that belong to
+# branches that are done:
+#   - a pull request is closed (merged or not)  -> that branch's previews
+#   - a branch is deleted                       -> that branch's previews
+#   - weekly sweep                              -> previews whose branch no
+#                                                  longer exists, plus anything
+#                                                  older than MAX_AGE_DAYS
+#
+# Tags are matched, not guessed: preview-image.yml publishes
+#   <branch-tag>  and  <branch-tag>-<7 hex sha>
+# where <branch-tag> is the branch name run through the sanitiser below. KEEP
+# `sanitize` IN SYNC with the "tag" step in preview-image.yml (or move both into
+# a shared script, e.g. docker/preview-tag.sh).
+#
+# A version is only deleted when ALL of its tags belong to the branch being
+# cleaned. Two branches at the same commit produce the same image digest, so
+# one version can carry both branches' tags; that version waits for the sweep.
+#
+# Untagged leftovers (the per-arch children of a deleted preview) are removed by
+# package-cleanup.yml after 7 days; they are not touched here.
+#
+# Needs the same GHCR_CLEANUP_TOKEN secret and GHCR_CLEANUP_LIVE variable as
+# package-cleanup.yml. Without GHCR_CLEANUP_LIVE=true every run is a dry run.
+
+on:
+  pull_request:
+    types: [closed]
+  delete:
+  schedule:
+    - cron: "17 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Force a dry run even when GHCR_CLEANUP_LIVE is true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-cleanup
+  cancel-in-progress: false
+
+env:
+  ORG: wickermoney
+  PACKAGE: wicker-money-preview
+  MAX_AGE_DAYS: "30"
+
+jobs:
+  cleanup:
+    # Not from a fork (no secrets, and previews are only built from branches of
+    # this repo) and only for deleted branches, not deleted tags.
+    if: >-
+      github.repository == 'wickermoney/wicker-money' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'delete' || github.event.ref_type == 'branch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete preview versions
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_CLEANUP_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          DELETED_BRANCH: ${{ github.event.ref }}
+          LIVE: ${{ vars.GHCR_CLEANUP_LIVE == 'true' && inputs.dry_run != true }}
+        run: |
+          set -euo pipefail
+          [ -n "$GH_TOKEN" ] || { echo "::error::GHCR_CLEANUP_TOKEN is not set"; exit 1; }
+
+          # Same rule as preview-image.yml.
+          sanitize() {
+            local tag
+            tag="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9._-]/-/g' -e 's/^[.-]*//' | cut -c1-100)"
+            if [ -z "$tag" ]; then tag=branch; fi
+            printf '%s' "$tag"
+          }
+
+          base="/orgs/$ORG/packages/container/$PACKAGE/versions"
+          if ! raw="$(gh api --paginate "$base?per_page=100" 2>/dev/null)"; then
+            echo "No $PACKAGE package yet (or no access); nothing to clean."
+            exit 0
+          fi
+          versions="$(jq -s 'add // []' <<<"$raw")"
+          echo "$(jq length <<<"$versions") versions in $PACKAGE"
+
+          case "$EVENT" in
+            pull_request) branch="$PR_BRANCH" ;;
+            delete)       branch="$DELETED_BRANCH" ;;
+            *)            branch="" ;;
+          esac
+
+          if [ -n "$branch" ]; then
+            target="$(sanitize "$branch")"
+            echo "Cleaning previews of branch '$branch' (tag '$target')"
+            re="^$(printf '%s' "$target" | sed 's/\./\\./g')(-[0-9a-f]{7})?\$"
+            rows="$(jq -r --arg re "$re" '
+              .[]
+              | select((.metadata.container.tags | length) > 0
+                       and (.metadata.container.tags | all(test($re))))
+              | "\(.id)\t\(.metadata.container.tags | join(","))"
+            ' <<<"$versions")"
+          else
+            echo "Sweep: branches that are gone, or older than $MAX_AGE_DAYS days"
+            alive="$(gh api --paginate "/repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name' \
+              | while IFS= read -r b; do sanitize "$b"; echo; done \
+              | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+            echo "$(jq length <<<"$alive") live branches"
+            cutoff="$(date -u -d "-$MAX_AGE_DAYS days" +%s)"
+            rows="$(jq -r --argjson alive "$alive" --argjson cutoff "$cutoff" '
+              def stem: sub("-[0-9a-f]{7}$"; "");
+              def live: . as $t | any($alive[]; . == $t) or any($alive[]; . == ($t | stem));
+              .[]
+              | select((.metadata.container.tags | length) > 0)
+              | select(((.metadata.container.tags | any(live)) | not)
+                       or ((.updated_at | fromdateiso8601) < $cutoff))
+              | "\(.id)\t\(.metadata.container.tags | join(","))"
+            ' <<<"$versions")"
+          fi
+
+          if [ -z "$rows" ]; then echo "Nothing to delete."; exit 0; fi
+
+          while IFS=$'\t' read -r id tags; do
+            if [ "$LIVE" = "true" ]; then
+              if gh api -X DELETE "$base/$id" >/dev/null; then
+                echo "deleted $id ($tags)"
+              else
+                echo "::warning::could not delete version $id ($tags)"
+              fi
+            else
+              echo "[dry run] would delete $id ($tags)"
+            fi
+          done <<<"$rows"
