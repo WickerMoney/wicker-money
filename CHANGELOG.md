@@ -9,6 +9,14 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Changed
+
+- **Old images are pruned.** `package-cleanup.yml` and `preview-cleanup.yml`
+  remove old `:edge-<short sha>` tags, old prereleases, untagged versions and
+  the preview images of closed or deleted branches. `:latest`, `:next`, `:edge`
+  and stable version tags are never deleted. See "Pruning old images" in
+  `DEVELOPMENT.md`.
+
 ## [0.4.2] - 2026-10-06
 
 Phone layouts, a tidier UI and a round of accessibility and matching fixes. No
