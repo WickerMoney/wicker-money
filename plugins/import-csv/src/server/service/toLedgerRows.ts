@@ -1,6 +1,6 @@
 import type { ClassifiedRow } from '../../shared/index.js'
 import type { NewLedgerRow } from '../repository/NewLedgerRow.js'
-import type { RuleForMatching } from '../repository/RuleForMatching.js'
+import type { RuleForMatching } from '@wickermoney/plugin-sdk/server'
 import type { CategoryResolver } from './CategoryResolver.js'
 
 /**

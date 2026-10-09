@@ -3,7 +3,7 @@ import type { ExportedImportBatch } from './ExportedImportBatch.js'
 import type { ExportedSourceMapping } from './ExportedSourceMapping.js'
 import type { ExportRepository } from './ExportRepository.js'
 import type { ImportExport } from './ImportExport.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /** {@link ExportRepository} over the plugin's query runner. */
 export class QueryExportRepository implements ExportRepository {

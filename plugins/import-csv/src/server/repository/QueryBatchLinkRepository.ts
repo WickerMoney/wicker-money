@@ -1,7 +1,7 @@
 import type { BatchLinkRepository } from './BatchLinkRepository.js'
 import { INSERT_CHUNK_SIZE } from './INSERT_CHUNK_SIZE.js'
 import { chunk } from './chunk.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /** {@link BatchLinkRepository} over the plugin's query runner. */
 export class QueryBatchLinkRepository implements BatchLinkRepository {

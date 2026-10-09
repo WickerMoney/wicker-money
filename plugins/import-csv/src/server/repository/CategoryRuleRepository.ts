@@ -1,4 +1,4 @@
-import type { RuleForMatching } from './RuleForMatching.js'
+import type { RuleForMatching } from '@wickermoney/plugin-sdk/server'
 
 /** Read access to the user's category rules. */
 export interface CategoryRuleRepository {

@@ -1,6 +1,6 @@
 import type { SourceMapping } from '../../shared/index.js'
 import type { MappingRepository } from './MappingRepository.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 import type { SavedMappingRow } from './SavedMappingRow.js'
 
 /** {@link MappingRepository} over the plugin's query runner. */

@@ -3,7 +3,7 @@ import type { BatchListRow } from './BatchListRow.js'
 import type { BatchRecord } from './BatchRecord.js'
 import type { BatchRepository } from './BatchRepository.js'
 import type { NewBatch } from './NewBatch.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /** {@link BatchRepository} over the plugin's query runner. */
 export class QueryBatchRepository implements BatchRepository {
