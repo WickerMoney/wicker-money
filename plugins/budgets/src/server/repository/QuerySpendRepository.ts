@@ -1,5 +1,6 @@
 import { monthPeriod } from '../../shared/index.js'
-import type { Query } from './Query.js'
+import type { AccountScope } from './AccountScope.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 import type { SpendRepository } from './SpendRepository.js'
 
 /**
@@ -76,5 +77,60 @@ export class QuerySpendRepository implements SpendRepository {
       HAVING SUM(amount) <> 0
     `
     return new Map(rows.map((r) => [`${r.category_id}:${r.month_key}`, r.spent]))
+  }
+
+  /** @inheritdoc */
+  async byAccountScopes(scopes: readonly AccountScope[]): Promise<Map<string, string>> {
+    if (scopes.length === 0) return new Map()
+    // The scopes go in as one JSON parameter and are unpacked in SQL, so the
+    // cost is one query however many months of history are being replayed.
+    const payload = JSON.stringify(
+      scopes.map((s) => ({ key: s.key, account_id: s.accountId, from_date: s.start, to_date: s.end, excluded: s.excluded })),
+    )
+    const rows = await this.q<{ key: string; spent: string }>`
+      WITH scopes AS (
+        SELECT s.key, s.account_id, s.from_date::date AS from_date, s.to_date::date AS to_date, s.excluded
+        FROM jsonb_to_recordset(${payload}::jsonb)
+          AS s(key text, account_id uuid, from_date text, to_date text, excluded jsonb)
+      ),
+      expenses AS (
+        SELECT t.id, t.account_id, t.category_id, t.amount, t.transaction_date
+        FROM core.transactions t
+        LEFT JOIN core.categories c ON c.id = t.category_id
+        WHERE t.transaction_date >= (SELECT min(from_date) FROM scopes)
+          AND t.transaction_date <  (SELECT max(to_date) FROM scopes)
+          AND t.account_id IN (SELECT account_id FROM scopes)
+          AND t.transfer_id IS NULL
+          AND t.transfer_account_id IS NULL
+          AND (c.kind IS NULL OR c.kind NOT IN ('transfer', 'income'))
+      ),
+      split_totals AS (
+        SELECT s.transaction_id, SUM(s.amount) AS split_sum
+        FROM core.transaction_splits s
+        JOIN expenses e ON e.id = s.transaction_id
+        GROUP BY s.transaction_id
+      ),
+      parts AS (
+        SELECT e.account_id, e.category_id, e.transaction_date, e.amount - COALESCE(st.split_sum, 0) AS amount
+        FROM expenses e
+        LEFT JOIN split_totals st ON st.transaction_id = e.id
+        UNION ALL
+        SELECT e.account_id, s.category_id, e.transaction_date, s.amount
+        FROM core.transaction_splits s
+        JOIN expenses e ON e.id = s.transaction_id
+      )
+      SELECT sc.key, (-SUM(p.amount))::text AS spent
+      FROM scopes sc
+      JOIN parts p
+        ON p.account_id = sc.account_id
+       AND p.transaction_date >= sc.from_date
+       AND p.transaction_date <  sc.to_date
+       AND (p.category_id IS NULL OR NOT jsonb_exists(sc.excluded, p.category_id::text))
+       -- Uncategorized money in is not a refund of anything; see the interface.
+       AND (p.category_id IS NOT NULL OR p.amount < 0)
+      GROUP BY sc.key
+      HAVING SUM(p.amount) <> 0
+    `
+    return new Map(rows.map((r) => [r.key, r.spent]))
   }
 }

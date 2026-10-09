@@ -1,5 +1,5 @@
 import type { SavedMappingRow } from '../repository/SavedMappingRow.js'
-import type { RuleForMatching } from '../repository/RuleForMatching.js'
+import type { RuleForMatching } from '@wickermoney/plugin-sdk/server'
 import type { StoredBatch } from './StoredBatch.js'
 import type { StoredTransaction } from './StoredTransaction.js'
 

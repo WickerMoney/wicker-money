@@ -10,11 +10,7 @@ import type { ImportRouteDeps } from './helpers/ImportRouteDeps.js'
 
 export { IMPORT_API_BASE } from '../constants.js'
 export { ImportError } from '../service/ImportError.js'
-export type { ConditionForMatching } from '../repository/ConditionForMatching.js'
-export type { Query } from '../repository/Query.js'
-export type { RuleForMatching } from '../repository/RuleForMatching.js'
 export type { ImportRouteDeps } from './helpers/ImportRouteDeps.js'
-export type { RouteContext } from './helpers/RouteContext.js'
 
 /**
  * Registers every CSV import endpoint through the host-supplied route registrar.

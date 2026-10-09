@@ -52,13 +52,17 @@ function isCacheable(init: RequestInit): boolean {
  * Builds the scoped client handed to one plugin.
  *
  * Two things happen here. The plugin's identity is attached to every request so
- * the server can check it against the manifest — that check is the authoritative
- * one. And an obviously ungranted path is refused locally, which turns a
- * server-side 403 into an immediate, specific error at the call site.
+ * the server can check it against the manifest, which gives an honest plugin a
+ * specific 403 when it asks for a table it never declared. And an obviously
+ * ungranted path is refused locally, which turns that 403 into an immediate
+ * error at the call site.
  *
- * The local check is developer ergonomics, not a security boundary: plugin code
- * runs in this realm and could call fetch itself. Enforcement lives on the
- * server and, beneath it, in the per-plugin database role.
+ * Neither check is a security boundary. UI plugins are fully trusted code that
+ * runs in this realm and this origin: a malicious one can call `fetch` itself,
+ * omit the plugin header (the server then treats the request as the host
+ * application), or obtain an access token and use it directly. Only the
+ * per-plugin database role is enforced against plugin code, and it covers
+ * server-side plugin code, not this client.
  *
  * `get` also goes through the per-user response cache, so widgets (from one
  * plugin or several) asking for the same URL at about the same time cost one

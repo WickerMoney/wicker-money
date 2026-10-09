@@ -24,13 +24,24 @@ export const pluginManifestSchema = z.object({
   author: z.string().default(''),
   /** Major version of the SDK the plugin was built against. */
   sdkVersion: z.number().int().nonnegative(),
-  /** Core tables the plugin needs, each with the access level requested. Defaults to none. */
+  /**
+   * Core tables the plugin needs, each with the access level requested.
+   * Defaults to none.
+   *
+   * Enforced by a per-plugin PostgreSQL role for the plugin's server-side code.
+   * It is a declaration and early feedback, not an enforced boundary, for the
+   * plugin's UI code, which runs fully trusted in the host origin.
+   */
   requiredTables: z.array(tableGrantSchema).default([]),
   /** Capabilities beyond table access the plugin asks for. Defaults to none. */
   permissions: z.array(z.enum(PERMISSIONS)).default([]),
   /**
    * URL of the Module Federation entry: a same-origin `/plugins/<folder>/...`
    * path, or an `https:` URL whose origin the host has allowlisted.
+   *
+   * Whatever is loaded from here runs with full trust in the host's origin.
+   * Third-party plugin install is not supported yet; do not allowlist an
+   * origin you do not fully trust.
    *
    * The entry must be an ES module: the host registers every remote with
    * `type: 'module'` and loads it with a dynamic `import()`, never a classic

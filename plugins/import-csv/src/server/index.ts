@@ -17,9 +17,7 @@
  * never requested.
  */
 export { registerImportRoutes, ImportError } from './routes/index.js'
-export type {
-  ConditionForMatching, RuleForMatching, ImportRouteDeps, Query, RouteContext,
-} from './routes/index.js'
+export type { ImportRouteDeps } from './routes/index.js'
 export { IMPORT_PLUGIN_ID } from './constants.js'
 export { exportImportData } from './export.js'
 export type {

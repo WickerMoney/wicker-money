@@ -3,11 +3,13 @@ import type { PluginContext } from '@wickermoney/plugin-sdk'
 import { ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import {
-  isBudgetable, monthKeyOf, planProblem, shiftMonth, todayIn, windowIssue,
+  ACCOUNT_LINE_TYPES, isBudgetable, monthKeyOf, planProblem, shiftMonth, todayIn, windowIssue,
 } from '../../shared/index.js'
 import { BUDGETS_API_BASE } from '../../server/constants.js'
 import { monthLabel } from '../helpers/monthLabel.js'
-import type { Category, MonthLine, MonthResponse, WindowDraft } from '../models/index.js'
+import type {
+  AccountLine, AccountLineDraft, AccountOption, Category, MonthLine, MonthResponse, WindowDraft,
+} from '../models/index.js'
 
 /** What {@link useBudgetMonth} returns. */
 export interface BudgetMonth {
@@ -16,6 +18,12 @@ export interface BudgetMonth {
   readonly month: MonthResponse | null
   /** Categories that can carry a budget line: enabled, and neither income nor transfer. */
   readonly categories: readonly Category[]
+  /**
+   * Accounts an allowance can be set on (checking accounts). Empty when the
+   * host does not offer the account listing, in which case the page still works
+   * and just cannot add an allowance.
+   */
+  readonly accounts: readonly AccountOption[]
   /** The message currently shown: a failure, or a notice after carrying lines over. */
   readonly message: string | null
   readonly busy: boolean
@@ -47,6 +55,16 @@ export interface BudgetMonth {
    *   `note`) and anything else as `form`.
    */
   readonly saveWindow: (draft: WindowDraft) => Promise<FormErrors>
+  /**
+   * Creates or updates an account's allowance for the month shown, after
+   * checking the amount with the server's own rule.
+   *
+   * @returns No errors once saved; otherwise the problems by field
+   *   (`accountId`, `planned`, `excludedCategoryIds`, `note`) and anything else as `form`.
+   */
+  readonly saveAccountLine: (draft: AccountLineDraft) => Promise<FormErrors>
+  /** Removes an account's allowance for the month shown. */
+  readonly removeAccountLine: (line: AccountLine) => Promise<void>
 }
 
 /**
@@ -73,6 +91,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   const [monthKey, setMonthKey] = useState(() => monthKeyOf(todayIn(timezone)))
   const [month, setMonth] = useState<MonthResponse | null>(null)
   const [categories, setCategories] = useState<readonly Category[]>([])
+  const [accounts, setAccounts] = useState<readonly AccountOption[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [edits, setEdits] = useState<Record<string, string>>({})
@@ -89,17 +108,24 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
 
     setMessage(null)
     try {
-      const [loaded, cats] = await Promise.all([
+      const [loaded, cats, accountList] = await Promise.all([
         api.get<MonthResponse>(
           `${BUDGETS_API_BASE}/month?month=${key}&tz=${encodeURIComponent(timezone)}`,
           { signal },
         ),
         api.get<Category[]>('/core/categories/list', { signal }),
+        // The account listing only adds the allowance form's picker. A host
+        // that does not offer it must not stop the month from loading.
+        api.get<{ accounts?: AccountOption[] }>('/core/accounts/list', { signal }).catch((e: unknown) => {
+          if (signal.aborted) throw e
+          return null
+        }),
       ])
       if (signal.aborted) return
       setMonth(loaded)
       // Only categories a budget can count; income and transfers would always read zero.
       setCategories(cats.filter(isBudgetable))
+      setAccounts((accountList?.accounts ?? []).filter((a) => ACCOUNT_LINE_TYPES.includes(a.type)))
       setEdits({})
       setPlanErrors({})
     } catch (e) {
@@ -215,6 +241,36 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
+  const saveAccountLine = useCallback(async (draft: AccountLineDraft): Promise<FormErrors> => {
+    const checks: Record<string, string> = {}
+    if (draft.accountId === '') checks['accountId'] = 'Choose an account.'
+    const planned = planProblem(draft.planned)
+    if (planned !== null) checks['planned'] = planned
+    const problems: FormErrors = { fields: checks, form: null }
+    if (hasFormErrors(problems)) return problems
+
+    setBusy(true); setMessage(null)
+    try {
+      await api.put(`${BUDGETS_API_BASE}/account-line`, { month: monthKey, ...draft })
+      await reload(monthKey)
+      return NO_FORM_ERRORS
+    } catch (e) {
+      return formErrorsFrom(
+        e, ['accountId', 'planned', 'excludedCategoryIds', 'note'], 'Could not save that allowance.',
+      )
+    } finally { setBusy(false) }
+  }, [api, monthKey, reload])
+
+  const removeAccountLine = useCallback(async (line: AccountLine) => {
+    setBusy(true); setMessage(null)
+    try {
+      await api.del(`${BUDGETS_API_BASE}/account-line?month=${monthKey}&accountId=${line.accountId}`)
+      await reload(monthKey)
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not remove that allowance.')
+    } finally { setBusy(false) }
+  }, [api, monthKey, reload])
+
   const previousMonth = useCallback(() => setMonthKey((k) => shiftMonth(k, -1)), [])
   const nextMonth = useCallback(() => setMonthKey((k) => shiftMonth(k, 1)), [])
   const thisMonth = useCallback(() => setMonthKey(monthKeyOf(todayIn(timezone))), [timezone])
@@ -227,8 +283,8 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   )
 
   return {
-    monthKey, month, categories, message, busy, edits, planErrors,
+    monthKey, month, categories, accounts, message, busy, edits, planErrors,
     previousMonth, nextMonth, thisMonth, editPlan,
-    save, remove, adopt, addLine, saveWindow,
+    save, remove, adopt, addLine, saveWindow, saveAccountLine, removeAccountLine,
   }
 }

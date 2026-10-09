@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { PluginPageProps } from '@wickermoney/plugin-sdk'
 import { Alert, Spinner, Surface } from '@wickermoney/ui-kit'
 import './styles.js'
+import { AccountLineForm } from './components/AccountLineForm.js'
+import { AccountLinesTable } from './components/AccountLinesTable.js'
 import { AddLineForm } from './components/AddLineForm.js'
 import { AdoptDraftBanner } from './components/AdoptDraftBanner.js'
 import { BudgetLinesTable } from './components/BudgetLinesTable.js'
@@ -11,7 +13,7 @@ import { UnbudgetedPanel } from './components/UnbudgetedPanel.js'
 import { WindowForm } from './components/WindowForm.js'
 import { monthLabel } from './helpers/monthLabel.js'
 import { useBudgetMonth } from './hooks/useBudgetMonth.js'
-import type { MonthLine } from './models/index.js'
+import type { AccountLine, MonthLine } from './models/index.js'
 
 /**
  * A month of budget, as one editable table.
@@ -35,6 +37,9 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
   const { month, monthKey } = budget
   const money = ctx.formatMoney
   const [editingWindow, setEditingWindow] = useState<MonthLine | null>(null)
+  const [editingAccountLine, setEditingAccountLine] = useState<AccountLine | null>(null)
+  const accountLines = month?.accountLines ?? []
+  const categoryNames = new Map(budget.categories.map((c) => [c.id, c.name]))
 
   return (
     <div className="page bud">
@@ -53,7 +58,7 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
         {month === null ? <Spinner label="Loading the month" /> : (
           <>
             <MonthTotals summary={month.summary} formatMoney={money} />
-            {month.draft && month.lines.some((l) => l.draft) ? (
+            {(month.draft && month.lines.some((l) => l.draft)) || accountLines.some((l) => l.draft) ? (
               <AdoptDraftBanner
                 monthKey={monthKey}
                 busy={budget.busy}
@@ -108,6 +113,41 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
             busy={budget.busy}
             onSave={budget.saveWindow}
             onCancel={() => setEditingWindow(null)}
+          />
+        </Surface>
+      ) : null}
+
+      {month !== null ? (
+        <Surface title="Account allowances">
+          <p className="bud__note">
+            An allowance is money set aside to spend from one account, like $150 a month of
+            spending money. It counts everything that leaves the account, whatever the category,
+            except the categories you leave out, so holiday gifts that have a window of their own
+            do not eat into it. What is left carries into next month. It is kept out of the totals
+            above, since the same spending is also counted in its categories.
+          </p>
+          {accountLines.length > 0 ? (
+            <AccountLinesTable
+              lines={accountLines}
+              monthKey={monthKey}
+              today={month.today}
+              busy={budget.busy}
+              categoryName={(id) => categoryNames.get(id) ?? 'a removed category'}
+              formatMoney={money}
+              onEdit={setEditingAccountLine}
+              onRemove={(line) => {
+                if (editingAccountLine?.accountId === line.accountId) setEditingAccountLine(null)
+                void budget.removeAccountLine(line)
+              }}
+            />
+          ) : null}
+          <AccountLineForm
+            accounts={budget.accounts}
+            categories={budget.categories}
+            editing={editingAccountLine}
+            busy={budget.busy}
+            onSave={budget.saveAccountLine}
+            onCancel={() => setEditingAccountLine(null)}
           />
         </Surface>
       ) : null}

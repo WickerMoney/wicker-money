@@ -136,6 +136,10 @@ a plugin that can `RESET ROLE` regains the application role's table privileges
 for its own tenant, so untrusted third-party plugins need out-of-process
 isolation before they are installed.
 
+The same applies to plugin UI code, which has no isolation at all: it runs in
+the host's origin and can call any API route as the signed-in user. See
+[Plugin trust model](#plugin-trust-model).
+
 ### Running tests against the same server
 
 Unit tests (`pnpm test`) need no database. Integration tests are the API files
@@ -459,12 +463,39 @@ What a bundled plugin still does not get:
 - Its own idea of core behaviour. Categorization, for instance, is injected from
   the core rule engine rather than reimplemented.
 
+### Plugin trust model
+
+UI plugins (widgets and pages loaded over Module Federation) run **fully
+trusted, in the host's origin**. Read this before writing or reviewing anything
+that talks about plugin "permissions", "scoping" or "sandboxing".
+
+| Layer | What it does | Boundary against plugin code? |
+| --- | --- | --- |
+| Per-plugin PostgreSQL role (`plugin-roles.ts`) | Refuses queries outside the manifest's `requiredTables` | Yes, for **server-side** plugin code (bundled plugins' `runAsPlugin`) |
+| Row-level security | Keeps every query inside the signed-in user's rows | Yes, for tenants |
+| `x-wickermoney-plugin` header + `requireTableGrant` | Holds a request that names a plugin to that plugin's manifest | **No.** A request with no header is the host application, so a UI plugin can omit it |
+| Scoped `ctx.api` client in `apps/web/src/plugins/context.ts` | Fails fast on an ungranted path | **No.** Developer ergonomics; plugin code can call `fetch` |
+| `PLUGIN_REMOTE_ORIGINS` and the CSP | Limit where plugin code may be loaded from | No. They choose whose code is trusted, not what it may do |
+
+Consequences for contributors:
+
+- Do not describe `requiredTables` as protecting data from a UI plugin. It
+  protects data from a plugin's server code.
+- Do not rely on the plugin header for access control. A route that must not
+  be reachable by UI plugins needs a different mechanism, which does not exist
+  yet.
+- Third-party plugin install stays unsupported, and `PLUGIN_REMOTE_ORIGINS`
+  stays empty by default, until UI plugins are isolated.
+
 ### When a plugin is turned off
 
 An owner can turn any plugin off from Settings → Plugins. The host unmounts the
 plugin's pages and widgets (a remote already loaded stays in memory but is no
 longer rendered), its own routes answer `404 plugin_disabled`, and a core data
 request carrying its `x-wickermoney-plugin` header gets `403 grant_denied`.
+(A request that omits the header is not attributed to the plugin, so a
+disabled plugin's already-loaded code is not stopped from calling core routes;
+see [Plugin trust model](#plugin-trust-model).)
 Its schema, rows and role are kept. Do not assume a plugin's code runs at
 every page load, and do not delete data on unmount.
 
@@ -697,8 +728,10 @@ change anywhere.
 Plugins reach core data through a scoped client that attaches their id to every
 request; the server checks that id against the manifest's `requiredTables` and
 answers `grant_denied` for anything the plugin never asked for. That check is
-the authoritative one — the matching client-side guard is developer ergonomics,
-since plugin code shares the host's realm. The enforceable second layer, a
+feedback for honest plugins, not a security boundary: plugin code shares the
+host's realm and origin and can omit the header (a request with none is treated
+as the host application). The matching client-side guard is developer
+ergonomics for the same reason. The enforceable second layer, a
 database role per plugin, arrived with M3 above (`plugin-roles.ts`'s
 `pluginRoleName`/`asPlugin`, used by every bundled plugin, not just
 import-csv) — this paragraph originally said that arrives at M4; it shipped

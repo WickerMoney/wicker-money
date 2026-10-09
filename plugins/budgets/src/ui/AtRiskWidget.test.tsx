@@ -136,4 +136,24 @@ describe('AtRiskWidget', () => {
 
     expect(init.signal?.aborted).toBe(true)
   })
+
+  it('shows an account allowance as a tile, and does not claim its spending in the month\'s total', async () => {
+    const allowance = {
+      ...overLine, id: 'al1', categoryId: 'account:a1', categoryName: 'Joint Checking spending',
+      available: '190.0000', planned: '150.0000', spent: '60.0000', remaining: '130.0000',
+      used: 60 / 190, pace: 1, health: 'on-track',
+    } as MonthLine
+    const api = makeApi()
+    api.get.mockResolvedValue(atRisk({
+      lines: [], total: 1, breakdown: [allowance], summary: { spent: '0.0000', available: '0.0000' },
+    }))
+
+    render(<AtRiskWidget ctx={makeCtx(api)} size="md" />)
+
+    expect(await screen.findByText('Joint Checking spending')).toBeTruthy()
+    expect(screen.getByText('$130.0000 left')).toBeTruthy()
+    expect(screen.getByText(/of \$190\.0000/)).toBeTruthy()
+    // Only account lines this month, so there is no category total to quote.
+    expect(screen.queryByText(/of \$0\.0000 spent/)).toBeNull()
+  })
 })

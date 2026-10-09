@@ -16,9 +16,15 @@ export interface PluginSession {
  * Scoped HTTP client handed to a plugin.
  *
  * Requests are relative to the plugin's own namespace (`/api/v1/p/<id>/`) for
- * plugin endpoints, or to core read endpoints the manifest's `requiredTables`
- * permits. The host attaches credentials — a plugin never sees the access
- * token, so it cannot exfiltrate one or call the API as the user elsewhere.
+ * plugin endpoints, or to core endpoints the manifest's `requiredTables`
+ * covers. The host attaches credentials, so well-behaved plugin code never
+ * handles the access token.
+ *
+ * This client is a convenience and a statement of intent, not a sandbox. A UI
+ * plugin runs fully trusted in the host's origin and could bypass it with
+ * `fetch`. The grants it checks are enforced by the database for server-side
+ * plugin code only, not for calls a UI plugin makes through here or around
+ * here. Do not install a UI plugin you would not give your whole session to.
  */
 export interface PluginApi {
   /**

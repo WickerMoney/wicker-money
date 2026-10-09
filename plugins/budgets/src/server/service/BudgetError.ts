@@ -1,16 +1,13 @@
-/** One problem with a request, tied to the body field it is about; the host passes these on as `issues`. */
-export interface BudgetIssue {
-  /** The field, as the request body spells it; empty for the request as a whole. */
-  readonly path: readonly (string | number)[]
-  /** A sentence about that field that does not repeat its name. */
-  readonly message: string
-}
+import { PluginRouteError } from '@wickermoney/plugin-sdk/server'
+import type { PluginRouteIssue } from '@wickermoney/plugin-sdk/server'
 
 /**
  * An error a route handler raises on purpose, carrying the HTTP status and
  * machine-readable code the host should answer with.
+ *
+ * A {@link PluginRouteError} with this plugin's defaults and a field helper.
  */
-export class BudgetError extends Error {
+export class BudgetError extends PluginRouteError {
   /**
    * @param message - Human-readable explanation, safe to show to the user.
    * @param statusCode - HTTP status the host responds with. Defaults to `400`.
@@ -19,12 +16,11 @@ export class BudgetError extends Error {
    */
   constructor(
     message: string,
-    readonly statusCode: number = 400,
-    readonly code: string = 'budget_error',
-    readonly issues?: readonly BudgetIssue[],
+    statusCode: number = 400,
+    code: string = 'budget_error',
+    issues?: readonly PluginRouteIssue[],
   ) {
-    super(message)
-    this.name = 'BudgetError'
+    super(message, statusCode, code, issues)
   }
 
   /**

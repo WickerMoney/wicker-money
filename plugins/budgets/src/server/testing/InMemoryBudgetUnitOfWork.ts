@@ -1,5 +1,6 @@
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
 import type { BudgetUnitOfWork } from '../repository/BudgetUnitOfWork.js'
+import { InMemoryAccountLineRepository } from './InMemoryAccountLineRepository.js'
 import { InMemoryBalanceRepository } from './InMemoryBalanceRepository.js'
 import { InMemoryBudgetLineRepository } from './InMemoryBudgetLineRepository.js'
 import type { InMemoryBudgetStore } from './InMemoryBudgetStore.js'
@@ -18,6 +19,8 @@ export class InMemoryBudgetUnitOfWork implements BudgetUnitOfWork {
   run<T>(userId: string, work: (repos: BudgetRepositories) => Promise<T>): Promise<T> {
     return work({
       lines: new InMemoryBudgetLineRepository(this.store, userId),
+      accountLines: new InMemoryAccountLineRepository(this.store, userId),
+      accounts: { list: async () => [...this.store.accounts] },
       spend: new InMemorySpendRepository(this.store, userId),
       balances: new InMemoryBalanceRepository(this.store, userId),
       categories: { list: async () => [...this.store.categories] },

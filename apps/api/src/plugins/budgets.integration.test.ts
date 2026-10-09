@@ -609,10 +609,18 @@ describe('the budgets PostgreSQL role', () => {
     ).resolves.toBe(true)
   })
 
-  it('REFUSES core.accounts, which it never asked for', async () => {
+  it('can read core.accounts, which account lines name and check', async () => {
     await expect(
       asPlugin(h.db, ROLE, user.id, async (trx) =>
         sql`SELECT 1 FROM core.accounts LIMIT 1`.execute(trx),
+      ),
+    ).resolves.toBeDefined()
+  })
+
+  it('REFUSES to write core.accounts: the grant is read-only', async () => {
+    await expect(
+      asPlugin(h.db, ROLE, user.id, async (trx) =>
+        sql`UPDATE core.accounts SET name = name`.execute(trx),
       ),
     ).rejects.toThrow(/permission denied/i)
   })

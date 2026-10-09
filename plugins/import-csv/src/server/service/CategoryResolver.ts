@@ -1,4 +1,4 @@
-import type { RuleForMatching } from '../repository/RuleForMatching.js'
+import type { RuleForMatching, RuleSubject } from '@wickermoney/plugin-sdk/server'
 
 /**
  * Picks the category id the given rules assign to a transaction.
@@ -10,5 +10,5 @@ import type { RuleForMatching } from '../repository/RuleForMatching.js'
  */
 export type CategoryResolver = (
   rules: readonly RuleForMatching[],
-  subject: { merchant: string; notes?: string | null; amount: string },
+  subject: RuleSubject,
 ) => string | null

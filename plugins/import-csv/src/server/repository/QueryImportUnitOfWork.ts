@@ -2,7 +2,7 @@ import { createImportRepositories } from './createImportRepositories.js'
 import type { ImportRepositories } from './ImportRepositories.js'
 import type { ImportUnitOfWork } from './ImportUnitOfWork.js'
 import type { RuleLoader } from './RuleLoader.js'
-import type { RunAsPlugin } from './RunAsPlugin.js'
+import type { RunAsPlugin } from '@wickermoney/plugin-sdk/server'
 
 /** {@link ImportUnitOfWork} over the host's `runAsPlugin`. */
 export class QueryImportUnitOfWork implements ImportUnitOfWork {

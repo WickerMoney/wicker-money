@@ -1,5 +1,5 @@
 /**
- * The columns the category rule engine needs to test one condition.
+ * The columns the host's category rule engine needs to test one condition.
  *
  * A rule carries an array of AND-ed conditions. Text and amount fields are
  * mutually exclusive per `condition_type`, mirroring the check constraint on

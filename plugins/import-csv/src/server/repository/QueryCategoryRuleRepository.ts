@@ -1,6 +1,5 @@
 import type { CategoryRuleRepository } from './CategoryRuleRepository.js'
-import type { Query } from './Query.js'
-import type { RuleForMatching } from './RuleForMatching.js'
+import type { Query, RuleForMatching } from '@wickermoney/plugin-sdk/server'
 
 /**
  * {@link CategoryRuleRepository} that delegates to the host's rule loader.

@@ -7,14 +7,22 @@ import { addMoney, money } from '../../money.js'
 import type { CandidateTransactionRow } from '../repository/CandidateTransactionRow.js'
 import type { RecurringItemRow } from '../repository/RecurringItemRow.js'
 import { addDays } from './addDays.js'
-import { MATCH_WINDOW_DAYS, rankCandidates, type MatchCandidate } from './matchCandidates.js'
+import { assignSuggestions } from './assignSuggestions.js'
+import { buildDismissed } from './buildDismissed.js'
+import { compare } from './compare.js'
+import type { Described } from './Described.js'
+import { dismissedPairKeys } from './dismissedPairKeys.js'
+import { MATCH_WINDOW_DAYS, rankCandidates } from './matchCandidates.js'
 import type {
   DismissalView, DismissedSuggestion, MatchSuggestion, MatchSuggestionList, OccurrenceCandidates,
 } from './MatchSuggestion.js'
 import { MAX_MOVE_DAYS } from './OCCURRENCE_RULES.js'
 import type { OccurrenceOverrideInput } from './OccurrenceOverrideInput.js'
 import { describeOccurrence, groupHistories, type ItemHistory, type OccurrenceState } from './occurrenceState.js'
+import { occurrenceKey } from './occurrenceKey.js'
 import type { OccurrenceView } from './OccurrenceView.js'
+import type { LegPair, OpenLeg } from './OpenLeg.js'
+import { pairKey } from './pairKey.js'
 import { toOccurrenceView } from './toOccurrenceView.js'
 import { toSchedule } from './toSchedule.js'
 import type {
@@ -29,17 +37,6 @@ export const SUGGEST_LOOKAHEAD_DAYS = 5
 export const MAX_TRANSACTION_IDS = 200
 /** The most occurrences offered for one transaction. */
 const MAX_TRANSACTION_CANDIDATES = 20
-
-/** An item and one occurrence's state. */
-interface Described {
-  readonly row: RecurringItemRow
-  readonly state: OccurrenceState
-}
-
-/** Map key for one occurrence. */
-const occurrenceKey = (itemId: string, nominalDate: string) => `${itemId}|${nominalDate}`
-/** Map key for one transaction against one occurrence. */
-const pairKey = (transactionId: string, itemId: string, nominalDate: string) => `${transactionId}|${itemId}|${nominalDate}`
 
 /**
  * Single occurrences of recurring items: what the user records about one
@@ -561,10 +558,10 @@ async function findSuggestions(
     await repos.recurringOccurrences.trackingStarts(),
   )
   const dismissals = await repos.recurringOccurrences.listDismissals(scan)
-  const dismissedPairs = new Set(dismissals.map((d) => pairKey(d.transaction_id, d.recurring_item_id, d.nominal_date)))
+  const dismissedPairs = dismissedPairKeys(dismissals)
 
   const inWindow = new Map<string, Described>()
-  const open: { row: RecurringItemRow; state: OccurrenceState; accountId: string; amount: string }[] = []
+  const open: OpenLeg[] = []
   for (const row of await repos.recurringItems.list()) {
     for (const nominalDate of occurrences(toSchedule(row), scan.from, scan.to)) {
       const state = describeOccurrence(row, history(row.id), nominalDate, today)
@@ -580,7 +577,7 @@ async function findSuggestions(
     accounts, addDays(from, -MATCH_WINDOW_DAYS), addDays(to, MATCH_WINDOW_DAYS),
   )
 
-  const pairs: { open: (typeof open)[number]; candidate: MatchCandidate }[] = []
+  const pairs: LegPair[] = []
   for (const o of open) {
     for (const candidate of rankCandidates(o, o.state.expectedDate, rows)) {
       if (!candidate.confident) continue
@@ -588,18 +585,7 @@ async function findSuggestions(
       pairs.push({ open: o, candidate })
     }
   }
-  pairs.sort((a, b) => a.candidate.score - b.candidate.score)
-
-  const usedTransactions = new Set<string>()
-  const usedLegs = new Set<string>()
-  const suggestions: MatchSuggestion[] = []
-  for (const { open: o, candidate } of pairs) {
-    const leg = `${o.row.id}|${o.state.nominalDate}|${o.accountId}`
-    if (usedTransactions.has(candidate.transactionId) || usedLegs.has(leg)) continue
-    usedTransactions.add(candidate.transactionId)
-    usedLegs.add(leg)
-    suggestions.push({ occurrence: toOccurrenceView(o.row, o.state, o.state.expectedDate), accountId: o.accountId, candidate })
-  }
+  const suggestions = assignSuggestions(pairs)
 
   // Dismissed pairs, to undo: only while the occurrence is in the window and
   // the transaction settles nothing, since otherwise the dismissal changes nothing.
@@ -607,19 +593,7 @@ async function findSuggestions(
   const txById = new Map((await repos.recurringOccurrences.findTransactions(
     [...new Set(relevant.map((d) => d.transaction_id))],
   )).map((t) => [t.id, t]))
-  const dismissed: DismissedSuggestion[] = []
-  for (const d of relevant) {
-    const tx = txById.get(d.transaction_id)
-    const found = inWindow.get(occurrenceKey(d.recurring_item_id, d.nominal_date))
-    if (tx === undefined || found === undefined || tx.recurring_occurrence_id !== null) continue
-    dismissed.push({
-      occurrence: toOccurrenceView(found.row, found.state, found.state.expectedDate),
-      accountId: tx.account_id,
-      transaction: { id: tx.id, date: tx.transaction_date, amount: tx.amount, merchant: tx.merchant },
-    })
-  }
-  dismissed.sort((a, b) => compare(a.occurrence.expectedDate, b.occurrence.expectedDate)
-    || compare(a.occurrence.name, b.occurrence.name) || compare(a.transaction.id, b.transaction.id))
+  const dismissed = buildDismissed(relevant, inWindow, txById)
   return { suggestions, dismissed }
 }
 
@@ -668,9 +642,4 @@ async function withTransferPartner(repos: Repositories, row: RecurringItemRow, t
   const partner = (await repos.recurringOccurrences.findTransferRows(tx.transfer_id)).find((r) => r.id !== tx.id)
   if (partner === undefined || partner.account_id === tx.account_id) return [tx.id]
   return row.legs.some((l) => l.account_id === partner.account_id) ? [tx.id, partner.id] : [tx.id]
-}
-
-/** String order. */
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0
 }

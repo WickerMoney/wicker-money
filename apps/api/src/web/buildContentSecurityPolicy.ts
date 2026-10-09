@@ -9,6 +9,11 @@ const HTTPS_ORIGIN = /^https:\/\/[^\s;,'"/]+$/
  * come from somewhere the operator named. This is the policy recommended in the
  * code review (S6).
  *
+ * Every origin listed is trusted completely: script from it runs in this app's
+ * origin and can call the whole API as the signed-in user, and `connect-src`
+ * lets it send data back. The policy limits where code may come from, not what
+ * that code may do, so keep the list empty unless you trust each origin.
+ *
  * It replaces Helmet's default for the document. That default carries
  * `upgrade-insecure-requests`, which makes a browser rewrite every sub-resource
  * request on an `http://` page to `https://` — so a self-hosted instance reached

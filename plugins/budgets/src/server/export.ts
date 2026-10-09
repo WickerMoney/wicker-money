@@ -1,7 +1,9 @@
 import { createBudgetRepositories } from './repository/createBudgetRepositories.js'
+import type { ExportedAccountLine } from './repository/ExportedAccountLine.js'
 import type { ExportedBudgetLine } from './repository/ExportedBudgetLine.js'
-import type { Query } from './repository/Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
+export type { ExportedAccountLine } from './repository/ExportedAccountLine.js'
 export type { ExportedBudgetLine } from './repository/ExportedBudgetLine.js'
 
 /**
@@ -16,10 +18,12 @@ export type { ExportedBudgetLine } from './repository/ExportedBudgetLine.js'
  * narrowed every row to the calling user.
  *
  * @param q - A query runner already bound to the current user.
- * @returns The user's budget lines, ordered by month then category id.
+ * @returns The user's budget lines, ordered by month then category id, and
+ *   their account lines, ordered by month then account id.
  */
 export async function exportBudgetsData(
   q: Query,
-): Promise<{ budgetLines: readonly ExportedBudgetLine[] }> {
-  return { budgetLines: await createBudgetRepositories(q).lines.listAll() }
+): Promise<{ budgetLines: readonly ExportedBudgetLine[]; accountLines: readonly ExportedAccountLine[] }> {
+  const repos = createBudgetRepositories(q)
+  return { budgetLines: await repos.lines.listAll(), accountLines: await repos.accountLines.listAll() }
 }
