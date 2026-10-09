@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { CORE_TABLES } from './CORE_TABLES.js'
 
-/** Validates one entry of a manifest's `requiredTables`: a core table and the access level requested on it. */
+/**
+ * Validates one entry of a manifest's `requiredTables`: a core table and the access level requested on it.
+ *
+ * The grant becomes a database privilege for the plugin's server-side code. It
+ * does not restrict the plugin's UI code, which runs fully trusted in the host origin.
+ */
 export const tableGrantSchema = z.object({
   /** The core table the plugin wants to reach. */
   table: z.enum(CORE_TABLES),
