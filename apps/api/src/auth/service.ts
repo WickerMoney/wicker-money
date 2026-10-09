@@ -88,7 +88,7 @@ export class AuthService {
 
     let created: UserIdentity
     try {
-      created = await this.uow.forSystem((repos) => repos.users.register(normalized, digest))
+      created = await this.uow.forSystem((repos) => repos.users.register(normalized, digest, this.config.BOOTSTRAP_OWNER_EMAIL))
     } catch (error) {
       // Caught out here: a failed statement aborts the transaction it ran in.
       if (error instanceof DuplicateKeyError) {

@@ -2,6 +2,7 @@ import { sql } from 'kysely'
 import { translateDuplicateKey } from '../../data/translateDuplicateKey.js'
 import type { UserRole } from '../../db/models/index.js'
 import type { Trx } from '../../db/Trx.js'
+import { BOOTSTRAP_OWNER_SETTING } from './BOOTSTRAP_OWNER_SETTING.js'
 import type { LoginCandidate } from './LoginCandidate.js'
 import type { UserIdentity } from './UserIdentity.js'
 import type { UserRepository } from './UserRepository.js'
@@ -12,7 +13,12 @@ export class KyselyUserRepository implements UserRepository {
   constructor(private readonly trx: Trx) {}
 
   /** @inheritdoc */
-  async register(email: string, passwordHash: string): Promise<UserIdentity> {
+  async register(email: string, passwordHash: string, bootstrapOwnerEmail?: string): Promise<UserIdentity> {
+    // The database cannot read the environment, so the configured owner email
+    // travels as a setting that ends with this transaction. See migration 027.
+    if (bootstrapOwnerEmail !== undefined) {
+      await sql`SELECT set_config(${BOOTSTRAP_OWNER_SETTING}, ${bootstrapOwnerEmail}, true)`.execute(this.trx)
+    }
     // A plain INSERT is denied by row-level security: no user context exists
     // yet, and a fresh row cannot satisfy a policy keyed on its own id.
     const result = await translateDuplicateKey(() =>
