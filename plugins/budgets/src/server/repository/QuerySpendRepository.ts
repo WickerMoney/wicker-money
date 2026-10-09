@@ -1,6 +1,6 @@
 import { monthPeriod } from '../../shared/index.js'
 import type { AccountScope } from './AccountScope.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 import type { SpendRepository } from './SpendRepository.js'
 
 /**

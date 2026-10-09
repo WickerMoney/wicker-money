@@ -14,8 +14,6 @@ import type { BudgetRouteDeps } from './helpers/BudgetRouteDeps.js'
 export { BudgetError } from '../service/BudgetError.js'
 export type { BudgetRouteDeps } from './helpers/BudgetRouteDeps.js'
 export type { MonthLine } from '../service/MonthLine.js'
-export type { Query } from '../repository/Query.js'
-export type { RouteContext } from './helpers/RouteContext.js'
 
 /**
  * Registers every budget endpoint through the host-supplied `route` function.

@@ -18,7 +18,7 @@
  * behaviour.
  */
 export { registerBudgetRoutes, BudgetError } from './routes/index.js'
-export type { BudgetRouteDeps, MonthLine, Query, RouteContext } from './routes/index.js'
+export type { BudgetRouteDeps, MonthLine } from './routes/index.js'
 export { BUDGETS_PLUGIN_ID, BUDGETS_API_BASE, CARRY_LOOKBACK_MONTHS } from './constants.js'
 export { exportBudgetsData } from './export.js'
 export type { ExportedAccountLine, ExportedBudgetLine } from './export.js'

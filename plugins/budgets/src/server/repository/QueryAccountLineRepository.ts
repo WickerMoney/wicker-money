@@ -3,7 +3,7 @@ import type { AccountLineRepository } from './AccountLineRepository.js'
 import type { AccountLineRow } from './AccountLineRow.js'
 import type { ExportedAccountLine } from './ExportedAccountLine.js'
 import type { NewAccountLine } from './NewAccountLine.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /**
  * {@link AccountLineRepository} over a user-bound query runner.
