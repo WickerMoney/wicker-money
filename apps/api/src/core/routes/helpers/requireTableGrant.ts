@@ -12,15 +12,24 @@ import type { TableGrantGuard } from './TableGrantGuard.js'
  * and the guard checks that plugin's manifest actually grants the table. A
  * `write` grant also satisfies a `read` requirement.
  *
- * The header is advisory identification, not authentication: plugin code runs
- * in the host's origin, so a determined plugin could send any header it likes,
- * or none at all and be treated as the host application. What the guard
- * guarantees is narrower and still useful. A request that *does* name a plugin
- * is held to that plugin's manifest, and naming a plugin that is unknown,
- * disabled or malformed (an empty value, or one repeated so the values are
- * joined) is refused rather than ignored. The boundary that holds for
- * server-side plugin code is the per-plugin database role; the header check is
- * fast feedback for plugin authors.
+ * **This is not a security boundary for UI plugins.** The header is advisory
+ * identification, not authentication. A federated UI plugin runs in the host's
+ * origin, with the host's privileges, so it can send any header it likes, or
+ * none at all, and a request with no header is treated as the host application
+ * and allowed. A malicious UI plugin can therefore reach every `/api/v1/*`
+ * route the signed-in user can, whatever its manifest's `requiredTables` says.
+ * UI plugins are fully trusted code today, which is why third-party install is
+ * not supported and `PLUGIN_REMOTE_ORIGINS` must stay empty unless you trust
+ * the origin completely.
+ *
+ * What the guard does guarantee is narrower. A request that *does* name a
+ * plugin is held to that plugin's manifest, and naming a plugin that is
+ * unknown, disabled or malformed (an empty value, or one repeated so the
+ * values are joined) is refused rather than ignored. That catches an honest
+ * plugin's mistakes early and gives its author fast feedback. The boundary that
+ * holds is the per-plugin PostgreSQL role, and it applies to *server-side*
+ * plugin code only (bundled plugins' `runAsPlugin`), not to calls a UI plugin
+ * makes to these core routes, which run as the application role.
  *
  * @param app - The Fastify instance, used to authenticate the request.
  * @param plugins - The plugin registry.
