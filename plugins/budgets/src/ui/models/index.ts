@@ -1,3 +1,6 @@
+export type { AccountLine } from './AccountLine.js'
+export type { AccountLineDraft } from './AccountLineDraft.js'
+export type { AccountOption } from './AccountOption.js'
 export type { AtRiskResponse } from './AtRiskResponse.js'
 export type { Category } from './Category.js'
 export type { LineWindow } from './LineWindow.js'

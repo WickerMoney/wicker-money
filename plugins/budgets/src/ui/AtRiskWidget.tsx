@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { PluginWidgetProps } from '@wickermoney/plugin-sdk'
+import { isZeroMoney } from '@wickermoney/plugin-sdk/money'
 import { Button, EmptyState, Spinner } from '@wickermoney/ui-kit'
 import './styles.js'
 import { BUDGETS_API_BASE } from '../server/constants.js'
@@ -136,7 +137,8 @@ export default function AtRiskWidget({ ctx }: PluginWidgetProps) {
           {attention === 0
             ? `All ${total} budget lines are on pace.`
             : `${attention} of ${total} lines need attention.`}
-          {data.summary && ` ${ctx.formatMoney(data.summary.spent)} of ${ctx.formatMoney(data.summary.available)} spent.`}
+          {data.summary !== undefined && !isZeroMoney(data.summary.available) &&
+            ` ${ctx.formatMoney(data.summary.spent)} of ${ctx.formatMoney(data.summary.available)} spent.`}
           {' '}The mark on each bar is today.
         </p>
         {total > tiles.length && (
