@@ -30,6 +30,10 @@
     "./money": {
       "types": "./dist/money/index.d.ts",
       "default": "./dist/money/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
     }
   },
   "files": [
