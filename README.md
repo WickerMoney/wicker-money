@@ -145,7 +145,9 @@ docker compose up -d
 ```
 
 Open `http://<host>:8180` (set `HOST_PORT` to change it) and create an
-account. The first account on an instance is its **owner**. Once everyone who
+account. The first account on an instance is its **owner**, unless you set
+`BOOTSTRAP_OWNER_EMAIL` (see [Owners and members](#owners-and-members)); set it
+in `.env` before the first start if anyone else can reach the host. Once everyone who
 needs an account has one, add `REGISTRATION_ENABLED=false` to the
 `wickermoney` service's `environment` and run `docker compose up -d` again.
 Serve it over HTTPS before you put real data in it; see
@@ -304,6 +306,25 @@ after it is a **member**. Members use the app normally, with their own data.
 Only an owner can administer the instance, which today means turning plugins
 on and off. The server checks the role on every owner-only request, so
 changing it takes effect on that person's next request, with no sign-out.
+
+Who becomes the owner is set by one optional setting, alongside the one that
+closes registration:
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `BOOTSTRAP_OWNER_EMAIL` | unset | When set, the account registered with this address (case-insensitive) becomes the owner, whether it registers first or after other people; everyone else is a member. When unset, the first account to register is the owner. |
+| `REGISTRATION_ENABLED` | `true` | Set to `false` once the accounts you need exist. It takes precedence: with registration closed, nobody can register, including `BOOTSTRAP_OWNER_EMAIL`. |
+
+With `BOOTSTRAP_OWNER_EMAIL` unset, whoever registers first on a fresh instance
+owns it, so on a server other people can reach, register your own account
+straight away or set the variable first. In production the API logs a warning at
+start-up when the instance has no accounts, registration is open and the
+variable is unset. Setting it never creates a second owner while one exists
+(the address then registers as a member) and never changes an existing account.
+Email addresses are not verified when someone registers, so anyone who knows the
+address could register it before you do; the variable keeps strangers from
+claiming a fresh instance by accident, it is not a login check. Register
+promptly, then close registration.
 
 There is no screen for changing roles yet. As the database owner
 (`DATABASE_OWNER_URL`):
