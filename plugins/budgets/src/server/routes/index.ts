@@ -1,3 +1,5 @@
+import { registerDeleteAccountLine } from './handlers/deleteAccountLine.js'
+import { registerUpsertAccountLine } from './handlers/upsertAccountLine.js'
 import { registerAdoptMonth } from './handlers/adoptMonth.js'
 import { registerDeleteLine } from './handlers/deleteLine.js'
 import { registerDeleteWindow } from './handlers/deleteWindow.js'
@@ -37,4 +39,6 @@ export function registerBudgetRoutes(deps: BudgetRouteDeps): void {
   registerGetAtRisk(deps, service)
   registerUpsertWindow(deps, service)
   registerDeleteWindow(deps, service)
+  registerUpsertAccountLine(deps, service)
+  registerDeleteAccountLine(deps, service)
 }

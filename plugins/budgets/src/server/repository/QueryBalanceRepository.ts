@@ -67,4 +67,55 @@ export class QueryBalanceRepository implements BalanceRepository {
     }
     return byCategory
   }
+
+  /** @inheritdoc */
+  async accountHistoryThrough(
+    monthKey: string,
+    accountIds: readonly string[],
+  ): Promise<Map<string, HistoryEntry[]>> {
+    if (accountIds.length === 0) return new Map()
+
+    const from = monthPeriod(shiftMonth(monthKey, -CARRY_LOOKBACK_MONTHS)).start
+    const { end } = monthPeriod(monthKey)
+
+    const lines = await this.q<{
+      id: string
+      account_id: string
+      period_start: string
+      planned: string
+      rollover: boolean
+      excluded_category_ids: string[]
+    }>`
+      SELECT id, account_id, period_start::text, planned::text, rollover, excluded_category_ids
+      FROM plugin_budgets.account_lines
+      WHERE account_id = ANY(${[...accountIds]}::uuid[])
+        AND period_start >= ${from}::date
+        AND period_start <  ${end}::date
+      ORDER BY account_id, period_start
+    `
+
+    // Every month's spend in one pass, each against its own exclusions.
+    const spent = await this.spend.byAccountScopes(
+      lines.map((l) => ({
+        key: l.id,
+        accountId: l.account_id,
+        start: l.period_start,
+        end: monthPeriod(monthKeyOf(l.period_start)).end,
+        excluded: l.excluded_category_ids,
+      })),
+    )
+
+    const byAccount = new Map<string, HistoryEntry[]>()
+    for (const line of lines) {
+      const list = byAccount.get(line.account_id) ?? []
+      list.push({
+        monthKey: monthKeyOf(line.period_start),
+        planned: line.planned,
+        spent: spent.get(line.id) ?? ZERO_MONEY,
+        rollover: line.rollover,
+      })
+      byAccount.set(line.account_id, list)
+    }
+    return byAccount
+  }
 }

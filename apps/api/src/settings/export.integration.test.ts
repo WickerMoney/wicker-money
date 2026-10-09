@@ -171,6 +171,7 @@ describe('GET /api/v1/settings/export', () => {
     expect(doc.plugins[BUDGETS]?.['budgetLines']).toEqual([
       expect.objectContaining({ category_id: alice.categoryId, period_start: '2026-03-01' }),
     ])
+    expect(doc.plugins[BUDGETS]?.['accountLines']).toEqual([])
     expect(doc.plugins[IMPORT]?.['importBatches']).toEqual([
       expect.objectContaining({ file_name: 'alice.csv', account_id: alice.accountId }),
     ])
@@ -200,7 +201,7 @@ describe('GET /api/v1/settings/export', () => {
     const { doc } = await exportFor(empty)
     expect(doc.core.accounts).toEqual([])
     expect(doc.core.transactionSplits).toEqual([])
-    expect(doc.plugins[BUDGETS]).toEqual({ budgetLines: [] })
+    expect(doc.plugins[BUDGETS]).toEqual({ budgetLines: [], accountLines: [] })
   })
 })
 
@@ -284,7 +285,7 @@ describe('plugin exporters run under the host-managed role', () => {
 
   it('cannot read a core table its manifest did not grant', async () => {
     const u = await createUser(h)
-    const snoop: PluginExporter = async (q) => q`SELECT count(*) FROM core.accounts`
+    const snoop: PluginExporter = async (q) => q`SELECT count(*) FROM core.recurring_items`
     await expect(
       settingsService({ [BUDGETS]: snoop }).exportUserData(u.id, { write: async () => undefined }),
     ).rejects.toThrow(/permission denied/)

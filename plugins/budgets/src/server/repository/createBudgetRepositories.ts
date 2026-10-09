@@ -1,5 +1,7 @@
 import type { BudgetRepositories } from './BudgetRepositories.js'
 import type { Query } from './Query.js'
+import { QueryAccountLineRepository } from './QueryAccountLineRepository.js'
+import { QueryAccountRepository } from './QueryAccountRepository.js'
 import { QueryBalanceRepository } from './QueryBalanceRepository.js'
 import { QueryBudgetLineRepository } from './QueryBudgetLineRepository.js'
 import { QueryCategoryRepository } from './QueryCategoryRepository.js'
@@ -15,6 +17,8 @@ export function createBudgetRepositories(q: Query): BudgetRepositories {
   const spend = new QuerySpendRepository(q)
   return {
     lines: new QueryBudgetLineRepository(q),
+    accountLines: new QueryAccountLineRepository(q),
+    accounts: new QueryAccountRepository(q),
     spend,
     balances: new QueryBalanceRepository(q, spend),
     categories: new QueryCategoryRepository(q),
