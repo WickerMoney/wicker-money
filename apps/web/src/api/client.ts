@@ -21,9 +21,12 @@ const REFRESH_MARGIN_MS = 30_000
  *
  * Held in a module-local variable rather than in storage: a token in storage
  * is readable by any script on the origin, including plugin code. It is not
- * airtight (plugin code shares this realm), but it removes the trivial path,
- * and the scoped client handed to plugins never exposes it. The refresh token
- * is not held here at all; it is an HttpOnly cookie.
+ * airtight: plugin code shares this realm and origin, so it can wrap `fetch`,
+ * or call `/auth/refresh` itself (the cookie and the CSRF header are both
+ * available to same-origin script) and read the token from the response. This
+ * only removes the trivial path, and the scoped client handed to plugins does
+ * not expose the token. The refresh token is not held here at all; it is an
+ * HttpOnly cookie.
  */
 let accessToken: string | null = null
 
