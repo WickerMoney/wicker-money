@@ -1,11 +1,13 @@
 import { buildApp } from './app.js'
 import { AuthService } from './auth/service.js'
 import { startSessionPurge } from './auth/startSessionPurge.js'
+import { warnIfFirstRegistrationOpen } from './auth/warnIfFirstRegistrationOpen.js'
 import { loadConfig } from './config.js'
 import { KyselyUnitOfWork } from './data/KyselyUnitOfWork.js'
 import { configureTenantContext } from './db/configureTenantContext.js'
 import { createDb } from './db/client.js'
 import { assertSchemaReady } from './db/healthcheck.js'
+import { instanceHasUsers } from './db/instanceHasUsers.js'
 import { assertLeastPrivilege } from './db/privileges.js'
 import { recordDeployment } from './db/recordDeployment.js'
 import { seedBundledPlugins } from './plugins/registry.js'
@@ -38,6 +40,10 @@ try {
 }
 
 const app = buildApp({ db, config })
+
+// Advice only: tells an operator who is about to expose an empty instance that
+// whoever registers first will own it. Never worth failing startup over.
+await warnIfFirstRegistrationOpen(config, () => instanceHasUsers(db), (message) => console.warn(message))
 
 // Housekeeping only; the app's own AuthService also purges opportunistically on login.
 const purgeTimer = startSessionPurge(new AuthService(new KyselyUnitOfWork(db), config), (error) =>

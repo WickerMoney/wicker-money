@@ -5,6 +5,7 @@ import { createDb, type Db } from '../client.js'
 import { createHarness, TEST_ADMIN_DATABASE_URL, type Harness } from '../../testing/harness.js'
 import { BOOTSTRAP_OWNER_SETTING } from '../../auth/repository/BOOTSTRAP_OWNER_SETTING.js'
 import type { Executor } from './support/index.js'
+import { instanceHasUsers } from '../instanceHasUsers.js'
 import { down, up } from './027_bootstrap_owner_email.js'
 
 /**
@@ -356,5 +357,12 @@ describe('the migration itself', () => {
       expect(after.rows).toEqual(before.rows)
       throw new Rollback()
     })).rejects.toBeInstanceOf(Rollback)
+  })
+})
+
+describe('instanceHasUsers', () => {
+  it('reads core.instance_has_users() as the application role', async () => {
+    await register(email())
+    await expect(instanceHasUsers(h.db)).resolves.toBe(true)
   })
 })
