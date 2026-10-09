@@ -58,6 +58,15 @@ export function setAccessToken(next: string | null): void {
 }
 
 /**
+ * Whose session the client is acting for, as far as the access token says.
+ *
+ * @returns The token's `sub` (the user id), or `null` when there is no token or it carries none.
+ */
+export function activeUserId(): string | null {
+  return accessToken === null ? null : tokenSubject(accessToken)
+}
+
+/**
  * Stores a token without touching the session epoch.
  *
  * A refresh normally keeps the same user. If the new token names someone else

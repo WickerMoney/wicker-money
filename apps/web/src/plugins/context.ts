@@ -1,5 +1,6 @@
 import type { PluginApi, PluginContext, PluginManifest } from '@wickermoney/plugin-sdk'
-import { api } from '../api/client.js'
+import { activeUserId, api } from '../api/client.js'
+import { responseCache } from '../api/responseCache.js'
 import type { CurrentUser } from '../auth/index.js'
 import { formatDate } from '../lib/formatDate.js'
 import { formatMoney } from '../lib/formatMoney.js'
@@ -25,6 +26,29 @@ function tableFromPath(path: string): string | null {
 }
 
 /**
+ * Whether a `fetch` cache mode asks for a guaranteed-fresh read.
+ *
+ * Standard `RequestInit.cache` values are used as the opt-out, so the plugin
+ * SDK's `PluginApi` needs no new option.
+ */
+function wantsFreshRead(mode: RequestCache | undefined): boolean {
+  return mode === 'no-store' || mode === 'reload'
+}
+
+/**
+ * Whether a `get`'s options leave the response a pure function of the URL.
+ *
+ * Only `signal` and a plain or fresh `cache` mode qualify. Anything else (custom
+ * headers, credentials, a different cache mode) could change what comes back,
+ * so such a call goes straight to the network and is neither shared nor kept.
+ */
+function isCacheable(init: RequestInit): boolean {
+  const { cache, ...rest } = init
+  const others = Object.entries(rest).some(([name, value]) => name !== 'signal' && value !== undefined)
+  return !others && (cache === undefined || cache === 'default' || wantsFreshRead(cache))
+}
+
+/**
  * Builds the scoped client handed to one plugin.
  *
  * Two things happen here. The plugin's identity is attached to every request so
@@ -36,10 +60,18 @@ function tableFromPath(path: string): string | null {
  * runs in this realm and could call fetch itself. Enforcement lives on the
  * server and, beneath it, in the per-plugin database role.
  *
+ * `get` also goes through the per-user response cache, so widgets (from one
+ * plugin or several) asking for the same URL at about the same time cost one
+ * request. Plugins are separate bundles with no shared module state, which is
+ * why this lives in the host. The rules, and why the plugin id is not part of
+ * the key, are in `DEVELOPMENT.md` under "Request sharing in the scoped client".
+ * Writes need no handling here: the client empties the cache on any non-GET.
+ *
  * @param manifest - The plugin's manifest; its `requiredTables` define the grants.
+ * @param userId - The signed-in user; the cache is partitioned by it and by nothing shared between users.
  * @returns A client whose methods throw synchronously for a malformed or ungranted path.
  */
-function scopedApi(manifest: PluginManifest): PluginApi {
+function scopedApi(manifest: PluginManifest, userId: string): PluginApi {
   const granted = new Set(manifest.requiredTables.map((g) => g.table))
 
   const guard = (path: string): void => {
@@ -65,7 +97,28 @@ function scopedApi(manifest: PluginManifest): PluginApi {
   return {
     get: async <T,>(path: string, init?: RequestInit) => {
       guard(path)
-      return api.get<T>(path, { ...init, pluginId: manifest.id })
+      const options = init ?? {}
+      // A context built for one user must not read or fill another user's
+      // bucket if it outlives a user change: the request would carry the new
+      // user's token. Such a call goes straight to the network.
+      const active = activeUserId()
+      if (!isCacheable(options) || (active !== null && active !== userId)) {
+        return api.get<T>(path, { ...options, pluginId: manifest.id })
+      }
+
+      // The key is the full URL, query included. The plugin id is left out on
+      // purpose: the server uses it only to grant or refuse (a 403, never cached),
+      // and the guard above has already applied the same grants to this call.
+      const key = `GET ${path}`
+      if (wantsFreshRead(options.cache)) {
+        // Drop the remembered answer too, so the next shared read is not older than this one.
+        responseCache.forget(userId, key)
+        return api.get<T>(path, { ...options, pluginId: manifest.id })
+      }
+      // The shared request carries no caller's signal: it outlives any one caller.
+      return responseCache.read(
+        userId, key, () => api.get<T>(path, { pluginId: manifest.id }), options.signal,
+      )
     },
     post: async <T,>(path: string, body: unknown, init?: RequestInit) => {
       guard(path)
@@ -98,7 +151,7 @@ export function buildPluginContext(
 ): PluginContext {
   return {
     session: { userId: user.id, email: user.email, timezone: user.timezone },
-    api: scopedApi(manifest),
+    api: scopedApi(manifest, user.id),
     navigate,
     formatMoney,
     formatDate,
