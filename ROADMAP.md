@@ -59,5 +59,7 @@ Polish after the plugin manager:
 - Suggesting recurring items by detecting patterns in transaction history.
 - Themes as a data-only plugin type (a validated set of design tokens, no code).
 - Third-party plugin install. This depends on plugin isolation, which does not
-  exist yet; today plugin code runs fully trusted.
+  exist yet; today plugin code runs fully trusted, in the host's origin, and a
+  plugin's table grants do not restrict its front-end code. Until that is
+  designed and built, `PLUGIN_REMOTE_ORIGINS` is for origins you fully trust.
 - Freezing the plugin API (`SDK_MAJOR_VERSION`) ahead of 1.0.
