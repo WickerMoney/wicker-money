@@ -576,8 +576,16 @@ wildcards.
   previews whose branch is gone or that are older than 30 days. Its tag
   sanitiser must match the one in `preview-image.yml`.
 
+Every run writes a summary to the run page (the "GHCR cleanup" section at the
+bottom): what was or would be deleted, with tags, age and the rule that picked it,
+and which untagged images were kept because a manifest list points at them.
+`package-cleanup.yml` also attaches the report and the before/after package
+snapshots as the `ghcr-cleanup-report` artifact (30 days). The step log is mostly
+Docker noise; the lines that matter are snok's `dry-run: Would have deleted`
+lines, whose ids are the summary's version ids.
+
 To check a change to either file, run it from **Actions → Run workflow** with
-`GHCR_CLEANUP_LIVE` unset and read the "would delete" list before going live.
+`GHCR_CLEANUP_LIVE` unset and read the summary before going live.
 
 ## Screenshots
 

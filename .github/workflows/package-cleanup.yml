@@ -35,6 +35,14 @@ name: Package cleanup
 #      "would delete" list contains nothing you want (see the checklist below),
 #      then set GHCR_CLEANUP_LIVE=true.
 #
+# Reading a run: open the run page and read the "GHCR cleanup" summary at the
+# bottom. It lists what was (or would be) deleted and why, per package, and the
+# same Markdown plus the raw before/after snapshots are attached as the
+# `ghcr-cleanup-report` artifact. The step log underneath is mostly Docker
+# noise; the only lines that matter are snok's `dry-run: Would have deleted`
+# (or `Deleted`) lines. Its ids are package version ids, the same ids as the
+# summary. .github/scripts/ghcr-report.sh builds the summary.
+#
 # Dry-run checklist:
 #   - the versions behind :latest, :next and :edge are not listed
 #   - no stable version tag is listed
@@ -76,6 +84,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      # What exists before anything is deleted; the report diffs this against
+      # the state afterwards.
+      - name: Snapshot (before)
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_CLEANUP_TOKEN }}
+        run: bash .github/scripts/ghcr-report.sh snapshot "$RUNNER_TEMP/before.json"
 
       # Digests behind the moving tags, so they cannot be deleted whatever the
       # tag filters below end up matching. A tag that does not exist yet (no
@@ -142,3 +160,33 @@ jobs:
           for t in latest edge; do
             docker buildx imagetools inspect "$IMAGE:$t" > /dev/null || { echo "::error::$IMAGE:$t no longer resolves"; exit 1; }
           done
+
+      # Always, so a failed run still says what state it left behind.
+      - name: Snapshot (after)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_CLEANUP_TOKEN }}
+        run: bash .github/scripts/ghcr-report.sh snapshot "$RUNNER_TEMP/after.json"
+
+      - name: Report
+        if: always()
+        continue-on-error: true
+        env:
+          LIVE: ${{ env.DRY_RUN == 'false' }}
+        run: |
+          bash .github/scripts/ghcr-report.sh report "$RUNNER_TEMP/before.json" "$RUNNER_TEMP/after.json" > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attach report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ghcr-cleanup-report
+          path: |
+            ${{ runner.temp }}/report.md
+            ${{ runner.temp }}/before.json
+            ${{ runner.temp }}/after.json
+          if-no-files-found: ignore
+          retention-days: 30

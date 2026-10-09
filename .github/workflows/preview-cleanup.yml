@@ -21,6 +21,9 @@ name: Preview cleanup
 # Untagged leftovers (the per-arch children of a deleted preview) are removed by
 # package-cleanup.yml after 7 days; they are not touched here.
 #
+# Each run writes a summary (what was or would be deleted, and for which branch)
+# to the run page.
+#
 # Needs the same GHCR_CLEANUP_TOKEN secret and GHCR_CLEANUP_LIVE variable as
 # package-cleanup.yml. Without GHCR_CLEANUP_LIVE=true every run is a dry run.
 
@@ -120,16 +123,36 @@ jobs:
             ' <<<"$versions")"
           fi
 
-          if [ -z "$rows" ]; then echo "Nothing to delete."; exit 0; fi
+          if [ "$LIVE" = "true" ]; then mode="LIVE run"; else mode="DRY RUN (nothing was deleted)"; fi
+          if [ -n "$branch" ]; then what="branch \`$branch\` ($EVENT)"; else what="weekly sweep"; fi
+          {
+            echo "# Preview cleanup: $mode"
+            echo
+            echo "Package \`$PACKAGE\`, $what."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
 
+          if [ -z "$rows" ]; then
+            echo "Nothing to delete."
+            echo "Nothing to delete." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "| version id | tags | result |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
           while IFS=$'\t' read -r id tags; do
             if [ "$LIVE" = "true" ]; then
               if gh api -X DELETE "$base/$id" >/dev/null; then
                 echo "deleted $id ($tags)"
+                echo "| $id | $tags | deleted |" >> "$GITHUB_STEP_SUMMARY"
               else
                 echo "::warning::could not delete version $id ($tags)"
+                echo "| $id | $tags | **delete failed** |" >> "$GITHUB_STEP_SUMMARY"
               fi
             else
               echo "[dry run] would delete $id ($tags)"
+              echo "| $id | $tags | would delete |" >> "$GITHUB_STEP_SUMMARY"
             fi
           done <<<"$rows"
