@@ -11,6 +11,15 @@ curated, human-readable version.
 
 ### Changed
 
+- **The dashboard asks once for what several widgets share.** The host's
+  scoped client now shares identical in-flight `ctx.api.get` calls and keeps
+  a resolved one for 5 seconds, per user and never between users, so the
+  three monthly-summary widgets make one request instead of three, with no
+  plugin changes. Any write drops the user's whole cache, and sign-out or a
+  user change clears it. A plugin can force a fresh read with
+  `{ cache: 'no-store' }`. Performance only: no API change, no server-side
+  cache. See "Request sharing in the scoped client" in `DEVELOPMENT.md`.
+
 - **Old images are pruned.** `package-cleanup.yml` and `preview-cleanup.yml`
   remove old `:edge-<short sha>` tags, old prereleases, untagged versions and
   the preview images of closed or deleted branches. `:latest`, `:next`, `:edge`

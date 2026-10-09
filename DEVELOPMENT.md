@@ -474,6 +474,59 @@ every page load, and do not delete data on unmount.
 `formErrorsFrom` and `useFormErrors` put each issue on its field and render
 the rest with `FormError` beside the submit button.
 
+### Request sharing in the scoped client
+
+`ctx.api.get` does not always reach the network. Plugins are separate
+federated bundles that cannot share module state, so the host's scoped client
+(`apps/web/src/plugins/context.ts`, backed by `apps/web/src/api/responseCache.ts`)
+holds a small in-memory memory of reads. It exists so that several widgets
+asking for the same thing at once, such as the three dashboard widgets that
+read `/core/transactions/monthly-summary?months=12`, cost one request.
+
+The rules:
+
+- **Per user, never shared between users.** Entries live in a bucket per user
+  id, and the key inside it is the method plus the full URL, query string
+  included. Concurrent identical `GET`s join one request; a resolved one is
+  served again for `RESPONSE_CACHE_TTL_MS` (5 seconds). Each user keeps at
+  most `RESPONSE_CACHE_MAX_ENTRIES` (50) entries, least recently used out first.
+- **The plugin id is not in the key.** The server reads `x-wickermoney-plugin`
+  only to grant or refuse (`403`), never to change the data, and the client-side
+  guard applies the same grants before the cache is consulted. So two plugins
+  that may both read a table share the answer. The request that actually goes
+  out carries the id of whichever caller came first.
+- **Writes drop the cache.** Any non-`GET` request through the client, from a
+  plugin or from the host's own pages, empties the cache before it is sent and
+  again when it settles (even if it fails). It is by user, not by endpoint, so
+  a plugin never has to know which reads a write affects. A read that was in
+  flight when the write happened still answers its own callers but is not
+  stored. Sign-in, sign-out, a refused refresh and a refresh that returns a
+  different user's token clear everything too.
+- **Failures are never kept.** Callers already waiting on a failing request all
+  get its error; the next call asks again.
+- **You get your own copy.** Every caller receives a clone of the response, so
+  mutating it cannot affect another widget. Aborting your `signal` stops only
+  your wait, not the shared request.
+- **To bypass it, pass `cache: 'no-store'` or `cache: 'reload'`** (standard
+  `fetch` options, so the SDK types need nothing new):
+
+  ```ts
+  const fresh = await ctx.api.get<Summary>(path, { cache: 'no-store' })
+  ```
+
+  The call goes to the network, never joins a request in flight, and drops the
+  remembered answer for that URL. Calls that pass other options, such as custom
+  `headers`, skip the cache the same way. You rarely need this: after your own
+  write the cache is already empty. Reach for it only when something outside
+  this tab, such as another device or a server-side job, may have changed the
+  data and a few-second-old answer would be a bug.
+
+What this does not do: the API has no server-side cache, and the host's own
+unscoped `api` client never reads from this memory, so the plugin registry and
+its focus-triggered refetch are always live. A plugin that
+is turned off can still be answered from memory for up to the TTL; the host
+unmounts it, so this is not visible.
+
 ### Plugin roles
 
 Each plugin gets a PostgreSQL role, named `<app role>_plugin_<slug>` and granted
