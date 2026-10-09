@@ -9,6 +9,21 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **Account allowances.** The Budgets page has an "Account allowances"
+  section: a monthly amount measured against one checking account instead of
+  one category. Everything that leaves the account counts, except transfers,
+  income, and the categories you choose to exclude (Holiday Gifts, say, which
+  keeps its own window). What is left rolls into the next month, and an
+  overspend carries forward as a negative. Allowances show in the Budget
+  breakdown widget as "<account> spending" and are copied when you start a
+  month from the previous one. New migration `027` adds
+  `plugin_budgets.account_lines`; the Budgets plugin now also asks for read
+  access to `accounts`. An account with an allowance counts as in use, so
+  deleting it asks for the usual confirmation. The settings export gains
+  `accountLines`.
+
 ### Changed
 
 - **Old images are pruned.** `package-cleanup.yml` and `preview-cleanup.yml`

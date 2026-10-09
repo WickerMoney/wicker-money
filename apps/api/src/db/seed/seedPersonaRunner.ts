@@ -2,7 +2,7 @@ import { sql } from 'kysely'
 import type { Db } from '../client.js'
 import type { Services } from '../../composition/Services.js'
 import { accountDefsFor, createAccounts } from './seedAccounts.js'
-import { budgetLineDefsFor, createBudgetLines } from './seedBudgets.js'
+import { accountLineDefsFor, budgetLineDefsFor, createAccountLines, createBudgetLines } from './seedBudgets.js'
 import { createImportCsvFixtures } from './seedImportCsv.js'
 import type { Persona } from './seedPersonas.js'
 import { createRecurringItems, recurringItemDefsFor } from './seedRecurringItems.js'
@@ -77,6 +77,7 @@ export async function runPersona(ctx: RunContext, persona: Persona): Promise<Run
     const special = await seedSpecialFixtures(ctx.services.transactions, userId, accountIds, slugToId)
     await createRecurringItems(ctx.db, userId, recurringItemDefsFor('hero'), accountIds, slugToId)
     await createBudgetLines(ctx.db, userId, budgetLineDefsFor('hero'), slugToId)
+    await createAccountLines(ctx.db, userId, accountLineDefsFor('hero'), accountIds, slugToId)
     const [linked1, linked2] = special.linkableIds
     if (linked1 !== undefined && linked2 !== undefined) {
       await createImportCsvFixtures(ctx.db, userId, accountIds.get('checking')!, [linked1, linked2])
@@ -91,6 +92,7 @@ export async function runPersona(ctx: RunContext, persona: Persona): Promise<Run
     // otherwise the opening balances, which is all the upcoming widget and
     // forecast need to project from.
     await createRecurringItems(ctx.db, userId, recurringItemDefsFor('household'), accountIds, slugToId)
+    await createAccountLines(ctx.db, userId, accountLineDefsFor('household'), accountIds, slugToId)
     await seedRecurringMatches(ctx.services, userId, accountIds, slugToId)
   }
 
