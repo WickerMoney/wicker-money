@@ -18,4 +18,19 @@ export interface BalanceRepository {
    *   without querying.
    */
   historyThrough(monthKey: string, categoryIds: readonly string[]): Promise<Map<string, HistoryEntry[]>>
+
+  /**
+   * The same replay history as {@link BalanceRepository.historyThrough}, for
+   * account lines.
+   *
+   * Each month is measured with that month's own excluded categories, so
+   * changing what an allowance excludes does not rewrite the months before.
+   *
+   * @param monthKey - The month whose opening balances are wanted, as `YYYY-MM`.
+   * @param accountIds - The accounts to load; typically those with rollover on.
+   * @returns Account id to its months in ascending order. An account with no
+   *   history is absent, and an empty `accountIds` returns an empty map
+   *   without querying.
+   */
+  accountHistoryThrough(monthKey: string, accountIds: readonly string[]): Promise<Map<string, HistoryEntry[]>>
 }

@@ -1,10 +1,12 @@
 import { compareMoney, subtractMoney, sumMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import {
-  addDays, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
+  ACCOUNT_LINE_TYPES, addDays, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
   todayIn, windowIssue, type LineStatus,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
 import type { BudgetUnitOfWork } from '../repository/BudgetUnitOfWork.js'
+import type { AccountLineInput } from './AccountLineInput.js'
+import { accountMonthLines } from './accountMonthLines.js'
 import type { AdoptResult } from './AdoptResult.js'
 import type { AtRiskReport } from './AtRiskReport.js'
 import { BudgetError } from './BudgetError.js'
@@ -18,6 +20,7 @@ import { lineStatusOf } from './lineStatusOf.js'
 import type { MonthLine } from './MonthLine.js'
 import type { MonthReport } from './MonthReport.js'
 import { openingBalances } from './openingBalances.js'
+import type { SavedAccountLine } from './SavedAccountLine.js'
 import type { SavedLine } from './SavedLine.js'
 import type { SavedWindow } from './SavedWindow.js'
 import { summarizeMonth } from './summarizeMonth.js'
@@ -104,6 +107,7 @@ export class BudgetService {
       })
 
       const lines = [...monthly, ...windows.lines].sort((a, b) => a.categoryId.localeCompare(b.categoryId))
+      const accounts = await accountMonthLines(repos, monthKey, today, true)
 
       const unbudgeted = findUnbudgeted(
         outsideWindows(spend, windows.spentInMonth),
@@ -117,6 +121,7 @@ export class BudgetService {
         today,
         draft,
         lines,
+        accountLines: accounts.lines,
         unbudgeted,
         summary: summarizeMonth(lines, unbudgeted),
       }
@@ -234,18 +239,29 @@ export class BudgetService {
   adoptMonth(userId: string, monthKey: string): Promise<AdoptResult> {
     const previous = previousMonth(monthKey)
     return this.uow.run(userId, async (repos) => {
+      // Category lines and account lines are copied independently: a month
+      // can have its category lines and still be missing its allowance, such
+      // as the month the allowance was first set up.
       const existing = await repos.lines.listForMonth(monthKey)
-      if (existing.length > 0) return { created: 0, alreadyPlanned: existing.length }
+      const existingAccount = await repos.accountLines.listForMonth(monthKey)
+      const sourceCount = existing.length === 0 ? (await repos.lines.listForMonth(previous)).length : 0
+      const sourceAccountCount = existingAccount.length === 0
+        ? (await repos.accountLines.listForMonth(previous)).length
+        : 0
 
-      const source = await repos.lines.listForMonth(previous)
-      if (source.length === 0) {
+      if (sourceCount + sourceAccountCount === 0) {
+        const planned = existing.length + existingAccount.length
+        if (planned > 0) return { created: 0, alreadyPlanned: planned }
         throw new BudgetError(
           `There is nothing to copy — ${previous} has no budget either.`,
           409,
           'nothing_to_copy',
         )
       }
-      return { created: await repos.lines.copyMonth(previous, monthKey), alreadyPlanned: 0 }
+      const created =
+        (sourceCount > 0 ? await repos.lines.copyMonth(previous, monthKey) : 0) +
+        (sourceAccountCount > 0 ? await repos.accountLines.copyMonth(previous, monthKey) : 0)
+      return { created, alreadyPlanned: 0 }
     })
   }
 
@@ -266,6 +282,73 @@ export class BudgetService {
     return this.uow.run(userId, async (repos) => {
       const removed = await repos.lines.deleteForMonth(categoryId, monthKey)
       if (removed === 0) throw new BudgetError('There is no such budget line.', 404, 'not_found')
+      return { removed }
+    })
+  }
+
+  /**
+   * Creates or updates one account's allowance for a month.
+   *
+   * An upsert, like {@link BudgetService.upsertLine}: the client edits a cell
+   * in a month that may or may not exist yet.
+   *
+   * @param userId - The signed-in user.
+   * @param input - The validated line.
+   * @returns The stored line.
+   * @throws {BudgetError} `400 bad_account` if the account is not one of the
+   *   caller's checking accounts, `400 bad_excluded` if an excluded category is
+   *   not one of the caller's, and `500 not_saved` if the write returns no row.
+   */
+  upsertAccountLine(userId: string, input: AccountLineInput): Promise<SavedAccountLine> {
+    const { start, end } = monthPeriod(input.monthKey)
+    return this.uow.run(userId, async (repos) => {
+      const account = (await repos.accounts.list()).find((a) => a.id === input.accountId)
+      if (account === undefined) {
+        throw BudgetError.field('accountId', 'Choose one of your accounts.', 'bad_account')
+      }
+      if (!ACCOUNT_LINE_TYPES.includes(account.account_type)) {
+        throw BudgetError.field('accountId', 'An allowance can be set on a checking account.', 'bad_account')
+      }
+      // The column has no foreign key (see migration 027), so this is the
+      // check that keeps another user's category id out of it.
+      const known = new Set((await repos.categories.list()).map((c) => c.id))
+      if (input.excludedCategoryIds.some((id) => !known.has(id))) {
+        throw BudgetError.field('excludedCategoryIds', 'Choose from your own categories.', 'bad_excluded')
+      }
+
+      const row = await repos.accountLines.upsert({
+        accountId: input.accountId,
+        periodStart: start,
+        periodEnd: end,
+        planned: input.planned,
+        rollover: input.rollover,
+        excludedCategoryIds: input.excludedCategoryIds,
+        note: input.note,
+      })
+      if (row === undefined) throw new BudgetError('The line was not saved.', 500, 'not_saved')
+      return {
+        id: row.id,
+        accountId: row.account_id,
+        planned: row.planned,
+        rollover: row.rollover,
+        excludedCategoryIds: row.excluded_category_ids,
+      }
+    })
+  }
+
+  /**
+   * Removes one account's allowance for a month.
+   *
+   * @param userId - The signed-in user.
+   * @param monthKey - The month as `YYYY-MM`.
+   * @param accountId - The account whose line is removed.
+   * @returns How many rows were removed, always 1.
+   * @throws {BudgetError} `404 not_found` if the caller has no line for that account and month.
+   */
+  deleteAccountLine(userId: string, monthKey: string, accountId: string): Promise<DeleteResult> {
+    return this.uow.run(userId, async (repos) => {
+      const removed = await repos.accountLines.deleteForMonth(accountId, monthKey)
+      if (removed === 0) throw new BudgetError('There is no such account line.', 404, 'not_found')
       return { removed }
     })
   }
@@ -300,7 +383,10 @@ export class BudgetService {
     const nameOf = categoryNames(await repos.categories.list())
     const lines = await repos.lines.listForMonth(monthKey)
     const windows = await windowLines(repos, monthKey, today, nameOf)
-    if (lines.length === 0 && windows.lines.length === 0) return { monthKey, today, planned: false, lines: [] }
+    const accounts = await accountMonthLines(repos, monthKey, today, false)
+    if (lines.length === 0 && windows.lines.length === 0 && accounts.lines.length === 0) {
+      return { monthKey, today, planned: false, lines: [] }
+    }
 
     const spend = await repos.spend.byCategory(monthKey)
     const carried = await openingBalances(
@@ -309,7 +395,7 @@ export class BudgetService {
       lines.filter((l) => l.rollover).map((l) => l.category_id),
     )
 
-    const statuses = [
+    const categoryStatuses: LineStatus[] = [
       ...lines.map((line) =>
         lineStatusOf(
           {
@@ -334,6 +420,10 @@ export class BudgetService {
         used: l.used, pace: l.pace, elapsed: l.elapsed, health: l.health,
       })),
     ]
+    // Account allowances join the tiles and the ranking, but not the totals
+    // below: their spending is also spent in categories, and counting it in
+    // both would make "spent of available" larger than the month.
+    const statuses: LineStatus[] = [...categoryStatuses, ...accounts.lines]
 
     return {
       monthKey,
@@ -345,8 +435,8 @@ export class BudgetService {
       lines: rankAtRisk(statuses),
       breakdown: rankBreakdown(statuses),
       summary: {
-        spent: sumMoney(statuses.map((s) => s.spent)),
-        available: sumMoney(statuses.map((s) => s.available)),
+        spent: sumMoney(categoryStatuses.map((s) => s.spent)),
+        available: sumMoney(categoryStatuses.map((s) => s.available)),
       },
     }
   }
