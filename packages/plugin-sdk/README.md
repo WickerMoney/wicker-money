@@ -30,9 +30,11 @@ plugin as a Module Federation singleton.
 | `@wickermoney/plugin-sdk/runtime` | Plugin UI code (browser) | Types for the React components a plugin exports (`PluginWidgetProps`, `PluginPageProps`, `PluginContext`, ...), and `adoptPluginStyles` |
 | `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `scheduledOccurrences`, `nextScheduledOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals`, with per-occurrence overrides (skip, move, change the legs) |
 | `@wickermoney/plugin-sdk/money` | Anything (browser or Node) | Exact money arithmetic on decimal strings: `addMoney`, `sumMoney`, `compareMoney`, `equalMoney`, `moneyToUnits`, `divideUnits`, ... |
+| `@wickermoney/plugin-sdk/server` | Bundled plugins' server code, and the host (Node) | The server-side contract: `RouteContext`, `RegisterRoute`, `Query`, `RunAsPlugin`, `PluginRouteError`, `isUuid`, and the category-rule types `RuleForMatching` and `RuleSubject` |
 | `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above, plus the Zod manifest schemas, `parseManifest`, dashboard-range helpers and constants |
 
-Import from `/runtime` (and `/money` or `/recurrence` if you need them) in plugin UI code.
+Import from `/runtime` (and `/money` or `/recurrence` if you need them) in plugin UI code,
+and from `/server` in a bundled plugin's server code.
 The package root re-exports the Zod manifest schemas, which add about 85 kB to
 a plugin bundle that never uses them.
 
@@ -218,7 +220,46 @@ So today:
 
 Only bundled plugins may contribute server endpoints (`contributes.endpoints`).
 The host has no sandbox for third-party server code yet. Third-party plugins are
-UI-only and use core endpoints through `ctx.api`.
+UI-only and use core endpoints through `ctx.api`. Bundled plugins are trusted
+as much as the API itself; the one thing that is enforced for them is the
+database: every query runs under the plugin's own PostgreSQL role.
+
+`/server` is the contract between the host and a bundled plugin's `register`
+function. It is dependency-free (no Zod) and has no runtime cost beyond two
+small values.
+
+```ts
+import {
+  PluginRouteError, isUuid,
+  type RegisterRoute, type RunAsPlugin,
+} from '@wickermoney/plugin-sdk/server'
+
+export function registerRoutes(deps: { route: RegisterRoute; runAsPlugin: RunAsPlugin }): void {
+  deps.route('GET', '/things/:id', async ({ userId, params }) => {
+    if (!isUuid(params['id'])) throw new PluginRouteError('id must be a thing id.', 400, 'bad_id')
+    return deps.runAsPlugin(userId, (q) => q`SELECT id, name FROM things WHERE id = ${params['id']}`)
+  })
+}
+```
+
+- **`PluginRouteError(message, statusCode, code, issues?)`** is how a handler
+  refuses a request the person can fix. The host answers with that status and
+  code and shows `message`, so it must be safe to display. `issues` is a list
+  of `{ path, message }` so a form can show each problem by its field. Any
+  other thrown error is a bug: it is logged and answered with a generic 500.
+  The host recognises an error by its `statusCode` and `code`, so a subclass
+  (to add defaults or helpers) works too.
+- **`isUuid(value)`** is the one UUID rule. It accepts the canonical
+  hyphenated form in either case with a valid RFC 9562 version (1 to 8) and
+  variant, plus the nil and max UUIDs. It refuses braces, `urn:uuid:`, missing
+  hyphens and anything that is not a string. Every id PostgreSQL generates
+  passes. Check ids with it before they reach a `uuid` column, which would
+  otherwise fail as a 500.
+- **`RouteContext`**, **`RegisterRoute`**, **`Query`** and **`RunAsPlugin`**
+  are the request input, the route registrar, the tagged-template query runner
+  and the transaction wrapper the host provides.
+- **`RuleForMatching`**, **`ConditionForMatching`** and **`RuleSubject`**
+  describe the category rules the host loads and matches on a plugin's behalf.
 
 ## Related
 

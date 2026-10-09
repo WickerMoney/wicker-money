@@ -1,4 +1,4 @@
-import { mappingIssues, type SourceMapping } from '../../../shared/index.js'
+import { mappingIssues, type ColumnMap, type SourceMapping } from '../../../shared/index.js'
 import { AMOUNT_STYLES, DATE_FORMATS } from '../../../shared/fields.js'
 import { ImportError } from '../../service/ImportError.js'
 import type { MappingBody } from './MappingBody.js'
@@ -51,9 +51,39 @@ export function readMapping(body: MappingBody): SourceMapping {
 
   return {
     sourceName,
-    columns: columns as unknown as SourceMapping['columns'],
+    columns: readColumnMap(columns),
     dateFormat: body.dateFormat as SourceMapping['dateFormat'],
     amountStyle: amountStyle as SourceMapping['amountStyle'],
     invertAmount: body.invertAmount === true,
+  }
+}
+
+/**
+ * Builds the column map from values already checked to be strings.
+ *
+ * Only the known keys are kept, so an unexpected key in the request body is
+ * dropped rather than saved. `date` and `merchant` were checked by
+ * `mappingIssues` before this runs.
+ *
+ * @param columns - The request's `columns` object, whose values are all strings or absent.
+ * @returns The column map.
+ */
+function readColumnMap(columns: Record<string, unknown>): ColumnMap {
+  const text = (key: string): string | undefined => {
+    const value = columns[key]
+    return typeof value === 'string' ? value : undefined
+  }
+  const optional = (key: 'amount' | 'debit' | 'credit' | 'notes' | 'externalId'): Partial<ColumnMap> => {
+    const value = text(key)
+    return value === undefined ? {} : { [key]: value }
+  }
+  return {
+    date: text('date') ?? '',
+    merchant: text('merchant') ?? '',
+    ...optional('amount'),
+    ...optional('debit'),
+    ...optional('credit'),
+    ...optional('notes'),
+    ...optional('externalId'),
   }
 }

@@ -1,4 +1,5 @@
 import type { Period } from '../../shared/index.js'
+import type { AccountMonthLine } from './AccountMonthLine.js'
 import type { MonthLine } from './MonthLine.js'
 import type { MonthTotals } from './MonthTotals.js'
 import type { UnbudgetedSpend } from './UnbudgetedSpend.js'
@@ -13,6 +14,12 @@ export interface MonthReport {
   /** True when the month has no stored lines and shows the previous month's as a preview. */
   readonly draft: boolean
   readonly lines: readonly MonthLine[]
+  /**
+   * Allowances measured against an account rather than a category. Kept out of
+   * `lines`, `unbudgeted` and `summary`: what an account line counts is also
+   * counted by the category lines, so adding them in would count it twice.
+   */
+  readonly accountLines: readonly AccountMonthLine[]
   readonly unbudgeted: readonly UnbudgetedSpend[]
   readonly summary: MonthTotals
 }

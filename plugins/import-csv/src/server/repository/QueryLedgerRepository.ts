@@ -3,7 +3,7 @@ import { INSERT_CHUNK_SIZE } from './INSERT_CHUNK_SIZE.js'
 import { chunk } from './chunk.js'
 import type { LedgerRepository } from './LedgerRepository.js'
 import type { NewLedgerRow } from './NewLedgerRow.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /** {@link LedgerRepository} over the plugin's query runner. */
 export class QueryLedgerRepository implements LedgerRepository {

@@ -1,5 +1,5 @@
 import type { ImportRepositories } from './ImportRepositories.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 import { QueryAccountRepository } from './QueryAccountRepository.js'
 import { QueryBatchLinkRepository } from './QueryBatchLinkRepository.js'
 import { QueryBatchRepository } from './QueryBatchRepository.js'

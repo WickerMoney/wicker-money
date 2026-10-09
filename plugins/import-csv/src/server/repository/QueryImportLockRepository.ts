@@ -1,5 +1,5 @@
 import type { ImportLockRepository } from './ImportLockRepository.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /** {@link ImportLockRepository} using a transaction-scoped PostgreSQL advisory lock. */
 export class QueryImportLockRepository implements ImportLockRepository {

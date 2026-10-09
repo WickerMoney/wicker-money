@@ -59,6 +59,9 @@ jobs:
     name: Image (${{ matrix.slug }})
     needs: [meta, verify]
     runs-on: ${{ matrix.runner }}
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     permissions:
       contents: read
       packages: write
@@ -74,6 +77,15 @@ jobs:
             slug: arm64
     steps:
       - uses: actions/checkout@v7
+      # Anonymous Docker Hub pulls are throttled per runner IP and have timed
+      # out fetching tokens. Skipped when the secrets are absent (fork and
+      # Dependabot runs), which then build anonymously as before.
+      - uses: docker/login-action@v4
+        if: ${{ env.DOCKERHUB_TOKEN != '' }}
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
