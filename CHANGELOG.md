@@ -23,8 +23,38 @@ curated, human-readable version.
   access to `accounts`. An account with an allowance counts as in use, so
   deleting it asks for the usual confirmation. The settings export gains
   `accountLines`.
+- **`@wickermoney/plugin-sdk/server`**, the server-side half of the plugin
+  contract, in one place. It exports the types a bundled plugin's `register`
+  function is handed (`RouteContext`, `RegisterRoute`, `RouteMethod`, `Query`,
+  `RunAsPlugin`), the category-rule types the host injects (`RuleForMatching`,
+  `ConditionForMatching`, `RuleSubject`), `PluginRouteError(message,
+  statusCode, code, issues?)` for refusing a request the person can fix, and
+  `isUuid`. It has no dependencies (no Zod) and is also re-exported from the
+  package root. Additive: nothing in the published SDK changed or moved.
+- **One UUID rule for plugins.** `isUuid` accepts the canonical hyphenated form
+  in either case with an RFC 9562 version (1 to 8) and variant, plus the nil
+  and max UUIDs, the same rule the API applies to `:id` params. Every id
+  PostgreSQL generates passes; braces, `urn:uuid:`, missing hyphens and
+  non-strings do not.
 
 ### Changed
+
+- **Bundled plugins share the SDK's server contract.** Budgets and Import CSV
+  each carried their own copies of `RouteContext`, `Query` and `RunAsPlugin`,
+  an error class and a UUID check, and the two UUID checks disagreed. Both,
+  and the API, now use `@wickermoney/plugin-sdk/server`; `BudgetError` and
+  `ImportError` extend `PluginRouteError` and behave as before on the wire.
+  The API's two `as unknown as` casts around the category rule engine and
+  Import CSV's column-map cast are gone. The two plugin packages are private,
+  so dropping their re-exports of these types affects no external author.
+- **Ids sent to Budgets and Import CSV are checked more strictly.** An id
+  PostgreSQL could not have generated (for example a version digit of 0) now
+  gets the usual `400` instead of reaching the database. Ids from the app are
+  unaffected.
+- **A comment that overstated the bundled plugins' trust is corrected.**
+  `bundled.ts` said bundled plugins hold no privilege a third-party plugin
+  could not request. That is true of their browser half; their server half is
+  imported and run by the API.
 
 - **Old images are pruned.** `package-cleanup.yml` and `preview-cleanup.yml`
   remove old `:edge-<short sha>` tags, old prereleases, untagged versions and

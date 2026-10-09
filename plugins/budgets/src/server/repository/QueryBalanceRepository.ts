@@ -2,7 +2,7 @@ import { ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
 import { monthKeyOf, monthPeriod, shiftMonth, type HistoryEntry } from '../../shared/index.js'
 import { CARRY_LOOKBACK_MONTHS } from '../constants.js'
 import type { BalanceRepository } from './BalanceRepository.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 import type { SpendRepository } from './SpendRepository.js'
 
 /**

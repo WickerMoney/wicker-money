@@ -1,7 +1,7 @@
 import { createBudgetRepositories } from './repository/createBudgetRepositories.js'
 import type { ExportedAccountLine } from './repository/ExportedAccountLine.js'
 import type { ExportedBudgetLine } from './repository/ExportedBudgetLine.js'
-import type { Query } from './repository/Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 export type { ExportedAccountLine } from './repository/ExportedAccountLine.js'
 export type { ExportedBudgetLine } from './repository/ExportedBudgetLine.js'

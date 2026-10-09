@@ -1,6 +1,5 @@
-import type { RunAsPlugin } from '../../repository/RunAsPlugin.js'
+import type { RegisterRoute, RunAsPlugin } from '@wickermoney/plugin-sdk/server'
 import type { Clock } from '../../service/Clock.js'
-import type { RouteContext } from './RouteContext.js'
 
 /**
  * What the host hands this plugin to register its routes.
@@ -13,12 +12,7 @@ import type { RouteContext } from './RouteContext.js'
  */
 export interface BudgetRouteDeps {
   /** Registers a handler for an HTTP method and a path relative to the plugin's API base. */
-  readonly route: (
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-    path: string,
-    handler: (ctx: RouteContext) => Promise<unknown>,
-    options?: { readonly bodyLimit?: number },
-  ) => void
+  readonly route: RegisterRoute
   /** Runs `fn` in a transaction as the given user, under this plugin's database role. */
   readonly runAsPlugin: RunAsPlugin
   /** The current instant; defaults to the real clock. Lets tests fix "today". */

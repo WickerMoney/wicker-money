@@ -1,7 +1,6 @@
 import type { CategoryResolver } from '../../service/CategoryResolver.js'
+import type { RegisterRoute, RunAsPlugin } from '@wickermoney/plugin-sdk/server'
 import type { RuleLoader } from '../../repository/RuleLoader.js'
-import type { RunAsPlugin } from '../../repository/RunAsPlugin.js'
-import type { RouteContext } from './RouteContext.js'
 
 /**
  * The capabilities the host hands this plugin's route registration.
@@ -13,12 +12,7 @@ import type { RouteContext } from './RouteContext.js'
  */
 export interface ImportRouteDeps {
   /** Registers one route. Paths are relative to the plugin's base. */
-  readonly route: (
-    method: 'GET' | 'POST' | 'PUT',
-    path: string,
-    handler: (ctx: RouteContext) => Promise<unknown>,
-    options?: { readonly bodyLimit?: number },
-  ) => void
+  readonly route: RegisterRoute
   /** Runs a query callback as this plugin's role, bound to the calling user. */
   readonly runAsPlugin: RunAsPlugin
   /**

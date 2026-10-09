@@ -1,6 +1,6 @@
 import { QueryExportRepository } from './repository/QueryExportRepository.js'
 import type { ImportExport } from './repository/ImportExport.js'
-import type { Query } from './repository/Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /**
  * Reads everything this plugin stores for the calling user, for the host's
