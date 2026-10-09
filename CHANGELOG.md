@@ -39,6 +39,12 @@ curated, human-readable version.
 
 ### Changed
 
+- **Plugin trust boundary wording.** The docs, SDK comments and `SECURITY.md`
+  now say plainly that UI plugins run fully trusted in the app's origin. A
+  plugin's `requiredTables` is enforced by PostgreSQL for its server-side code,
+  not for its front-end code, and the `x-wickermoney-plugin` header is advisory.
+  `PLUGIN_REMOTE_ORIGINS` should stay empty unless you fully trust the origin,
+  and third-party plugin install remains unsupported. No behaviour change.
 - **Bundled plugins share the SDK's server contract.** Budgets and Import CSV
   each carried their own copies of `RouteContext`, `Query` and `RunAsPlugin`,
   an error class and a UUID check, and the two UUID checks disagreed. Both,

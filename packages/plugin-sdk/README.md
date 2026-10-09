@@ -149,9 +149,13 @@ const result = parseManifest({
 if ('error' in result) throw new Error(result.error)
 ```
 
-`requiredTables` is enforced by PostgreSQL, not only by the app. Each plugin
-runs under its own database role, which is granted exactly the tables its
-manifest lists. A query against any other table is refused.
+`requiredTables` is enforced by PostgreSQL for a plugin's **server-side** code.
+Each bundled plugin's server code runs under its own database role, which is
+granted exactly the tables its manifest lists. A query against any other table
+is refused.
+
+It is **not** enforced against your plugin's UI code. See
+[Trust model](#trust-model) below.
 
 ### Widget
 
@@ -159,8 +163,9 @@ manifest lists. A query against any other table is refused.
 import type { PluginWidgetProps } from '@wickermoney/plugin-sdk/runtime'
 
 export default function RunwayWidget({ ctx, size, range }: PluginWidgetProps) {
-  // ctx.api is scoped to your plugin and the tables your manifest grants;
-  // the host attaches credentials, so the plugin never sees a token.
+  // ctx.api is scoped to your plugin and the tables your manifest grants
+  // (a convenience that catches mistakes early, not a sandbox); the host
+  // attaches credentials, so well-behaved plugin code never handles a token.
   // Paths are relative to the API root; don't prefix /api/v1 yourself.
   // ...
   return <p>{ctx.formatMoney('1234.5600')}</p>
@@ -188,6 +193,28 @@ Money crosses the contract as a **decimal string**, never a JavaScript
 
    This is not a style sandbox. Scope your selectors under a class your plugin
    owns.
+
+## Trust model
+
+UI plugins (widgets and pages loaded over Module Federation) run **fully
+trusted, in the host application's origin**. They share the page, its memory and
+the signed-in user's session with the host. The host's scoped client, the
+`x-wickermoney-plugin` header and the manifest check in `ctx.api` are
+developer feedback, not a security boundary: UI code that wants to can call any
+`/api/v1/*` route as the user, including routes outside its `requiredTables`.
+
+What is enforced against plugin code is the per-plugin PostgreSQL role, and only
+for server-side code (`contributes.endpoints`, bundled plugins only).
+
+So today:
+
+- Third-party plugin install is not supported. Treat every UI plugin as code
+  with full access to the user's data, and only run plugins you wrote or have
+  reviewed.
+- Operators should keep `PLUGIN_REMOTE_ORIGINS` empty unless they fully trust
+  every origin listed.
+- Declare `requiredTables` honestly anyway. It is what the database enforces
+  for your server code, and the contract a future isolation model will rely on.
 
 ## Server-side code
 

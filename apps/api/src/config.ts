@@ -66,6 +66,12 @@ const schema = z.object({
    * Comma-separated `https` origins (for example `https://plugins.example.com`)
    * that may serve plugin front-end code. Empty by default, which means plugin
    * code is loaded from this host only.
+   *
+   * Keep it empty unless you fully trust every listed origin. Plugin front-end
+   * code runs in this app's origin with the signed-in user's full access to the
+   * API (plugin grants are not enforced against UI code), so an allowlisted
+   * origin can read and change all of that user's data. Third-party plugin
+   * install is not supported yet.
    */
   PLUGIN_REMOTE_ORIGINS: z
     .string()
