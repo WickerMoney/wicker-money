@@ -2,7 +2,9 @@ import { validationIssuesOf } from '@wickermoney/ui-kit'
 import { ApiError } from './ApiError.js'
 import { buildRequestHeaders } from './buildRequestHeaders.js'
 import type { RequestOptions } from './RequestOptions.js'
+import { responseCache } from './responseCache.js'
 import { tokenExpiry } from './tokenExpiry.js'
+import { tokenSubject } from './tokenSubject.js'
 
 const BASE = '/api/v1'
 
@@ -49,11 +51,22 @@ let inflightRefresh: Promise<{ accessToken: string } | null> | null = null
  */
 export function setAccessToken(next: string | null): void {
   sessionEpoch += 1
+  // Sign-in, sign-out or a user change: nothing remembered for the previous
+  // session may be served to the next one.
+  responseCache.clear()
   applyToken(next)
 }
 
-/** Stores a token without touching the session epoch. */
+/**
+ * Stores a token without touching the session epoch.
+ *
+ * A refresh normally keeps the same user. If the new token names someone else
+ * (the refresh cookie is shared by every tab, so another tab can sign in as a
+ * different user), what was remembered for the old user is dropped.
+ */
 function applyToken(next: string | null): void {
+  const previous = accessToken === null ? null : tokenSubject(accessToken)
+  if ((next === null ? null : tokenSubject(next)) !== previous) responseCache.clear()
   accessToken = next
   accessExpiresAt = next === null ? null : tokenExpiry(next)
 }
@@ -91,6 +104,7 @@ async function parseError(res: Response): Promise<ApiError> {
 
 /** Ends the local session and tells the registered handler. */
 function endSession(): void {
+  responseCache.clear()
   applyToken(null)
   onUnauthorized?.()
 }
@@ -255,6 +269,29 @@ async function retryAfterUnauthorized(
  * @throws {ApiError} On any non-2xx response.
  */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (!isRead(options.method)) {
+    // A write may change anything a remembered read reported. Drop it all
+    // before sending, so no read started from here on joins a stale one, and
+    // again once it settles, so a read that overlapped the write cannot have
+    // put pre-write data back.
+    responseCache.clear()
+    try {
+      return await perform<T>(path, options)
+    } finally {
+      responseCache.clear()
+    }
+  }
+  return perform<T>(path, options)
+}
+
+/** Whether a method only reads. A missing method is a `GET`. */
+function isRead(method: string | undefined): boolean {
+  const verb = (method ?? 'GET').toUpperCase()
+  return verb === 'GET' || verb === 'HEAD'
+}
+
+/** The request pipeline behind {@link request}: headers, refresh, retry and parsing. */
+async function perform<T>(path: string, options: RequestOptions): Promise<T> {
   const { pluginId, anonymous, headers, ...init } = options
   const isAnonymous = anonymous === true
   const merged = buildRequestHeaders(headers, init.body !== undefined, pluginId)
