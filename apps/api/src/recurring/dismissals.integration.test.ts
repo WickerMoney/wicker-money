@@ -1,7 +1,7 @@
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { asUser } from '../db/client.js'
 import { auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
-import { addDays } from './service/addDays.js'
 
 /**
  * Dismissing suggested matches, and matching from the transaction side,

@@ -1,5 +1,5 @@
 import {
-  dailyBalances, monthlyEquivalent, nextPayday, nextScheduledOccurrence, occurrences, scheduledOccurrences,
+  addDays, dailyBalances, monthlyEquivalent, nextPayday, nextScheduledOccurrence, occurrences, scheduledOccurrences,
 } from '@wickermoney/plugin-sdk/recurrence'
 import type { RecurringItem } from '@wickermoney/plugin-sdk/recurrence'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
@@ -9,7 +9,6 @@ import { NotFoundError, ValidationError } from '../../errors.js'
 import { addMoney, money, negate, toMoney } from '../../money.js'
 import type { OccurrenceFilter } from '../repository/RecurringOccurrenceRepository.js'
 import type { RecurringItemRow } from '../repository/RecurringItemRow.js'
-import { addDays } from './addDays.js'
 import { DEFAULT_FORECAST_HORIZON, type ForecastHorizon } from './FORECAST_HORIZONS.js'
 import { forecastStats } from './forecastStats.js'
 import type { ForecastAccount, ForecastEntry, ForecastView } from './ForecastView.js'
