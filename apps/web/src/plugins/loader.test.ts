@@ -32,6 +32,22 @@ beforeEach(async () => {
   apiGet.mockReset()
 })
 
+describe('shared dependencies', () => {
+  it('declares the React versions that are actually running, not a hard-coded one', async () => {
+    const React = await import('react')
+    const ReactDom = await import('react-dom')
+    apiGet.mockResolvedValue({ plugins: [] })
+
+    await loadPluginRegistry()
+
+    const shared = init.mock.calls[0]![0].shared as Record<string, { version: string; shareConfig: { singleton: boolean } }>
+    expect(shared['react']!.version).toBe(React.version)
+    expect(shared['react-dom']!.version).toBe(ReactDom.version)
+    expect(shared['react']!.shareConfig.singleton).toBe(true)
+    expect(shared['react-dom']!.shareConfig.singleton).toBe(true)
+  })
+})
+
 describe('loadPluginRegistry', () => {
   it('registers the remote as an ES module', async () => {
     apiGet.mockResolvedValue({ plugins: [manifest()] })

@@ -1,4 +1,6 @@
 import { init, loadRemote } from '@module-federation/runtime'
+import { version as reactVersion } from 'react'
+import { version as reactDomVersion } from 'react-dom'
 import {
   federationName, type PluginManifest,
 } from '@wickermoney/plugin-sdk'
@@ -16,9 +18,13 @@ function ensureInit(): void {
     remotes: [],
     shared: {
       // Declared again at runtime because remotes are registered dynamically,
-      // after the build-time config has already been applied.
-      react: { version: '19.0.0', scope: 'default', lib: undefined, shareConfig: { singleton: true, requiredVersion: '^19.0.0' } },
-      'react-dom': { version: '19.0.0', scope: 'default', lib: undefined, shareConfig: { singleton: true, requiredVersion: '^19.0.0' } },
+      // after the build-time config has already been applied. The versions are
+      // read from the copies actually running, not written down: the federation
+      // runtime prefers the highest version on offer, so a host claiming an
+      // older one than it runs would lose to a remote's own copy and the page
+      // would end up with two Reacts.
+      react: { version: reactVersion, scope: 'default', lib: undefined, shareConfig: { singleton: true, requiredVersion: '^19.0.0' } },
+      'react-dom': { version: reactDomVersion, scope: 'default', lib: undefined, shareConfig: { singleton: true, requiredVersion: '^19.0.0' } },
     },
   })
   initialised = true
