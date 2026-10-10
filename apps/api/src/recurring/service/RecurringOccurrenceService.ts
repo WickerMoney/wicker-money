@@ -24,7 +24,7 @@ import { describeOccurrence, groupHistories, type ItemHistory, type OccurrenceSt
 import { occurrenceKey } from './occurrenceKey.js'
 import type { OccurrenceView } from './OccurrenceView.js'
 import { windowOccurrences } from './windowOccurrences.js'
-import type { RecurringData } from './RecurringData.js'
+import { rangeCovering, type RecurringData } from './RecurringData.js'
 import { suggestionWindow } from './suggestionWindow.js'
 import { toOccurrenceView } from './toOccurrenceView.js'
 import { toSchedule } from './toSchedule.js'
@@ -188,21 +188,33 @@ export class RecurringOccurrenceService {
       )
       const recordById = new Map(records.map((r) => [r.id, r]))
       const dismissals = await repos.recurringOccurrences.listDismissals({ transactionIds: ids })
-      const described = await describeWanted(repos, today, [
+      // Suggestions are for transactions that settle nothing yet; a page of
+      // rows that are all linked has none to find, and finding them costs about
+      // a dozen queries.
+      const wantsSuggestions = txs.some((t) => t.recurring_occurrence_id === null)
+      const wanted = [
         ...records.map((r) => ({ itemId: r.recurring_item_id, nominalDate: r.nominal_date })),
         ...dismissals.map((d) => ({ itemId: d.recurring_item_id, nominalDate: d.nominal_date })),
+      ]
+
+      // One load serves both readers below, for this request only: it is a
+      // local of this callback, built from this transaction's repositories
+      // (so under this user's row-level security) and gone when it returns.
+      // Nothing in this request writes, so it cannot go stale.
+      const range = rangeCovering([
+        ...(wanted.length === 0 ? [] : [wantedRange(wanted)]),
+        ...(wantsSuggestions ? [suggestionWindow(today).scan] : []),
       ])
+      const data = range === null ? undefined : await loadRecurringData(repos, range)
+
+      const described = data === undefined ? new Map<string, Described>() : describeAt(data, today, wanted)
       const viewOf = (itemId: string, nominalDate: string): OccurrenceView | null => {
         const found = described.get(occurrenceKey(itemId, nominalDate))
         return found === undefined ? null : toOccurrenceView(found.row, found.state, found.state.expectedDate)
       }
 
-      // Suggestions are for transactions that settle nothing yet; a page of
-      // rows that are all linked has none to find, and finding them costs about
-      // a dozen queries.
-      const wantsSuggestions = txs.some((t) => t.recurring_occurrence_id === null)
-      const { suggestions } = wantsSuggestions
-        ? await findSuggestions(repos, await loadRecurringData(repos, suggestionWindow(today).scan), today)
+      const { suggestions } = data !== undefined && wantsSuggestions
+        ? await findSuggestions(repos, data, today)
         : { suggestions: [] }
       const suggestionFor = new Map(suggestions.map((s) => [s.candidate.transactionId, s]))
 
