@@ -84,3 +84,6 @@
 .spt__tip-row strong, .spt__tip-total strong { font-variant-numeric: tabular-nums; font-weight: 600; }
 .spt__tip-row strong.is-neg { color: var(--wm-negative); }
 .spt__tip-total { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--wm-border); }
+
+/* The chart/table switch, right-aligned above the plot. */
+.spt__view { display: flex; justify-content: flex-end; margin: 0 0 8px; }

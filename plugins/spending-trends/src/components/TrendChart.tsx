@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Button } from '@wickermoney/ui-kit'
 import { axisLabel } from '../helpers/axisLabel.js'
 import { labelEvery } from '../helpers/labelEvery.js'
 import { niceScale } from '../helpers/niceScale.js'
@@ -13,6 +14,7 @@ import type { Trend } from '../models/index.js'
 import { StackedMonthMark } from './StackedMonthMark.js'
 import { StackedTooltip } from './StackedTooltip.js'
 import { TrendGrid } from './TrendGrid.js'
+import { TrendTable } from './TrendTable.js'
 
 /** Props for {@link TrendChart}. */
 export interface TrendChartProps {
@@ -43,6 +45,8 @@ export interface TrendChartProps {
  */
 export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: TrendChartProps) {
   const [hover, setHover] = useState<number | null>(null)
+  // The same figures as a table, for anyone the marks do not serve.
+  const [asTable, setAsTable] = useState(false)
   // The plot is drawn at the width it is shown at; see trendLayout.
   const [plot, setPlot] = useState<HTMLDivElement | null>(null)
   const measured = useElementWidth(plot)
@@ -84,9 +88,23 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
 
   return (
     <div className="spt__plot" ref={setPlot}>
+      <div className="spt__view">
+        <Button
+          onClick={() => {
+            setHover(null)
+            setAsTable((v) => !v)
+          }}
+        >
+          {asTable ? 'Show as chart' : 'Show as table'}
+        </Button>
+      </div>
+
+      {asTable ? (
+        <TrendTable trend={trend} visible={visible} readouts={readouts} rangeLabel={rangeLabel} formatMoney={formatMoney} />
+      ) : (
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        role="img"
+        role="list"
         aria-label={`Spending by category, month by month (${rangeLabel})`}
       >
         <TrendGrid ticks={scale.ticks} y={y} formatMoney={formatMoney} layout={layout} />
@@ -106,8 +124,9 @@ export function TrendChart({ trend, colors, hidden, formatMoney, rangeLabel }: T
           />
         ))}
       </svg>
+      )}
 
-      {active === undefined ? null : (
+      {active === undefined || asTable ? null : (
         <StackedTooltip
           readout={active}
           anchor={tooltipAnchor(barX(hover ?? 0), barWidth, width)}

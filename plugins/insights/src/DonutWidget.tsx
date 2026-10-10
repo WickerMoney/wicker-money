@@ -62,7 +62,9 @@ export default function DonutWidget({ ctx, range }: PluginWidgetProps) {
 
   return (
     <div className="viz viz--donut">
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Spending by category">
+      {/* A list, not an image: an img makes its children presentational, which
+          would drop the focusable slices out of the accessibility tree. */}
+      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} role="list" aria-label="Spending by category">
         {segments.map((s, i) => {
           // Trim each segment so neighbours never touch; skip the trim when the
           // slice is too thin to survive it.
