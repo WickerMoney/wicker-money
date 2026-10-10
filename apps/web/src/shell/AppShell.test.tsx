@@ -47,6 +47,14 @@ describe('AppShell phone drawer', () => {
     expect(document.activeElement).toBe(menuButton())
   })
 
+  it('keeps Tab inside the open drawer, including the skip link outside it', async () => {
+    renderShell()
+    await userEvent.click(menuButton())
+    const nav = document.getElementById('shell-nav')!
+    for (let i = 0; i < 15; i++) { await userEvent.tab(); expect(nav.contains(document.activeElement)).toBe(true) }
+    for (let i = 0; i < 15; i++) { await userEvent.tab({ shift: true }); expect(nav.contains(document.activeElement)).toBe(true) }
+  })
+
   it('closes after following a link to another page', async () => {
     renderShell()
     await userEvent.click(menuButton())

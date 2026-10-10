@@ -32,7 +32,9 @@ export function PluginSwitch({ name, on, saving, onChange }: PluginSwitchProps) 
       >
         <span className="plugin-switch__thumb" aria-hidden="true" />
       </button>
-      <span className="plugin-switch__text" aria-hidden="true">{saving ? 'Saving…' : on ? 'On' : 'Off'}</span>
+      {/* The state is already announced by the switch itself; this live region
+          exists so "Saving…" is spoken politely when it appears. */}
+      <span className="plugin-switch__text" role="status">{saving ? 'Saving…' : on ? 'On' : 'Off'}</span>
     </div>
   )
 }

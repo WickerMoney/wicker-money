@@ -80,8 +80,9 @@ export function BatchHistory({ ctx, refreshKey, onReverted }: BatchHistoryProps)
         <table className="imp__table">
           <thead>
             <tr>
-              <th>When</th><th>Source</th><th>Account</th>
-              <th className="num">Imported</th><th className="num">Skipped</th><th />
+              <th scope="col">When</th><th scope="col">Source</th><th scope="col">Account</th>
+              <th scope="col" className="num">Imported</th><th scope="col" className="num">Skipped</th>
+              <th scope="col"><span className="wm-visually-hidden">Actions</span></th>
             </tr>
           </thead>
           <tbody>

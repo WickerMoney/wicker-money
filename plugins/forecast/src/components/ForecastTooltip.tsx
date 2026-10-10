@@ -16,8 +16,9 @@ export interface ForecastTooltipProps {
 
 /**
  * The readout for the hovered or focused day: its end balance, its low when
- * the day dips below that, and what lands on it. Announced politely, so a
- * keyboard user stepping through days hears each one.
+ * the day dips below that, and what lands on it. Visual only: the
+ * chart's persistent live region speaks the same day, because a live region
+ * that mounts together with its text is often not announced.
  */
 export function ForecastTooltip({
   date, isToday, balance, low, entries, leftPercent, formatMoney, formatDate,
@@ -25,7 +26,7 @@ export function ForecastTooltip({
   // Keep the box inside the chart near either edge.
   const shift = leftPercent > 70 ? '-100%' : leftPercent < 30 ? '0' : '-50%'
   return (
-    <div className="fc-tip" style={{ left: `${leftPercent}%`, transform: `translateX(${shift})` }} aria-live="polite">
+    <div className="fc-tip" style={{ left: `${leftPercent}%`, transform: `translateX(${shift})` }} aria-hidden="true">
       <span className="fc-tip__date">{isToday ? `Today, ${formatDate(date)}` : formatDate(date)}</span>
       <span className="fc-tip__row">{isToday ? 'Balance now' : 'End of day'} <strong>{formatMoney(balance)}</strong></span>
       {low !== balance ? (

@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import { Button } from '@wickermoney/ui-kit'
 import type { SituationGroup } from './SituationGroup.js'
 
@@ -9,6 +10,8 @@ export interface WizardHeaderProps {
   readonly groups: readonly SituationGroup[]
   /** Called to close the wizard without finishing. */
   readonly onDismiss: () => void
+  /** Ref to the title, which the wizard focuses when the step changes. */
+  readonly headingRef?: Ref<HTMLHeadingElement>
 }
 
 /**
@@ -18,11 +21,11 @@ export interface WizardHeaderProps {
  * opens again next time. Saying so is better than a dismissal that quietly
  * turns out to be temporary.
  */
-export function WizardHeader({ step, groups, onDismiss }: WizardHeaderProps) {
+export function WizardHeader({ step, groups, onDismiss, headingRef }: WizardHeaderProps) {
   return (
     <header className="wiz__head">
       <div>
-        <h2 className="wiz__title" id="wiz-title">Set up your categories</h2>
+        <h2 className="wiz__title" id="wiz-title" tabIndex={-1} ref={headingRef}>Set up your categories</h2>
         <p className="wiz__sub">
           Step {step + 1} of {groups.length} · {groups[step]?.title}
         </p>

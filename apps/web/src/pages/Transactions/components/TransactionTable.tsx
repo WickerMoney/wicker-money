@@ -60,6 +60,7 @@ export function TransactionTable({
         </label>
       ) : null}
       <Table
+        caption="Transactions"
         className="txn-table"
         columns={[
           { key: 'sel',
