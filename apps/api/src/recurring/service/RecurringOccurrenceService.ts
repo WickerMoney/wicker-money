@@ -1,4 +1,5 @@
-import { addDays, occurrences } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
+import { occurrences } from '@wickermoney/plugin-sdk/recurrence'
 import type { Repositories } from '../../data/Repositories.js'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import { todayIn } from '../../core/service/todayIn.js'

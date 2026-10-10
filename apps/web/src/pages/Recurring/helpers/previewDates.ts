@@ -1,4 +1,5 @@
-import { addDays, occurrences } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
+import { occurrences } from '@wickermoney/plugin-sdk/recurrence'
 import type { RecurringDraft } from '../state/RecurringDraft.js'
 
 /** How far ahead the preview looks: long enough for a yearly item's next date. */

@@ -28,6 +28,7 @@ plugin as a Module Federation singleton.
 | Import | Use it for | Contents |
 |---|---|---|
 | `@wickermoney/plugin-sdk/runtime` | Plugin UI code (browser) | Types for the React components a plugin exports (`PluginWidgetProps`, `PluginPageProps`, `PluginContext`, ...), and `adoptPluginStyles` |
+| `@wickermoney/plugin-sdk/date` | Anything (browser or Node) | Calendar-date arithmetic on `YYYY-MM-DD` strings: `addDays` and `addMonths` |
 | `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `scheduledOccurrences`, `nextScheduledOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals`, the calendar helpers `addDays` and `addMonths`, with per-occurrence overrides (skip, move, change the legs) |
 | `@wickermoney/plugin-sdk/money` | Anything (browser or Node) | Exact money arithmetic on decimal strings: `addMoney`, `sumMoney`, `compareMoney`, `equalMoney`, `moneyToUnits`, `divideUnits`, ... |
 | `@wickermoney/plugin-sdk/server` | Bundled plugins' server code, and the host (Node) | The server-side contract: `RouteContext`, `RegisterRoute`, `Query`, `RunAsPlugin`, `PluginRouteError`, `isUuid`, and the category-rule types `RuleForMatching` and `RuleSubject` |
@@ -50,9 +51,10 @@ module documentation (`@stable` or `@experimental`).
 | `@wickermoney/plugin-sdk/runtime` | stable | The props and context the host hands a plugin's React components, plus `adoptPluginStyles` | The web app and all six bundled UI plugins |
 | `@wickermoney/plugin-sdk/money` | stable | Exact money arithmetic on decimal strings | The web app, the Budgets, Insights and Spending Trends plugins, and the API's tests |
 | `@wickermoney/plugin-sdk/server` | stable | The server-side contract between the host and a bundled plugin's `register` function | The API, Budgets and Import CSV |
-| `@wickermoney/plugin-sdk/recurrence` | experimental | Recurring-item date maths and projections, and the `addDays` and `addMonths` calendar helpers | The API and the web app; Budgets uses `addDays`. No plugin uses the projections yet |
+| `@wickermoney/plugin-sdk/date` | stable | The `addDays` and `addMonths` calendar helpers | The API, the web app and Budgets |
+| `@wickermoney/plugin-sdk/recurrence` | experimental | Recurring-item date maths and projections. It still re-exports `addDays` and `addMonths` so older imports work; import them from `/date` | The API and the web app. No plugin uses the projections yet |
 
-The root also re-exports the `/recurrence`, `/money` and `/server` exports. An
+The root also re-exports the `/date`, `/recurrence`, `/money` and `/server` exports. An
 export keeps the tier of the entry point it comes from, however it is
 imported, so `occurrences` is experimental even when imported from the root.
 
@@ -117,7 +119,7 @@ involved. `addMonths` clamps to the end of a short month, and each call clamps
 on its own, so add the total to the original date rather than stepping.
 
 ```ts
-import { addDays, addMonths } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays, addMonths } from '@wickermoney/plugin-sdk/date'
 
 addDays('2026-12-31', 1)       // '2027-01-01'
 addMonths('2026-08-31', 6)     // '2027-02-28' ('2028-02-29' in a leap year)

@@ -1,4 +1,5 @@
-import { addDays, occurrences } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
+import { occurrences } from '@wickermoney/plugin-sdk/recurrence'
 import type { Described } from './Described.js'
 import { occurrenceKey } from './occurrenceKey.js'
 import { describeOccurrence } from './occurrenceState.js'

@@ -1,4 +1,4 @@
-import { addDays, addMonths } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays, addMonths } from '@wickermoney/plugin-sdk/date'
 import { asUser, type Db } from '../client.js'
 import { toMoney } from '../../money.js'
 import type { TransactionService } from '../../transactions/service/TransactionService.js'

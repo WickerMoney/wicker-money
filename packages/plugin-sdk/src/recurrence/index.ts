@@ -27,4 +27,6 @@ export { nextScheduledOccurrence, scheduledOccurrences } from './scheduled.js'
 export {
   dailyBalances, flowTotals, monthlyEquivalent, nextPayday,
 } from './projection.js'
-export { addDays, addMonths } from './calendar.js'
+// Kept so imports that predate the `./date` entry point keep working. Prefer
+// `@wickermoney/plugin-sdk/date`, which is stable.
+export { addDays, addMonths } from '../date/index.js'
