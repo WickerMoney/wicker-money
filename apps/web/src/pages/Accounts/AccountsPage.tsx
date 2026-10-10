@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert } from '@wickermoney/ui-kit'
+import { Alert, Button, Dialog } from '@wickermoney/ui-kit'
 import { useActionStatus } from '../../hooks/useActionStatus.js'
 import { AccountsPanel } from './components/AccountsPanel.js'
 import { AddAccountForm } from './components/AddAccountForm.js'
@@ -13,8 +13,9 @@ import { useOpeningBalanceFix } from './hooks/useOpeningBalanceFix.js'
  * Account management: list, rename, add, correct an opening balance, archive
  * and delete.
  *
- * Correcting an opening balance and deleting an account with history each get
- * their own panel and preview rather than living behind an ordinary edit,
+ * Adding, correcting an opening balance and deleting an account with history
+ * each open in a dialog, as on the Transactions page. The last two get their
+ * own preview rather than living behind an ordinary edit,
  * because both change more than the row they are started from.
  */
 export function AccountsPage() {
@@ -23,26 +24,36 @@ export function AccountsPage() {
   const { accounts, includeArchived, setIncludeArchived, reload } = useAccountList(status)
   const fix = useOpeningBalanceFix(status, reload, setNotice)
   const deletion = useAccountDeletion(status, accounts, reload, setNotice)
+  const [adding, setAdding] = useState(false)
 
   return (
     <div className="page">
-      <h1 className="page__title">Accounts</h1>
+      <div className="page__header">
+        <h1 className="page__title">Accounts</h1>
+        <Button variant="primary" onClick={() => setAdding(true)}>Add account</Button>
+      </div>
       {status.message !== null ? <Alert>{status.message}</Alert> : null}
       {notice !== null ? <Alert>{notice}</Alert> : null}
 
-      <div className="page__split acct-split">
-        <AccountsPanel
-          accounts={accounts}
-          includeArchived={includeArchived}
-          onIncludeArchivedChange={setIncludeArchived}
-          status={status}
-          onChanged={reload}
-          onFixOpeningBalance={(a) => { fix.open(a); deletion.dismiss() }}
-          onArchive={(a) => void deletion.archive(a)}
-          onDelete={(a) => void deletion.startDelete(a)}
-        />
-        <AddAccountForm status={status} onCreated={reload} />
-      </div>
+      <AccountsPanel
+        accounts={accounts}
+        includeArchived={includeArchived}
+        onIncludeArchivedChange={setIncludeArchived}
+        status={status}
+        onChanged={reload}
+        onFixOpeningBalance={(a) => { fix.open(a); deletion.dismiss() }}
+        onArchive={(a) => void deletion.archive(a)}
+        onDelete={(a) => void deletion.startDelete(a)}
+      />
+
+      {adding ? (
+        <Dialog title="Add an account" onClose={() => setAdding(false)}>
+          <AddAccountForm
+            status={status}
+            onCreated={async () => { await reload(); setAdding(false) }}
+          />
+        </Dialog>
+      ) : null}
 
       {fix.fixing !== null ? (
         <FixOpeningBalancePanel

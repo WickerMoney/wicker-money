@@ -9,6 +9,8 @@ import type { RecurringDraft } from '../state/RecurringDraft.js'
 /** What {@link useRecurringEditing} returns. */
 export interface RecurringEditing {
   readonly draft: RecurringDraft
+  /** `true` while the add/edit dialog is showing. */
+  readonly open: boolean
   /** The item being edited, or `null` when the form adds a new one. */
   readonly editing: RecurringItem | null
   /** What is wrong with the form, by field (see `checkDraft`), and anything else for beside its button. */
@@ -17,7 +19,9 @@ export interface RecurringEditing {
   readonly formRef: RefObject<HTMLFormElement | null>
   readonly change: (patch: Partial<RecurringDraft>) => void
   readonly edit: (item: RecurringItem) => void
-  /** Clears the form back to a new, blank item. */
+  /** Opens the dialog on a new, blank item. */
+  readonly startAdd: () => void
+  /** Closes the dialog and clears the form back to a new, blank item. */
   readonly reset: () => void
   readonly save: () => Promise<void>
   readonly end: (item: RecurringItem) => Promise<void>
@@ -43,6 +47,7 @@ export function useRecurringEditing(
 ): RecurringEditing {
   const [draft, setDraft] = useState<RecurringDraft>(() => emptyDraft(today, defaultAccountId))
   const [editing, setEditing] = useState<RecurringItem | null>(null)
+  const [open, setOpen] = useState(false)
   const form = useFormErrors()
   const { clear: clearErrors, clearField } = form
 
@@ -54,12 +59,22 @@ export function useRecurringEditing(
   }, [clearField])
 
   const reset = useCallback(() => {
+    setOpen(false)
     setEditing(null)
     setDraft(emptyDraft(today, defaultAccountId))
     clearErrors()
   }, [today, defaultAccountId, clearErrors])
 
+  const startAdd = useCallback(() => {
+    setEditing(null)
+    setDraft(emptyDraft(today, defaultAccountId))
+    clearErrors()
+    showNotice(null)
+    setOpen(true)
+  }, [today, defaultAccountId, showNotice, clearErrors])
+
   const edit = useCallback((item: RecurringItem) => {
+    setOpen(true)
     setEditing(item)
     setDraft(draftFromItem(item))
     clearErrors()
@@ -116,5 +131,5 @@ export function useRecurringEditing(
     })
   }
 
-  return { draft, editing, errors: form.errors, formRef: form.ref, change, edit, reset, save, end, remove }
+  return { draft, open, editing, errors: form.errors, formRef: form.ref, change, edit, startAdd, reset, save, end, remove }
 }

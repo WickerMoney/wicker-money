@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import {
-  Button, Field, FormError, SelectField, Surface, formErrorsFrom, hasFormErrors, useFormErrors,
+  Button, Field, FormError, SelectField, formErrorsFrom, hasFormErrors, useFormErrors,
 } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -15,7 +15,7 @@ export interface AddAccountFormProps {
   readonly onCreated: () => Promise<void>
 }
 
-/** A form that creates one account with an opening balance. */
+/** A form that creates one account with an opening balance. It sits inside a dialog, which supplies the title. */
 export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
   const [name, setName] = useState('')
   const [type, setType] = useState<string>('checking')
@@ -48,8 +48,7 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
   }
 
   return (
-    <Surface title="Add an account">
-      <form onSubmit={create} ref={form.ref} noValidate>
+    <form onSubmit={create} ref={form.ref} noValidate>
         <Field label="Name" required value={name} error={form.errors.fields['name']}
                onChange={(e) => { setName(e.target.value); form.clearField('name') }} />
         <SelectField label="Type" value={type} error={form.errors.fields['accountType']}
@@ -73,7 +72,6 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
           {status.busy ? 'Adding…' : 'Add account'}
         </Button>
         <FormError message={form.errors.form} />
-      </form>
-    </Surface>
+    </form>
   )
 }

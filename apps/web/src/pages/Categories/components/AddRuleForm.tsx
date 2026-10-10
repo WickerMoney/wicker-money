@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import {
-  Button, CategoryOptions, EmptyState, Field, FormError, SelectField, Surface, formErrorsFrom, hasFormErrors,
+  Button, CategoryOptions, EmptyState, Field, FormError, SelectField, formErrorsFrom, hasFormErrors,
   useFormErrors,
 } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
@@ -109,7 +109,7 @@ export function AddRuleForm({ categories, status, onChanged }: AddRuleFormProps)
   const busy = status.busy
 
   return (
-    <Surface title="Add a rule">
+    <>
       {categories === null || categories.length === 0 ? (
         <EmptyState title="Add a category first" hint="A rule has to assign something." />
       ) : (
@@ -171,6 +171,6 @@ export function AddRuleForm({ categories, status, onChanged }: AddRuleFormProps)
           ) : null}
         </form>
       )}
-    </Surface>
+    </>
   )
 }

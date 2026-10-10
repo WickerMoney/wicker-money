@@ -214,6 +214,7 @@
 @media (max-width: 560px) {
   .wm-field__control, .cat-cell__select, .cat-edit { font-size: 16px; }
   .wm-btn { min-height: 40px; }
+  .txn__filters .wm-field__control, .txn__filters .wm-btn { height: 40px; }
   .page__title { font-size: 18px; }
   .page__head { gap: 8px; }
   .settings-facts > div { grid-template-columns: 1fr; gap: 0; }
@@ -484,6 +485,14 @@
   padding-bottom: 14px; border-bottom: 1px solid var(--wm-border);
 }
 .txn__filter-actions { display: flex; gap: 8px; align-items: flex-end; }
+/* Every control shares one bottom edge. The field's own bottom margin (right for
+   stacked form fields) lifted the inputs above the Search and Clear buttons, and
+   a native date input is taller than a select, so all of them get one height. A
+   field's error floats under it instead of growing the field and lifting its input. */
+.txn__filters .wm-field { position: relative; margin-bottom: 0; }
+.txn__filters .wm-field__error { position: absolute; top: 100%; left: 0; margin-top: 2px; white-space: nowrap; }
+.txn__filters .wm-field__control, .txn__filters .wm-btn { box-sizing: border-box; height: 38px; }
+.txn__filters .wm-field__control { padding-block: 0; }
 
 /* Everything in the pager sits on one centre line: the count, "Per page" with its
    select beside it (not stacked above it), Previous, the page number and Next.
@@ -538,6 +547,7 @@
 /* Recurring items */
 .recur-split { grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); }
 @media (max-width: 1100px) { .recur-split { grid-template-columns: minmax(0, 1fr); } }
+.recur-toolbar { display: flex; justify-content: flex-end; }
 .recur-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--wm-gap); }
 .recur-tiles__hint { margin: 8px 0 0; }
 .recur-sub { font-size: 12px; }
