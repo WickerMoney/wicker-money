@@ -1,5 +1,7 @@
 import { money } from '../../money.js'
 import type { CandidateTransactionRow } from '../repository/CandidateTransactionRow.js'
+import type { ParsedCandidate } from './ParsedCandidate.js'
+import { parseCandidates } from './parseCandidates.js'
 
 /** How far either side of an occurrence's expected date a transaction can be offered as its match. */
 export const MATCH_WINDOW_DAYS = 10
@@ -38,6 +40,9 @@ export interface MatchCandidate {
  * weighs a day's distance against a tenth of the amount: a payment exactly
  * on the amount two days late beats one 30% off on the day.
  *
+ * To rank the same transactions against several legs, {@link parseCandidates}
+ * them once and call {@link rankParsedCandidates} for each.
+ *
  * @param leg - The leg: its account and expected signed amount.
  * @param expectedDate - When the occurrence is expected.
  * @param rows - Transactions to choose from (any account, any date).
@@ -50,16 +55,38 @@ export function rankCandidates(
   rows: readonly CandidateTransactionRow[],
   occurrenceId: string | null = null,
 ): MatchCandidate[] {
+  return rankParsedCandidates(leg, expectedDate, parseCandidates(rows), occurrenceId)
+}
+
+/**
+ * {@link rankCandidates} over transactions already parsed by {@link parseCandidates}:
+ * the checks that need no arithmetic (account, link, date) run first, so an
+ * amount is only parsed for a row that could still be a candidate, and only once
+ * across every leg it is ranked against.
+ *
+ * @param leg - The leg: its account and expected signed amount.
+ * @param expectedDate - When the occurrence is expected.
+ * @param candidates - Parsed transactions to choose from (any account, any date).
+ * @param occurrenceId - The occurrence's own row, if it has one: transactions already on it stay candidates.
+ * @returns Candidates, best first.
+ */
+export function rankParsedCandidates(
+  leg: { readonly accountId: string; readonly amount: string },
+  expectedDate: string,
+  candidates: readonly ParsedCandidate[],
+  occurrenceId: string | null = null,
+): MatchCandidate[] {
   const expected = money(leg.amount)
   const negative = expected.isNegative()
+  const expectedMs = Date.parse(`${expectedDate}T00:00:00Z`)
   const found: MatchCandidate[] = []
-  for (const row of rows) {
+  for (const { row, dateMs, amount } of candidates) {
     if (row.account_id !== leg.accountId) continue
     if (row.recurring_occurrence_id !== null && row.recurring_occurrence_id !== occurrenceId) continue
-    const actual = money(row.amount)
-    if (actual.isZero() || actual.isNegative() !== negative) continue
-    const dayDifference = daysBetween(expectedDate, row.transaction_date)
+    const dayDifference = Math.round((dateMs - expectedMs) / 86_400_000)
     if (Math.abs(dayDifference) > MATCH_WINDOW_DAYS) continue
+    const actual = amount()
+    if (actual.isZero() || actual.isNegative() !== negative) continue
 
     const difference = actual.minus(expected)
     const relative = difference.abs().dividedBy(expected.abs())
@@ -75,11 +102,6 @@ export function rankCandidates(
     })
   }
   return found.sort((a, b) => a.score - b.score || compare(a.date, b.date) || compare(a.transactionId, b.transactionId))
-}
-
-/** Whole days from `a` to `b`, both `YYYY-MM-DD`. */
-function daysBetween(a: string, b: string): number {
-  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
 }
 
 /** String order. */

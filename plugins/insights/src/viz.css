@@ -126,3 +126,6 @@
   color: var(--wm-positive);
 }
 .viz__tip-net.is-neg { color: var(--wm-negative); }
+
+/* The chart/table switch, right-aligned above the plot. */
+.viz__view { display: flex; justify-content: flex-end; margin: 0 0 8px; }

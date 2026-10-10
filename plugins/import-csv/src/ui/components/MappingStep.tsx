@@ -113,7 +113,7 @@ export function MappingStep(p: MappingStepProps) {
           </h3>
           <table className="imp__table">
             <thead>
-              <tr><th>Row</th><th>Date</th><th>Description</th><th className="num">Amount</th></tr>
+              <tr><th scope="col">Row</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col" className="num">Amount</th></tr>
             </thead>
             <tbody>
               {rows.map((r) => (

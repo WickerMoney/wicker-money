@@ -121,6 +121,41 @@ describe('ForecastPage', () => {
     expect(tip.textContent).toContain('Rent')
   })
 
+  it('speaks each day through one live region that is already mounted before any day is chosen', async () => {
+    const { container } = render(<ForecastPage ctx={ctxWith(() => base)} />)
+    await screen.findByText('Monthly Expenses, next 90 days')
+    const chart = container.querySelector('svg[role="img"]')!
+    const live = container.querySelector('[role="status"][aria-live="polite"]')!
+    // Present, and empty, before anything is hovered or focused.
+    expect(live).not.toBeNull()
+    expect(live.textContent).toBe('')
+
+    fireEvent.focus(chart)
+    fireEvent.keyDown(chart, { key: 'ArrowRight' })
+    fireEvent.keyDown(chart, { key: 'ArrowRight' })
+    expect(container.querySelector('[role="status"][aria-live="polite"]')).toBe(live)
+    expect(live.textContent).toBe('2026-10-04. End of day $900.0000. Dips to $-100.0000 before money arrives. Paycheck $1000.0000. Rent $-500.0000.')
+
+    // Moving on changes the text of the same node, it does not remount it.
+    fireEvent.keyDown(chart, { key: 'ArrowRight' })
+    expect(container.querySelector('[role="status"][aria-live="polite"]')).toBe(live)
+    expect(live.textContent).toContain('2026-10-05')
+
+    fireEvent.keyDown(chart, { key: 'Escape' })
+    expect(container.querySelector('[role="status"][aria-live="polite"]')).toBe(live)
+    expect(live.textContent).toBe('')
+  })
+
+  it('keeps the visual tooltip out of the accessibility tree so a day is not read twice', async () => {
+    const { container } = render(<ForecastPage ctx={ctxWith(() => base)} />)
+    await screen.findByText('Monthly Expenses, next 90 days')
+    const chart = container.querySelector('svg[role="img"]')!
+    fireEvent.focus(chart)
+    const tip = container.querySelector('.fc-tip')!
+    expect(tip.getAttribute('aria-hidden')).toBe('true')
+    expect(tip.hasAttribute('aria-live')).toBe(false)
+  })
+
   it('draws a step path, never a curve', async () => {
     const { container } = render(<ForecastPage ctx={ctxWith(() => base)} />)
     await screen.findByText('Monthly Expenses, next 90 days')

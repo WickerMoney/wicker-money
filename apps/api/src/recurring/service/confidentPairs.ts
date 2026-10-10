@@ -1,7 +1,8 @@
 import type { CandidateTransactionRow } from '../repository/CandidateTransactionRow.js'
-import { rankCandidates } from './matchCandidates.js'
+import { rankParsedCandidates } from './matchCandidates.js'
 import type { LegPair, OpenLeg } from './OpenLeg.js'
 import { pairKey } from './pairKey.js'
+import { parseCandidates } from './parseCandidates.js'
 
 /**
  * Pairs each open leg with the transactions confident enough to suggest for
@@ -18,8 +19,10 @@ export function confidentPairs(
   dismissedPairs: ReadonlySet<string>,
 ): LegPair[] {
   const pairs: LegPair[] = []
+  // Every leg is ranked against the same rows: parse each once.
+  const parsed = parseCandidates(rows)
   for (const o of open) {
-    for (const candidate of rankCandidates(o, o.state.expectedDate, rows)) {
+    for (const candidate of rankParsedCandidates(o, o.state.expectedDate, parsed)) {
       if (!candidate.confident) continue
       if (dismissedPairs.has(pairKey(candidate.transactionId, o.row.id, o.state.nominalDate))) continue
       pairs.push({ open: o, candidate })

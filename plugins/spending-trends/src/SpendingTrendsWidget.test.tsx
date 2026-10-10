@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveRange, type PluginContext } from '@wickermoney/plugin-sdk'
@@ -37,13 +37,13 @@ const segments = (container: HTMLElement) => container.querySelectorAll('.spt__s
 describe('SpendingTrendsWidget', () => {
   it('renders a labelled chart once loaded', async () => {
     render(<SpendingTrendsWidget ctx={ctxWith(rows)} size="lg" />)
-    expect(await screen.findByRole('img', { name: /spending by category/i })).toBeDefined()
+    expect(await screen.findByRole('list', { name: /spending by category/i })).toBeDefined()
   })
 
   it('reads the monthly summary for the range the dashboard is showing', async () => {
     const ctx = ctxWith(rows)
     render(<SpendingTrendsWidget ctx={ctx} size="lg" range={resolveRange('6m', '2026-09-19')} />)
-    await screen.findByRole('img')
+    await screen.findByRole('list')
     expect(ctx.api.get).toHaveBeenCalledWith(
       '/core/transactions/monthly-summary?months=6',
       expect.anything(),
@@ -60,7 +60,7 @@ describe('SpendingTrendsWidget', () => {
 
   it('draws one segment per category per month that spent', async () => {
     const { container } = render(<SpendingTrendsWidget ctx={ctxWith(rows)} size="lg" />)
-    await screen.findByRole('img')
+    await screen.findByRole('list')
     expect(segments(container)).toHaveLength(3)
   })
 
@@ -82,7 +82,7 @@ describe('SpendingTrendsWidget', () => {
     const user = userEvent.setup()
     const { container } = render(<SpendingTrendsWidget ctx={ctxWith(rows)} size="lg" />)
     const colour = () => container.querySelector('[data-series="b"]')?.getAttribute('fill')
-    await screen.findByRole('img')
+    await screen.findByRole('list')
     const before = colour()
 
     await user.click(screen.getByRole('button', { name: /Groceries/ }))
@@ -98,7 +98,7 @@ describe('SpendingTrendsWidget', () => {
     await user.click(screen.getByRole('button', { name: /Transport/ }))
 
     expect(screen.getByRole('status').textContent).toContain('Every category is hidden')
-    expect(screen.queryByRole('img')).toBeNull()
+    expect(screen.queryByRole('list')).toBeNull()
     expect(screen.getAllByRole('button')).toHaveLength(2)
   })
 
@@ -165,7 +165,7 @@ describe('negative amounts', () => {
 
   it('draws a month of pure refunds instead of the empty state', async () => {
     const { container } = render(<SpendingTrendsWidget ctx={ctxWith(refunds)} size="lg" />)
-    expect(await screen.findByRole('img')).toBeDefined()
+    expect(await screen.findByRole('list')).toBeDefined()
     expect(screen.queryByText('No spending yet')).toBeNull()
     expect(segments(container)).toHaveLength(1)
   })
@@ -207,5 +207,45 @@ describe('stylesheet delivery', () => {
     // whichever loaded second win.
     const css = document.querySelector('style[id="wickermoney-plugin-styles:wickermoney.spending-trends"]')?.textContent
     expect(css).not.toMatch(/\.viz\b/)
+  })
+})
+
+describe('chart semantics', () => {
+  it('exposes each month as a named list item of a labelled list, not a child of an image', async () => {
+    const { container } = render(<SpendingTrendsWidget ctx={ctxWith(rows)} size="lg" range={resolveRange('3m', '2026-09-19')} />)
+    const list = await screen.findByRole('list', { name: /spending by category, month by month/i })
+    expect(container.querySelector('[role="img"]')).toBeNull()
+    const months = within(list).getAllByRole('listitem')
+    expect(months).toHaveLength(3)
+    expect(months[0]?.getAttribute('aria-label')).toBe('Jul 2026: Transport $40.00, Groceries $120.00; total $160.00')
+  })
+
+  it('offers a table whose cells match the chart, and follows the category filter', async () => {
+    render(<SpendingTrendsWidget ctx={ctxWith(rows)} size="lg" range={resolveRange('3m', '2026-09-19')} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Show as table' }))
+
+    let table = screen.getByRole('table')
+    expect(screen.queryByRole('list')).toBeNull()
+    const read = () => within(table).getAllByRole('row').map((r) => within(r).queryAllByRole('columnheader').concat(within(r).queryAllByRole('cell')).map((c) => c.textContent))
+    expect(read()).toEqual([
+      ['Month', 'Groceries', 'Transport', 'Total'],
+      ['Jul 2026', '$120.00', '$40.00', '$160.00'],
+      ['Aug 2026', '$90.00', '$0.00', '$90.00'],
+      ['Sep 2026', '$0.00', '$0.00', '$0.00'],
+    ])
+
+    // Hiding a category takes it out of the table as it does the bars.
+    fireEvent.click(screen.getByRole('button', { name: /Transport/ }))
+    table = screen.getByRole('table')
+    expect(read()).toEqual([
+      ['Month', 'Groceries', 'Total'],
+      ['Jul 2026', '$120.00', '$120.00'],
+      ['Aug 2026', '$90.00', '$90.00'],
+      ['Sep 2026', '$0.00', '$0.00'],
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show as chart' }))
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.getAllByRole('listitem')).toHaveLength(3)
   })
 })
