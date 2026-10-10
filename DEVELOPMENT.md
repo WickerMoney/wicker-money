@@ -471,8 +471,9 @@ that talks about plugin "permissions", "scoping" or "sandboxing".
 
 | Layer | What it does | Boundary against plugin code? |
 | --- | --- | --- |
-| Per-plugin PostgreSQL role (`plugin-roles.ts`) | Refuses queries outside the manifest's `requiredTables` | Yes, for **server-side** plugin code (bundled plugins' `runAsPlugin`) |
-| Row-level security | Keeps every query inside the signed-in user's rows | Yes, for tenants |
+| Per-plugin PostgreSQL role (`plugin-roles.ts`) | Refuses queries outside the manifest's `requiredTables` | For **server-side** plugin code (bundled plugins' `runAsPlugin`) that behaves: a guardrail, not a sandbox, because crafted SQL can leave the role |
+| `assertSafePluginSql` (the plugin query runner) | Refuses statement text that changes the role or session settings | **No.** It reads text, and a `DO` block with dynamic `EXECUTE` gets past it. It exists to catch mistakes |
+| Row-level security | Keeps every query inside the signed-in user's rows | Yes, for tenants, including after the SQL leaves the plugin role (the tenant context is signed) |
 | `x-wickermoney-plugin` header + `requireTableGrant` | Holds a request that names a plugin to that plugin's manifest | **No.** A request with no header is the host application, so a UI plugin can omit it |
 | Scoped `ctx.api` client in `apps/web/src/plugins/context.ts` | Fails fast on an ungranted path | **No.** Developer ergonomics; plugin code can call `fetch` |
 | `PLUGIN_REMOTE_ORIGINS` and the CSP | Limit where plugin code may be loaded from | No. They choose whose code is trusted, not what it may do |
@@ -481,6 +482,11 @@ Consequences for contributors:
 
 - Do not describe `requiredTables` as protecting data from a UI plugin. It
   protects data from a plugin's server code.
+- Do not describe the plugin role or the SQL screen as a sandbox for server
+  code. They stop mistakes; row-level security is what holds against hostile
+  SQL. Do not add patterns to `FORBIDDEN_SQL` to "close" the dynamic-SQL gap:
+  a connection the plugin cannot leave is the real fix, and it belongs with
+  plugin isolation.
 - Do not rely on the plugin header for access control. A route that must not
   be reachable by UI plugins needs a different mechanism, which does not exist
   yet.

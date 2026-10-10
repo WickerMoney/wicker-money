@@ -40,7 +40,8 @@ Particularly interesting, because the design leans on them:
 - Anything that lets one user read or modify another user's rows (tenant
   isolation is enforced with PostgreSQL row-level security).
 - A bundled plugin's server-side code reaching a table its manifest never
-  requested (enforced by a per-plugin PostgreSQL role).
+  requested through its normal query path (guarded by a per-plugin PostgreSQL
+  role; see "Things worth knowing" for what that does not cover).
 - Authentication, session and refresh-token handling.
 
 Out of scope:
@@ -65,10 +66,19 @@ Out of scope:
   `requiredTables` and the `x-wickermoney-plugin` header are not a security
   boundary for that code: a UI plugin can call any `/api/v1/*` route the user
   can, including data export, by simply leaving the header off. What *is*
-  enforced is the per-plugin PostgreSQL role for server-side plugin code, which
-  is bundled plugins only.
+  enforced is row-level security for every query and, for the server-side code
+  of bundled plugins, the per-plugin PostgreSQL role (with the limit described
+  below).
 - Keep `PLUGIN_REMOTE_ORIGINS` empty unless you fully trust every origin you
   list. A listed origin can run code with the same access as the app itself.
 - A report that a UI plugin can reach data outside its `requiredTables` is a
   known limitation, not a vulnerability, until third-party install is
   supported. Isolation for UI plugins is tracked as a requirement for that.
+- **The per-plugin PostgreSQL role is a guardrail for server-side plugin code,
+  not a sandbox.** The plugin query runner refuses statements that change the
+  role or session settings, but it reads SQL text, so a crafted statement (a
+  `DO` block that builds `RESET ROLE` at run time, for instance) can return to
+  the application role and lose the manifest's table limits. Row-level security
+  still holds: such a statement reads no other user's rows. A report of that is
+  a known limitation, not a vulnerability, until third-party install is
+  supported.
