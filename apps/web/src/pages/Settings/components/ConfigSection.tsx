@@ -25,6 +25,7 @@ export function ConfigSection() {
       {config === null && error === null ? <Spinner label="Loading configuration" /> : null}
       {config !== null ? (
         <Table<ConfigRow>
+          caption="Server configuration"
           columns={[
             { key: 'label', header: 'Setting', render: (r) => r.label },
             { key: 'value', header: 'Value', render: (r) => <code>{r.value}</code> },

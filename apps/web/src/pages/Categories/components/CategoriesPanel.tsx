@@ -96,6 +96,7 @@ export function CategoriesPanel({ categories, parents, status, onChanged, groups
 
           <div className="cat-table tbl-cards">
             <Table
+              caption="Categories"
               columns={[
                 { key: 'name', header: 'Name',
                   render: (c: Category) => (

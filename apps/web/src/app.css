@@ -79,7 +79,7 @@
   color: var(--wm-text-muted); background: transparent; border: 0; border-radius: 4px;
 }
 .account__segment:hover { color: var(--wm-text); }
-.account__segment[aria-checked="true"] { background: var(--wm-surface); color: var(--wm-accent); box-shadow: var(--wm-shadow); }
+.account__segment[aria-pressed="true"] { background: var(--wm-surface); color: var(--wm-accent); box-shadow: var(--wm-shadow); }
 .account__menu-divider { height: 1px; margin: 4px 0; background: var(--wm-border); }
 .account__item {
   display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px;

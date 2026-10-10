@@ -86,6 +86,20 @@ describe('Table', () => {
     expect(screen.getByText('Nothing yet')).toBeDefined()
     expect(screen.queryByRole('table')).toBeNull()
   })
+  it('scopes every header to its column', () => {
+    render(<Table columns={columns} rows={[{ name: 'A' }]} rowKey={(r) => r.name} />)
+    expect(screen.getAllByRole('columnheader').map((h) => h.getAttribute('scope'))).toEqual(['col', 'col'])
+  })
+  it('names the table from a hidden caption when given one', () => {
+    render(<Table caption="Accounts" columns={columns} rows={[{ name: 'A' }]} rowKey={(r) => r.name} />)
+    expect(screen.getByRole('table', { name: 'Accounts' })).toBeDefined()
+  })
+  it('gives an empty header a hidden Actions label that is not copied to the cell label', () => {
+    const cols = [...columns, { key: 'act', header: '', render: () => 'y' }]
+    const { container } = render(<Table columns={cols} rows={[{ name: 'A' }]} rowKey={(r) => r.name} />)
+    expect(screen.getByRole('columnheader', { name: 'Actions' }).querySelector('.wm-visually-hidden')).not.toBeNull()
+    expect(container.querySelector('td[data-col="act"]')?.getAttribute('data-label')).toBeNull()
+  })
   it('puts a class on its scroller and tags each cell with its column and, for a text header, its label', () => {
     const cols = [
       { key: 'name', header: 'Name', render: (r: { name: string }) => r.name },

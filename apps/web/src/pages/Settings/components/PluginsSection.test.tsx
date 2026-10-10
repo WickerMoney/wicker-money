@@ -102,6 +102,7 @@ describe('PluginsSection, for an owner', () => {
     expect(switchOf('Budgets').getAttribute('aria-checked')).toBe('false')
     expect(switchOf('Budgets').disabled).toBe(true)
     expect(within(card('Budgets')).getByText('Saving…')).toBeTruthy()
+    expect(within(card('Budgets')).getByRole('status').textContent).toBe('Saving…')
 
     saved.resolve(changeOf(budgets, false))
     await waitFor(() => { expect(refresh).toHaveBeenCalledTimes(1) })
