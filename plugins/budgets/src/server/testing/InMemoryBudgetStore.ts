@@ -3,6 +3,7 @@ import { monthPeriod } from '../../shared/index.js'
 import type { AccountRow } from '../repository/AccountRow.js'
 import type { CategoryRow } from '../repository/CategoryRow.js'
 import type { AccountTransaction } from './AccountTransaction.js'
+import type { DatedSpend } from './DatedSpend.js'
 import type { SpendEntry } from './SpendEntry.js'
 import type { StoredAccountLine } from './StoredAccountLine.js'
 import type { StoredLine } from './StoredLine.js'
@@ -17,6 +18,8 @@ import type { StoredLine } from './StoredLine.js'
 export class InMemoryBudgetStore {
   lines: StoredLine[] = []
   spend: SpendEntry[] = []
+  /** Spend with a day on it, for tests where a window starts or ends mid-month. */
+  datedSpend: DatedSpend[] = []
   categories: CategoryRow[] = []
   accounts: AccountRow[] = []
   accountLines: StoredAccountLine[] = []
@@ -108,6 +111,22 @@ export class InMemoryBudgetStore {
    */
   addSpend(userId: string, monthKey: string, categoryId: string, spent: string): void {
     this.spend.push({ userId, categoryId, monthKey, spent })
+  }
+
+  /**
+   * Seeds net spend for a category on one day.
+   *
+   * Counts toward its month like {@link InMemoryBudgetStore.addSpend}, and
+   * also lets a range that starts or ends mid-month include only the days it
+   * covers.
+   *
+   * @param userId - The owner.
+   * @param date - The day, `YYYY-MM-DD`.
+   * @param categoryId - The category.
+   * @param spent - Net spend as a decimal string; negative for a refund.
+   */
+  addSpendOn(userId: string, date: string, categoryId: string, spent: string): void {
+    this.datedSpend.push({ userId, categoryId, date, spent })
   }
 
   /**

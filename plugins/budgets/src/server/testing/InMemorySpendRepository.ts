@@ -16,20 +16,31 @@ export class InMemorySpendRepository implements SpendRepository {
 
   /** @inheritdoc */
   async byCategory(monthKey: string): Promise<Map<string, string>> {
-    return new Map(
+    const out = new Map(
       this.store.spend
         .filter((s) => s.userId === this.userId && s.monthKey === monthKey)
         .map((s) => [s.categoryId, s.spent]),
     )
+    for (const d of this.store.datedSpend) {
+      if (d.userId !== this.userId || d.date.slice(0, 7) !== monthKey) continue
+      out.set(d.categoryId, addMoney(out.get(d.categoryId) ?? ZERO_MONEY, d.spent))
+    }
+    return out
   }
 
   /** @inheritdoc */
   async byCategoryAndMonth(start: string, end: string): Promise<Map<string, string>> {
-    return new Map(
+    const out = new Map(
       this.store.spend
         .filter((s) => s.userId === this.userId && `${s.monthKey}-01` >= start && `${s.monthKey}-01` < end)
         .map((s) => [`${s.categoryId}:${s.monthKey}`, s.spent]),
     )
+    for (const d of this.store.datedSpend) {
+      if (d.userId !== this.userId || d.date < start || d.date >= end) continue
+      const key = `${d.categoryId}:${d.date.slice(0, 7)}`
+      out.set(key, addMoney(out.get(key) ?? ZERO_MONEY, d.spent))
+    }
+    return out
   }
 
   /** @inheritdoc */
