@@ -78,14 +78,14 @@ export function TransactionTable({
             render: (t: Transaction) => t.merchant },
           { key: 'cat', header: 'Category',
             render: (t: Transaction) => (
-              <TransactionCategoryCell transaction={t} row={row} categoryOptionsFor={categoryOptionsFor} />
+              <TransactionCategoryCell transaction={t} onAssign={row.assign} categoryOptionsFor={categoryOptionsFor} />
             ) },
           { key: 'amt', header: 'Amount', numeric: true,
             render: (t: Transaction) => <TransactionAmountCell transaction={t} /> },
           ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
             render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
           { key: 'actions', header: '',
-            render: (t: Transaction) => <TransactionActionsCell transaction={t} row={row} busy={busy} /> },
+            render: (t: Transaction) => <TransactionActionsCell transaction={t} onEdit={row.start} onDelete={row.remove} busy={busy} /> },
         ]}
         rows={items}
         rowKey={(t) => t.id}

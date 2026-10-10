@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -21,6 +21,11 @@ export function useTransactionEditing(
   const [editing, setEditing] = useState<TransactionEdit | null>(null)
   const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
 
+  // `start`, `assign` and `remove` are what every row's cells call, so they
+  // keep their identity while the editor's fields change on each keystroke;
+  // otherwise typing in the dialog would re-render every row behind it.
+  const { begin, end, show } = status
+
   const change = (next: TransactionEdit) => {
     // A field's message goes once that field changes; the others stay.
     setErrors((current) => ({
@@ -32,7 +37,7 @@ export function useTransactionEditing(
     setEditing(next)
   }
 
-  const start = (t: Transaction) => {
+  const start = useCallback((t: Transaction) => {
     setErrors(NO_FORM_ERRORS)
     setEditing({
       id: t.id,
@@ -42,12 +47,12 @@ export function useTransactionEditing(
       notes: t.notes ?? '',
       isTransfer: t.transfer_id !== null,
     })
-  }
+  }, [])
 
   const cancel = () => { setEditing(null); setErrors(NO_FORM_ERRORS) }
 
-  const assign = async (id: string, next: string) => {
-    status.show(null)
+  const assign = useCallback(async (id: string, next: string) => {
+    show(null)
     try {
       await api.post('/transactions/categorize', {
         transactionIds: [id],
@@ -55,9 +60,9 @@ export function useTransactionEditing(
       })
       await onChanged()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not set that category.')
+      show(e instanceof Error ? e.message : 'Could not set that category.')
     }
-  }
+  }, [show, onChanged])
 
   const save = async () => {
     if (editing === null) return
@@ -90,20 +95,20 @@ export function useTransactionEditing(
   // The confirmation says which is about to happen, because a transfer's other
   // leg disappearing along with the clicked one would otherwise read as data loss
   // rather than the deliberate delete the API performs.
-  const remove = async (t: Transaction) => {
+  const remove = useCallback(async (t: Transaction) => {
     const message = t.transfer_id !== null
       ? `Delete this transfer of ${formatMoney(t.amount)}? Both sides of the transfer will be removed.`
       : `Delete this transaction (${formatMoney(t.amount)} -- ${t.merchant})?`
     if (!window.confirm(message)) return
-    status.begin()
+    begin()
     try {
       await api.del(`/transactions/${t.id}`)
-      if (editing?.id === t.id) setEditing(null)
+      setEditing((current) => (current?.id === t.id ? null : current))
       await onChanged()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not delete that transaction.')
-    } finally { status.end() }
-  }
+      show(e instanceof Error ? e.message : 'Could not delete that transaction.')
+    } finally { end() }
+  }, [begin, end, show, onChanged])
 
   return { editing, errors, change, start, cancel, save, remove, assign }
 }
