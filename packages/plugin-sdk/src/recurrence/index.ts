@@ -9,6 +9,13 @@
  * zone. The caller works out the user's today once, in their zone, and passes
  * it in. Ranges are half-open (`from` inclusive, `to` exclusive), like
  * `DashboardRange`.
+ *
+ * Stability: `@experimental`. Only the host consumes the projections today
+ * (the API and the web app), and the item and schedule shapes mirror the
+ * host's recurring-item rows. They may change in any pre-1.0 minor release
+ * until a plugin needs them and the shape is settled.
+ *
+ * @experimental
  */
 export { DEFAULT_SEMIMONTHLY_DAYS, RECURRENCE_FREQUENCIES } from './types.js'
 export type {

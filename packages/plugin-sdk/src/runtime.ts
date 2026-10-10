@@ -1,3 +1,16 @@
+/**
+ * @module
+ * The browser-side half of the plugin contract: the props and context the
+ * host hands a plugin's React components, the shape of a plugin's federated
+ * module, and {@link adoptPluginStyles}.
+ *
+ * Types plus one small helper, so importing this costs a plugin bundle almost
+ * nothing. It needs `react` 19 as a type dependency only.
+ *
+ * Stability: `@stable`. Every bundled UI plugin builds against it.
+ *
+ * @stable
+ */
 import type { ComponentType } from 'react'
 import type { WidgetSize } from './manifest/index.js'
 import type { DashboardRange } from './range.js'
