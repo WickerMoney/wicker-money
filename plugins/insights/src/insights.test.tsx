@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
 import DonutWidget from './DonutWidget.js'
@@ -70,7 +70,9 @@ describe('aggregation', () => {
 describe('TrendWidget', () => {
   it('renders a labelled chart once loaded', async () => {
     render(<TrendWidget ctx={ctxWith(rows)} size="lg" />)
-    expect(await screen.findByRole('img', { name: /spending per month/i })).toBeDefined()
+    // A list, not an img: an img makes its focusable marks presentational.
+    expect(await screen.findByRole('list', { name: /income and spending per month/i })).toBeDefined()
+    expect(screen.queryByRole('img')).toBeNull()
   })
 
   it('shows an empty state rather than an empty chart', async () => {
@@ -93,6 +95,18 @@ describe('DonutWidget', () => {
     expect(screen.getByText('Transport')).toBeDefined()
     expect(screen.getByText('$210.00')).toBeDefined()
     expect(screen.getByText('$40.00')).toBeDefined()
+  })
+
+  it('exposes the slices as named list items, not as children of an image', async () => {
+    const { container } = render(<DonutWidget ctx={ctxWith(rows)} size="md" />)
+    const list = await screen.findByRole('list', { name: 'Spending by category' })
+    expect(list.getAttribute('role')).toBe('list')
+    expect(container.querySelector('[role="img"]')).toBeNull()
+    const slices = within(list).getAllByRole('listitem')
+    expect(slices.map((s) => s.getAttribute('aria-label'))).toEqual([
+      'Groceries: $210.00, 84%',
+      'Transport: $40.00, 16%',
+    ])
   })
 
   it('shows the total in the centre', async () => {
@@ -165,7 +179,7 @@ describe('the widgets and the dashboard range', () => {
   it('asks the API for the range it was given', async () => {
     const ctx = ctxWith(rows)
     render(<TrendWidget ctx={ctx} size="lg" range={range} />)
-    await screen.findByRole('img')
+    await screen.findByRole('list')
     expect(ctx.api.get).toHaveBeenCalledWith('/core/transactions/monthly-summary?months=3', {
       signal: expect.any(AbortSignal) as AbortSignal,
     })
@@ -174,7 +188,7 @@ describe('the widgets and the dashboard range', () => {
   it('falls back to twelve months when rendered without a range', async () => {
     const ctx = ctxWith(rows)
     render(<TrendWidget ctx={ctx} size="lg" />)
-    await screen.findByRole('img')
+    await screen.findByRole('list')
     expect(ctx.api.get).toHaveBeenCalledWith('/core/transactions/monthly-summary?months=12', {
       signal: expect.any(AbortSignal) as AbortSignal,
     })
@@ -250,7 +264,7 @@ describe('income against expense', () => {
   it('scales both directions the same, so the two are comparable', async () => {
     const ctx = ctxWith(mixed)
     const { container } = render(<TrendWidget ctx={ctx} size="lg" />)
-    await screen.findByRole('img')
+    await screen.findByRole('list')
     const bars = [...container.querySelectorAll('rect.viz__bar')] as SVGRectElement[]
     const july = bars.slice(0, 2).map((b) => Number(b.getAttribute('height')))
     // 3000 in against 400 out: the income bar must be about 7.5x the expense
@@ -274,7 +288,7 @@ describe('a month whose refunds exceeded its spending', () => {
   it('still draws a bar, on the side the sign implies', async () => {
     const ctx = ctxWith(refunded)
     const { container } = render(<TrendWidget ctx={ctx} size="lg" />)
-    await screen.findByRole('img')
+    await screen.findByRole('list')
     const bars = [...container.querySelectorAll('rect.viz__bar')] as SVGRectElement[]
     const drawn = bars.filter((b) => Number(b.getAttribute('height')) > 0)
 
@@ -284,5 +298,49 @@ describe('a month whose refunds exceeded its spending', () => {
     const zero = Number(drawn[0]?.getAttribute('y'))
     // Above the zero line, because money came back in.
     expect(zero).toBeLessThan(150)
+  })
+})
+
+describe('the income and spending chart as a table', () => {
+  const many: SummaryRow[] = [
+    { month: '2026-07', categoryId: 's', categoryName: 'Salary', kind: 'income', total: '3000.00' },
+    { month: '2026-07', categoryId: 'a', categoryName: 'Groceries', kind: 'expense', total: '400.00' },
+    { month: '2026-08', categoryId: 'a', categoryName: 'Groceries', kind: 'expense', total: '500.00' },
+  ]
+
+  it('names its marks as list items of a labelled list', async () => {
+    render(<TrendWidget ctx={ctxWith(many)} size="lg" />)
+    const list = await screen.findByRole('list', { name: /income and spending per month/i })
+    const marks = within(list).getAllByRole('listitem')
+    expect(marks.length).toBeGreaterThan(0)
+    for (const m of marks) expect(m.getAttribute('aria-label')).toMatch(/ in, .* out, .* net$/)
+  })
+
+  it('offers a table whose cells are the chart data, through the money formatter', async () => {
+    render(<TrendWidget ctx={ctxWith(many)} size="lg" />)
+    const toggle = await screen.findByRole('button', { name: 'Show as table' })
+    expect(screen.queryByRole('table')).toBeNull()
+
+    fireEvent.click(toggle)
+
+    const table = screen.getByRole('table')
+    expect(screen.queryByRole('list', { name: /income and spending/i })).toBeNull()
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent))
+      .toEqual(['Month', 'Income', 'Spending', 'Net'])
+    const body = within(table).getAllByRole('row').slice(1)
+    const cells = body.map((r) => within(r).getAllByRole('cell').map((c) => c.textContent))
+    expect(cells).toEqual([
+      ['Jul 2026', '$3000.00', '$400.00', '$2600.00'],
+      ['Aug 2026', '$0.00', '$500.00', '$-500.00'],
+    ])
+    expect(screen.getByRole('group', { name: /as a table/i })).toBeTruthy()
+  })
+
+  it('goes back to the chart', async () => {
+    render(<TrendWidget ctx={ctxWith(many)} size="lg" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Show as table' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show as chart' }))
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.getByRole('list', { name: /income and spending/i })).toBeTruthy()
   })
 })
