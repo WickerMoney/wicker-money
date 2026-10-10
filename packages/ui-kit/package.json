@@ -21,6 +21,10 @@
     },
     "./styles.css": "./dist/tokens.css"
   },
+  "sideEffects": [
+    "./dist/index.js",
+    "./dist/*.css"
+  ],
   "files": [
     "dist"
   ],
