@@ -1,12 +1,12 @@
 import { Button, CategoryOptions, Field, FormError, SelectField } from '@wickermoney/ui-kit'
-import type { Account, Category } from '../../../models/index.js'
+import type { AccountOption, Category } from '../../../models/index.js'
 import type { EntryFields } from '../state/EntryFields.js'
 import type { SpendEntry } from '../state/SpendEntry.js'
 
 /** Props for {@link SpendForm}. */
 export interface SpendFormProps {
   /** Accounts the transaction can be recorded against. */
-  readonly accounts: readonly Account[]
+  readonly accounts: readonly AccountOption[]
   /** Categories offered for the new transaction. */
   readonly enabledCategories: readonly Category[]
   /** The fields shared with the transfer form. */

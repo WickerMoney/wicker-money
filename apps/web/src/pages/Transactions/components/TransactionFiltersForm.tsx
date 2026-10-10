@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, CategoryOptions, Field, SelectField } from '@wickermoney/ui-kit'
-import type { Account, Category } from '../../../models/index.js'
+import type { AccountOption, Category } from '../../../models/index.js'
 import type { SortDirection } from '../state/SortDirection.js'
 import type { SortField } from '../state/SortField.js'
 import type { TransactionFilters } from '../state/TransactionFilters.js'
@@ -10,7 +10,7 @@ export interface TransactionFiltersFormProps {
   /** The current filter values. */
   readonly filters: TransactionFilters
   /** Accounts offered in the account filter. */
-  readonly accounts: readonly Account[]
+  readonly accounts: readonly AccountOption[]
   /** Only enabled categories are offered, like every other picker on the page. */
   readonly enabledCategories: readonly Category[]
   /** `true` while a request is in flight; disables the controls. */

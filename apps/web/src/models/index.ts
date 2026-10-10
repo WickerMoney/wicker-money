@@ -1,4 +1,4 @@
-export type { Account } from './Account.js'
+export type { Account, AccountOption } from './Account.js'
 export type { AccountUsage } from './AccountUsage.js'
 export type { BalancePreview } from './BalancePreview.js'
 export type { Category } from './Category.js'
