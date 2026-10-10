@@ -15,7 +15,8 @@ import { confidentPairs } from './confidentPairs.js'
 import { describeAt, wantedRange, type WantedOccurrence } from './describeAt.js'
 import { dismissedPairKeys } from './dismissedPairKeys.js'
 import { loadRecurringData } from './loadRecurringData.js'
-import { MATCH_WINDOW_DAYS, rankCandidates } from './matchCandidates.js'
+import { MATCH_WINDOW_DAYS, rankCandidates, rankParsedCandidates } from './matchCandidates.js'
+import { parseCandidates } from './parseCandidates.js'
 import type {
   DismissalView, DismissedSuggestion, MatchSuggestion, MatchSuggestionList, OccurrenceCandidates,
 } from './MatchSuggestion.js'
@@ -122,7 +123,7 @@ export class RecurringOccurrenceService {
       const row = await findOccurrence(repos, itemId, nominalDate)
       const state = await this.stateOn(repos, row, nominalDate, today)
       const open = state.legs.filter((l) => l.transaction === null)
-      const rows = await repos.recurringOccurrences.findCandidates(
+      const search = await repos.recurringOccurrences.findCandidates(
         open.map((l) => l.accountId),
         addDays(state.expectedDate, -MATCH_WINDOW_DAYS),
         addDays(state.expectedDate, MATCH_WINDOW_DAYS),
@@ -130,14 +131,16 @@ export class RecurringOccurrenceService {
       const dismissed = new Set((await repos.recurringOccurrences.listDismissals(
         { itemId, from: nominalDate, to: addDays(nominalDate, 1) },
       )).map((d) => d.transaction_id))
+      const parsed = parseCandidates(search.rows)
       return {
         today,
         occurrence: toOccurrenceView(row, state, state.expectedDate),
         legs: open.map((leg) => ({
           accountId: leg.accountId,
           amount: leg.amount,
-          candidates: rankCandidates(leg, state.expectedDate, rows)
+          candidates: rankParsedCandidates(leg, state.expectedDate, parsed)
             .map((c) => ({ ...c, dismissed: dismissed.has(c.transactionId) })),
+          truncated: search.truncatedAccounts.includes(leg.accountId),
         })),
       }
     }, { readOnly: true })
@@ -565,15 +568,15 @@ async function findSuggestions(
   repos: Repositories,
   data: RecurringData,
   today: string,
-): Promise<{ suggestions: MatchSuggestion[]; dismissed: DismissedSuggestion[] }> {
+): Promise<{ suggestions: MatchSuggestion[]; dismissed: DismissedSuggestion[]; truncated: boolean }> {
   const window = suggestionWindow(today)
   const dismissals = await repos.recurringOccurrences.listDismissals(window.scan)
   const { inWindow, open } = windowOccurrences(data, window, today)
   const accounts = [...new Set(open.map((o) => o.accountId))]
-  const rows = await repos.recurringOccurrences.findCandidates(
+  const search = await repos.recurringOccurrences.findCandidates(
     accounts, addDays(window.from, -MATCH_WINDOW_DAYS), addDays(window.to, MATCH_WINDOW_DAYS),
   )
-  const suggestions = assignSuggestions(confidentPairs(open, rows, dismissedPairKeys(dismissals)))
+  const suggestions = assignSuggestions(confidentPairs(open, search.rows, dismissedPairKeys(dismissals)))
 
   // Dismissed pairs, to undo: only while the occurrence is in the window and
   // the transaction settles nothing, since otherwise the dismissal changes nothing.
@@ -582,7 +585,7 @@ async function findSuggestions(
     [...new Set(relevant.map((d) => d.transaction_id))],
   )).map((t) => [t.id, t]))
   const dismissed = buildDismissed(relevant, inWindow, txById)
-  return { suggestions, dismissed }
+  return { suggestions, dismissed, truncated: search.truncatedAccounts.length > 0 }
 }
 
 /**

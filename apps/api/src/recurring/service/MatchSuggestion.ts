@@ -29,6 +29,11 @@ export interface MatchSuggestionList {
    * expected date, then name.
    */
   readonly dismissed: readonly DismissedSuggestion[]
+  /**
+   * Whether an account's transactions were more than one query returns, so
+   * a suggestion that would need one of the oldest may be missing.
+   */
+  readonly truncated: boolean
 }
 
 /** A candidate for one leg, and whether the user dismissed it as a suggestion. */
@@ -47,6 +52,8 @@ export interface OccurrenceCandidates {
     readonly amount: string
     /** Best first. */
     readonly candidates: readonly OccurrenceCandidate[]
+    /** Whether this account had more transactions in range than one query returns: the oldest are not offered. */
+    readonly truncated: boolean
   }[]
 }
 
