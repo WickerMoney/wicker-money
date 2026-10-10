@@ -1,4 +1,5 @@
 import { sql } from 'kysely'
+import { setLocalRole } from '../../db/client.js'
 import type { Trx } from '../../db/Trx.js'
 import { pluginRoleName } from '../../db/plugin-roles.js'
 import type { PluginQuery } from '../../plugins/PluginQuery.js'
@@ -49,11 +50,7 @@ export class KyselyExportRepository implements ExportRepository {
 
   /** @inheritdoc */
   async runAsPlugin<T>(pluginId: string, work: (q: PluginQuery) => Promise<T>): Promise<T> {
-    const role = pluginRoleName(pluginId)
-    if (!/^[a-z_][a-z0-9_]{0,62}$/.test(role)) {
-      throw new Error(`Refusing to SET ROLE to a non-identifier: ${role}`)
-    }
-    await sql`SET LOCAL ROLE ${sql.raw(role)}`.execute(this.trx)
+    await setLocalRole(this.trx, pluginRoleName(pluginId))
     const result = await work(queryRunner(this.trx))
     await sql`RESET ROLE`.execute(this.trx)
     return result

@@ -79,4 +79,40 @@ export default tseslint.config(
       ],
     },
   },
+  // SQL injection guard. Kysely sends every `${value}` in a sql`` template as a
+  // bound parameter, so ordinary queries cannot be injected. `sql.raw()` is the
+  // exception: it splices text into the statement unescaped. It is needed for
+  // identifiers (role, table and column names cannot be parameters), and that
+  // is the job of the database layer and migrations, where every call site is
+  // reviewed. Anywhere else, use a bound value, `sql.id` / `sql.ref` /
+  // `sql.table` for names, or a lookup map keyed by a validated enum.
+  //
+  // Allowed: the database layer (including migrations), keyset paging (column
+  // and cast come from fixed maps keyed by a validated enum), and tests.
+  //
+  // `no-restricted-syntax` replaces rather than merges across config blocks, so
+  // a later block that sets it for the same files must repeat this selector.
+  {
+    files: ['**/*.{ts,tsx,mts,cts}'],
+    ignores: [
+      'apps/api/src/db/**',
+      'apps/api/src/transactions/repository/keysetFilter.ts',
+      'apps/api/src/testing/**',
+      '**/*.test.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[object.name='sql'][property.name='raw']",
+          message:
+            'sql.raw() splices text into the statement unescaped. Use a bound value, sql.id / sql.ref / sql.table for names, or move this into apps/api/src/db. See the SQL injection guard in eslint.config.js.',
+        },
+        {
+          selector: "VariableDeclarator[init.name='sql'] > ObjectPattern > Property[key.name='raw']",
+          message: 'Do not destructure sql.raw out of sql; it bypasses the sql.raw() guard in eslint.config.js.',
+        },
+      ],
+    },
+  },
 )

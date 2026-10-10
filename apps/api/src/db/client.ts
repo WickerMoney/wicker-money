@@ -124,6 +124,40 @@ export async function asSystem<T>(
   return beginTransaction(db, options).execute(fn)
 }
 
+/** A plain lowercase PostgreSQL identifier, the only shape a role name may take here. */
+const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/
+
+/**
+ * Refuses a role name that is not a plain lowercase identifier.
+ *
+ * @param role - Candidate role name.
+ * @throws {Error} If `role` is not a plain lowercase identifier.
+ */
+function assertRoleName(role: string): void {
+  if (!ROLE_NAME.test(role)) {
+    throw new Error(`Refusing to SET ROLE to a non-identifier: ${role}`)
+  }
+}
+
+/**
+ * Switches an open transaction to `role` for the rest of that transaction
+ * (`SET LOCAL ROLE`), after checking the name is a plain identifier.
+ *
+ * The one place a role name reaches SQL at request time. `SET ROLE` takes an
+ * identifier, which cannot be sent as a bound parameter, so the name is checked
+ * and then quoted with `sql.id` rather than spliced in as raw text. Callers
+ * still pass a role derived from a plugin id, never request input; the check
+ * is the backstop, not the plan.
+ *
+ * @param trx - The transaction to switch.
+ * @param role - Role to assume (lowercase identifier, max 63 chars).
+ * @throws {Error} If `role` is not a plain lowercase identifier.
+ */
+export async function setLocalRole(trx: Transaction<Database>, role: string): Promise<void> {
+  assertRoleName(role)
+  await sql`SET LOCAL ROLE ${sql.id(role)}`.execute(trx)
+}
+
 /**
  * Runs `fn` as a plugin: the plugin's database role, bound to one user.
  *
@@ -164,16 +198,15 @@ export async function asPlugin<T>(
   userId: string,
   fn: (trx: Transaction<Database>) => Promise<T>,
 ): Promise<T> {
-  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(role)) {
-    throw new Error(`Refusing to SET ROLE to a non-identifier: ${role}`)
-  }
+  // Fail before a transaction is opened, not inside one.
+  assertRoleName(role)
   return db.transaction().execute(async (trx) => {
     // Order matters: bind the context first. After SET ROLE the session may no
     // longer hold the privileges set_config needs on some configurations, and
     // a failure there would leave the transaction running as the plugin with
     // no user bound — which RLS would treat as "no rows" rather than an error.
     await bindTenantContext(trx, userId)
-    await sql`SET LOCAL ROLE ${sql.raw(role)}`.execute(trx)
+    await setLocalRole(trx, role)
     return fn(trx)
   })
 }
