@@ -1,12 +1,12 @@
 import { Button, Field, FormError, SelectField } from '@wickermoney/ui-kit'
-import type { Account } from '../../../models/index.js'
+import type { AccountOption } from '../../../models/index.js'
 import type { EntryFields } from '../state/EntryFields.js'
 import type { TransferEntry } from '../state/TransferEntry.js'
 
 /** Props for {@link TransferForm}. */
 export interface TransferFormProps {
   /** Accounts money can move between. */
-  readonly accounts: readonly Account[]
+  readonly accounts: readonly AccountOption[]
   /** The fields shared with the spend form. */
   readonly fields: EntryFields
   /** This form's own fields and submit handler. */

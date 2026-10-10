@@ -22,3 +22,9 @@ export interface Account {
   /** ISO timestamp, or `null` for an active account. */
   readonly archivedAt: string | null
 }
+
+/**
+ * An account as `GET /accounts?fields=basic` returns it: enough to name and
+ * filter by, without the balance (which costs a sum over the ledger).
+ */
+export type AccountOption = Pick<Account, 'id' | 'name' | 'accountType' | 'currencyCode' | 'spendable' | 'archivedAt'>

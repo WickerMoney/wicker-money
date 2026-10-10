@@ -340,6 +340,38 @@ describe('plugin access', () => {
     expect((res.json() as { occurrences: { name: string }[] }).occurrences.map((o) => o.name)).toEqual(['Rent', 'Pay'])
   })
 
+  it('names the account on every leg, including accounts the outlook does not list', async () => {
+    const u = await createUser(h)
+    const make = async (payload: Record<string, unknown>) => (await h.app.inject({
+      method: 'POST', url: '/api/v1/accounts', headers: auth(u), payload: { initialBalance: '0', ...payload },
+    })).json() as { id: string }
+    const checking = await make({ name: 'Everyday', accountType: 'checking', initialBalance: '500.00' })
+    const vault = await make({ name: 'Vault', accountType: 'savings' })
+    const { today } = await list('', u)
+    const soon = new Date(Date.parse(`${today}T00:00:00Z`) + 2 * 86_400_000).toISOString().slice(0, 10)
+    await created({
+      name: 'To the vault', kind: 'transfer', frequency: 'once', seriesStartDate: soon,
+      legs: [{ accountId: checking.id, amount: '-100' }, { accountId: vault.id, amount: '100' }],
+    }, u)
+
+    // Through the widget's own role, as the plugin calls it.
+    const res = await h.app.inject({
+      method: 'GET', url: '/api/v1/core/recurring-items/upcoming', headers: asPlugin(u, 'wickermoney.upcoming'),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as {
+      accounts: { accountId: string }[]
+      occurrences: { name: string; legs: { accountId: string; accountName: string }[] }[]
+    }
+    // The savings account is not spendable, so the outlook does not list it; its leg still has a name.
+    expect(body.accounts.map((a) => a.accountId)).toEqual([checking.id])
+    const transfer = body.occurrences.find((o) => o.name === 'To the vault')
+    expect(transfer?.legs.map((l) => [l.accountId, l.accountName])).toEqual(
+      expect.arrayContaining([[checking.id, 'Everyday'], [vault.id, 'Vault']]),
+    )
+    expect(transfer?.legs).toHaveLength(2)
+  })
+
   it('counts only spendable accounts, shows a non-spendable checking account, and serves it to the widget plugin', async () => {
     const u = await createUser(h)
     const make = async (payload: Record<string, unknown>) => (await h.app.inject({

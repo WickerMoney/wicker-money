@@ -2,6 +2,7 @@ import { sql } from 'kysely'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
 import { asUser } from '../db/client.js'
+import { KyselyAccountRepository } from './repository/KyselyAccountRepository.js'
 
 let h: Harness
 let user: TestUser
@@ -58,6 +59,80 @@ describe('accounts', () => {
       method: 'GET', url: '/api/v1/accounts?includeArchived=true', headers: auth(user),
     })
     expect(withArchived.json().map((a: { id: string }) => a.id)).toContain(account.id)
+  })
+
+  describe('?fields=basic', () => {
+    const list = (query: string, as = user) =>
+      h.app.inject({ method: 'GET', url: `/api/v1/accounts${query}`, headers: auth(as) })
+
+    it('returns names and kinds without any balance, and leaves the default shape alone', async () => {
+      const u = await createUser(h)
+      const account = await makeAccount(u, { name: 'Basic', initialBalance: '10.00' })
+
+      const basic = await list('?fields=basic', u)
+      expect(basic.statusCode).toBe(200)
+      expect(basic.json()).toEqual([{
+        id: account.id, name: 'Basic', accountType: 'checking', currencyCode: 'USD',
+        spendable: true, archivedAt: null,
+      }])
+
+      const full = (await list('', u)).json()
+      expect(full[0]).toMatchObject({ id: account.id, balance: '10.0000', initialBalance: '10.0000', bufferAmount: '0.0000' })
+      expect((await list('?fields=full', u)).json()).toEqual(full)
+    })
+
+    it('orders by name, and honours includeArchived', async () => {
+      const u = await createUser(h)
+      await makeAccount(u, { name: 'Zed' })
+      const gone = await makeAccount(u, { name: 'Alpha' })
+      await makeAccount(u, { name: 'Mid' })
+      await h.app.inject({ method: 'POST', url: `/api/v1/accounts/${gone.id}/archive`, headers: auth(u) })
+
+      const names = async (q: string) => (await list(q, u)).json().map((a: { name: string }) => a.name)
+      expect(await names('?fields=basic')).toEqual(['Mid', 'Zed'])
+      expect(await names('?fields=basic&includeArchived=true')).toEqual(['Alpha', 'Mid', 'Zed'])
+    })
+
+    it('rejects an unknown fields value', async () => {
+      const res = await list('?fields=everything')
+      expect(res.statusCode).toBe(400)
+      expect(res.json().code).toBe('validation_failed')
+    })
+
+    it('is scoped to the signed-in user', async () => {
+      const other = await createUser(h)
+      await makeAccount(other, { name: 'Not yours' })
+      const names = (await list('?fields=basic')).json().map((a: { name: string }) => a.name)
+      expect(names).not.toContain('Not yours')
+    })
+
+    it('never reads the transactions table, while the full list does', async () => {
+      const u = await createUser(h)
+      const account = await makeAccount(u, { name: 'Ledgered' })
+      await h.app.inject({
+        method: 'POST', url: '/api/v1/transactions', headers: auth(u),
+        payload: { accountId: account.id, amount: '-5.00', merchant: 'Test', transactionDate: '2026-03-01' },
+      })
+
+      // Per-transaction scan counters: they reset with each transaction and are
+      // visible straight away, so the count is exactly what this one read touched.
+      const scans = async (read: (repo: KyselyAccountRepository) => Promise<unknown>) =>
+        asUser(h.db, u.id, async (trx) => {
+          const count = async () => {
+            const { rows } = await sql<{ scans: string }>`
+              SELECT COALESCE(SUM(seq_scan + idx_scan), 0)::text AS scans
+              FROM pg_stat_xact_user_tables WHERE schemaname = 'core' AND relname = 'transactions'
+            `.execute(trx)
+            return Number(rows[0]?.scans)
+          }
+          const before = await count()
+          await read(new KyselyAccountRepository(trx))
+          return (await count()) - before
+        })
+
+      expect(await scans((repo) => repo.listBasic(false))).toBe(0)
+      expect(await scans((repo) => repo.listWithBalances(false))).toBeGreaterThan(0)
+    })
   })
 
   it('rejects an unknown account type', async () => {

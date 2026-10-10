@@ -21,7 +21,7 @@ import {
 import type { OccurrenceView } from './OccurrenceView.js'
 import type { RecurringItemInput } from './RecurringItemInput.js'
 import type { RecurringItemView } from './RecurringItemView.js'
-import type { UpcomingAccount, UpcomingView } from './UpcomingView.js'
+import type { UpcomingAccount, UpcomingOccurrenceView, UpcomingView } from './UpcomingView.js'
 import { toSchedule } from './toSchedule.js'
 import { validateRecurringItem } from './validateRecurringItem.js'
 
@@ -314,11 +314,17 @@ export class RecurringItemService {
         })
         const safeToSpend = addMoney('0', ...accounts.filter((a) => a.counted && !a.short).map((a) => a.headroom))
 
-        const found: OccurrenceView[] = []
+        // Every account, archived too: a leg can name one the outlook does not list.
+        const names = new Map((await repos.accounts.listBasic(true)).map((a) => [a.id, a.name]))
+        const found: UpcomingOccurrenceView[] = []
         rows.forEach((row, i) => {
           for (const placed of scheduledOccurrences(items[i] as RecurringItem, from, to)) {
             const state = describeOccurrence(row, history(row.id), placed.nominalDate, today)
-            found.push(toOccurrenceView(row, state, placed.date))
+            const view = toOccurrenceView(row, state, placed.date)
+            found.push({
+              ...view,
+              legs: view.legs.map((l) => ({ ...l, accountName: names.get(l.accountId) ?? 'Unknown account' })),
+            })
           }
         })
         found.sort(byDateThenName)

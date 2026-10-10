@@ -22,9 +22,9 @@ const base: UpcomingResponse = {
     },
   ],
   occurrences: [
-    { itemId: 'rent', date: '2026-10-01', name: 'Mortgage', kind: 'bill', categoryId: null, amount: '-1500.0000', legs: [{ accountId: 'm', amount: '-1500.0000' }] },
-    { itemId: 'save', date: '2026-10-01', name: 'Vacation Fund', kind: 'transfer', categoryId: null, amount: '200.0000', legs: [{ accountId: 'm', amount: '-200.0000' }, { accountId: 's', amount: '200.0000' }] },
-    { itemId: 'pay', date: '2026-10-02', name: 'Alex Paycheck', kind: 'income', categoryId: null, amount: '2200.0000', legs: [{ accountId: 'm', amount: '1850.0000' }, { accountId: 'y', amount: '350.0000' }] },
+    { itemId: 'rent', date: '2026-10-01', name: 'Mortgage', kind: 'bill', categoryId: null, amount: '-1500.0000', legs: [{ accountId: 'm', accountName: 'Monthly Expenses', amount: '-1500.0000' }] },
+    { itemId: 'save', date: '2026-10-01', name: 'Vacation Fund', kind: 'transfer', categoryId: null, amount: '200.0000', legs: [{ accountId: 'm', accountName: 'Monthly Expenses', amount: '-200.0000' }, { accountId: 's', accountName: 'Sinking Funds', amount: '200.0000' }] },
+    { itemId: 'pay', date: '2026-10-02', name: 'Alex Paycheck', kind: 'income', categoryId: null, amount: '2200.0000', legs: [{ accountId: 'm', accountName: 'Monthly Expenses', amount: '1850.0000' }, { accountId: 'y', accountName: 'Yearly Expenses', amount: '350.0000' }] },
   ],
   hasItems: true,
 }
@@ -54,7 +54,41 @@ describe('UpcomingWidget', () => {
     render(<UpcomingWidget ctx={ctx} size="lg" />)
     await screen.findByText(/Safe to spend/)
     expect(ctx.api.get).toHaveBeenCalledWith('/core/recurring-items/upcoming', expect.anything())
+    // Names ride on the legs: no second request.
+    expect(ctx.api.get).toHaveBeenCalledTimes(1)
+    expect(ctx.api.get).not.toHaveBeenCalledWith('/core/accounts/list', expect.anything())
+  })
+
+  it('falls back to the account list when a host older than names-on-legs sends legs without names', async () => {
+    const old: UpcomingResponse = {
+      ...base,
+      occurrences: base.occurrences.map((o) => ({ ...o, legs: o.legs.map(({ accountName: _name, ...leg }) => leg) })),
+    }
+    const user = userEvent.setup()
+    const ctx = ctxWith(old)
+    render(<UpcomingWidget ctx={ctx} size="lg" />)
+    await screen.findByText('Mortgage')
     expect(ctx.api.get).toHaveBeenCalledWith('/core/accounts/list', expect.anything())
+    await user.click(screen.getByLabelText('Show transfers'))
+    expect(screen.getByText('Monthly Expenses → Sinking Funds')).toBeDefined()
+  })
+
+  it('shows the outlook with "Unknown account" when an old host\'s account list fails', async () => {
+    const old: UpcomingResponse = {
+      ...base,
+      occurrences: base.occurrences.map((o) => ({ ...o, legs: o.legs.map(({ accountName: _name, ...leg }) => leg) })),
+    }
+    const ctx = ctxWith(old)
+    ;(ctx.api.get as ReturnType<typeof vi.fn>).mockImplementation(async (path: string) => {
+      if (path.includes('upcoming')) return old as never
+      throw new Error('forbidden')
+    })
+    render(<UpcomingWidget ctx={ctx} size="lg" />)
+    expect(await screen.findByText('Mortgage')).toBeDefined()
+    // Outlook accounts are still named; only the savings account, which no leg names, is not.
+    expect(screen.getByText('Monthly Expenses + Yearly Expenses')).toBeDefined()
+    await userEvent.setup().click(screen.getByLabelText('Show transfers'))
+    expect(screen.getByText('Monthly Expenses → Unknown account')).toBeDefined()
   })
 
   it('shows safe to spend until payday', async () => {

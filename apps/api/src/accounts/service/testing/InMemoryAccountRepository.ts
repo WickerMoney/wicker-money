@@ -1,6 +1,7 @@
 import { Decimal } from 'decimal.js'
 import { DuplicateKeyError } from '../../../data/DuplicateKeyError.js'
 import type { ReferenceUsage } from '../../../db/usage.js'
+import type { AccountBasic } from '../../repository/AccountBasic.js'
 import type { AccountChanges } from '../../repository/AccountChanges.js'
 import type { AccountLabel } from '../../repository/AccountLabel.js'
 import type { AccountRepository } from '../../repository/AccountRepository.js'
@@ -35,6 +36,17 @@ export class InMemoryAccountRepository implements AccountRepository {
       .filter((a) => includeArchived || a.archived_at === null)
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((a) => this.withBalance(a))
+  }
+
+  /** @inheritdoc */
+  async listBasic(includeArchived: boolean): Promise<AccountBasic[]> {
+    return this.mine()
+      .filter((a) => includeArchived || a.archived_at === null)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((a) => ({
+        id: a.id, name: a.name, account_type: a.account_type, currency_code: a.currency_code,
+        spendable: a.spendable, archived_at: a.archived_at,
+      }))
   }
 
   /** @inheritdoc */
