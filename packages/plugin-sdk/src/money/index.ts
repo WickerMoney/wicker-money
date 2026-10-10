@@ -22,6 +22,10 @@
  *
  * Pure and dependency-free, so it is safe in the browser and in Node. For
  * showing an amount to a person, use the host's `ctx.formatMoney`.
+ *
+ * Stability: `@stable`. Plugins, the API and the web app all use it.
+ *
+ * @stable
  */
 export type { Money } from './Money.js'
 export { MONEY_SCALE } from './MONEY_SCALE.js'

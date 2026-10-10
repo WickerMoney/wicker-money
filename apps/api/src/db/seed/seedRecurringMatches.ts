@@ -1,5 +1,5 @@
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import type { Services } from '../../composition/Services.js'
-import { addDays } from './seedRng.js'
 
 /** Name of the weekly item that carries the late, skipped and dismissed occurrences. */
 export const LAWN_SERVICE = 'Lawn Service'

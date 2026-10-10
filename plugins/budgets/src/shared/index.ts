@@ -28,7 +28,7 @@ export {
 } from './pace.js'
 
 export {
-  isDate, addDays, isCalendarMonth, windowProblem, windowIssue, windowElapsed, asOfInMonth, windowMonth,
+  isDate, isCalendarMonth, windowProblem, windowIssue, windowElapsed, asOfInMonth, windowMonth,
   MAX_WINDOW_MONTHS, type WindowMonth, type WindowMonthInput,
 } from './window.js'
 

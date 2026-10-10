@@ -1,6 +1,7 @@
 import { compareMoney, subtractMoney, sumMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import {
-  ACCOUNT_LINE_TYPES, addDays, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
+  ACCOUNT_LINE_TYPES, draftPlannedFrom, monthKeyOf, monthPeriod, previousMonth, rankAtRisk, rankBreakdown,
   todayIn, windowIssue, type LineStatus,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'

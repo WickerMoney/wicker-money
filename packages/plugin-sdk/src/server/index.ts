@@ -10,6 +10,11 @@
  *
  * Pure types plus two small values ({@link PluginRouteError}, {@link isUuid});
  * dependency-free (no Zod), safe to import from Node.
+ *
+ * Stability: `@stable`. The host and every bundled plugin with server code
+ * build against it.
+ *
+ * @stable
  */
 export type { ConditionForMatching } from './ConditionForMatching.js'
 export { isUuid } from './isUuid.js'

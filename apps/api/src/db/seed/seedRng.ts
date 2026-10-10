@@ -99,36 +99,6 @@ export function todayIso(): string {
 
 /**
  * @param iso - `YYYY-MM-DD`.
- * @param days - Days to add (negative for the past).
- * @returns The resulting date as `YYYY-MM-DD`.
- */
-export function addDays(iso: string, days: number): string {
-  const [y, m, d] = iso.split('-').map(Number) as [number, number, number]
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  dt.setUTCDate(dt.getUTCDate() + days)
-  return isoDate(dt)
-}
-
-/**
- * Adds calendar months, clamping the day to the shortest resulting month (the
- * same rule `ROADMAP.md` describes for a recurring item landing on the
- * 29th-31st) rather than overflowing into the following month.
- *
- * @param iso - `YYYY-MM-DD`.
- * @param months - Months to add (negative for the past).
- * @returns The resulting date as `YYYY-MM-DD`, day clamped to the target month's length.
- */
-export function addMonthsClamped(iso: string, months: number): string {
-  const [y, m, d] = iso.split('-').map(Number) as [number, number, number]
-  const targetMonthIndex = m - 1 + months
-  const targetYear = y + Math.floor(targetMonthIndex / 12)
-  const targetMonth = ((targetMonthIndex % 12) + 12) % 12
-  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
-  return isoDate(new Date(Date.UTC(targetYear, targetMonth, Math.min(d, lastDay))))
-}
-
-/**
- * @param iso - `YYYY-MM-DD`.
  * @returns The last day of that same month, as `YYYY-MM-DD`.
  */
 export function lastDayOfMonth(iso: string): string {

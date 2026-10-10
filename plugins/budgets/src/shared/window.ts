@@ -1,4 +1,5 @@
 import { addMoney, subtractMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import { monthKeyOf, monthPeriod, shiftMonth } from './period.js'
 
 /**
@@ -42,22 +43,6 @@ export function isDate(value: string): boolean {
   if (m === null) return false
   const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
   return new Date(t).toISOString().slice(0, 10) === value
-}
-
-/**
- * Moves a date forwards or backwards by whole days.
- *
- * UTC arithmetic on a date with no time attached, so no zone or daylight
- * saving shift can move it.
- *
- * @param date - A `YYYY-MM-DD` date.
- * @param days - Days to add; negative moves backwards.
- * @returns The resulting `YYYY-MM-DD` date.
- * @throws {RangeError} If `date` is not a valid date.
- */
-export function addDays(date: string, days: number): string {
-  if (!isDate(date)) throw new RangeError(`Not a date: ${date}`)
-  return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
 }
 
 /** Whole days from `a` to `b` (`b - a`). Both must be valid dates. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addDays, asOfInMonth, isBudgetable, isCalendarMonth, isDate, statusAt, windowElapsed, windowMonth, windowProblem,
+  asOfInMonth, isBudgetable, isCalendarMonth, isDate, statusAt, windowElapsed, windowMonth, windowProblem,
 } from './index.js'
 
 describe('dates', () => {
@@ -10,13 +10,6 @@ describe('dates', () => {
     expect(isDate('2026-02-29')).toBe(false)
     expect(isDate('2026-13-01')).toBe(false)
     expect(isDate('2026-1-01')).toBe(false)
-  })
-
-  it('adds days across months and years without a zone getting in the way', () => {
-    expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
-    expect(addDays('2026-03-01', -1)).toBe('2026-02-28')
-    // A daylight-saving change in most zones; a date has no zone, so nothing moves.
-    expect(addDays('2026-03-08', 1)).toBe('2026-03-09')
   })
 })
 

@@ -1,8 +1,8 @@
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { asUser } from '../db/client.js'
 import { auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
 import { KyselyRecurringOccurrenceRepository } from './repository/KyselyRecurringOccurrenceRepository.js'
-import { addDays } from './service/addDays.js'
 
 /**
  * What the matching candidate query returns, against real PostgreSQL: linked
