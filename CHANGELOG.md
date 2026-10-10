@@ -9,8 +9,22 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-### Added
+## [0.5.0] - 2026-10-10
 
+Plugin platform hardening, plus account allowances. The plugin contract now
+lives in one place (`@wickermoney/plugin-sdk/server`) with documented
+stability tiers, the dashboard asks the API once for what several widgets
+share, `BOOTSTRAP_OWNER_EMAIL` names the owner of a new instance, and the docs
+say plainly what the plugin trust boundary does and does not protect. The
+Budgets page gains account allowances. **Back up your database before
+upgrading:** this release has two migrations, 027 and 028. Both have a
+`down`, so going back to 0.4.2 is `node dist/db/cli.js down` twice with the
+0.5.0 image, then the old image; that deletes any account allowances and puts
+the old `core.register_user` back. Nothing was removed from the plugin SDK, so
+plugin authors have nothing to migrate. See [Upgrading](README.md#upgrading).
+
+
+### Added
 - **`BOOTSTRAP_OWNER_EMAIL` names the instance owner.** Until now the first
   account to register became the owner, so a new instance that others could
   reach belonged to whoever got there first. Set this variable and only the
@@ -70,7 +84,6 @@ curated, human-readable version.
   SDK changed other than the two helpers above.
 
 ### Changed
-
 - **The dashboard asks once for what several widgets share.** The host's
   scoped client now shares identical in-flight `ctx.api.get` calls and keeps
   a resolved one for 5 seconds, per user and never between users, so the
@@ -124,7 +137,6 @@ curated, human-readable version.
   `bundled.ts` said bundled plugins hold no privilege a third-party plugin
   could not request. That is true of their browser half; their server half is
   imported and run by the API.
-
 - **One copy of the date helpers.** The API, the web app, the seed data and
   Budgets each carried their own `addDays`, and the API and seed their own
   `addMonths`. All of them now use the SDK's. Results are the same for every
@@ -133,13 +145,11 @@ curated, human-readable version.
   which used to roll over to March 2 in the API, web and seed copies and now
   throws `RangeError`; every date those callers pass is already validated or
   comes from the server. Budgets' page chunk grows by about 0.7 kB.
-
 - **Old images are pruned.** `package-cleanup.yml` and `preview-cleanup.yml`
   remove old `:edge-<short sha>` tags, old prereleases, untagged versions and
   the preview images of closed or deleted branches. `:latest`, `:next`, `:edge`
   and stable version tags are never deleted. See "Pruning old images" in
   `DEVELOPMENT.md`.
-
 - **Add and fix forms open in the same dialog as Transactions.** On Accounts,
   Categories and Recurring, the add forms no longer sit beside the table, so
   the table gets the full page width. "Add account", "Add category",
@@ -150,11 +160,26 @@ curated, human-readable version.
   Recurring's History panel is unchanged.
 
 ### Fixed
-
 - **The Transactions filter row lines up.** The search box, date pickers,
   selects and the Search and Clear buttons share one height and bottom edge.
   Before, the inputs sat above the buttons, and the "To" error message pushed
   its date picker out of line.
+
+### Migrations
+
+- **027_budget_account_lines** adds `plugin_budgets.account_lines`, one row
+  per account allowance per month: a planned amount, a rollover flag and the
+  categories it does not count. Row-level security forced, a composite
+  `(user_id, account_id)` key to `core.accounts` so a line can never name
+  another user's account, and a check that each period is exactly one calendar
+  month. Additive. Its `down` drops the table, which discards every allowance.
+- **028_bootstrap_owner_email** replaces `core.register_user` so a
+  transaction-local setting, passed by the API from `BOOTSTRAP_OWNER_EMAIL`,
+  decides who becomes the owner, keeping the advisory lock that stops two
+  first registrations both becoming owner. It also adds
+  `core.instance_has_users()`. No data changes, and with the variable unset
+  the function behaves as before. Its `down` puts migration 026's function
+  back and drops the new one.
 
 ## [0.4.2] - 2026-10-06
 
@@ -641,7 +666,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/WickerMoney/wicker-money/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/WickerMoney/wicker-money/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/WickerMoney/wicker-money/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/WickerMoney/wicker-money/compare/v0.3.0...v0.4.0

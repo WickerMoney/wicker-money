@@ -279,6 +279,7 @@ previous image without restoring that backup depends on the release:
 
 | Release | Migrations | Going back to the previous image |
 |---|---|---|
+| `v0.5.0` | 027, 028 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one (this deletes account allowances) |
 | `v0.4.2` | none | Run the old image as it is |
 | `v0.4.1` | none | Run the old image as it is |
 | `v0.4.0` | 025, 026 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one |
@@ -294,7 +295,9 @@ upgrading to `v0.4.2`, an instance whose `AUTH_SECRET` or database URL still
 contains a placeholder such as `change-me` or `CHANGE_ME` refuses to start in
 production until you replace it; the
 steps are under [Placeholder credentials](https://wickermoney.dev/docs/self-hosting/upgrading#placeholder-credentials)
-and in the changelog.
+and in the changelog. After upgrading to `v0.5.0`, nothing changes for
+existing accounts; to name the owner of a new instance, set
+`BOOTSTRAP_OWNER_EMAIL` (see [Owners and members](#owners-and-members)).
 Per-release
 notes are also on the docs site under [Upgrading](https://wickermoney.dev/docs/self-hosting/upgrading).
 
@@ -389,11 +392,13 @@ Argon2id digest with the application's own parameters by hand.
 
 ## Status
 
-**`v0.4.2`** is the current release. It makes the app usable on phones (a
-navigation drawer and card layouts) and tidies Categories, Rules and row
-actions, on top of `v0.4.1`'s two starter categories and `v0.4.0`'s plugin
-manager, owner and member roles, matching from the Transactions page, and form
-errors shown on the field they are about. Wicker Money is pre-1.0 with a single
+**`v0.5.0`** is the current release. It hardens the plugin platform (the
+server-side plugin contract in one place, documented SDK stability tiers, one
+shared read for dashboard widgets, a plain account of the plugin trust
+boundary), lets you name the owner of a new instance with
+`BOOTSTRAP_OWNER_EMAIL`, and adds account allowances to Budgets, on top of
+`v0.4.2`'s phone layouts and `v0.4.0`'s plugin manager, owner and member roles
+and matching from the Transactions page. Wicker Money is pre-1.0 with a single
 maintainer, so the plugin API can still change between minor versions.
 [CHANGELOG.md](CHANGELOG.md) has every release and [ROADMAP.md](ROADMAP.md)
 what is next.

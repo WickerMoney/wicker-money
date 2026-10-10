@@ -4,7 +4,7 @@ Wicker Money is pre-1.0 and has a single maintainer. This is direction, not a
 promise: items move, shrink or disappear, and there are no dates.
 
 **Now** is what the next release is working toward. The current release is
-`v0.4.2`; see `CHANGELOG.md` for what each tag contains.
+`v0.5.0`; see `CHANGELOG.md` for what each tag contains.
 
 ## Shipped
 
@@ -14,6 +14,7 @@ promise: items move, shrink or disappear, and there are no dates.
 | M2 | The shell and the first plugin: Module Federation host, dashboard widgets from plugins, scoped plugin client |
 | M3 | Import and categorization: CSV import, category rules with preview, triage tools |
 | M4 (`v0.1.0`) | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
+| `v0.5.0` | Plugin platform hardening and account allowances: `plugin-sdk/server` (the host-to-plugin contract in one place), SDK stability tiers and shared `addDays` / `addMonths`, one shared read for dashboard widgets, one data load for recurring matches, `BOOTSTRAP_OWNER_EMAIL`, account allowances on Budgets (a monthly amount against one checking account, with rollover), an honest account of the plugin trust boundary, add and edit forms in the shared dialog, and a lint on `sql.raw` |
 | `v0.4.2` | Phone layouts and UI cleanup: a navigation drawer, card layouts for Transactions, Accounts, Recurring and Categories, collapsible Categories and Rules, icon row actions, charts and budget tiles that fit narrow screens. Also the `:edge` image from `main` |
 | `v0.4.1` | Two starter categories: Memberships (Subscriptions, everyone's base set) and Domains / web hosting (Technology, with the tech setup question) |
 | `v0.4.0` | The plugin manager: owners turn plugins on and off from Settings, applied live, with data kept. Owner and member roles (only the first account is an owner). Matching from the Transactions page and dismissing a suggestion, plus seed data that shows matching. Form errors shown on the field they are about, with structured `issues` from the API |
@@ -60,6 +61,10 @@ Polish after the plugin manager:
 - Themes as a data-only plugin type (a validated set of design tokens, no code).
 - Third-party plugin install. This depends on plugin isolation, which does not
   exist yet; today plugin code runs fully trusted, in the host's origin, and a
-  plugin's table grants do not restrict its front-end code. Until that is
-  designed and built, `PLUGIN_REMOTE_ORIGINS` is for origins you fully trust.
-- Freezing the plugin API (`SDK_MAJOR_VERSION`) ahead of 1.0.
+  plugin's table grants do not restrict its front-end code. A bundled plugin's
+  server-side SQL is checked for honest mistakes, not sandboxed. Until
+  isolation is designed and built, `PLUGIN_REMOTE_ORIGINS` is for origins you
+  fully trust.
+- Freezing the plugin API (`SDK_MAJOR_VERSION`) ahead of 1.0. The plugin SDK's
+  entry points now carry stability tiers (see its README); the freeze applies
+  to the stable ones.
