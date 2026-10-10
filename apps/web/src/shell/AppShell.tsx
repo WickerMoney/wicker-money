@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
+import { useFocusTrap } from '@wickermoney/ui-kit'
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js'
 import { useEscapeKey } from '../hooks/useEscapeKey.js'
 import { AccountMenu } from './AccountMenu.js'
@@ -63,6 +64,9 @@ export function AppShell({ plugins }: AppShellProps) {
     menuButtonRef.current?.focus()
   }, [])
   useEscapeKey(navOpen, closeNav)
+  // Tab wraps inside the open drawer (the skip link sits outside the inert
+  // regions). Focus return is handled by closeNav, which targets the menu button.
+  useFocusTrap(navRef, navOpen, { restoreFocus: false })
 
   // Following a link closes the drawer. Focus is left where the navigation put
   // it (the new page) rather than pulled back to the menu button. The route
