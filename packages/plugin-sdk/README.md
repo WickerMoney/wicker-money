@@ -32,12 +32,13 @@ plugin as a Module Federation singleton.
 | `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `scheduledOccurrences`, `nextScheduledOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals`, the calendar helpers `addDays` and `addMonths`, with per-occurrence overrides (skip, move, change the legs) |
 | `@wickermoney/plugin-sdk/money` | Anything (browser or Node) | Exact money arithmetic on decimal strings: `addMoney`, `sumMoney`, `compareMoney`, `equalMoney`, `moneyToUnits`, `divideUnits`, ... |
 | `@wickermoney/plugin-sdk/server` | Bundled plugins' server code, and the host (Node) | The server-side contract: `RouteContext`, `RegisterRoute`, `Query`, `RunAsPlugin`, `PluginRouteError`, `isUuid`, and the category-rule types `RuleForMatching` and `RuleSubject` |
-| `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above, plus the Zod manifest schemas, `parseManifest`, dashboard-range helpers and constants |
+| `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above, plus `parseManifest` and the manifest types, dashboard-range helpers and constants |
 
 Import from `/runtime` (and `/money` or `/recurrence` if you need them) in plugin UI code,
 and from `/server` in a bundled plugin's server code.
-The package root re-exports the Zod manifest schemas, which add about 85 kB to
-a plugin bundle that never uses them.
+The package root includes `parseManifest`, which is built on Zod, so importing the
+root adds about 85 kB to a plugin bundle that never uses it. The Zod schemas
+themselves are not exported; validate a manifest with `parseManifest`.
 
 ## Stability
 
@@ -46,7 +47,7 @@ module documentation (`@stable` or `@experimental`).
 
 | Import | Tier | What it is for | Who uses it today |
 |---|---|---|---|
-| `@wickermoney/plugin-sdk` (root: manifest, dashboard range) | stable | Manifest schema and `parseManifest`, `SDK_MAJOR_VERSION`, remote-entry checks, and the dashboard range helpers | The API and the web app (manifest, range); the Insights and Spending Trends plugins (`monthsInRange`); several plugins import the `PluginContext` and props types from here |
+| `@wickermoney/plugin-sdk` (root: manifest, dashboard range) | stable | `parseManifest` and the manifest types, `SDK_MAJOR_VERSION`, remote-entry checks, and the dashboard range helpers | The API and the web app (manifest, range); the Insights and Spending Trends plugins (`monthsInRange`); several plugins import the `PluginContext` and props types from here |
 | `@wickermoney/plugin-sdk/runtime` | stable | The props and context the host hands a plugin's React components, plus `adoptPluginStyles` | The web app and all six bundled UI plugins |
 | `@wickermoney/plugin-sdk/money` | stable | Exact money arithmetic on decimal strings | The web app, the Budgets, Insights and Spending Trends plugins, and the API's tests |
 | `@wickermoney/plugin-sdk/server` | stable | The server-side contract between the host and a bundled plugin's `register` function | The API, Budgets and Import CSV |

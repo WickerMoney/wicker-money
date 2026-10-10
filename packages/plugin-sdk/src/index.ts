@@ -18,7 +18,6 @@
 export {
   CORE_TABLES,
   checkRemoteEntry,
-  remoteEntrySchema,
   PERMISSIONS,
   REMOTE_ENTRY_TYPE,
   SDK_MAJOR_VERSION,
@@ -28,10 +27,6 @@ export {
   isCompatible,
   pagePath,
   parseManifest,
-  pageContributionSchema,
-  pluginManifestSchema,
-  tableGrantSchema,
-  widgetContributionSchema,
 } from './manifest/index.js'
 export type {
   CoreTableName,
