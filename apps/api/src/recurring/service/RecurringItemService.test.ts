@@ -43,7 +43,7 @@ function serviceOver(
     recurringItems,
     recurringOccurrences: { listRecords: async () => [], listLinks: async () => [], trackingStarts: async () => new Map() },
     reports: { findTimezone: async () => timezone },
-    accounts: { listWithBalances: async () => [...accounts] },
+    accounts: { listWithBalances: async () => [...accounts], listBasic: async () => [...accounts] },
   } as unknown as Repositories
   const uow: UnitOfWork = {
     forUser: (_userId, work) => work(repos),

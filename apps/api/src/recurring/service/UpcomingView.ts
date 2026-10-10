@@ -1,4 +1,4 @@
-import type { OccurrenceView } from './OccurrenceView.js'
+import type { OccurrenceLegView, OccurrenceView } from './OccurrenceView.js'
 
 /** One account's outlook to the next payday. */
 export interface UpcomingAccount {
@@ -23,6 +23,20 @@ export interface UpcomingAccount {
   readonly counted: boolean
 }
 
+/** A leg of an upcoming occurrence, with the name of the account it is on. */
+export interface UpcomingLegView extends OccurrenceLegView {
+  /**
+   * The account's name, archived or not, so a client can describe a transfer
+   * to an account that is not in {@link UpcomingView.accounts} without a second request.
+   */
+  readonly accountName: string
+}
+
+/** An occurrence in the upcoming window: its legs also carry account names. */
+export interface UpcomingOccurrenceView extends Omit<OccurrenceView, 'legs'> {
+  readonly legs: readonly UpcomingLegView[]
+}
+
 /** Everything the upcoming widget shows, computed on the server. */
 export interface UpcomingView {
   /** The user's today in their time zone. */
@@ -44,7 +58,7 @@ export interface UpcomingView {
   /** Active checking accounts and spendable savings accounts: counted first, then by name. */
   readonly accounts: readonly UpcomingAccount[]
   /** Every occurrence in the window, all kinds; a client chooses which to list. */
-  readonly occurrences: readonly OccurrenceView[]
+  readonly occurrences: readonly UpcomingOccurrenceView[]
   /** Whether the user has any recurring item at all, ended ones included. */
   readonly hasItems: boolean
 }
