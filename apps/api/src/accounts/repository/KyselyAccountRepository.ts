@@ -1,6 +1,7 @@
 import { sql } from 'kysely'
 import { translateDuplicateKey } from '../../data/translateDuplicateKey.js'
 import type { Trx } from '../../db/Trx.js'
+import type { AccountBasic } from './AccountBasic.js'
 import type { AccountChanges } from './AccountChanges.js'
 import type { AccountLabel } from './AccountLabel.js'
 import type { AccountRepository } from './AccountRepository.js'
@@ -26,6 +27,16 @@ export class KyselyAccountRepository implements AccountRepository {
       ? sql<AccountWithBalance>`${SELECT_WITH_BALANCE} ORDER BY a.name`
       : sql<AccountWithBalance>`${SELECT_WITH_BALANCE} WHERE a.archived_at IS NULL ORDER BY a.name`
     return (await query.execute(this.trx)).rows
+  }
+
+  /** @inheritdoc */
+  listBasic(includeArchived: boolean): Promise<AccountBasic[]> {
+    let query = this.trx
+      .selectFrom('core.accounts')
+      .select(['id', 'name', 'account_type', 'currency_code', 'spendable', 'archived_at'])
+      .orderBy('name')
+    if (!includeArchived) query = query.where('archived_at', 'is', null)
+    return query.execute()
   }
 
   /** @inheritdoc */
