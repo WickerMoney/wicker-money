@@ -95,6 +95,12 @@ curated, human-readable version.
   not for its front-end code, and the `x-wickermoney-plugin` header is advisory.
   `PLUGIN_REMOTE_ORIGINS` should stay empty unless you fully trust the origin,
   and third-party plugin install remains unsupported. No behaviour change.
+- **`sql.raw` is linted.** ESLint now rejects `sql.raw()` outside the
+  database layer, keyset paging and tests, so a value cannot be spliced into
+  a statement by accident. The one request-time use outside `db/`, the role
+  switch for the settings export, now shares `setLocalRole` with
+  `asPlugin`, and both `GRANT CONNECT` statements quote the database name
+  with `sql.id`. No behaviour change.
 - **Bundled plugins share the SDK's server contract.** Budgets and Import CSV
   each carried their own copies of `RouteContext`, `Query` and `RunAsPlugin`,
   an error class and a UUID check, and the two UUID checks disagreed. Both,
