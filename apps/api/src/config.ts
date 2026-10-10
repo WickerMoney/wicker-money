@@ -31,6 +31,21 @@ const schema = z.object({
     .transform((v) => v === 'true'),
 
   /**
+   * The email address whose account becomes the instance owner. Compared
+   * without regard to case and surrounding spaces; a blank value counts as
+   * unset. When unset, the first account registered becomes the owner.
+   *
+   * Registration does not verify email addresses, so this does not stop
+   * someone who knows the address from registering it first. It stops the
+   * ordinary case, a stranger reaching a fresh instance before its operator.
+   */
+  BOOTSTRAP_OWNER_EMAIL: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined || value.trim() === '' ? undefined : value.trim().toLowerCase()))
+    .pipe(z.string().max(320).email('BOOTSTRAP_OWNER_EMAIL must be an email address such as you@example.com').optional()),
+
+  /**
    * Trust `X-Forwarded-*` headers from a reverse proxy. Required for per-client
    * rate limiting to see the real client address; leave `false` when the API is
    * exposed directly, or clients could spoof their address.

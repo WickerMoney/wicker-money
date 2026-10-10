@@ -186,7 +186,14 @@ describe('the migration itself', () => {
   })
 
   it('is a no-op on a second run', async () => {
-    await up(admin)
+    // Rolled back: committing 026's function would replace the one a later
+    // migration installed over it, for every suite that runs after this one.
+    await expect(admin.transaction().execute(async (trx) => {
+      await up(trx)
+      expect(await roleDefault(trx)).toContain('member')
+      expect(await functionTakesLock(trx)).toBe(true)
+      throw new Rollback()
+    })).rejects.toBeInstanceOf(Rollback)
     expect(await roleDefault(admin)).toContain('member')
     expect(await functionTakesLock(admin)).toBe(true)
   })

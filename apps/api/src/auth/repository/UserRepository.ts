@@ -15,10 +15,13 @@ export interface UserRepository {
    *
    * @param email - Email address; the database trims and lower-cases it.
    * @param passwordHash - Argon2 digest of the password.
+   * @param bootstrapOwnerEmail - The configured owner email, if any. Only an
+   *   account with this address can become the owner; without it, the first
+   *   account can.
    * @returns The new account's identity.
    * @throws {DuplicateKeyError} When the email is already registered.
    */
-  register(email: string, passwordHash: string): Promise<UserIdentity>
+  register(email: string, passwordHash: string, bootstrapOwnerEmail?: string): Promise<UserIdentity>
 
   /**
    * Looks an account up by email. Works with no user context.

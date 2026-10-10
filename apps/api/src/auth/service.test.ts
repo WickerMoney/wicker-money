@@ -35,13 +35,16 @@ class Store {
   users: LoginCandidate[] = []
   sessions: Row[] = []
   purges: number[] = []
+  /** The bootstrap owner email each registration was given, in order. */
+  bootstrapSeen: Array<string | undefined> = []
 
   private active(row: Row): boolean {
     return row.revokedAt === null && row.expiresAt.getTime() > Date.now()
   }
 
   readonly usersRepo: UserRepository = {
-    register: (email, passwordHash) => {
+    register: (email, passwordHash, bootstrapOwnerEmail) => {
+      this.bootstrapSeen.push(bootstrapOwnerEmail)
       if (this.users.some((u) => u.email === email)) {
         return Promise.reject(new DuplicateKeyError('ux_users_email', new Error('duplicate')))
       }
@@ -284,6 +287,22 @@ describe('AuthService accounts', () => {
     const error = await closed.register('a@example.com', PASSWORD).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(AppError)
     expect(error).toMatchObject({ statusCode: 403, code: 'registration_disabled' })
+    expect(store.users).toHaveLength(0)
+  })
+
+  it('hands the configured bootstrap owner email to registration, and nothing when unset', async () => {
+    await service.register('a@example.com', PASSWORD)
+    const configured = new AuthService(store.uow, config({ BOOTSTRAP_OWNER_EMAIL: 'boss@example.com' }))
+    await configured.register('b@example.com', PASSWORD)
+    expect(store.bootstrapSeen).toEqual([undefined, 'boss@example.com'])
+  })
+
+  it('still refuses registration when switched off, even for the bootstrap owner email', async () => {
+    const closed = new AuthService(
+      store.uow,
+      config({ REGISTRATION_ENABLED: false, BOOTSTRAP_OWNER_EMAIL: 'boss@example.com' }),
+    )
+    await expect(closed.register('boss@example.com', PASSWORD)).rejects.toMatchObject({ code: 'registration_disabled' })
     expect(store.users).toHaveLength(0)
   })
 

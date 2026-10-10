@@ -48,7 +48,10 @@ Out of scope:
 - Deployments that run in production over plain HTTP with `COOKIE_SECURE=false`.
   The app warns about this at startup; put it behind HTTPS instead.
 - Instances left with `REGISTRATION_ENABLED=true` on a network you do not
-  control. That setting is deliberate and documented.
+  control. That setting is deliberate and documented. Unless
+  `BOOTSTRAP_OWNER_EMAIL` is set, the first account to register on such an
+  instance becomes its owner; the variable does not verify the address, so it
+  does not stop someone who knows it from registering it first.
 - Vulnerabilities in third-party plugins (see below).
 
 ## Things worth knowing

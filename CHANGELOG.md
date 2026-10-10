@@ -11,6 +11,20 @@ curated, human-readable version.
 
 ### Added
 
+- **`BOOTSTRAP_OWNER_EMAIL` names the instance owner.** Until now the first
+  account to register became the owner, so a new instance that others could
+  reach belonged to whoever got there first. Set this variable and only the
+  account registered with that address (compared without regard to case)
+  becomes the owner, even if other people registered before it; everyone else
+  is a member. It never creates a second owner while one exists and never
+  changes existing accounts. Unset, nothing changes: the first account is the
+  owner. Registration does not verify email addresses, so this does not stop
+  someone who knows the address from registering it first; register promptly,
+  then set `REGISTRATION_ENABLED=false`. `REGISTRATION_ENABLED=false` still
+  takes precedence. In production the API now logs a warning at start-up when
+  the instance has no accounts, registration is open and the variable is unset.
+  The sample compose file passes it through. Includes a migration that changes
+  `core.register_user` and adds `core.instance_has_users()`.
 - **Account allowances.** The Budgets page has an "Account allowances"
   section: a monthly amount measured against one checking account instead of
   one category. Everything that leaves the account counts, except transfers,

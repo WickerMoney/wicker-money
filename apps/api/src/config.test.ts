@@ -35,6 +35,7 @@ describe('defaults', () => {
       PLUGIN_REMOTE_ORIGINS: [],
     })
     expect(config.COOKIE_SECURE).toBeUndefined()
+    expect(config.BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
   })
 
   it('reads the environment it is given, not the process', () => {
@@ -116,6 +117,36 @@ describe('boolean variables', () => {
       }
     },
   )
+})
+
+describe('BOOTSTRAP_OWNER_EMAIL', () => {
+  it('is unset by default, and a blank value counts as unset', () => {
+    expect(loadConfig(env()).BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
+    expect(loadConfig(env({ BOOTSTRAP_OWNER_EMAIL: '' })).BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
+    expect(loadConfig(env({ BOOTSTRAP_OWNER_EMAIL: '   ' })).BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
+  })
+
+  it('is trimmed and lower-cased', () => {
+    expect(loadConfig(env({ BOOTSTRAP_OWNER_EMAIL: '  Jeremy@Example.COM ' })).BOOTSTRAP_OWNER_EMAIL).toBe('jeremy@example.com')
+  })
+
+  it.each(['jeremy', 'jeremy@', '@example.com', 'two words@example.com', 'a@b@example.com', `${'a'.repeat(320)}@example.com`])(
+    'rejects %j with a message that names the variable',
+    (value) => {
+      const message = failure({ BOOTSTRAP_OWNER_EMAIL: value })
+      expect(message).toMatch(/^Invalid configuration:/)
+      expect(message).toContain('BOOTSTRAP_OWNER_EMAIL')
+    },
+  )
+
+  it('says what it expects', () => {
+    expect(failure({ BOOTSTRAP_OWNER_EMAIL: 'nope' })).toContain('must be an email address')
+  })
+
+  it('is reported alongside other problems, and is valid in production', () => {
+    expect(failure({ BOOTSTRAP_OWNER_EMAIL: 'nope', PORT: 'eighty' })).toMatch(/BOOTSTRAP_OWNER_EMAIL[\s\S]*PORT|PORT[\s\S]*BOOTSTRAP_OWNER_EMAIL/)
+    expect(loadConfig(env({ NODE_ENV: 'production', BOOTSTRAP_OWNER_EMAIL: 'me@example.com' })).BOOTSTRAP_OWNER_EMAIL).toBe('me@example.com')
+  })
 })
 
 describe('production refuses development credentials', () => {
