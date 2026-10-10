@@ -1,5 +1,5 @@
 import { addMoney, subtractMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
-import { addDays } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
 import {
   asOfInMonth, monthPeriod, statusAt, windowElapsed, windowMonth,
 } from '../../shared/index.js'

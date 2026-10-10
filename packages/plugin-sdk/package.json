@@ -23,6 +23,10 @@
       "types": "./dist/runtime.d.ts",
       "default": "./dist/runtime.js"
     },
+    "./date": {
+      "types": "./dist/date/index.d.ts",
+      "default": "./dist/date/index.js"
+    },
     "./recurrence": {
       "types": "./dist/recurrence/index.d.ts",
       "default": "./dist/recurrence/index.js"

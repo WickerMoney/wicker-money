@@ -9,6 +9,20 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+- **`@wickermoney/plugin-sdk/date`**, a stable entry point for the calendar
+  helpers `addDays` and `addMonths`. They moved here from the experimental
+  `/recurrence` entry point so that first-party code (Budgets, the API, the web
+  app) no longer depends on a tier that may change. Behaviour is unchanged. It
+  has no dependencies, so importing it pulls in nothing else from the SDK.
+  `/recurrence` and the package root still export both helpers, so existing
+  imports keep working; new code should import from `/date`.
+
+### Changed
+- **The host and Budgets import the date helpers from `/date`.** The API, the
+  web app, the seed data and Budgets now import `addDays` and `addMonths` from
+  `@wickermoney/plugin-sdk/date`. No behaviour change.
+
 ## [0.5.0] - 2026-10-10
 
 Plugin platform hardening, plus account allowances. The plugin contract now

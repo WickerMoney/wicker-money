@@ -1,4 +1,5 @@
-import { addDays, occurrences, type OccurrenceOverride, type RecurringItem } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
+import { occurrences, type OccurrenceOverride, type RecurringItem } from '@wickermoney/plugin-sdk/recurrence'
 import { money } from '../../money.js'
 import type { OccurrenceLinkRow } from '../repository/OccurrenceLinkRow.js'
 import type { OccurrenceRecordRow } from '../repository/OccurrenceRecordRow.js'

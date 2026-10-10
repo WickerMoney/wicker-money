@@ -1,7 +1,7 @@
 /**
  * @module
  * Calendar-date arithmetic on `YYYY-MM-DD` strings. `addDays` and `addMonths` are
- * public (re-exported from the `./recurrence` entry point); the rest is internal to the SDK.
+ * public (exported from the `./date` entry point); the rest is internal to the SDK.
  *
  * Dates here are calendar days, not instants: there is no time of day and no
  * time zone, so nothing can shift a day across midnight or a DST change. The

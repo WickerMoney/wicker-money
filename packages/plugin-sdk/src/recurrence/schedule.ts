@@ -1,6 +1,6 @@
 import {
   clampedMonthDate, fromDayNumber, monthsBetween, parseDate, toDayNumber,
-} from './calendar.js'
+} from '../date/calendar.js'
 import { DEFAULT_SEMIMONTHLY_DAYS, type RecurrenceSchedule } from './types.js'
 
 /** A schedule after validation, with its dates as day numbers. */

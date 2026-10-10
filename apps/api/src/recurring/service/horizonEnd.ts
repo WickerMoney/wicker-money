@@ -1,4 +1,4 @@
-import { addDays, addMonths } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays, addMonths } from '@wickermoney/plugin-sdk/date'
 import type { ForecastHorizon } from './FORECAST_HORIZONS.js'
 
 /**

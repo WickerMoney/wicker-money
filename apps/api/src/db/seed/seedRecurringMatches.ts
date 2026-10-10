@@ -1,4 +1,4 @@
-import { addDays } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
 import type { Services } from '../../composition/Services.js'
 
 /** Name of the weekly item that carries the late, skipped and dismissed occurrences. */

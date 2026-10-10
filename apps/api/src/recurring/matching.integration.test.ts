@@ -1,4 +1,4 @@
-import { addDays } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { asUser } from '../db/client.js'
 import { auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
