@@ -1,6 +1,6 @@
 import type { FormEvent, RefObject } from 'react'
 import {
-  Button, CategoryOptions, Field, FormError, SelectField, Surface, orderByParent, type FormErrors,
+  Button, CategoryOptions, Dialog, Field, FormError, SelectField, orderByParent, type FormErrors,
 } from '@wickermoney/ui-kit'
 import { formatDate } from '../../../lib/formatDate.js'
 import type { Account, Category, RecurringItem } from '../../../models/index.js'
@@ -33,7 +33,7 @@ const DAYS = Array.from({ length: 31 }, (_, i) => i + 1)
 const LIABILITIES = new Set(['credit_card', 'loan'])
 
 /**
- * Adds or edits a recurring item, with its legs, and previews the next dates.
+ * The dialog that adds or edits a recurring item, with its legs, and previews the next dates.
  *
  * The fields follow the kind: a bill is one account and an amount, income can
  * be split across accounts, and a transfer or debt payment is from → to. Every
@@ -66,7 +66,7 @@ export function RecurringItemForm({
   )
 
   return (
-    <Surface title={editing === null ? 'Add a recurring item' : `Edit '${editing.name}'`}>
+    <Dialog title={editing === null ? 'Add a recurring item' : `Edit '${editing.name}'`} onClose={onCancel}>
       <form onSubmit={submit} ref={formRef} noValidate>
         <Field label="Name" required value={draft.name} error={err('name')}
                onChange={(e) => onChange({ name: e.target.value })} />
@@ -159,14 +159,14 @@ export function RecurringItemForm({
           )}
         </div>
 
-        <div className="page__actions">
+        <div className="wm-dialog__actions">
+          <Button disabled={busy} onClick={onCancel}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={busy}>
             {busy ? 'Saving…' : editing === null ? 'Add item' : 'Save changes'}
           </Button>
-          {editing !== null ? <Button disabled={busy} onClick={onCancel}>Cancel</Button> : null}
         </div>
         <FormError message={errors.form} />
       </form>
-    </Surface>
+    </Dialog>
   )
 }

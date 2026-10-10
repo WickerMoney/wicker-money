@@ -1,4 +1,4 @@
-import { Button, Field, FormError, Surface, type FormErrors } from '@wickermoney/ui-kit'
+import { Button, Dialog, Field, FormError, type FormErrors } from '@wickermoney/ui-kit'
 import { formatMoney } from '../../../lib/formatMoney.js'
 import type { Account, BalancePreview } from '../../../models/index.js'
 
@@ -18,12 +18,12 @@ export interface FixOpeningBalancePanelProps {
   readonly onInputChange: (value: string) => void
   /** Called to save the previewed opening balance. */
   readonly onApply: () => void
-  /** Called to close the panel without saving. */
+  /** Called to close the dialog without saving. */
   readonly onCancel: () => void
 }
 
 /**
- * The panel for correcting an account's opening balance.
+ * The dialog for correcting an account's opening balance.
  *
  * Shows the effect of the typed value before it can be applied, because
  * changing the opening figure moves every balance the account has ever reported.
@@ -32,7 +32,7 @@ export function FixOpeningBalancePanel({
   account, balanceInput, preview, errors, busy, onInputChange, onApply, onCancel,
 }: FixOpeningBalancePanelProps) {
   return (
-    <Surface title={`Fix opening balance for '${account.name}'`}>
+    <Dialog title={`Fix opening balance for '${account.name}'`} onClose={onCancel}>
       <p className="form-hint">
         The balance shown everywhere is derived as opening balance + everything recorded since,
         recomputed on every read. Changing the opening number here moves <strong>every balance
@@ -54,13 +54,13 @@ export function FixOpeningBalancePanel({
           throughout this account's history.
         </div>
       ) : null}
-      <div className="page__actions">
+      <div className="wm-dialog__actions">
+        <Button disabled={busy} onClick={onCancel}>Cancel</Button>
         <Button variant="primary" disabled={busy || preview === null} onClick={onApply}>
           {busy ? 'Applying…' : 'Apply'}
         </Button>
-        <Button disabled={busy} onClick={onCancel}>Cancel</Button>
       </div>
       <FormError message={errors.form} />
-    </Surface>
+    </Dialog>
   )
 }

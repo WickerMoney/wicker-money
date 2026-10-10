@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import {
-  Button, Field, FormError, SelectField, Surface, formErrorsFrom, hasFormErrors, useFormErrors,
+  Button, Field, FormError, SelectField, formErrorsFrom, hasFormErrors, useFormErrors,
 } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -59,8 +59,7 @@ export function AddCategoryForm({ parents, status, onChanged, onCreated }: AddCa
   }
 
   return (
-    <Surface title="Add a category">
-      <form onSubmit={addCategory} ref={form.ref} noValidate>
+    <form onSubmit={addCategory} ref={form.ref} noValidate>
         <Field label="Name" required value={name} error={form.errors.fields['name']}
                onChange={(e) => { setName(e.target.value); form.clearField('name') }}
                placeholder="Groceries" />
@@ -88,7 +87,6 @@ export function AddCategoryForm({ parents, status, onChanged, onCreated }: AddCa
           {status.busy ? 'Saving…' : 'Add category'}
         </Button>
         <FormError message={form.errors.form} />
-      </form>
-    </Surface>
+    </form>
   )
 }

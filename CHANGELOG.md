@@ -90,6 +90,22 @@ curated, human-readable version.
   and stable version tags are never deleted. See "Pruning old images" in
   `DEVELOPMENT.md`.
 
+- **Add and fix forms open in the same dialog as Transactions.** On Accounts,
+  Categories and Recurring, the add forms no longer sit beside the table, so
+  the table gets the full page width. "Add account", "Add category",
+  "Add rule" and "Add recurring item" are buttons in the page header, and
+  editing a recurring item, fixing an opening balance and resolving a delete
+  that has history open in the dialog too (a side drawer on desktop, a
+  full-screen sheet on a phone). The dialog closes after a successful save.
+  Recurring's History panel is unchanged.
+
+### Fixed
+
+- **The Transactions filter row lines up.** The search box, date pickers,
+  selects and the Search and Clear buttons share one height and bottom edge.
+  Before, the inputs sat above the buttons, and the "To" error message pushed
+  its date picker out of line.
+
 ## [0.4.2] - 2026-10-06
 
 Phone layouts, a tidier UI and a round of accessibility and matching fixes. No

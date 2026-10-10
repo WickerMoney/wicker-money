@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Alert, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
+import { Alert, Button, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
 import { useActionStatus, type ActionStatus } from '../../hooks/useActionStatus.js'
 import type { Account, Category, RecurringItem, RecurringItemList } from '../../models/index.js'
 import { OccurrencesPanel } from './components/OccurrencesPanel.js'
@@ -103,8 +103,20 @@ function Workspace({ list, accounts, categories, status, reload, showNotice }: W
         onDismiss={(s) => void suggested.dismiss(s)}
         onUndismiss={(d) => void suggested.undismiss(d)}
       />
-      <div className="page__split recur-split">
+      <div className={history !== null ? 'page__split recur-split' : undefined}>
         <div className="page">
+          {active.length === 0 ? null : (
+            <div className="recur-toolbar">
+              <Button variant="primary" onClick={() => { setHistoryId(null); editing.startAdd() }}>
+                Add recurring item
+              </Button>
+            </div>
+          )}
+          {active.length === 0 ? (
+            <Surface title="Add a recurring item">
+              <EmptyState title="Add an account first" hint="A recurring item needs an account for its money to land in." />
+            </Surface>
+          ) : null}
           {list.items.length === 0 ? (
             <Surface>
               <EmptyState
@@ -125,19 +137,16 @@ function Workspace({ list, accounts, categories, status, reload, showNotice }: W
             item={history} today={list.today} currency={currency} accountName={accountName}
             status={status} afterChange={afterOccurrenceChange} onClose={() => setHistoryId(null)}
           />
-        ) : active.length === 0 ? (
-          <Surface title="Add a recurring item">
-            <EmptyState title="Add an account first" hint="A recurring item needs an account for its money to land in." />
-          </Surface>
-        ) : (
-          <RecurringItemForm
-            draft={editing.draft} editing={editing.editing}
-            accounts={active} categories={categories} today={list.today} busy={status.busy}
-            errors={editing.errors} formRef={editing.formRef}
-            onChange={editing.change} onSubmit={() => void editing.save()} onCancel={editing.reset}
-          />
-        )}
+        ) : null}
       </div>
+      {editing.open ? (
+        <RecurringItemForm
+          draft={editing.draft} editing={editing.editing}
+          accounts={active} categories={categories} today={list.today} busy={status.busy}
+          errors={editing.errors} formRef={editing.formRef}
+          onChange={editing.change} onSubmit={() => void editing.save()} onCancel={editing.reset}
+        />
+      ) : null}
     </>
   )
 }

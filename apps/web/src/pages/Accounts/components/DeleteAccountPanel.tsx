@@ -1,4 +1,4 @@
-import { Button, FormError, SelectField, Surface } from '@wickermoney/ui-kit'
+import { Button, Dialog, FormError, SelectField } from '@wickermoney/ui-kit'
 import type { AccountDeletion } from '../hooks/useAccountDeletion.js'
 import { describeUsage } from '../helpers/describeUsage.js'
 import { MigrationPreviewNote } from './MigrationPreviewNote.js'
@@ -26,7 +26,7 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
   const moveTarget = target === undefined ? null : { id: target.id, name: target.name }
 
   return (
-    <Surface title={`Delete '${resolving.account.name}'`}>
+    <Dialog title={`Delete '${resolving.account.name}'`} onClose={deletion.dismiss}>
       <p className="form-hint">
         '{resolving.account.name}' still has {describeUsage(resolving.usage)}. Pick one:
       </p>
@@ -90,9 +90,9 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
       </div>
 
       <FormError message={errors.form} />
-      <div className="page__actions">
+      <div className="wm-dialog__actions">
         <Button disabled={busy} onClick={deletion.dismiss}>Cancel</Button>
       </div>
-    </Surface>
+    </Dialog>
   )
 }

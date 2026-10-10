@@ -125,13 +125,19 @@ describe('the list', () => {
     expect(screen.getByText('Transfers between your own accounts are not counted.')).toBeTruthy()
   })
 
-  it('shows an empty state with the form still available', async () => {
+  it('shows an empty state with the add button still available', async () => {
     serve({ ...full, items: [], summary: { monthlyIncome: '0.0000', monthlyOutgoings: '0.0000', monthlyNet: '0.0000' } })
     render(<RecurringPage />)
     expect(await screen.findByText('Nothing recurring yet')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Add item' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add recurring item' })).toBeTruthy()
   })
 })
+
+/** Opens the add dialog from the page's button and waits for it to show. */
+async function openForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: 'Add recurring item' }))
+  await screen.findByRole('button', { name: 'Add item' })
+}
 
 describe('the form', () => {
   it('adds a bill with the amount typed positive and sent negative', async () => {
@@ -139,7 +145,7 @@ describe('the form', () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({})
     const user = userEvent.setup()
     render(<RecurringPage />)
-    await screen.findByRole('button', { name: 'Add item' })
+    await openForm(user)
 
     await user.type(screen.getByLabelText('Name'), 'Phones')
     await user.type(screen.getByLabelText('Amount'), '85')
@@ -156,7 +162,7 @@ describe('the form', () => {
     serve(full)
     const user = userEvent.setup()
     render(<RecurringPage />)
-    await screen.findByRole('button', { name: 'Add item' })
+    await openForm(user)
 
     const options = () => Array.from((screen.getByLabelText('Category (optional)') as HTMLSelectElement).options).map((o) => o.text)
     expect(options()).toEqual(['None', 'Mortgage / rent'])
@@ -170,7 +176,7 @@ describe('the form', () => {
     serve(full)
     const user = userEvent.setup()
     render(<RecurringPage />)
-    await screen.findByRole('button', { name: 'Add item' })
+    await openForm(user)
     await user.selectOptions(screen.getByLabelText('Kind'), 'debt_payment')
     const to = Array.from((screen.getByLabelText('Pays (card or loan)') as HTMLSelectElement).options).map((o) => o.text)
     expect(to).toEqual(['Choose an account', 'Everyday Card'])
@@ -180,7 +186,7 @@ describe('the form', () => {
     serve(full)
     const user = userEvent.setup()
     render(<RecurringPage />)
-    await screen.findByRole('button', { name: 'Add item' })
+    await openForm(user)
     const start = screen.getByLabelText('First date')
     await user.clear(start)
     await user.type(start, '2025-01-31')
@@ -213,7 +219,7 @@ describe('errors on the add/edit form', () => {
     const post = vi.spyOn(api, 'post')
     const user = userEvent.setup()
     render(<RecurringPage />)
-    await screen.findByRole('button', { name: 'Add item' })
+    await openForm(user)
 
     await user.type(screen.getByLabelText('Amount'), '0')
     await user.click(screen.getByRole('button', { name: 'Add item' }))
@@ -231,7 +237,7 @@ describe('errors on the add/edit form', () => {
     )
     const user = userEvent.setup()
     render(<RecurringPage />)
-    await screen.findByRole('button', { name: 'Add item' })
+    await openForm(user)
 
     await user.type(screen.getByLabelText('Name'), 'Phones')
     await user.type(screen.getByLabelText('Amount'), '85')
