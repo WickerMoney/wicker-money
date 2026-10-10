@@ -60,6 +60,12 @@ export interface TransactionList {
   readonly toggleAllSelected: () => void
   /** Deselects every row. */
   readonly clearSelection: () => void
+  /**
+   * Counts how many times {@link TransactionList.reload} has been called. Things
+   * derived from the listed rows (recurring matches) watch it to know the rows
+   * were changed by the user, which re-reading the same rows does not show.
+   */
+  readonly revision: number
   /** Re-reads the current page. */
   readonly reload: () => Promise<void>
 }
@@ -84,6 +90,7 @@ export function useTransactionList(status: ActionStatus): TransactionList {
   const [cursors, setCursors] = useState<readonly string[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [revision, setRevision] = useState(0)
   const { show } = status
   const cursor = cursors.at(-1) ?? null
 
@@ -132,7 +139,10 @@ export function useTransactionList(status: ActionStatus): TransactionList {
 
   // After a change the user made (an edit, a delete, a new entry) the count may
   // be out of date, so re-read it along with the page.
-  const reload = useCallback(() => load(true), [load])
+  const reload = useCallback(() => {
+    setRevision((r) => r + 1)
+    return load(true)
+  }, [load])
 
   const changeFilters = useCallback((patch: Partial<TransactionFilters>) => {
     setCursors([])
@@ -188,6 +198,6 @@ export function useTransactionList(status: ActionStatus): TransactionList {
     hasPrevious: cursors.length > 0,
     hasNext: nextCursor !== null,
     changeFilters, clearFilters, changePageSize, goToNextPage, goToPreviousPage,
-    toggleSelected, toggleAllSelected, clearSelection, reload,
+    toggleSelected, toggleAllSelected, clearSelection, revision, reload,
   }
 }

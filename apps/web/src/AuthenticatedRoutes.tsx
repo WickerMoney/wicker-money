@@ -4,18 +4,19 @@ import type { PluginManifest } from '@wickermoney/plugin-sdk'
 import { Alert } from '@wickermoney/ui-kit'
 import { useAuth } from './auth/index.js'
 import { SetupWizard, OnboardingProvider } from './onboarding/index.js'
-import { AccountsPage } from './pages/Accounts/index.js'
-import { CategoriesPage } from './pages/Categories/index.js'
+import { LazyAccountsPage } from './pages/LazyAccountsPage.js'
+import { LazyCategoriesPage } from './pages/LazyCategoriesPage.js'
 import { Dashboard } from './pages/Dashboard/index.js'
-import { SettingsPage } from './pages/Settings/index.js'
-import { TransactionsPage } from './pages/Transactions/index.js'
-import { RecurringPage } from './pages/Recurring/index.js'
+import { LazySettingsPage } from './pages/LazySettingsPage.js'
+import { LazyTransactionsPage } from './pages/LazyTransactionsPage.js'
+import { LazyRecurringPage } from './pages/LazyRecurringPage.js'
 import { buildPluginContext } from './plugins/context.js'
 import { PluginUnavailable } from './plugins/PluginUnavailable.js'
 import { pluginRoutes } from './plugins/PluginRoutes.js'
 import { usePluginRegistry } from './plugins/registry/index.js'
 import { useCachedContextFor } from './plugins/useCachedContextFor.js'
 import { AppShell } from './shell/AppShell.js'
+import { PageBoundary } from './shell/PageBoundary.js'
 import { NotFound } from './pages/NotFound.js'
 
 /**
@@ -27,6 +28,9 @@ import { NotFound } from './pages/NotFound.js'
  * changes a disabled plugin unmounts everywhere and an enabled one mounts.
  * A plugin page's address with no plugin behind it falls through to
  * {@link PluginUnavailable} rather than "Not found".
+ *
+ * The Dashboard is the landing page and stays in the entry chunk; every other
+ * core page is a separate chunk fetched on first visit (see {@link PageBoundary}).
  *
  * Must be rendered inside a router, an `AuthProvider` with a signed-in user,
  * and a `PluginRegistryProvider`.
@@ -63,11 +67,11 @@ export function AuthenticatedRoutes() {
       <Routes>
         <Route element={<AppShell plugins={plugins} />}>
           <Route index element={<Dashboard plugins={plugins} contextFor={contextFor} />} />
-          <Route path="accounts" element={<AccountsPage />} />
-          <Route path="transactions" element={<TransactionsPage />} />
-          <Route path="recurring" element={<RecurringPage />} />
-          <Route path="categories" element={<CategoriesPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="accounts" element={<PageBoundary label="Accounts"><LazyAccountsPage /></PageBoundary>} />
+          <Route path="transactions" element={<PageBoundary label="Transactions"><LazyTransactionsPage /></PageBoundary>} />
+          <Route path="recurring" element={<PageBoundary label="Recurring"><LazyRecurringPage /></PageBoundary>} />
+          <Route path="categories" element={<PageBoundary label="Categories"><LazyCategoriesPage /></PageBoundary>} />
+          <Route path="settings" element={<PageBoundary label="Settings"><LazySettingsPage /></PageBoundary>} />
           {pluginRoutes(plugins, contextFor)}
           {/* Ranked below every plugin's own, more specific page route. */}
           <Route path="p/:pluginId/*" element={<PluginUnavailable />} />

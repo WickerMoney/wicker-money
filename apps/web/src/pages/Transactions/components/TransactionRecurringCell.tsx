@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Button } from '@wickermoney/ui-kit'
 import { formatDate } from '../../../lib/formatDate.js'
 import { formatMoney } from '../../../lib/formatMoney.js'
@@ -19,9 +20,12 @@ export interface TransactionRecurringCellProps {
  * A row's recurring item: the occurrence it settles (with Unmatch), or the
  * one suggested for it (Match, or Not this), plus any it was dismissed for
  * (with Undo). "Other" lists every occurrence it could settle, to pick a
- * different one. Nothing is matched without a click.
+ * different one. Nothing is matched without a click. Memoized: `matches` keeps
+ * its identity until the matching state changes.
  */
-export function TransactionRecurringCell({ transaction: t, matches, busy }: TransactionRecurringCellProps) {
+export const TransactionRecurringCell = memo(function TransactionRecurringCell(
+  { transaction: t, matches, busy }: TransactionRecurringCellProps,
+) {
   const summary = matches.byId.get(t.id)
   const picker = matches.picker?.transactionId === t.id ? matches.picker : null
   const linked = summary?.linked ?? null
@@ -97,4 +101,4 @@ export function TransactionRecurringCell({ transaction: t, matches, busy }: Tran
       ) : null}
     </div>
   )
-}
+})

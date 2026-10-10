@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
@@ -34,28 +34,54 @@ export interface TransactionMatches {
 const occurrenceUrl = (o: OccurrenceRef) => `/recurring-items/${o.itemId}/occurrences/${o.nominalDate}`
 
 /**
+ * How long a new set of rows must hold still before its matches are requested.
+ * Paging through quickly would otherwise issue a request for every page passed
+ * through; only the page the user stops on needs its matches.
+ */
+export const MATCHES_DEBOUNCE_MS = 150
+
+/**
  * Recurring-item matching for the rows on screen: which occurrence each
  * transaction settles, which one is suggested for it, and which it was
  * dismissed for. One request per page of the list, never one per row; the
  * full list of occurrences a transaction could settle is fetched only when
  * the user asks for it.
  *
+ * Matches are requested for the ids on screen, so a re-read of the list that
+ * returns the same rows costs nothing. Two things make it ask again: the ids
+ * changing (a page turn or a filter, debounced so that a burst of them makes
+ * one request; the first rows are requested at once) and `revision` changing (the user edited something, so a row's
+ * date or amount, and therefore what it looks like, may have changed). The
+ * second is requested at once, alongside the list re-read that caused it,
+ * because the ids it needs are the ones already on screen; if the re-read
+ * turns out to return different rows, those are requested after it and the
+ * earlier answer is dropped. A response is only applied while it is still the
+ * latest question asked.
+ *
  * The transaction list itself is not re-read after a change here: matching
  * does not change anything the table shows except this column.
  *
  * @param items - The rows on screen, `null` while loading.
  * @param status - Busy flag and error message shared with the page.
- * @returns The rows' matching state and the actions on it.
+ * @param revision - Bumped by the page whenever it re-reads the list after a change.
+ * @returns The rows' matching state and the actions on it. The object keeps its
+ *   identity until the matches or the open list change.
  */
-export function useTransactionMatches(items: readonly Transaction[] | null, status: ActionStatus): TransactionMatches {
+export function useTransactionMatches(
+  items: readonly Transaction[] | null, status: ActionStatus, revision = 0,
+): TransactionMatches {
   const [byId, setById] = useState<ReadonlyMap<string, TransactionMatchSummary>>(new Map())
   const [picker, setPicker] = useState<TransactionCandidates | null>(null)
   const latest = useLatestRequest()
-  const { show } = status
-  // Re-read whenever the list is: an edit to a row's date or amount can change what it looks like.
-  const reload = useCallback(() => {
-    const ids = (items ?? []).map((t) => t.id).join(',')
+  const { begin, end, show } = status
+  const idsKey = useMemo(() => (items ?? []).map((t) => t.id).join(','), [items])
+  // What `reload` asks about, without making every action depend on the rows.
+  const idsRef = useRef(idsKey)
+  idsRef.current = idsKey
+
+  const load = useCallback((ids: string) => {
     if (ids === '') {
+      latest.cancel()
       setById(new Map())
       return Promise.resolve()
     }
@@ -63,47 +89,63 @@ export function useTransactionMatches(items: readonly Transaction[] | null, stat
       (signal) => api.get<TransactionMatchList>(`/recurring-items/transaction-matches?transactionIds=${ids}`, { signal }),
       (list) => setById(new Map(list.transactions.map((t) => [t.transactionId, t]))),
     ).catch((e: unknown) => show(e instanceof Error ? e.message : 'Could not load recurring matches.'))
-  }, [items, latest, show])
+  }, [latest, show])
 
+  const lastRevision = useRef(revision)
+  const asked = useRef(false)
   useEffect(() => {
     setPicker(null)
-    void reload()
-    return latest.cancel
-  }, [reload, latest])
+    const edited = lastRevision.current !== revision
+    lastRevision.current = revision
+    // The first rows are asked about straight away; waiting is only worth it
+    // when the rows are being replaced, as in a burst of page turns.
+    if (edited || idsKey === '' || !asked.current) {
+      if (idsKey !== '') asked.current = true
+      void load(idsKey)
+      return latest.cancel
+    }
+    const timer = setTimeout(() => { void load(idsKey) }, MATCHES_DEBOUNCE_MS)
+    return () => { clearTimeout(timer); latest.cancel() }
+  }, [idsKey, revision, load, latest])
 
-  const run = async (work: () => Promise<unknown>, failure: string) => {
-    status.begin()
+  const run = useCallback(async (work: () => Promise<unknown>, failure: string) => {
+    begin()
     try {
       await work()
       setPicker(null)
-      await reload()
+      await load(idsRef.current)
     } catch (e) {
-      status.show(e instanceof Error ? e.message : failure)
-    } finally { status.end() }
-  }
+      show(e instanceof Error ? e.message : failure)
+    } finally { end() }
+  }, [begin, end, show, load])
 
-  const openPicker = async (t: Transaction) => {
-    status.begin()
+  const openPicker = useCallback(async (t: Transaction) => {
+    begin()
     try {
       setPicker(await api.get<TransactionCandidates>(`/recurring-items/transaction-matches/${t.id}`))
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not look for recurring items this could be.')
-    } finally { status.end() }
-  }
+      show(e instanceof Error ? e.message : 'Could not look for recurring items this could be.')
+    } finally { end() }
+  }, [begin, end, show])
 
-  const match = (t: Transaction, o: OccurrenceRef) =>
-    run(() => api.post(`${occurrenceUrl(o)}/matches`, { transactionId: t.id }), 'Could not record the match.')
+  const closePicker = useCallback(() => setPicker(null), [])
 
-  return {
+  const match = useCallback(
+    (t: Transaction, o: OccurrenceRef) =>
+      run(() => api.post(`${occurrenceUrl(o)}/matches`, { transactionId: t.id }), 'Could not record the match.'),
+    [run],
+  )
+
+  return useMemo(() => ({
     byId,
     picker,
     openPicker,
-    closePicker: () => setPicker(null),
+    closePicker,
     confirm: (t, s) => match(t, s.occurrence),
     match,
     unmatch: (t, o) => run(() => api.del(`${occurrenceUrl(o)}/matches/${t.id}`), 'Could not unmatch that transaction.'),
     dismiss: (t, o) =>
       run(() => api.post(`${occurrenceUrl(o)}/dismissals`, { transactionId: t.id }), 'Could not dismiss the suggestion.'),
     undismiss: (t, o) => run(() => api.del(`${occurrenceUrl(o)}/dismissals/${t.id}`), 'Could not undo the dismissal.'),
-  }
+  }), [byId, picker, openPicker, closePicker, match, run])
 }
