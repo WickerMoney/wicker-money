@@ -9,6 +9,19 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Breaking
+- **The SDK root no longer exports the Zod manifest schemas.**
+  `pluginManifestSchema`, `tableGrantSchema`, `widgetContributionSchema`,
+  `pageContributionSchema` and `remoteEntrySchema` are no longer exported from
+  `@wickermoney/plugin-sdk`. Exporting them tied the stable root to Zod's major
+  version. Nothing in this repository imported them; they were used only inside
+  the SDK. **Migration:** to validate a manifest, call `parseManifest(input)`,
+  which returns `{ manifest }` on success or `{ error }` with a readable message
+  (it also rejects a manifest built against a newer SDK major). The types
+  (`PluginManifest`, `TableGrant`, `WidgetContribution`, `PageContribution`) and
+  `checkRemoteEntry` are unchanged. `zod` is still a dependency of the SDK,
+  because `parseManifest` uses it.
+
 ## [0.5.0] - 2026-10-10
 
 Plugin platform hardening, plus account allowances. The plugin contract now

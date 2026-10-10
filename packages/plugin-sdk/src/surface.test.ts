@@ -107,19 +107,14 @@ describe('public runtime surface', () => {
       'nextScheduledOccurrence',
       'normalizeMoney',
       'occurrences',
-      'pageContributionSchema',
       'pagePath',
       'parseManifest',
-      'pluginManifestSchema',
       'rangeLabel',
-      'remoteEntrySchema',
       'resolveRange',
       'scheduledOccurrences',
       'subtractMoney',
       'sumMoney',
-      'tableGrantSchema',
       'unitsToMoney',
-      'widgetContributionSchema',
     ])
   })
 })
