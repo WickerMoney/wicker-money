@@ -4,6 +4,7 @@ import {
   asOfInMonth, monthPeriod, statusAt, windowElapsed, windowMonth,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
+import type { CategoryRange } from '../repository/CategoryRange.js'
 import type { MonthLine } from './MonthLine.js'
 
 /** What {@link windowLines} found for one month. */
@@ -22,12 +23,13 @@ export interface WindowLines {
 /**
  * Builds the month's lines for every window that overlaps it.
  *
- * Each window costs one spend query, over the window's own start through the
- * end of this month (or the window's end, if that comes first). Clipping to
- * the window's start matters when it begins mid-month, since the month bucket
- * would otherwise include the days before it. A month rarely has more than one
- * or two windows, so one query per window is the simple choice. It is not
- * worth folding them into one.
+ * Every window's spend comes from one query, however many windows there are.
+ * Each window asks for two ranges of its own category: from its start up to
+ * this month (what it spent before), and from its start or the month's first
+ * day, whichever is later, through the end of this month or of the window,
+ * whichever is sooner (what it spent in the month). Clipping to the window's
+ * own start and end matters when it begins or ends mid-month, since a
+ * month-sized bucket would include days outside it.
  *
  * @param repos - Repositories bound to the caller's transaction.
  * @param monthKey - The month being shown, `YYYY-MM`.
@@ -42,25 +44,32 @@ export async function windowLines(
   nameOf: (categoryId: string) => string,
 ): Promise<WindowLines> {
   const windows = await repos.lines.listWindows(monthKey)
-  const { end: monthEnd } = monthPeriod(monthKey)
+  const { start: monthStart, end: monthEnd } = monthPeriod(monthKey)
   const asOf = asOfInMonth(monthKey, today)
+
+  const ranges: CategoryRange[] = []
+  for (const w of windows) {
+    const until = w.period_end < monthEnd ? w.period_end : monthEnd
+    // A range is left out when it is empty: a window that starts inside the
+    // month has no "before", and one that ends before the month's first day
+    // has no "now".
+    const beforeEnd = until < monthStart ? until : monthStart
+    if (w.period_start < beforeEnd) {
+      ranges.push({ key: `${w.id}:before`, categoryId: w.category_id, start: w.period_start, end: beforeEnd })
+    }
+    const nowStart = w.period_start > monthStart ? w.period_start : monthStart
+    if (nowStart < until) ranges.push({ key: `${w.id}:now`, categoryId: w.category_id, start: nowStart, end: until })
+  }
+  const spent = await repos.spend.byCategoryRanges(ranges)
 
   const lines: MonthLine[] = []
   const spentInMonth = new Map<string, string>()
 
   for (const w of windows) {
-    const until = w.period_end < monthEnd ? w.period_end : monthEnd
-    const byMonth = await repos.spend.byCategoryAndMonth(w.period_start, until)
-
-    let spentBefore = ZERO_MONEY
-    let spentNow = ZERO_MONEY
-    const prefix = `${w.category_id}:`
-    for (const [key, amount] of byMonth) {
-      if (!key.startsWith(prefix)) continue
-      const month = key.slice(prefix.length)
-      if (month < monthKey) spentBefore = addMoney(spentBefore, amount)
-      else if (month === monthKey) spentNow = addMoney(spentNow, amount)
-    }
+    // Through addMoney so a total is always written the same way, as before
+    // when the months were added up here.
+    const spentBefore = addMoney(ZERO_MONEY, spent.get(`${w.id}:before`) ?? ZERO_MONEY)
+    const spentNow = addMoney(ZERO_MONEY, spent.get(`${w.id}:now`) ?? ZERO_MONEY)
 
     const figures = windowMonth({
       start: w.period_start, funded: w.planned, monthKey, spentBefore, spentInMonth: spentNow,
