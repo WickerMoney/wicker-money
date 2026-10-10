@@ -1,7 +1,8 @@
+import { addDays, addMonths } from '@wickermoney/plugin-sdk/recurrence'
 import { asUser, type Db } from '../client.js'
 import { toMoney } from '../../money.js'
 import type { TransactionService } from '../../transactions/service/TransactionService.js'
-import { addDays, addMonthsClamped, firstDayOfMonth, type SeedRng, todayIso } from './seedRng.js'
+import { firstDayOfMonth, type SeedRng, todayIso } from './seedRng.js'
 
 /** One fixed (non-random) monthly transaction or transfer, anchored to a day offset from the 1st. */
 interface FixedMonthly {
@@ -84,7 +85,7 @@ export async function seedMonthlyHistory(
   const today = todayIso()
 
   for (let monthsAgo = monthsBack - 1; monthsAgo >= 0; monthsAgo--) {
-    const monthFirst = firstDayOfMonth(addMonthsClamped(today, -monthsAgo))
+    const monthFirst = firstDayOfMonth(addMonths(today, -monthsAgo))
 
     // Two paychecks, semi-monthly. These are ordinary ledger transactions,
     // not `core.recurring_items` rows, so they don't depend on the
@@ -271,7 +272,7 @@ export async function seedLightHistory(
 ): Promise<void> {
   const today = todayIso()
   for (let monthsAgo = 2; monthsAgo >= 0; monthsAgo--) {
-    const monthFirst = firstDayOfMonth(addMonthsClamped(today, -monthsAgo))
+    const monthFirst = firstDayOfMonth(addMonths(today, -monthsAgo))
     await create(service, userId, {
       accountId: accountIds.get('checking')!,
       amount: '2100.0000',

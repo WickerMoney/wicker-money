@@ -1,8 +1,9 @@
 import { BUDGETS_PLUGIN_ID } from '@wickermoney/plugin-budgets/server'
+import { addMonths } from '@wickermoney/plugin-sdk/recurrence'
 import { asPlugin, type Db } from '../client.js'
 import { pluginRoleName } from '../plugin-roles.js'
 import { queryRunner } from '../../plugins/queryRunner.js'
-import { addMonthsClamped, firstDayOfMonth, todayIso } from './seedRng.js'
+import { firstDayOfMonth, todayIso } from './seedRng.js'
 import type { Persona } from './seedPersonas.js'
 
 /** One `plugin_budgets.budget_lines` row to create, for one calendar month. */
@@ -65,9 +66,9 @@ export async function createBudgetLines(
     for (const def of defs) {
       const categoryId = slugToId.get(def.categorySlug)
       if (categoryId === undefined) continue
-      const monthAnchor = addMonthsClamped(todayIso(), -def.monthsAgo)
+      const monthAnchor = addMonths(todayIso(), -def.monthsAgo)
       const periodStart = firstDayOfMonth(monthAnchor)
-      const periodEnd = firstDayOfMonth(addMonthsClamped(monthAnchor, 1))
+      const periodEnd = firstDayOfMonth(addMonths(monthAnchor, 1))
       await q`
         INSERT INTO plugin_budgets.budget_lines
           (user_id, category_id, period_start, period_end, planned, rollover, note)
@@ -144,9 +145,9 @@ export async function createAccountLines(
       const accountId = accountIds.get(def.accountKey)
       if (accountId === undefined) continue
       const excluded = def.excludedSlugs.flatMap((slug) => slugToId.get(slug) ?? [])
-      const monthAnchor = addMonthsClamped(todayIso(), -def.monthsAgo)
+      const monthAnchor = addMonths(todayIso(), -def.monthsAgo)
       const periodStart = firstDayOfMonth(monthAnchor)
-      const periodEnd = firstDayOfMonth(addMonthsClamped(monthAnchor, 1))
+      const periodEnd = firstDayOfMonth(addMonths(monthAnchor, 1))
       await q`
         INSERT INTO plugin_budgets.account_lines
           (user_id, account_id, period_start, period_end, planned, rollover, excluded_category_ids, note)

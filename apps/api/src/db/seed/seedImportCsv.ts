@@ -1,8 +1,9 @@
 import { IMPORT_PLUGIN_ID } from '@wickermoney/plugin-import-csv/server'
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import { asPlugin, type Db } from '../client.js'
 import { pluginRoleName } from '../plugin-roles.js'
 import { queryRunner } from '../../plugins/queryRunner.js'
-import { addDays, todayIso } from './seedRng.js'
+import { todayIso } from './seedRng.js'
 
 /**
  * Seeds two saved column mappings and two import batches for `hero`: one

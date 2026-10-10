@@ -1,7 +1,8 @@
+import { addDays, addMonths } from '@wickermoney/plugin-sdk/recurrence'
 import { asUser, type Db } from '../client.js'
 import type { RecurrenceFrequency, RecurringKind } from '../models/index.js'
 import type { Persona } from './seedPersonas.js'
-import { addDays, addMonthsClamped, firstDayOfMonth, todayIso } from './seedRng.js'
+import { firstDayOfMonth, todayIso } from './seedRng.js'
 
 /** One leg of a seeded recurring item: a signed amount on one of the persona's accounts. */
 export interface RecurringLegDef {
@@ -101,7 +102,7 @@ export function recurringItemDefsFor(personaKey: Persona['key']): readonly Recur
       { name: 'Alex Paycheck', kind: 'income', frequency: 'biweekly', seriesStartDate: addDays(today, -365), categorySlug: 'salary', legs: [leg('monthly', '1850.0000'), leg('yearly', '350.0000')] },
       // Second income, biweekly on the offset week: a payday every week.
       { name: 'Sam Paycheck', kind: 'income', frequency: 'biweekly', seriesStartDate: addDays(today, -358), categorySlug: 'salary', legs: [leg('monthly', '1420.0000')] },
-      { name: 'Mortgage', kind: 'bill', frequency: 'monthly', seriesStartDate: addMonthsClamped(monthStart, -12), categorySlug: 'mortgage-rent', legs: [leg('monthly', '-2100.0000')] },
+      { name: 'Mortgage', kind: 'bill', frequency: 'monthly', seriesStartDate: addMonths(monthStart, -12), categorySlug: 'mortgage-rent', legs: [leg('monthly', '-2100.0000')] },
       { name: 'Electricity', kind: 'bill', frequency: 'monthly', seriesStartDate: addDays(today, -340), categorySlug: 'electricity', legs: [leg('monthly', '-140.0000')] },
       { name: 'Phones', kind: 'bill', frequency: 'monthly', seriesStartDate: addDays(today, -330), categorySlug: 'mobile-phone', legs: [leg('monthly', '-85.0000')] },
       { name: 'Card Payment', kind: 'debt_payment', frequency: 'monthly', seriesStartDate: addDays(today, -320), legs: move('monthly', 'credit_card', '600.0000') },
