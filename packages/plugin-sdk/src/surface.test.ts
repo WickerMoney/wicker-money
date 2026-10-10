@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as date from './date/index.js'
 import * as root from './index.js'
 import * as money from './money/index.js'
 import * as recurrence from './recurrence/index.js'
@@ -19,6 +20,10 @@ const names = (ns: object): string[] => Object.keys(ns).sort()
 describe('public runtime surface', () => {
   it('/runtime', () => {
     expect(names(runtime)).toEqual(['adoptPluginStyles'])
+  })
+
+  it('/date', () => {
+    expect(names(date)).toEqual(['addDays', 'addMonths'])
   })
 
   it('/recurrence', () => {

@@ -1,4 +1,4 @@
-import { addDays } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'

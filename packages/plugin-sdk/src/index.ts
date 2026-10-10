@@ -8,7 +8,7 @@
  * The two groups are kept apart so a Node process can import the manifest
  * exports without pulling in React.
  *
- * Stability: the manifest, runtime, range, money and server exports are
+ * Stability: the manifest, runtime, range, date, money and server exports are
  * `@stable`. The recurrence exports re-exported here are `@experimental`,
  * exactly as they are from `@wickermoney/plugin-sdk/recurrence`: an export
  * keeps the tier of the entry point it comes from, however it is imported.
@@ -62,9 +62,11 @@ export {
 } from './range.js'
 export type { DashboardRange, RangeKey } from './range.js'
 
+export { addDays, addMonths } from './date/index.js'
+
 export {
   DEFAULT_SEMIMONTHLY_DAYS, RECURRENCE_FREQUENCIES,
-  addDays, addMonths, dailyBalances, flowTotals, monthlyEquivalent, nextOccurrence, nextPayday, nextScheduledOccurrence,
+  dailyBalances, flowTotals, monthlyEquivalent, nextOccurrence, nextPayday, nextScheduledOccurrence,
   occurrences, scheduledOccurrences,
 } from './recurrence/index.js'
 export type {

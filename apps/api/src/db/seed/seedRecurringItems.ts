@@ -1,4 +1,4 @@
-import { addDays, addMonths } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays, addMonths } from '@wickermoney/plugin-sdk/date'
 import { asUser, type Db } from '../client.js'
 import type { RecurrenceFrequency, RecurringKind } from '../models/index.js'
 import type { Persona } from './seedPersonas.js'

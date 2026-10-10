@@ -1,4 +1,4 @@
-import { addDays } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
 import { MAX_MOVE_DAYS } from './OCCURRENCE_RULES.js'
 import type { DateRange } from './RecurringData.js'
 

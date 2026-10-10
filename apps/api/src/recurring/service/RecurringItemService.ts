@@ -1,6 +1,5 @@
-import {
-  addDays, dailyBalances, monthlyEquivalent, nextPayday, nextScheduledOccurrence, occurrences, scheduledOccurrences,
-} from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
+import { dailyBalances, monthlyEquivalent, nextPayday, nextScheduledOccurrence, occurrences, scheduledOccurrences } from '@wickermoney/plugin-sdk/recurrence'
 import type { RecurringItem } from '@wickermoney/plugin-sdk/recurrence'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import type { Repositories } from '../../data/Repositories.js'

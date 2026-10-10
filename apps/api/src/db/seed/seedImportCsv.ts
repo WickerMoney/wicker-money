@@ -1,5 +1,5 @@
 import { IMPORT_PLUGIN_ID } from '@wickermoney/plugin-import-csv/server'
-import { addDays } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays } from '@wickermoney/plugin-sdk/date'
 import { asPlugin, type Db } from '../client.js'
 import { pluginRoleName } from '../plugin-roles.js'
 import { queryRunner } from '../../plugins/queryRunner.js'
