@@ -6,10 +6,10 @@ import { createHarness, TEST_ADMIN_DATABASE_URL, type Harness } from '../../test
 import { BOOTSTRAP_OWNER_SETTING } from '../../auth/repository/BOOTSTRAP_OWNER_SETTING.js'
 import type { Executor } from './support/index.js'
 import { instanceHasUsers } from '../instanceHasUsers.js'
-import { down, up } from './027_bootstrap_owner_email.js'
+import { down, up } from './028_bootstrap_owner_email.js'
 
 /**
- * Migration 027: a configured owner email decides who becomes the owner,
+ * Migration 028: a configured owner email decides who becomes the owner,
  * without weakening migration 026's guarantee of one owner per race.
  *
  * Like the 026 suite, tests that need "no owner yet" demote the owners the

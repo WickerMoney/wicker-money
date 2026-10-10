@@ -15,7 +15,7 @@ export class KyselyUserRepository implements UserRepository {
   /** @inheritdoc */
   async register(email: string, passwordHash: string, bootstrapOwnerEmail?: string): Promise<UserIdentity> {
     // The database cannot read the environment, so the configured owner email
-    // travels as a setting that ends with this transaction. See migration 027.
+    // travels as a setting that ends with this transaction. See migration 028.
     if (bootstrapOwnerEmail !== undefined) {
       await sql`SELECT set_config(${BOOTSTRAP_OWNER_SETTING}, ${bootstrapOwnerEmail}, true)`.execute(this.trx)
     }
