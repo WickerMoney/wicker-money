@@ -79,6 +79,16 @@ curated, human-readable version.
   user change clears it. A plugin can force a fresh read with
   `{ cache: 'no-store' }`. Performance only: no API change, no server-side
   cache. See "Request sharing in the scoped client" in `DEVELOPMENT.md`.
+- **The transaction list's recurring matches load their data once.** The
+  request that shows which transactions settle, are suggested for, or were
+  dismissed for a recurring occurrence read the recurring items, records,
+  links and tracking starts twice, once to describe occurrences and once to
+  find suggestions. It now reads them once for the whole request: 14 database
+  statements instead of 20, the same however many recurring items and
+  transactions there are. Nothing is kept between requests or shared between
+  users. Performance only: no API change and the same results. The new
+  `countStatements` test helper and a statement-count integration suite guard
+  the recurring read paths.
 - **Plugin trust boundary wording.** The docs, SDK comments and `SECURITY.md`
   now say plainly that UI plugins run fully trusted in the app's origin. A
   plugin's `requiredTables` is enforced by PostgreSQL for its server-side code,
