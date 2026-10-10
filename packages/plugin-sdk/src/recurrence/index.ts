@@ -20,3 +20,4 @@ export { nextScheduledOccurrence, scheduledOccurrences } from './scheduled.js'
 export {
   dailyBalances, flowTotals, monthlyEquivalent, nextPayday,
 } from './projection.js'
+export { addDays, addMonths } from './calendar.js'
