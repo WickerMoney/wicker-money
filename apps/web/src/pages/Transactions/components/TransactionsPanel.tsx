@@ -24,7 +24,7 @@ export interface TransactionsPanelProps {
 export function TransactionsPanel({ list, reference, status }: TransactionsPanelProps) {
   const { accounts, categories, enabledCategories } = reference
   const { filters, items } = list
-  const matches = useTransactionMatches(items, status)
+  const matches = useTransactionMatches(items, status, list.revision)
 
   const optionsFor = useCallback(
     (currentId: string | null) => categoryOptionsFor(categories, enabledCategories, currentId),
