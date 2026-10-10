@@ -1,4 +1,5 @@
 import type { AccountScope } from './AccountScope.js'
+import type { CategoryRange } from './CategoryRange.js'
 
 /** Net outflow per category, or per account, derived from the ledger on every read. */
 export interface SpendRepository {
@@ -20,9 +21,25 @@ export interface SpendRepository {
    *
    * @param start - Inclusive start date, `YYYY-MM-DD`.
    * @param end - Exclusive end date, `YYYY-MM-DD`.
+   * @param categoryIds - Only these categories, when given. Omit for all of them.
    * @returns A map keyed `"<categoryId>:<YYYY-MM>"` to net spend as a decimal string.
    */
-  byCategoryAndMonth(start: string, end: string): Promise<Map<string, string>>
+  byCategoryAndMonth(start: string, end: string, categoryIds?: readonly string[]): Promise<Map<string, string>>
+
+  /**
+   * Net spend for each of a set of category ranges, in one query.
+   *
+   * A range is one category over its own start and end dates, which need not
+   * fall on month boundaries; a window that begins on the 15th is measured
+   * from the 15th. The same rules as {@link SpendRepository.byCategory} apply.
+   * The ledger is read once, over the earliest start to the latest end, however
+   * many ranges there are.
+   *
+   * @param ranges - What to measure. An empty list returns an empty map without querying.
+   * @returns Range key to net spend as a decimal string. A range that nets to
+   *   zero, or is empty, is absent.
+   */
+  byCategoryRanges(ranges: readonly CategoryRange[]): Promise<Map<string, string>>
 
   /**
    * Net spend for each of a set of account scopes, in one query.

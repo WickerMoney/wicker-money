@@ -26,11 +26,12 @@ export class QueryBalanceRepository implements BalanceRepository {
   async historyThrough(
     monthKey: string,
     categoryIds: readonly string[],
+    currentSpend: ReadonlyMap<string, string>,
   ): Promise<Map<string, HistoryEntry[]>> {
     if (categoryIds.length === 0) return new Map()
 
     const from = monthPeriod(shiftMonth(monthKey, -CARRY_LOOKBACK_MONTHS)).start
-    const { end } = monthPeriod(monthKey)
+    const { start: monthStart, end } = monthPeriod(monthKey)
 
     const history = await this.q<{
       category_id: string
@@ -50,17 +51,22 @@ export class QueryBalanceRepository implements BalanceRepository {
       ORDER BY category_id, period_start
     `
 
-    // Spend for every month in range, in one pass, rather than a query per month.
-    const spendByMonth = await this.spend.byCategoryAndMonth(from, end)
+    if (history.length === 0) return new Map()
+
+    // Spend for every earlier month, in one pass rather than a query per month,
+    // and only for the categories asked about. The month itself is not read
+    // again: the caller already holds it (see the interface).
+    const spendByMonth = await this.spend.byCategoryAndMonth(from, monthStart, categoryIds)
 
     const byCategory = new Map<string, HistoryEntry[]>()
     for (const row of history) {
       const key = monthKeyOf(row.period_start)
       const list = byCategory.get(row.category_id) ?? []
+      const spent = key === monthKey ? currentSpend.get(row.category_id) : spendByMonth.get(`${row.category_id}:${key}`)
       list.push({
         monthKey: key,
         planned: row.planned,
-        spent: spendByMonth.get(`${row.category_id}:${key}`) ?? ZERO_MONEY,
+        spent: spent ?? ZERO_MONEY,
         rollover: row.rollover,
       })
       byCategory.set(row.category_id, list)

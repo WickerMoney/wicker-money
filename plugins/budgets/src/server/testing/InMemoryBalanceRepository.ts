@@ -19,11 +19,12 @@ export class InMemoryBalanceRepository implements BalanceRepository {
   async historyThrough(
     monthKey: string,
     categoryIds: readonly string[],
+    currentSpend: ReadonlyMap<string, string>,
   ): Promise<Map<string, HistoryEntry[]>> {
     const out = new Map<string, HistoryEntry[]>()
     const earliest = shiftMonth(monthKey, -CARRY_LOOKBACK_MONTHS)
     const spendByMonth = await new InMemorySpendRepository(this.store, this.userId)
-      .byCategoryAndMonth(`${earliest}-01`, monthPeriod(monthKey).end)
+      .byCategoryAndMonth(`${earliest}-01`, monthPeriod(monthKey).start, categoryIds)
     const earlier = this.store.lines
       .filter(
         (l) =>
@@ -36,7 +37,8 @@ export class InMemoryBalanceRepository implements BalanceRepository {
       .sort((a, b) => a.period_start.localeCompare(b.period_start))
     for (const l of earlier) {
       const key = monthKeyOf(l.period_start)
-      const spent = spendByMonth.get(`${l.category_id}:${key}`) ?? '0.0000'
+      const spent =
+        (key === monthKey ? currentSpend.get(l.category_id) : spendByMonth.get(`${l.category_id}:${key}`)) ?? '0.0000'
       const list = out.get(l.category_id) ?? []
       list.push({ monthKey: key, planned: l.planned, spent, rollover: l.rollover })
       out.set(l.category_id, list)

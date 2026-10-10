@@ -1,5 +1,6 @@
 import { monthPeriod } from '../../shared/index.js'
 import type { AccountScope } from './AccountScope.js'
+import type { CategoryRange } from './CategoryRange.js'
 import type { Query } from '@wickermoney/plugin-sdk/server'
 import type { SpendRepository } from './SpendRepository.js'
 
@@ -41,7 +42,12 @@ export class QuerySpendRepository implements SpendRepository {
   }
 
   /** @inheritdoc */
-  async byCategoryAndMonth(start: string, end: string): Promise<Map<string, string>> {
+  async byCategoryAndMonth(
+    start: string,
+    end: string,
+    categoryIds?: readonly string[],
+  ): Promise<Map<string, string>> {
+    const only = categoryIds === undefined ? null : [...categoryIds]
     const rows = await this.q<{ category_id: string; month_key: string; spent: string }>`
       WITH expenses AS (
         SELECT t.id, t.category_id, t.amount, t.transaction_date
@@ -73,10 +79,64 @@ export class QuerySpendRepository implements SpendRepository {
              (-SUM(amount))::text AS spent
       FROM parts
       WHERE category_id IS NOT NULL
+        -- Filtered here, after the parts are built, because a split's category
+        -- can differ from its parent's.
+        AND (${only}::uuid[] IS NULL OR category_id = ANY(${only}::uuid[]))
       GROUP BY category_id, to_char(transaction_date, 'YYYY-MM')
       HAVING SUM(amount) <> 0
     `
     return new Map(rows.map((r) => [`${r.category_id}:${r.month_key}`, r.spent]))
+  }
+
+  /** @inheritdoc */
+  async byCategoryRanges(ranges: readonly CategoryRange[]): Promise<Map<string, string>> {
+    if (ranges.length === 0) return new Map()
+    // The ranges go in as one JSON parameter and are unpacked in SQL, as for
+    // byAccountScopes, so the cost is one query however many windows there are.
+    const payload = JSON.stringify(
+      ranges.map((r) => ({ key: r.key, category_id: r.categoryId, from_date: r.start, to_date: r.end })),
+    )
+    const rows = await this.q<{ key: string; spent: string }>`
+      WITH ranges AS (
+        SELECT r.key, r.category_id, r.from_date::date AS from_date, r.to_date::date AS to_date
+        FROM jsonb_to_recordset(${payload}::jsonb)
+          AS r(key text, category_id uuid, from_date text, to_date text)
+      ),
+      expenses AS (
+        SELECT t.id, t.category_id, t.amount, t.transaction_date
+        FROM core.transactions t
+        LEFT JOIN core.categories c ON c.id = t.category_id
+        WHERE t.transaction_date >= (SELECT min(from_date) FROM ranges)
+          AND t.transaction_date <  (SELECT max(to_date) FROM ranges)
+          AND t.transfer_id IS NULL
+          AND t.transfer_account_id IS NULL
+          AND (c.kind IS NULL OR c.kind NOT IN ('transfer', 'income'))
+      ),
+      split_totals AS (
+        SELECT s.transaction_id, SUM(s.amount) AS split_sum
+        FROM core.transaction_splits s
+        JOIN expenses e ON e.id = s.transaction_id
+        GROUP BY s.transaction_id
+      ),
+      parts AS (
+        SELECT e.category_id, e.transaction_date, e.amount - COALESCE(st.split_sum, 0) AS amount
+        FROM expenses e
+        LEFT JOIN split_totals st ON st.transaction_id = e.id
+        UNION ALL
+        SELECT s.category_id, e.transaction_date, s.amount
+        FROM core.transaction_splits s
+        JOIN expenses e ON e.id = s.transaction_id
+      )
+      SELECT rg.key, (-SUM(p.amount))::text AS spent
+      FROM ranges rg
+      JOIN parts p
+        ON p.category_id = rg.category_id
+       AND p.transaction_date >= rg.from_date
+       AND p.transaction_date <  rg.to_date
+      GROUP BY rg.key
+      HAVING SUM(p.amount) <> 0
+    `
+    return new Map(rows.map((r) => [r.key, r.spent]))
   }
 
   /** @inheritdoc */
