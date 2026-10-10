@@ -1,6 +1,7 @@
 import { addMoney, subtractMoney, ZERO_MONEY } from '@wickermoney/plugin-sdk/money'
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import {
-  addDays, asOfInMonth, monthPeriod, statusAt, windowElapsed, windowMonth,
+  asOfInMonth, monthPeriod, statusAt, windowElapsed, windowMonth,
 } from '../../shared/index.js'
 import type { BudgetRepositories } from '../repository/BudgetRepositories.js'
 import type { MonthLine } from './MonthLine.js'

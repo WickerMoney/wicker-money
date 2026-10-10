@@ -1,4 +1,5 @@
-import { addDays, monthPeriod } from '../../shared/index.js'
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
+import { monthPeriod } from '../../shared/index.js'
 import type { AccountRow } from '../repository/AccountRow.js'
 import type { CategoryRow } from '../repository/CategoryRow.js'
 import type { AccountTransaction } from './AccountTransaction.js'
