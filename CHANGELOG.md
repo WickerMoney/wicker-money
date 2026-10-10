@@ -50,6 +50,24 @@ curated, human-readable version.
   and max UUIDs, the same rule the API applies to `:id` params. Every id
   PostgreSQL generates passes; braces, `urn:uuid:`, missing hyphens and
   non-strings do not.
+- **`addDays` and `addMonths` in `@wickermoney/plugin-sdk/recurrence`.**
+  `addDays(date, days)` and `addMonths(date, months)` work on `YYYY-MM-DD`
+  strings with no time zone involved. Both accept negative values.
+  `addMonths` clamps to the last day of a shorter month, so Aug 31 plus 6
+  months is Feb 28 (Feb 29 in a leap year). Each call clamps on its own, so
+  add the total to the original date rather than stepping a month at a time.
+  Anything that is not a real calendar date or a whole number throws
+  `RangeError`. Also re-exported from the package root. Additive.
+- **Stability tiers for the SDK.** The README now lists each entry point as
+  `stable` or `experimental`, with who uses it today and what each tier
+  promises, and the entry points' module documentation carries the same tag.
+  The root, `/runtime`, `/money` and `/server` are stable: a breaking change
+  there comes with a `BREAKING CHANGE` footer, a CHANGELOG entry under
+  Breaking and a migration note. `/recurrence` is experimental and may change
+  in any pre-1.0 minor release; no export was removed from it. A new test lists
+  every runtime export of each entry point, so a surface change cannot slip
+  through unnoticed. Documentation and tests only: nothing in the published
+  SDK changed other than the two helpers above.
 
 ### Changed
 
@@ -83,6 +101,15 @@ curated, human-readable version.
   `bundled.ts` said bundled plugins hold no privilege a third-party plugin
   could not request. That is true of their browser half; their server half is
   imported and run by the API.
+
+- **One copy of the date helpers.** The API, the web app, the seed data and
+  Budgets each carried their own `addDays`, and the API and seed their own
+  `addMonths`. All of them now use the SDK's. Results are the same for every
+  valid date, including month-end clamping, negative values, leap years and
+  year rollover. The one difference is an impossible date such as `2026-02-30`,
+  which used to roll over to March 2 in the API, web and seed copies and now
+  throws `RangeError`; every date those callers pass is already validated or
+  comes from the server. Budgets' page chunk grows by about 0.7 kB.
 
 - **Old images are pruned.** `package-cleanup.yml` and `preview-cleanup.yml`
   remove old `:edge-<short sha>` tags, old prereleases, untagged versions and
