@@ -13,9 +13,11 @@ import { compare } from './compare.js'
 import type { Described } from './Described.js'
 import { confidentPairs } from './confidentPairs.js'
 import { describeAt, wantedRange, type WantedOccurrence } from './describeAt.js'
+import { describeRemaining } from './describeRemaining.js'
+import type { HistoryRows } from './HistoryRows.js'
 import { dismissedPairKeys } from './dismissedPairKeys.js'
 import { loadRecurringData } from './loadRecurringData.js'
-import { MATCH_WINDOW_DAYS, rankCandidates, rankParsedCandidates } from './matchCandidates.js'
+import { MATCH_WINDOW_DAYS, rankParsedCandidates } from './matchCandidates.js'
 import { parseCandidates } from './parseCandidates.js'
 import type {
   DismissalView, DismissedSuggestion, MatchSuggestion, MatchSuggestionList, OccurrenceCandidates,
@@ -70,7 +72,8 @@ export class RecurringOccurrenceService {
   get(userId: string, itemId: string, nominalDate: string): Promise<OccurrenceView> {
     return this.uow.forUser(userId, async (repos) => {
       const row = await findOccurrence(repos, itemId, nominalDate)
-      return this.view(repos, userId, row, nominalDate)
+      const today = await this.today(repos, userId)
+      return toView(row, describeFrom(row, nominalDate, today, await this.readHistory(repos, itemId, nominalDate)))
     }, { readOnly: true })
   }
 
@@ -92,7 +95,9 @@ export class RecurringOccurrenceService {
     return this.uow.forUser(userId, async (repos) => {
       const row = await findOccurrence(repos, itemId, nominalDate)
       const legs = checkOverride(row, nominalDate, input)
-      const state = await this.state(repos, userId, row, nominalDate)
+      const today = await this.today(repos, userId)
+      const before = await this.readHistory(repos, row.id, nominalDate)
+      const state = describeFrom(row, nominalDate, today, before)
       if (input.skipped && state.legs.some((l) => l.transaction !== null)) {
         throw new ConflictError(
           'This occurrence has a transaction matched to it, so it happened. Unmatch the transaction to skip it.',
@@ -103,7 +108,10 @@ export class RecurringOccurrenceService {
       const expectedDate = input.expectedDate === nominalDate ? null : input.expectedDate
       await repos.recurringOccurrences.write(userId, id, { skipped: input.skipped, expectedDate, legs })
       await repos.recurringOccurrences.deleteIfEmpty(id)
-      return this.view(repos, userId, row, nominalDate)
+      // Recording an occurrence writes its record and nothing else: the links
+      // and tracking starts read above still stand, and today with them.
+      const records = await repos.recurringOccurrences.listRecords(historyFilter(row.id, nominalDate))
+      return toView(row, describeFrom(row, nominalDate, today, { ...before, records }))
     })
   }
 
@@ -121,7 +129,7 @@ export class RecurringOccurrenceService {
     return this.uow.forUser(userId, async (repos) => {
       const today = await this.today(repos, userId)
       const row = await findOccurrence(repos, itemId, nominalDate)
-      const state = await this.stateOn(repos, row, nominalDate, today)
+      const state = describeFrom(row, nominalDate, today, await this.readHistory(repos, row.id, nominalDate))
       const open = state.legs.filter((l) => l.transaction === null)
       const search = await repos.recurringOccurrences.findCandidates(
         open.map((l) => l.accountId),
@@ -163,7 +171,8 @@ export class RecurringOccurrenceService {
     return this.uow.forUser(userId, async (repos) => {
       const today = await this.today(repos, userId)
       const data = await loadRecurringData(repos, suggestionWindow(today).scan)
-      return { today, ...(await findSuggestions(repos, data, today)) }
+      const { suggestions, dismissed, truncated } = await findSuggestions(repos, data, today, true)
+      return { today, suggestions, dismissed, truncated }
     }, { readOnly: true })
   }
 
@@ -211,15 +220,17 @@ export class RecurringOccurrenceService {
       ])
       const data = range === null ? undefined : await loadRecurringData(repos, range)
 
-      const described = data === undefined ? new Map<string, Described>() : describeAt(data, today, wanted)
+      // The suggestions already describe the occurrences in the window; only
+      // the rest of the wanted ones are worked out again.
+      const { suggestions, inWindow } = data !== undefined && wantsSuggestions
+        ? await findSuggestions(repos, data, today, false)
+        : { suggestions: [], inWindow: new Map<string, Described>() }
+      const described = data === undefined ? new Map<string, Described>() : describeRemaining(data, today, wanted, inWindow)
       const viewOf = (itemId: string, nominalDate: string): OccurrenceView | null => {
         const found = described.get(occurrenceKey(itemId, nominalDate))
         return found === undefined ? null : toOccurrenceView(found.row, found.state, found.state.expectedDate)
       }
 
-      const { suggestions } = data !== undefined && wantsSuggestions
-        ? await findSuggestions(repos, data, today)
-        : { suggestions: [] }
       const suggestionFor = new Map(suggestions.map((s) => [s.candidate.transactionId, s]))
 
       const transactions: TransactionMatchSummary[] = []
@@ -281,6 +292,7 @@ export class RecurringOccurrenceService {
         .map((d) => occurrenceKey(d.recurring_item_id, d.nominal_date)))
 
       const candidates: TransactionCandidate[] = []
+      const parsedTx = parseCandidates([tx])
       for (const row of items) {
         const h = history(row.id)
         for (const nominalDate of occurrences(toSchedule(row), scan.from, scan.to)) {
@@ -288,7 +300,7 @@ export class RecurringOccurrenceService {
           if (state.status === 'skipped') continue
           const leg = state.legs.find((l) => l.accountId === tx.account_id)
           if (leg === undefined || leg.transaction !== null) continue
-          const [candidate] = rankCandidates(leg, state.expectedDate, [tx])
+          const [candidate] = rankParsedCandidates(leg, state.expectedDate, parsedTx)
           if (candidate === undefined) continue
           candidates.push({
             occurrence: toOccurrenceView(row, state, state.expectedDate),
@@ -384,8 +396,10 @@ export class RecurringOccurrenceService {
       const [tx] = await repos.recurringOccurrences.findTransactions([transactionId])
       if (tx === undefined) throw new NotFoundError('Transaction')
 
-      const state = await this.state(repos, userId, row, nominalDate)
-      if (state.legs.some((l) => l.transaction?.id === tx.id)) return this.view(repos, userId, row, nominalDate)
+      const today = await this.today(repos, userId)
+      const before = await this.readHistory(repos, row.id, nominalDate)
+      const state = describeFrom(row, nominalDate, today, before)
+      if (state.legs.some((l) => l.transaction?.id === tx.id)) return toView(row, state)
       if (tx.recurring_occurrence_id !== null) {
         throw new ConflictError('That transaction is already matched to another occurrence. Unmatch it there first.', 'already_matched')
       }
@@ -414,7 +428,7 @@ export class RecurringOccurrenceService {
       await repos.recurringOccurrences.setLink(linked, id)
       // Matching by hand overrides an earlier "not this one".
       await repos.recurringOccurrences.removeDismissals(linked, itemId, nominalDate)
-      return this.view(repos, userId, row, nominalDate)
+      return toView(row, await this.describeAfterLinking(repos, row, nominalDate, today, before))
     })
   }
 
@@ -433,7 +447,8 @@ export class RecurringOccurrenceService {
   unmatch(userId: string, itemId: string, nominalDate: string, transactionId: string): Promise<OccurrenceView> {
     return this.uow.forUser(userId, async (repos) => {
       const row = await findOccurrence(repos, itemId, nominalDate)
-      const [record] = await repos.recurringOccurrences.listRecords({ itemId, from: nominalDate, to: addDays(nominalDate, 1) })
+      const records = await repos.recurringOccurrences.listRecords(historyFilter(itemId, nominalDate))
+      const [record] = records
       const [tx] = await repos.recurringOccurrences.findTransactions([transactionId])
       if (record === undefined || tx === undefined || tx.recurring_occurrence_id !== record.id) throw new NotFoundError('Match')
 
@@ -445,7 +460,8 @@ export class RecurringOccurrenceService {
       }
       await repos.recurringOccurrences.setLink(unlinked, null)
       await repos.recurringOccurrences.deleteIfEmpty(record.id)
-      return this.view(repos, userId, row, nominalDate)
+      const today = await this.today(repos, userId)
+      return toView(row, await this.describeAfterLinking(repos, row, nominalDate, today, { records }))
     })
   }
 
@@ -454,28 +470,52 @@ export class RecurringOccurrenceService {
     const timezone = (await repos.reports.findTimezone(userId)) ?? 'UTC'
     return todayIn(timezone, this.now())
   }
-
-  /** One occurrence's state, against the user's today. */
-  private async state(repos: Repositories, userId: string, row: RecurringItemRow, nominalDate: string): Promise<OccurrenceState> {
-    return this.stateOn(repos, row, nominalDate, await this.today(repos, userId))
+  /** What describing one occurrence reads: its records and links, and every item's tracking start. */
+  private async readHistory(repos: Repositories, itemId: string, nominalDate: string): Promise<HistoryRows> {
+    const filter = historyFilter(itemId, nominalDate)
+    return {
+      records: await repos.recurringOccurrences.listRecords(filter),
+      links: await repos.recurringOccurrences.listLinks(filter),
+      trackingStarts: await repos.recurringOccurrences.trackingStarts(),
+    }
   }
 
-  /** One occurrence's state, against a given today. */
-  private async stateOn(repos: Repositories, row: RecurringItemRow, nominalDate: string, today: string): Promise<OccurrenceState> {
-    const filter = { itemId: row.id, from: nominalDate, to: addDays(nominalDate, 1) }
-    const history: ItemHistory = groupHistories(
-      await repos.recurringOccurrences.listRecords(filter),
-      await repos.recurringOccurrences.listLinks(filter),
-      await repos.recurringOccurrences.trackingStarts(),
-    )(row.id)
-    return describeOccurrence(row, history, nominalDate, today)
+  /**
+   * One occurrence's state after transactions were linked to it or unlinked
+   * from it. Linking writes the transaction rows and, at most, an empty
+   * record, which describes the same as none, so what was read before about
+   * its records (and today) still holds: only the links and the tracking
+   * starts, which the link changes, are read again.
+   */
+  private async describeAfterLinking(
+    repos: Repositories,
+    row: RecurringItemRow,
+    nominalDate: string,
+    today: string,
+    before: Pick<HistoryRows, 'records'>,
+  ): Promise<OccurrenceState> {
+    return describeFrom(row, nominalDate, today, {
+      records: before.records,
+      links: await repos.recurringOccurrences.listLinks(historyFilter(row.id, nominalDate)),
+      trackingStarts: await repos.recurringOccurrences.trackingStarts(),
+    })
   }
+}
 
-  /** One occurrence's view, listed on its expected date. */
-  private async view(repos: Repositories, userId: string, row: RecurringItemRow, nominalDate: string): Promise<OccurrenceView> {
-    const state = await this.state(repos, userId, row, nominalDate)
-    return toOccurrenceView(row, state, state.expectedDate)
-  }
+/** The rows that describe one occurrence: its item's, on its nominal date. */
+function historyFilter(itemId: string, nominalDate: string): { itemId: string; from: string; to: string } {
+  return { itemId, from: nominalDate, to: addDays(nominalDate, 1) }
+}
+
+/** One occurrence's state from rows already read, against a given today. */
+function describeFrom(row: RecurringItemRow, nominalDate: string, today: string, rows: HistoryRows): OccurrenceState {
+  const history: ItemHistory = groupHistories(rows.records, rows.links, rows.trackingStarts)(row.id)
+  return describeOccurrence(row, history, nominalDate, today)
+}
+
+/** One occurrence's view, listed on its expected date. */
+function toView(row: RecurringItemRow, state: OccurrenceState): OccurrenceView {
+  return toOccurrenceView(row, state, state.expectedDate)
 }
 
 /**
@@ -562,13 +602,22 @@ function checkDirection(legAmount: string, tx: CandidateTransactionRow): void {
  * @param repos - Repositories, under the user's row-level security.
  * @param data - The request's loaded data, covering the suggestion window's scan.
  * @param today - The user's today.
- * @returns Suggestions, best first, and the dismissed pairs in the window.
+ * @param withDismissed - Whether to work out the dismissed pairs too, which costs a read of their
+ *   transactions; a caller that wants only the suggestions leaves `dismissed` empty.
+ * @returns Suggestions, best first, the dismissed pairs in the window, whether a transaction query
+ *   hit its cap, and the occurrences in the window (by {@link occurrenceKey}) as described to find them.
  */
 async function findSuggestions(
   repos: Repositories,
   data: RecurringData,
   today: string,
-): Promise<{ suggestions: MatchSuggestion[]; dismissed: DismissedSuggestion[]; truncated: boolean }> {
+  withDismissed: boolean,
+): Promise<{
+  suggestions: MatchSuggestion[]
+  dismissed: DismissedSuggestion[]
+  truncated: boolean
+  inWindow: ReadonlyMap<string, Described>
+}> {
   const window = suggestionWindow(today)
   const dismissals = await repos.recurringOccurrences.listDismissals(window.scan)
   const { inWindow, open } = windowOccurrences(data, window, today)
@@ -577,6 +626,8 @@ async function findSuggestions(
     accounts, addDays(window.from, -MATCH_WINDOW_DAYS), addDays(window.to, MATCH_WINDOW_DAYS),
   )
   const suggestions = assignSuggestions(confidentPairs(open, search.rows, dismissedPairKeys(dismissals)))
+  const truncated = search.truncatedAccounts.length > 0
+  if (!withDismissed) return { suggestions, dismissed: [], truncated, inWindow }
 
   // Dismissed pairs, to undo: only while the occurrence is in the window and
   // the transaction settles nothing, since otherwise the dismissal changes nothing.
@@ -585,7 +636,7 @@ async function findSuggestions(
     [...new Set(relevant.map((d) => d.transaction_id))],
   )).map((t) => [t.id, t]))
   const dismissed = buildDismissed(relevant, inWindow, txById)
-  return { suggestions, dismissed, truncated: search.truncatedAccounts.length > 0 }
+  return { suggestions, dismissed, truncated, inWindow }
 }
 
 /**
