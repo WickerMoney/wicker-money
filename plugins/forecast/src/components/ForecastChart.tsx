@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { axisDates } from '../helpers/axisDates.js'
 import { axisMoney } from '../helpers/axisMoney.js'
+import { describeDay } from '../helpers/describeDay.js'
 import { chartLayout } from '../helpers/CHART_LAYOUT.js'
 import { isPositiveAmount } from '../helpers/isPositiveAmount.js'
 import { niceTicks } from '../helpers/niceTicks.js'
@@ -91,6 +92,9 @@ export function ForecastChart({
 
   const monthly = dates.length > 45
   const hovered = hover === null ? undefined : dates[hover]
+  const dayEntries = hovered === undefined ? [] : entries.filter((e) => e.date === hovered && e.status !== 'cleared')
+  const dayBalance = hover === null || hover === 0 ? start : days[hover - 1]!.balance
+  const dayLow = hover === null || hover === 0 ? start : days[hover - 1]!.low
 
   return (
     <div className="fc-chart" ref={frame}>
@@ -138,13 +142,23 @@ export function ForecastChart({
         ) : null}
         <path className="fc-chart__line" d={stepPath(points, x, y)} />
       </svg>
+      {/* Always mounted, so a screen reader is already watching it when the
+          text changes; a region that appears with its content is often missed. */}
+      <div className="wm-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+        {hovered === undefined || hover === null
+          ? ''
+          : describeDay({
+              date: hovered, isToday: hover === 0, balance: dayBalance, low: dayLow,
+              entries: dayEntries, formatMoney, formatDate,
+            })}
+      </div>
       {hovered !== undefined && hover !== null ? (
         <ForecastTooltip
           date={hovered}
           isToday={hover === 0}
-          balance={hover === 0 ? start : days[hover - 1]!.balance}
-          low={hover === 0 ? start : days[hover - 1]!.low}
-          entries={entries.filter((e) => e.date === hovered && e.status !== 'cleared')}
+          balance={dayBalance}
+          low={dayLow}
+          entries={dayEntries}
           leftPercent={((x(hover) + slot / 2) / W) * 100}
           formatMoney={formatMoney}
           formatDate={formatDate}
