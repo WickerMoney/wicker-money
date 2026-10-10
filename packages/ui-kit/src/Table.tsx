@@ -32,23 +32,36 @@ export interface TableProps<T> {
    * is text, so that CSS can place them and label them.
    */
   readonly className?: string
+  /**
+   * A name for the table, announced by screen readers (a visually hidden
+   * `<caption>`). Give one whenever a page has more than one table or the
+   * heading above it does not say what the rows are.
+   */
+  readonly caption?: string
 }
 
 /**
  * A data table.
  *
  * Wrapped in its own horizontal scroller so that a wide table does not force the
- * whole page to scroll sideways on a narrow screen.
+ * whole page to scroll sideways on a narrow screen. Header cells carry
+ * `scope="col"`, and a column with an empty string header (a column of row
+ * buttons) gets a visually hidden "Actions" label so no header cell is empty.
+ * That label is in the `<th>` only; `data-label` stays unset for it, so the
+ * phone card layouts do not print it.
  */
-export function Table<T>({ columns, rows, rowKey, empty, className }: TableProps<T>) {
+export function Table<T>({ columns, rows, rowKey, empty, className, caption }: TableProps<T>) {
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>
   return (
     <div className={className === undefined ? 'wm-table__scroll' : `wm-table__scroll ${className}`}>
       <table className="wm-table">
+        {caption === undefined ? null : <caption className="wm-visually-hidden">{caption}</caption>}
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} data-col={c.key} className={c.numeric === true ? 'wm-num' : undefined}>{c.header}</th>
+              <th key={c.key} scope="col" data-col={c.key} className={c.numeric === true ? 'wm-num' : undefined}>
+                {c.header === '' ? <span className="wm-visually-hidden">Actions</span> : c.header}
+              </th>
             ))}
           </tr>
         </thead>

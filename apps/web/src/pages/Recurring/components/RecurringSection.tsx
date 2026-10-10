@@ -36,6 +36,7 @@ export function RecurringSection({
   return (
     <Surface title={title}>
       <Table
+        caption={title}
         className="tbl-cards"
         columns={[
           { key: 'name', header: 'Name', render: (i: RecurringItem) => (

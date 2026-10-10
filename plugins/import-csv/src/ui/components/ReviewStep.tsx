@@ -69,8 +69,8 @@ export function ReviewStep({
           <table className="imp__table">
             <thead>
               <tr>
-                <th>Import</th><th>Row</th><th>Date</th><th>Description</th>
-                <th className="num">Amount</th><th>Matches</th>
+                <th scope="col">Import</th><th scope="col">Row</th><th scope="col">Date</th><th scope="col">Description</th>
+                <th scope="col" className="num">Amount</th><th scope="col">Matches</th>
               </tr>
             </thead>
             <tbody>
