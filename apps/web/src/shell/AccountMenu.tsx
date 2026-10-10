@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useId, useEffect, useRef, useState, type ComponentType } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../auth/index.js'
 import { useEscapeKey } from '../hooks/useEscapeKey.js'
@@ -16,7 +16,11 @@ const THEME_OPTIONS: Record<ThemePreference, { readonly label: string; readonly 
 
 /**
  * The signed-in user's entry at the foot of the sidebar: their email, opening a
- * menu with the theme choice (three icon buttons) and sign out.
+ * panel with the theme choice (three icon buttons) and sign out.
+ *
+ * A disclosure, not an ARIA menu: the trigger carries `aria-expanded` and the
+ * panel holds ordinary buttons reached with Tab, so no arrow-key handling is
+ * promised that is not there.
  *
  * The menu opens upward because the trigger is pinned to the bottom edge. It
  * stays open after a theme is picked so the change can be seen, and closes on
@@ -27,6 +31,7 @@ export function AccountMenu() {
   const navigate = useNavigate()
   const { preference, setPreference } = useTheme()
   const [open, setOpen] = useState(false)
+  const panelId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -53,8 +58,8 @@ export function AccountMenu() {
         ref={triggerRef}
         type="button"
         className="account__trigger"
-        aria-haspopup="menu"
         aria-expanded={open}
+        aria-controls={panelId}
         title={email}
         onClick={() => { setOpen((o) => !o) }}
       >
@@ -65,7 +70,7 @@ export function AccountMenu() {
       </button>
 
       {open ? (
-        <div className="account__menu" role="menu" aria-label="Account">
+        <div className="account__menu" id={panelId} role="group" aria-label="Account">
           <div className="account__theme" role="group" aria-label="Theme">
             <span className="account__menu-label" aria-hidden="true">Theme</span>
             <div className="account__segments">
@@ -75,8 +80,7 @@ export function AccountMenu() {
                   <button
                     key={option}
                     type="button"
-                    role="menuitemradio"
-                    aria-checked={option === preference}
+                    aria-pressed={option === preference}
                     aria-label={label}
                     title={label}
                     className="account__segment"
@@ -88,10 +92,9 @@ export function AccountMenu() {
               })}
             </div>
           </div>
-          <div className="account__menu-divider" role="separator" />
+          <div className="account__menu-divider" aria-hidden="true" />
           <button
             type="button"
-            role="menuitem"
             className="account__item"
             onClick={() => { void signOut().then(() => navigate('/')) }}
           >
