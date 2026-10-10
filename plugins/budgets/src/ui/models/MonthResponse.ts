@@ -1,3 +1,4 @@
+import type { AccountLine } from './AccountLine.js'
 import type { MonthLine } from './MonthLine.js'
 import type { MonthSummary } from './MonthSummary.js'
 import type { Unbudgeted } from './Unbudgeted.js'
@@ -13,6 +14,11 @@ export interface MonthResponse {
   /** `true` when the month has no saved lines and is showing the previous month's as a preview. */
   readonly draft: boolean
   readonly lines: readonly MonthLine[]
+  /**
+   * Allowances measured against an account, kept out of `lines` and `summary`.
+   * Absent from servers older than account lines.
+   */
+  readonly accountLines?: readonly AccountLine[]
   readonly unbudgeted: readonly Unbudgeted[]
   readonly summary: MonthSummary
 }

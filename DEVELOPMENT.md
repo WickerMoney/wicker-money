@@ -136,6 +136,10 @@ a plugin that can `RESET ROLE` regains the application role's table privileges
 for its own tenant, so untrusted third-party plugins need out-of-process
 isolation before they are installed.
 
+The same applies to plugin UI code, which has no isolation at all: it runs in
+the host's origin and can call any API route as the signed-in user. See
+[Plugin trust model](#plugin-trust-model).
+
 ### Running tests against the same server
 
 Unit tests (`pnpm test`) need no database. Integration tests are the API files
@@ -459,12 +463,39 @@ What a bundled plugin still does not get:
 - Its own idea of core behaviour. Categorization, for instance, is injected from
   the core rule engine rather than reimplemented.
 
+### Plugin trust model
+
+UI plugins (widgets and pages loaded over Module Federation) run **fully
+trusted, in the host's origin**. Read this before writing or reviewing anything
+that talks about plugin "permissions", "scoping" or "sandboxing".
+
+| Layer | What it does | Boundary against plugin code? |
+| --- | --- | --- |
+| Per-plugin PostgreSQL role (`plugin-roles.ts`) | Refuses queries outside the manifest's `requiredTables` | Yes, for **server-side** plugin code (bundled plugins' `runAsPlugin`) |
+| Row-level security | Keeps every query inside the signed-in user's rows | Yes, for tenants |
+| `x-wickermoney-plugin` header + `requireTableGrant` | Holds a request that names a plugin to that plugin's manifest | **No.** A request with no header is the host application, so a UI plugin can omit it |
+| Scoped `ctx.api` client in `apps/web/src/plugins/context.ts` | Fails fast on an ungranted path | **No.** Developer ergonomics; plugin code can call `fetch` |
+| `PLUGIN_REMOTE_ORIGINS` and the CSP | Limit where plugin code may be loaded from | No. They choose whose code is trusted, not what it may do |
+
+Consequences for contributors:
+
+- Do not describe `requiredTables` as protecting data from a UI plugin. It
+  protects data from a plugin's server code.
+- Do not rely on the plugin header for access control. A route that must not
+  be reachable by UI plugins needs a different mechanism, which does not exist
+  yet.
+- Third-party plugin install stays unsupported, and `PLUGIN_REMOTE_ORIGINS`
+  stays empty by default, until UI plugins are isolated.
+
 ### When a plugin is turned off
 
 An owner can turn any plugin off from Settings → Plugins. The host unmounts the
 plugin's pages and widgets (a remote already loaded stays in memory but is no
 longer rendered), its own routes answer `404 plugin_disabled`, and a core data
 request carrying its `x-wickermoney-plugin` header gets `403 grant_denied`.
+(A request that omits the header is not attributed to the plugin, so a
+disabled plugin's already-loaded code is not stopped from calling core routes;
+see [Plugin trust model](#plugin-trust-model).)
 Its schema, rows and role are kept. Do not assume a plugin's code runs at
 every page load, and do not delete data on unmount.
 
@@ -473,6 +504,59 @@ every page load, and do not delete data on unmount.
 `validation_failed`, and the host passes it through. On the page, ui-kit's
 `formErrorsFrom` and `useFormErrors` put each issue on its field and render
 the rest with `FormError` beside the submit button.
+
+### Request sharing in the scoped client
+
+`ctx.api.get` does not always reach the network. Plugins are separate
+federated bundles that cannot share module state, so the host's scoped client
+(`apps/web/src/plugins/context.ts`, backed by `apps/web/src/api/responseCache.ts`)
+holds a small in-memory memory of reads. It exists so that several widgets
+asking for the same thing at once, such as the three dashboard widgets that
+read `/core/transactions/monthly-summary?months=12`, cost one request.
+
+The rules:
+
+- **Per user, never shared between users.** Entries live in a bucket per user
+  id, and the key inside it is the method plus the full URL, query string
+  included. Concurrent identical `GET`s join one request; a resolved one is
+  served again for `RESPONSE_CACHE_TTL_MS` (5 seconds). Each user keeps at
+  most `RESPONSE_CACHE_MAX_ENTRIES` (50) entries, least recently used out first.
+- **The plugin id is not in the key.** The server reads `x-wickermoney-plugin`
+  only to grant or refuse (`403`), never to change the data, and the client-side
+  guard applies the same grants before the cache is consulted. So two plugins
+  that may both read a table share the answer. The request that actually goes
+  out carries the id of whichever caller came first.
+- **Writes drop the cache.** Any non-`GET` request through the client, from a
+  plugin or from the host's own pages, empties the cache before it is sent and
+  again when it settles (even if it fails). It is by user, not by endpoint, so
+  a plugin never has to know which reads a write affects. A read that was in
+  flight when the write happened still answers its own callers but is not
+  stored. Sign-in, sign-out, a refused refresh and a refresh that returns a
+  different user's token clear everything too.
+- **Failures are never kept.** Callers already waiting on a failing request all
+  get its error; the next call asks again.
+- **You get your own copy.** Every caller receives a clone of the response, so
+  mutating it cannot affect another widget. Aborting your `signal` stops only
+  your wait, not the shared request.
+- **To bypass it, pass `cache: 'no-store'` or `cache: 'reload'`** (standard
+  `fetch` options, so the SDK types need nothing new):
+
+  ```ts
+  const fresh = await ctx.api.get<Summary>(path, { cache: 'no-store' })
+  ```
+
+  The call goes to the network, never joins a request in flight, and drops the
+  remembered answer for that URL. Calls that pass other options, such as custom
+  `headers`, skip the cache the same way. You rarely need this: after your own
+  write the cache is already empty. Reach for it only when something outside
+  this tab, such as another device or a server-side job, may have changed the
+  data and a few-second-old answer would be a bug.
+
+What this does not do: the API has no server-side cache, and the host's own
+unscoped `api` client never reads from this memory, so the plugin registry and
+its focus-triggered refetch are always live. A plugin that
+is turned off can still be answered from memory for up to the TTL; the host
+unmounts it, so this is not visible.
 
 ### Plugin roles
 
@@ -644,8 +728,10 @@ change anywhere.
 Plugins reach core data through a scoped client that attaches their id to every
 request; the server checks that id against the manifest's `requiredTables` and
 answers `grant_denied` for anything the plugin never asked for. That check is
-the authoritative one — the matching client-side guard is developer ergonomics,
-since plugin code shares the host's realm. The enforceable second layer, a
+feedback for honest plugins, not a security boundary: plugin code shares the
+host's realm and origin and can omit the header (a request with none is treated
+as the host application). The matching client-side guard is developer
+ergonomics for the same reason. The enforceable second layer, a
 database role per plugin, arrived with M3 above (`plugin-roles.ts`'s
 `pluginRoleName`/`asPlugin`, used by every bundled plugin, not just
 import-csv) — this paragraph originally said that arrives at M4; it shipped

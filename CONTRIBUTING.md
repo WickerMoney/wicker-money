@@ -8,7 +8,8 @@ get a "not now", and things may change under you.
 
 Right now I'm accepting **issues and suggestions**, not feature pull requests.
 The plugin contract is still being settled and third-party plugin install isn't
-supported yet, so most outside code would need reworking. Typo, docs and small
+supported yet (plugin code runs fully trusted, with no isolation), so most
+outside code would need reworking. Typo, docs and small
 bug-fix PRs are fine. This will change once the plugin contract is stable and
 versioned.
 

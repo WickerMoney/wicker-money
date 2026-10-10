@@ -4,7 +4,7 @@ import type { BudgetLineRow } from './BudgetLineRow.js'
 import type { ExportedBudgetLine } from './ExportedBudgetLine.js'
 import type { NewBudgetLine } from './NewBudgetLine.js'
 import type { NewWindow } from './NewWindow.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 import type { SavedBudgetLine } from './SavedBudgetLine.js'
 import type { WindowRow } from './WindowRow.js'
 

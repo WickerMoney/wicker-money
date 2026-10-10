@@ -1,6 +1,9 @@
 import { addDays, monthPeriod } from '../../shared/index.js'
+import type { AccountRow } from '../repository/AccountRow.js'
 import type { CategoryRow } from '../repository/CategoryRow.js'
+import type { AccountTransaction } from './AccountTransaction.js'
 import type { SpendEntry } from './SpendEntry.js'
+import type { StoredAccountLine } from './StoredAccountLine.js'
 import type { StoredLine } from './StoredLine.js'
 
 /**
@@ -14,6 +17,9 @@ export class InMemoryBudgetStore {
   lines: StoredLine[] = []
   spend: SpendEntry[] = []
   categories: CategoryRow[] = []
+  accounts: AccountRow[] = []
+  accountLines: StoredAccountLine[] = []
+  accountTransactions: AccountTransaction[] = []
   /** Number of write operations performed; a read path must leave this at zero. */
   writes = 0
   /** When true the next `upsert` returns no row, like a write that produced nothing. */
@@ -101,5 +107,67 @@ export class InMemoryBudgetStore {
    */
   addSpend(userId: string, monthKey: string, categoryId: string, spent: string): void {
     this.spend.push({ userId, categoryId, monthKey, spent })
+  }
+
+  /**
+   * Adds an account.
+   *
+   * @param id - Account id.
+   * @param name - Display name.
+   * @param accountType - The account type; defaults to `checking`.
+   */
+  addAccount(id: string, name: string, accountType = 'checking'): void {
+    this.accounts.push({ id, name, account_type: accountType })
+  }
+
+  /**
+   * Adds a stored account line without counting it as a write.
+   *
+   * @param userId - The owner.
+   * @param monthKey - The month, `YYYY-MM`.
+   * @param accountId - The account.
+   * @param planned - Planned amount as a decimal string.
+   * @param options - Rollover (default on), excluded categories and note.
+   * @returns The stored line.
+   */
+  addAccountLine(
+    userId: string,
+    monthKey: string,
+    accountId: string,
+    planned: string,
+    options: { rollover?: boolean; excluded?: readonly string[]; note?: string | null } = {},
+  ): StoredAccountLine {
+    const line: StoredAccountLine = {
+      id: this.newId(),
+      userId,
+      account_id: accountId,
+      period_start: `${monthKey}-01`,
+      period_end: monthPeriod(monthKey).end,
+      planned,
+      rollover: options.rollover ?? true,
+      excluded_category_ids: [...(options.excluded ?? [])],
+      note: options.note ?? null,
+    }
+    this.accountLines.push(line)
+    return line
+  }
+
+  /**
+   * Seeds one transaction on an account.
+   *
+   * @param userId - The owner.
+   * @param accountId - The account.
+   * @param date - The transaction date, `YYYY-MM-DD`.
+   * @param amount - Signed amount as a decimal string; negative is money out.
+   * @param categoryId - The category, or `null` for none.
+   */
+  addAccountTransaction(
+    userId: string,
+    accountId: string,
+    date: string,
+    amount: string,
+    categoryId: string | null = null,
+  ): void {
+    this.accountTransactions.push({ userId, accountId, date, amount, categoryId })
   }
 }

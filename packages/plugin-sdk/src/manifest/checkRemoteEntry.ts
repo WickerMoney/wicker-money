@@ -3,7 +3,8 @@
  *
  * A same-origin path is always allowed: it is served by the host itself. An
  * `https:` URL is allowed only when its origin is in `allowedOrigins`, which is
- * empty by default (same-origin only).
+ * empty by default (same-origin only). An allowlisted origin is fully trusted:
+ * its code runs in the host's origin with the user's full API access.
  *
  * Run by the host when a manifest is registered, after `parseManifest` has
  * checked the entry's shape.

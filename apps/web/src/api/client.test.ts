@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './ApiError.js'
 import { api, request, resumeSession, setAccessToken, setUnauthorizedHandler } from './client.js'
+import { responseCache } from './responseCache.js'
 
 type Handler = (url: string, init: RequestInit) => Response | Promise<Response>
 
@@ -326,5 +327,109 @@ describe('resumeSession', () => {
     await Promise.all([resumeSession(), resumeSession()])
 
     expect(callsTo('/auth/refresh')).toBe(1)
+  })
+})
+
+describe('the response cache', () => {
+  const remember = async (userId = 'u1'): Promise<void> => {
+    await responseCache.read(userId, 'GET /things', async () => 'v')
+  }
+
+  it('is left alone by reads', async () => {
+    setAccessToken('tok-1')
+    route(() => json({}))
+    await remember()
+
+    await api.get('/things')
+
+    expect(responseCache.size('u1')).toBe(1)
+  })
+
+  it.each([
+    ['POST', () => api.post('/things', { a: 1 })],
+    ['PUT', () => api.put('/things/1', { a: 1 })],
+    ['PATCH', () => api.patch('/things/1', { a: 1 })],
+    ['DELETE', () => api.del('/things/1')],
+  ])('is dropped, for every user and endpoint, by a %s', async (_verb, write) => {
+    setAccessToken('tok-1')
+    route(() => json({}))
+    await remember('u1')
+    await remember('u2')
+
+    await write()
+
+    expect(responseCache.size('u1') + responseCache.size('u2')).toBe(0)
+  })
+
+  it('is dropped before a write is sent and again when it settles', async () => {
+    setAccessToken('tok-1')
+    let release!: () => void
+    route(() => new Promise<Response>((resolve) => { release = () => resolve(json({})) }))
+
+    const write = api.post('/things', {})
+    expect(responseCache.size('u1')).toBe(0)
+    await remember() // a read that overlaps the write, answered from before it
+    expect(responseCache.size('u1')).toBe(1)
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    release()
+    await write
+
+    expect(responseCache.size('u1')).toBe(0)
+  })
+
+  it('is dropped by a write that fails', async () => {
+    setAccessToken('tok-1')
+    route(() => json({ code: 'nope', message: 'No.' }, 422))
+    await remember()
+
+    await expect(api.post('/things', {})).rejects.toBeInstanceOf(ApiError)
+
+    expect(responseCache.size('u1')).toBe(0)
+  })
+
+  it('is dropped when the token is replaced or cleared', async () => {
+    setAccessToken('tok-1')
+    await remember()
+    setAccessToken('tok-2')
+    expect(responseCache.size('u1')).toBe(0)
+
+    await remember()
+    setAccessToken(null)
+    expect(responseCache.size('u1')).toBe(0)
+  })
+
+  it('is dropped when the session ends because a refresh was refused', async () => {
+    setAccessToken('tok-1')
+    route(() => json({ code: 'unauthorized' }, 401))
+    await remember()
+
+    await expect(api.get('/things')).rejects.toBeInstanceOf(ApiError)
+
+    expect(responseCache.size('u1')).toBe(0)
+  })
+
+  const tokenFor = (sub: string): string => {
+    const payload = btoa(JSON.stringify({ sub, exp: Math.floor(Date.now() / 1000) + 600 }))
+    return `h.${payload.replace(/=+$/, '')}.s`
+  }
+
+  it('is dropped when a refresh hands back a different user\'s token', async () => {
+    setAccessToken(tokenFor('u1'))
+    route(() => json({ accessToken: tokenFor('u2') }))
+    await remember()
+
+    await resumeSession()
+
+    expect(responseCache.size('u1')).toBe(0)
+  })
+
+  it('is kept when a refresh hands back the same user\'s token', async () => {
+    setAccessToken(tokenFor('u1'))
+    route(() => json({ accessToken: `${tokenFor('u1')}x` }))
+    await remember()
+
+    await resumeSession()
+
+    expect(responseCache.size('u1')).toBe(1)
   })
 })

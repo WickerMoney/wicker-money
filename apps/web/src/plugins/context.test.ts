@@ -4,9 +4,10 @@ import type { PluginManifest } from '@wickermoney/plugin-sdk'
 const apiGet = vi.fn()
 const apiPost = vi.fn()
 
-vi.mock('../api/client.js', () => ({ api: { get: apiGet, post: apiPost } }))
+vi.mock('../api/client.js', () => ({ api: { get: apiGet, post: apiPost }, activeUserId: () => null }))
 
 const { buildPluginContext } = await import('./context.js')
+const { responseCache } = await import('../api/responseCache.js')
 
 const user = { id: 'u1', email: 'demo@example.com', timezone: 'UTC', role: 'member' as const }
 
@@ -26,6 +27,7 @@ function manifestWith(tables: { table: string; access: string }[]): PluginManife
 }
 
 beforeEach(() => {
+  responseCache.clear()
   apiGet.mockReset()
   apiPost.mockReset()
   apiGet.mockResolvedValue({})

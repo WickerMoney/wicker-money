@@ -1,21 +1,18 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { BUDGETS_PLUGIN_ID, registerBudgetRoutes } from '@wickermoney/plugin-budgets/server'
-import {
-  IMPORT_PLUGIN_ID, registerImportRoutes,
-  type RuleForMatching, type Query, type RouteContext,
-} from '@wickermoney/plugin-import-csv/server'
+import { IMPORT_PLUGIN_ID, registerImportRoutes } from '@wickermoney/plugin-import-csv/server'
+import type {
+  Query, RegisterRoute, RuleForMatching, RuleSubject, RunAsPlugin,
+} from '@wickermoney/plugin-sdk/server'
 import { asPlugin, type Db } from '../db/client.js'
 import { pluginRoleName } from '../db/plugin-roles.js'
-import { resolveCategory, type MatchRule } from '../categories/engine.js'
+import { resolveCategory } from '../categories/engine.js'
 import { fetchRulesInResolutionOrder } from '../categories/repository/rules/fetchRulesInResolutionOrder.js'
 import { AppError, type ValidationIssue } from '../errors.js'
 import { queryRunner } from './queryRunner.js'
 import type { PluginService } from './service/PluginService.js'
 
 export { queryRunner } from './queryRunner.js'
-
-/** An error raised on behalf of a plugin, carrying the status and code the plugin chose. */
-class PluginRouteError extends AppError {}
 
 /**
  * Translates a plugin's own error into one the host's handler understands.
@@ -41,7 +38,7 @@ function toAppError(error: unknown): unknown {
     typeof (error as { code: unknown }).code === 'string'
   ) {
     const e = error as Error & { statusCode: number; code: string; issues?: unknown }
-    return new PluginRouteError(e.message, e.statusCode, e.code, readIssues(e.issues))
+    return new AppError(e.message, e.statusCode, e.code, readIssues(e.issues))
   }
   return error
 }
@@ -114,12 +111,7 @@ export function registerBundledPluginServers(app: FastifyInstance, db: Db, plugi
     const role = pluginRoleName(pluginId)
     const base = `/api/v1/p/${pluginId}`
 
-    const route = (
-      method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-      path: string,
-      handler: (ctx: RouteContext) => Promise<unknown>,
-      options?: { readonly bodyLimit?: number },
-    ): void => {
+    const route: RegisterRoute = (method, path, handler, options) => {
       app.route({
         method,
         url: `${base}${path}`,
@@ -131,7 +123,7 @@ export function registerBundledPluginServers(app: FastifyInstance, db: Db, plugi
           // request rather than at boot so toggling `core.plugins` takes effect
           // without a restart — the same property the dashboard widgets have.
           if ((await plugins.findEnabled(pluginId)) === undefined) {
-            throw new PluginRouteError(
+            throw new AppError(
               `Plugin '${pluginId}' is not installed or not enabled.`,
               404,
               'plugin_disabled',
@@ -165,10 +157,8 @@ export function registerBundledPluginServers(app: FastifyInstance, db: Db, plugi
       // plugin never has to know the rule resolution order or the row shape
       // of a condition. `q` is already the tagged-template runner that
       // `fetchRulesInResolutionOrder` wants, so no adapter is needed here.
-      getRulesForMatching: (q: Query) =>
-        fetchRulesInResolutionOrder(q) as unknown as Promise<readonly RuleForMatching[]>,
-      resolveCategory: (rules: readonly RuleForMatching[], subject) =>
-        resolveCategory(rules as unknown as readonly MatchRule[], subject),
+      getRulesForMatching: (q) => fetchRulesInResolutionOrder(q),
+      resolveCategory,
     })
   }
 
@@ -182,14 +172,9 @@ export function registerBundledPluginServers(app: FastifyInstance, db: Db, plugi
 /** Everything the host hands a bundled plugin's `register` function to mount its routes and reach core behaviour. */
 interface PluginServerDeps {
   /** Mounts one route under `/api/v1/p/<pluginId>`, after authentication and the enabled-plugin check. */
-  readonly route: (
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-    path: string,
-    handler: (ctx: RouteContext) => Promise<unknown>,
-    options?: { readonly bodyLimit?: number },
-  ) => void
+  readonly route: RegisterRoute
   /** Runs `fn` in a transaction under the plugin's own database role, with row-level security scoped to `userId`. */
-  readonly runAsPlugin: <T>(userId: string, fn: (q: Query) => Promise<T>) => Promise<T>
+  readonly runAsPlugin: RunAsPlugin
   /**
    * Reads and orders this user's category rules, conditions included.
    *
@@ -198,8 +183,5 @@ interface PluginServerDeps {
    */
   readonly getRulesForMatching: (q: Query) => Promise<readonly RuleForMatching[]>
   /** Picks the category id the given rules assign to a transaction, or `null` when none matches. */
-  readonly resolveCategory: (
-    rules: readonly RuleForMatching[],
-    subject: { merchant: string; notes?: string | null; amount: string },
-  ) => string | null
+  readonly resolveCategory: (rules: readonly RuleForMatching[], subject: RuleSubject) => string | null
 }

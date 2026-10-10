@@ -19,8 +19,9 @@ Self-hostable personal finance, rebuilt as a thin core plus installable plugins.
 The core owns identity, money movement and the app shell. Everything that
 *interprets* money — budgets, forecasting, net worth, FIRE, importers — is a
 plugin built against `@wickermoney/plugin-sdk`. A fresh install is useful on its
-own; bundled plugins ship enabled but hold no privileges a third-party plugin
-couldn't request.
+own; bundled plugins ship enabled and are built against the same SDK a
+third-party plugin would use. Plugin code is fully trusted today (see
+[Plugins](#plugins)), so third-party plugin install is not supported yet.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
@@ -358,6 +359,14 @@ or disappear without a reload, and other open tabs catch up when they regain
 focus. Turning a plugin off deletes nothing. Its tables, rows and database
 role stay, and turning it back on brings everything back. Plugins in the same
 area, such as two budgeting approaches, can be on together.
+
+**Plugins are trusted code.** A plugin's front-end code runs inside the app,
+in its own origin, with the same access to your data as you have. A plugin's
+declared table grants are enforced by the database for its server-side code,
+but they do not restrict its front-end code. Third-party plugin install is not
+supported yet, and there is no sandbox for it. Keep `PLUGIN_REMOTE_ORIGINS`
+empty unless you fully trust every origin you list there. See
+[SECURITY.md](SECURITY.md).
 
 ### Forgotten password
 

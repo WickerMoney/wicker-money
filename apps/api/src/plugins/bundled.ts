@@ -4,11 +4,17 @@ import { SDK_MAJOR_VERSION } from '@wickermoney/plugin-sdk'
 /**
  * Plugins that ship in the image and are enabled on first boot.
  *
- * They hold NO privilege a third-party plugin could not also request: the same
- * manifest shape, the same `requiredTables`, the same loader. The only
- * difference is that they are present at install time. That constraint is the
- * point — if a bundled plugin could reach around the SDK, the SDK would stop
- * being exercised by the code most likely to find its gaps.
+ * Their manifests use the same shape, `requiredTables` and loader as a
+ * third-party plugin's, and the browser half of a bundled plugin gets no more
+ * than a third-party one: the same `ctx`, the same grants. That keeps the SDK
+ * exercised by the code most likely to find its gaps.
+ *
+ * Server code is the exception, and it is not equal footing. A plugin with
+ * `contributes.endpoints` has a server half that the API imports and runs in
+ * its own process (see `registerBundledPluginServers`), so it is as trusted as
+ * the API itself; only a bundled plugin may do that. Its database access is
+ * still limited to its manifest's tables by its PostgreSQL role, but nothing
+ * else about it is sandboxed.
  */
 export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
   {
@@ -155,16 +161,22 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
      * parent category and shows every split category nothing. That error is
      * invisible, because the numbers are all plausible.
      *
-     * Absent, and each absence is deliberate: `accounts` (a budget never cares
-     * which account money left), `category_rules` (categorization is settled
-     * before a budget reads it), and `recurring_items` (income-side planning is
-     * genuinely useful but not something the plugin does yet, so asking for the
-     * grant would mean holding a privilege nothing uses).
+     * `accounts` is here for account lines, the allowance measured against one
+     * account ("$150 a month into checking to spend"). It names the account a
+     * line is on and checks that it is a checking account. Spending on an
+     * account needs no grant of its own: `transactions` already carries
+     * `account_id`.
+     *
+     * Absent, and each absence is deliberate: `category_rules` (categorization
+     * is settled before a budget reads it), and `recurring_items` (income-side
+     * planning is genuinely useful but not something the plugin does yet, so
+     * asking for the grant would mean holding a privilege nothing uses).
      */
     requiredTables: [
       { table: 'transactions', access: 'read' },
       { table: 'transaction_splits', access: 'read' },
       { table: 'categories', access: 'read' },
+      { table: 'accounts', access: 'read' },
     ],
     permissions: [],
     remoteEntry: '/plugins/budgets/remoteEntry.js',

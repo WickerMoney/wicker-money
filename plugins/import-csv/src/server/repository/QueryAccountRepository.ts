@@ -1,5 +1,5 @@
 import type { AccountRepository } from './AccountRepository.js'
-import type { Query } from './Query.js'
+import type { Query } from '@wickermoney/plugin-sdk/server'
 
 /** {@link AccountRepository} over the plugin's query runner. */
 export class QueryAccountRepository implements AccountRepository {

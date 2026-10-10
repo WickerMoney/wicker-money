@@ -70,3 +70,9 @@ export {
   isZeroMoney, moneyToUnits, negateMoney, normalizeMoney, subtractMoney, sumMoney, unitsToMoney,
 } from './money/index.js'
 export type { Money } from './money/index.js'
+
+export { PluginRouteError, isUuid } from './server/index.js'
+export type {
+  ConditionForMatching, PluginRouteIssue, Query, RegisterRoute, RouteContext, RouteMethod, RuleForMatching,
+  RuleSubject, RunAsPlugin,
+} from './server/index.js'

@@ -80,3 +80,82 @@ export async function createBudgetLines(
     }
   })
 }
+
+/** One `plugin_budgets.account_lines` row to create, for one calendar month. */
+export interface AccountLineDef {
+  /** The persona's account key, as in `seedAccounts`. */
+  readonly accountKey: string
+  readonly monthsAgo: number
+  readonly planned: string
+  readonly rollover: boolean
+  /** Catalog slugs of categories that do not count against the line. Unknown slugs are skipped. */
+  readonly excludedSlugs: readonly string[]
+  readonly note?: string
+}
+
+/**
+ * The account lines each persona gets: an allowance on one checking account,
+ * for the current and previous month so the first has something to carry in.
+ *
+ * `household` is the shape this feature exists for, a monthly spending
+ * allowance in the Monthly Expenses checking account that also receives
+ * holiday money; `hero` has a plain one on its everyday checking.
+ *
+ * @param personaKey - The persona.
+ * @returns The definitions, empty for a persona with none.
+ */
+export function accountLineDefsFor(personaKey: Persona['key']): readonly AccountLineDef[] {
+  if (personaKey === 'household') {
+    return [0, 1].map((monthsAgo) => ({
+      accountKey: 'monthly', monthsAgo, planned: '150.0000', rollover: true, excludedSlugs: ['gifts'],
+      note: 'Spending money. Holiday gifts have their own window.',
+    }))
+  }
+  if (personaKey === 'hero') {
+    return [0, 1].map((monthsAgo) => ({
+      accountKey: 'checking', monthsAgo, planned: '400.0000', rollover: true, excludedSlugs: [],
+    }))
+  }
+  return []
+}
+
+/**
+ * Inserts every account line under the budgets plugin's own database role, as
+ * {@link createBudgetLines} does for category lines.
+ *
+ * @param db - Application database handle.
+ * @param userId - The persona's user id.
+ * @param defs - From {@link accountLineDefsFor}.
+ * @param accountIds - This persona's account key to account id map.
+ * @param slugToId - This persona's catalog slug to category id map.
+ */
+export async function createAccountLines(
+  db: Db,
+  userId: string,
+  defs: readonly AccountLineDef[],
+  accountIds: ReadonlyMap<string, string>,
+  slugToId: ReadonlyMap<string, string>,
+): Promise<void> {
+  if (defs.length === 0) return
+  const role = pluginRoleName(BUDGETS_PLUGIN_ID)
+  await asPlugin(db, role, userId, async (trx) => {
+    const q = queryRunner(trx)
+    for (const def of defs) {
+      const accountId = accountIds.get(def.accountKey)
+      if (accountId === undefined) continue
+      const excluded = def.excludedSlugs.flatMap((slug) => slugToId.get(slug) ?? [])
+      const monthAnchor = addMonthsClamped(todayIso(), -def.monthsAgo)
+      const periodStart = firstDayOfMonth(monthAnchor)
+      const periodEnd = firstDayOfMonth(addMonthsClamped(monthAnchor, 1))
+      await q`
+        INSERT INTO plugin_budgets.account_lines
+          (user_id, account_id, period_start, period_end, planned, rollover, excluded_category_ids, note)
+        VALUES (
+          core.current_user_id(), ${accountId}, ${periodStart}::date, ${periodEnd}::date,
+          ${def.planned}::numeric, ${def.rollover}, ${excluded}::uuid[], ${def.note ?? null}
+        )
+        ON CONFLICT (user_id, account_id, period_start) DO NOTHING
+      `
+    }
+  })
+}

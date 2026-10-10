@@ -9,6 +9,8 @@ const FRIENDLY: Record<string, string> = {
   'core.recurring_item_legs': 'recurring item',
   // One leg's amount changed for one occurrence ("this month's bill is $20 more").
   'core.recurring_occurrence_legs': 'changed occurrence amount',
+  // The budgets plugin's allowance on the account (migration 027).
+  'plugin_budgets.account_lines': 'budget allowance',
 }
 
 /**

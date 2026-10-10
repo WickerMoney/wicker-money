@@ -1,7 +1,7 @@
 import type { BudgetRepositories } from './BudgetRepositories.js'
 import type { BudgetUnitOfWork } from './BudgetUnitOfWork.js'
 import { createBudgetRepositories } from './createBudgetRepositories.js'
-import type { RunAsPlugin } from './RunAsPlugin.js'
+import type { RunAsPlugin } from '@wickermoney/plugin-sdk/server'
 
 /** {@link BudgetUnitOfWork} over the host's `runAsPlugin`. */
 export class QueryBudgetUnitOfWork implements BudgetUnitOfWork {

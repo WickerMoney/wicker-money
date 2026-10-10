@@ -39,7 +39,8 @@ Particularly interesting, because the design leans on them:
 
 - Anything that lets one user read or modify another user's rows (tenant
   isolation is enforced with PostgreSQL row-level security).
-- A plugin reaching a table or endpoint its manifest never requested.
+- A bundled plugin's server-side code reaching a table its manifest never
+  requested (enforced by a per-plugin PostgreSQL role).
 - Authentication, session and refresh-token handling.
 
 Out of scope:
@@ -59,3 +60,15 @@ Out of scope:
 - Third-party plugin install is not supported. Plugin isolation does not exist
   yet, so plugin code runs fully trusted. Do not run plugin code you have not
   reviewed.
+- **UI plugins are not sandboxed.** A plugin's front-end code runs in the app's
+  own origin, with the signed-in user's access to the whole API. Its manifest's
+  `requiredTables` and the `x-wickermoney-plugin` header are not a security
+  boundary for that code: a UI plugin can call any `/api/v1/*` route the user
+  can, including data export, by simply leaving the header off. What *is*
+  enforced is the per-plugin PostgreSQL role for server-side plugin code, which
+  is bundled plugins only.
+- Keep `PLUGIN_REMOTE_ORIGINS` empty unless you fully trust every origin you
+  list. A listed origin can run code with the same access as the app itself.
+- A report that a UI plugin can reach data outside its `requiredTables` is a
+  known limitation, not a vulnerability, until third-party install is
+  supported. Isolation for UI plugins is tracked as a requirement for that.
