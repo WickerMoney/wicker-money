@@ -1,4 +1,4 @@
-import { occurrences } from '@wickermoney/plugin-sdk/recurrence'
+import { addDays, occurrences } from '@wickermoney/plugin-sdk/recurrence'
 import type { RecurringDraft } from '../state/RecurringDraft.js'
 
 /** How far ahead the preview looks: long enough for a yearly item's next date. */
@@ -34,10 +34,4 @@ export function previewDates(draft: RecurringDraft, today: string, count = 5): s
   } catch {
     return null
   }
-}
-
-/** Adds days to a `YYYY-MM-DD` date on a UTC calendar, so no DST change can move it. */
-function addDays(date: string, days: number): string {
-  const [y, m, d] = date.split('-').map(Number) as [number, number, number]
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }

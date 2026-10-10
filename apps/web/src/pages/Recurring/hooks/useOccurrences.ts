@@ -1,3 +1,4 @@
+import { addDays } from '@wickermoney/plugin-sdk/recurrence'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -31,12 +32,6 @@ export interface Occurrences {
     body: { skipped?: boolean; expectedDate?: string | null; legs?: { accountId: string; amount: string }[] | null },
     onError?: (error: unknown) => void,
   ) => Promise<boolean>
-}
-
-/** Adds days to `YYYY-MM-DD` in UTC, so no DST change moves it. */
-function addDays(date: string, days: number): string {
-  const [y, m, d] = date.split('-').map(Number) as [number, number, number]
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }
 
 /**
