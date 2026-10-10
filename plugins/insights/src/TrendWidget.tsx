@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { monthsInRange, type PluginWidgetProps } from '@wickermoney/plugin-sdk'
 import { isZeroMoney, sumMoney } from '@wickermoney/plugin-sdk/money'
-import { Alert, EmptyState, Spinner } from '@wickermoney/ui-kit'
+import { Alert, Button, EmptyState, Spinner } from '@wickermoney/ui-kit'
 import { TrendGrid } from './components/TrendGrid.js'
 import { TrendLegend } from './components/TrendLegend.js'
 import { TrendMonthMark } from './components/TrendMonthMark.js'
+import { TrendTable } from './components/TrendTable.js'
 import { TrendTooltip } from './components/TrendTooltip.js'
 import { labelEvery } from './helpers/labelEvery.js'
 import { monthLabelLong } from './helpers/monthLabel.js'
@@ -40,6 +41,8 @@ import './styles.js'
 export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
   const { rows, loading, error } = useMonthlySummary(ctx, range?.months ?? 12)
   const [hover, setHover] = useState<number | null>(null)
+  // The same figures as a table, for anyone the marks do not serve.
+  const [asTable, setAsTable] = useState(false)
   // Drawn at the width it is shown at; see trendLayout. Called before the early returns.
   const [chart, setChart] = useState<HTMLDivElement | null>(null)
   const layout = trendLayout(useElementWidth(chart))
@@ -101,9 +104,23 @@ export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
     <div className="viz viz--trend" ref={setChart}>
       <TrendLegend totals={totals} formatMoney={ctx.formatMoney} />
 
+      <div className="viz__view">
+        <Button
+          onClick={() => {
+            setHover(null)
+            setAsTable((v) => !v)
+          }}
+        >
+          {asTable ? 'Show as chart' : 'Show as table'}
+        </Button>
+      </div>
+
+      {asTable ? (
+        <TrendTable months={months} rangeLabel={range?.label ?? 'the last 12 months'} formatMoney={ctx.formatMoney} />
+      ) : (
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        role="img"
+        role="list"
         aria-label={`Income and spending per month over ${range?.label ?? 'the last 12 months'}`}
       >
         <TrendGrid
@@ -130,8 +147,9 @@ export default function TrendWidget({ ctx, range }: PluginWidgetProps) {
           />
         ))}
       </svg>
+      )}
 
-      {hovered !== undefined ? (
+      {hovered !== undefined && !asTable ? (
         <TrendTooltip
           month={hovered}
           leftPercent={((PAD.left + (hover ?? 0) * slot + slot / 2) / W) * 100}
