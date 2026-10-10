@@ -134,7 +134,7 @@ export async function migrateTestDatabase(): Promise<void> {
   const role = sql.raw(TEST_APP_ROLE)
 
   await sql`ALTER ROLE ${role} LOGIN PASSWORD ${sql.lit(password)}`.execute(admin)
-  await sql`GRANT CONNECT ON DATABASE ${sql.raw(`"${database}"`)} TO ${role}`.execute(admin)
+  await sql`GRANT CONNECT ON DATABASE ${sql.id(database)} TO ${role}`.execute(admin)
 
   // Plugin roles are part of a working database, not an extra. The migrate
   // command provisions them from the manifests; the suite has to do the same, or every

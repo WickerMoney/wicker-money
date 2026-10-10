@@ -82,7 +82,7 @@ async function configureAppRole(password: string): Promise<void> {
     SELECT current_database()
   `.execute(db)
   const database = rows[0]!.current_database
-  await sql`GRANT CONNECT ON DATABASE ${sql.raw(`"${database}"`)} TO ${role}`.execute(db)
+  await sql`GRANT CONNECT ON DATABASE ${sql.id(database)} TO ${role}`.execute(db)
 }
 
 try {
