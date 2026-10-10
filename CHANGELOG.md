@@ -34,6 +34,12 @@ curated, human-readable version.
 - **The host and Budgets import the date helpers from `/date`.** The API, the
   web app, the seed data and Budgets now import `addDays` and `addMonths` from
   `@wickermoney/plugin-sdk/date`. No behaviour change.
+- **The image no longer has a `:next` tag.** A release candidate is published
+  under its version tag only (for example `:0.6.0-rc.1`), as before, so pin that
+  to try one. `:next` followed the newest candidate and fell behind `:latest`
+  after every stable release, so it was more often stale than useful; it is no
+  longer updated. `:latest` is still stable releases only and `:edge` is
+  unchanged. The npm `next` dist-tag for the SDK and UI kit is unchanged.
 
 ## [0.5.0] - 2026-10-10
 

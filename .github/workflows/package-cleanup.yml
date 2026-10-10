@@ -4,7 +4,7 @@ name: Package cleanup
 # wicker-money-preview). The npm packages are not touched.
 #
 # What is kept, always:
-#   :latest  :next  :edge        the three moving tags (their digests are also
+#   :latest  :edge               the two moving tags (their digests are also
 #                                passed to snok as skip-shas, belt and braces)
 #   every stable version tag     0.4.2, 0.5.0, ...  (self-hosters pin these)
 #
@@ -12,7 +12,7 @@ name: Package cleanup
 #   edge-<short sha>             older than 14 days, keeping the newest 10
 #   prerelease version tags      0.5.0-rc.1 style, older than 60 days
 #   untagged versions            older than 7 days (old :edge images, replaced
-#                                :next/:latest images, orphaned previews)
+#                                :latest images, orphaned previews)
 #
 # Why 7 days for untagged: release.yml, edge-image.yml and preview-image.yml
 # push each architecture by digest, which is untagged until the `merge` job
@@ -44,7 +44,7 @@ name: Package cleanup
 # summary. .github/scripts/ghcr-report.sh builds the summary.
 #
 # Dry-run checklist:
-#   - the versions behind :latest, :next and :edge are not listed
+#   - the versions behind :latest and :edge are not listed
 #   - no stable version tag is listed
 #   - the per-arch children of a kept :latest are not listed
 #   If any of those is wrong, do not go live.
@@ -96,13 +96,13 @@ jobs:
         run: bash .github/scripts/ghcr-report.sh snapshot "$RUNNER_TEMP/before.json"
 
       # Digests behind the moving tags, so they cannot be deleted whatever the
-      # tag filters below end up matching. A tag that does not exist yet (no
-      # prerelease so far means no :next) is skipped.
+      # tag filters below end up matching. A tag that does not exist yet is
+      # skipped.
       - name: Resolve protected digests
         id: protect
         run: |
           shas=""
-          for t in latest next edge; do
+          for t in latest edge; do
             d="$(docker buildx imagetools inspect "$IMAGE:$t" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
             if [ -n "$d" ]; then
               echo "$t -> $d"
@@ -127,7 +127,7 @@ jobs:
           dry-run: ${{ env.DRY_RUN }}
 
       # `*.*.*-*` matches 0.5.0-rc.1 and 0.5.0-beta.2; it does not match
-      # edge-<sha> (no dots), 0.5.0 (no hyphen), latest, next or edge.
+      # edge-<sha> (no dots), 0.5.0 (no hyphen), latest or edge.
       - name: Prerelease version tags (older than 60d)
         uses: snok/container-retention-policy@v3.1.0
         with:

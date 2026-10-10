@@ -9,7 +9,8 @@ name: Release
 #   - a GitHub release with generated notes
 #
 # A tag with a hyphen (v0.1.0-rc.1) is a prerelease: npm dist-tag `next`,
-# image tag `:next` instead of `:latest`, release marked as prerelease.
+# release marked as prerelease, and the image gets only its version tag
+# (:0.1.0-rc.1). There is no :next image tag; :latest is stable releases only.
 #
 # Every job is guarded by the repository check below, so a tag mirrored to the
 # mirror of this repo or a fork can never publish anything.
@@ -182,9 +183,8 @@ jobs:
         working-directory: /tmp/digests
         run: |
           tags=(-t "$IMAGE:${{ needs.meta.outputs.version }}")
-          if [ "${{ needs.meta.outputs.prerelease }}" = "true" ]; then
-            tags+=(-t "$IMAGE:next")
-          else
+          # A prerelease gets its version tag only; :latest is for stable releases.
+          if [ "${{ needs.meta.outputs.prerelease }}" != "true" ]; then
             tags+=(-t "$IMAGE:latest")
           fi
           docker buildx imagetools create "${tags[@]}" $(printf "$IMAGE@sha256:%s " *)

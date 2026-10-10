@@ -600,9 +600,11 @@ web app's About page always agree with the tag, with nothing to remember to
 update by hand.
 
 A tag such as `v0.1.0-rc.1` is a prerelease: the packages go out under the npm
-`next` tag, the image never takes `:latest`, and the release is marked as a
-prerelease. Re-running the packages job after a partial failure is safe; a version
-the registry already has is skipped.
+`next` tag, the image gets only its version tag (`:0.1.0-rc.1`) and never takes
+`:latest`, and the release is marked as a prerelease. There is no `:next` image
+tag: it would trail `:latest` after every stable release, so a candidate is
+tested by pinning its version tag. Re-running the packages job after a partial
+failure is safe; a version the registry already has is skipped.
 
 The npm packages publish via [trusted publishing](https://docs.npmjs.com/trusted-publishers)
 (OIDC) rather than a stored token: no `NPM_TOKEN` secret exists or is needed.
@@ -622,7 +624,7 @@ fails before a tag does.
 Every merge to `main` runs `.github/workflows/edge-image.yml`, which publishes
 `ghcr.io/wickermoney/wicker-money:edge` plus `:edge-<short sha>` (amd64 and
 arm64). It runs `ci.yml` first as a reusable workflow, so a red `main` publishes
-nothing. `:edge` is not a release: it never takes `:latest` or `:next`, publishes
+nothing. `:edge` is not a release: it never takes `:latest` or a version tag, publishes
 no npm packages and creates no GitHub release, and the app reports its version as
 `0.0.0-edge.<sha>`. Merging a migration moves `:edge` onto it immediately, so back
 up the database before pulling `:edge`, and pin `:edge-<short sha>` to stay on one
@@ -656,7 +658,7 @@ GitHub App token with `packages: write`); `GITHUB_TOKEN` cannot use the tag
 wildcards.
 
 - `package-cleanup.yml` runs daily on `wicker-money`. It never deletes
-  `:latest`, `:next`, `:edge` or a stable version tag. It deletes `:edge-<short sha>`
+  `:latest`, `:edge` or a stable version tag. It deletes `:edge-<short sha>`
   tags older than 14 days (keeping the newest 10), prerelease tags such as
   `0.5.0-rc.1` older than 60 days, and untagged versions older than 7 days. The
   untagged rule also covers `wicker-money-preview`. Per-arch images that a kept

@@ -6,8 +6,8 @@ name: Edge image
 # for people who want to run what is on main without waiting for a tag.
 #
 # :edge moves with every merge. It is not a release: it never takes :latest or
-# :next, it publishes no npm packages and creates no GitHub release, and a
-# migration on main reaches :edge before it reaches a tagged version. Pin
+# a version tag, it publishes no npm packages and creates no GitHub release, and
+# a migration on main reaches :edge before it reaches a tagged version. Pin
 # :edge-<short sha> to stay on one build, and take a database backup before
 # pulling :edge.
 #

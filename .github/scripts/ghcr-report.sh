@@ -56,7 +56,7 @@ report() { # <before.json> <after.json>
   if [ "$LIVE" = "true" ]; then mode="LIVE run"; else mode="DRY RUN (nothing was deleted)"; fi
   echo "# GHCR cleanup: $mode"
   echo
-  echo "Rules: moving tags (latest, next, edge) and stable versions are never deleted. \`edge-<sha>\` older than ${EDGE_DAYS}d beyond the newest ${EDGE_KEEP}, prereleases older than ${PRERELEASE_DAYS}d, and untagged versions older than ${UNTAGGED_DAYS}d that no kept manifest list points at are deleted."
+  echo "Rules: moving tags (latest, edge) and stable versions are never deleted. \`edge-<sha>\` older than ${EDGE_DAYS}d beyond the newest ${EDGE_KEEP}, prereleases older than ${PRERELEASE_DAYS}d, and untagged versions older than ${UNTAGGED_DAYS}d that no kept manifest list points at are deleted."
   echo
 
   for p in $PACKAGES; do
@@ -78,7 +78,7 @@ report() { # <before.json> <after.json>
       | ($now | map(
           . + (
             if (.tags | length) > 0 then
-              if has("^(latest|next|edge)$") then {act: "keep", why: "moving tag"}
+              if has("^(latest|edge)$") then {act: "keep", why: "moving tag"}
               elif has("^[0-9]+\\.[0-9]+\\.[0-9]+$") then {act: "keep", why: "stable release"}
               elif has("^[0-9]+\\.[0-9]+\\.[0-9]+-") then
                 (if age > $preDays then {act: "delete", why: "prerelease older than \($preDays)d"}

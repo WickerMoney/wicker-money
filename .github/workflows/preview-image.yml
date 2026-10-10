@@ -12,7 +12,7 @@ name: Preview image
 # that runs.
 #
 # What it does NOT do, on purpose: publish to npm, create a release, or touch
-# ghcr.io/wickermoney/wicker-money (:latest, :next and the version tags). Preview
+# ghcr.io/wickermoney/wicker-money (:latest and the version tags). Preview
 # images go to a separate package, so the real one's tag list stays release-only
 # and a half-finished branch can never be pulled as wicker-money:<anything>.
 # The preview package is private unless you change its visibility.
