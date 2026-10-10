@@ -1,3 +1,4 @@
+import type { AccountBasic } from './AccountBasic.js'
 import type { AccountChanges } from './AccountChanges.js'
 import type { AccountLabel } from './AccountLabel.js'
 import type { AccountWithBalance } from './AccountWithBalance.js'
@@ -19,6 +20,15 @@ export interface AccountRepository {
    * @returns Accounts with derived balances, ordered by name.
    */
   listWithBalances(includeArchived: boolean): Promise<AccountWithBalance[]>
+
+  /**
+   * Like {@link listWithBalances}, but without the balance: no read of the
+   * transactions table, so it stays cheap however long the ledger is.
+   *
+   * @param includeArchived - Whether archived accounts are included.
+   * @returns Accounts ordered by name.
+   */
+  listBasic(includeArchived: boolean): Promise<AccountBasic[]>
 
   /**
    * @param id - Account id.

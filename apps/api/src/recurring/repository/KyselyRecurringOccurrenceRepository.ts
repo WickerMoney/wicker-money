@@ -2,6 +2,7 @@ import { sql, type ExpressionBuilder } from 'kysely'
 import type { Trx } from '../../db/Trx.js'
 import type { Database } from '../../db/models/index.js'
 import { databaseNow } from '../../accounts/repository/databaseNow.js'
+import type { CandidateSearch } from './CandidateSearch.js'
 import type { CandidateTransactionRow } from './CandidateTransactionRow.js'
 import type { DismissalRow } from './DismissalRow.js'
 import type { OccurrenceLinkRow } from './OccurrenceLinkRow.js'
@@ -169,13 +170,16 @@ export class KyselyRecurringOccurrenceRepository implements RecurringOccurrenceR
   }
 
   /** @inheritdoc */
-  async findCandidates(accountIds: readonly string[], from: string, through: string): Promise<CandidateTransactionRow[]> {
-    const found: CandidateTransactionRow[] = []
+  async findCandidates(accountIds: readonly string[], from: string, through: string): Promise<CandidateSearch> {
+    const rows: CandidateTransactionRow[] = []
+    const truncatedAccounts: string[] = []
     // One query per account (there are few, and they share one connection
     // anyway), newest first, so a cap drops the oldest rows rather than the
     // ones about to be settled. Linked transactions are never candidates.
+    // Asking for one row more than the cap is how a full account is told from
+    // a truncated one.
     for (const accountId of new Set(accountIds)) {
-      found.push(...await this.trx
+      const found = await this.trx
         .selectFrom('core.transactions')
         .select(CANDIDATE_COLUMNS)
         .where('account_id', '=', accountId)
@@ -184,10 +188,15 @@ export class KyselyRecurringOccurrenceRepository implements RecurringOccurrenceR
         .where('transaction_date', '<=', through)
         .orderBy('transaction_date', 'desc')
         .orderBy('id', 'desc')
-        .limit(this.maxCandidatesPerAccount)
-        .execute())
+        .limit(this.maxCandidatesPerAccount + 1)
+        .execute()
+      if (found.length > this.maxCandidatesPerAccount) {
+        truncatedAccounts.push(accountId)
+        found.length = this.maxCandidatesPerAccount
+      }
+      rows.push(...found)
     }
-    return found.sort((a, b) => compare(a.transaction_date, b.transaction_date) || compare(a.id, b.id))
+    return { rows: rows.sort((a, b) => compare(a.transaction_date, b.transaction_date) || compare(a.id, b.id)), truncatedAccounts }
   }
 
   /** @inheritdoc */

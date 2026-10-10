@@ -82,6 +82,7 @@ export function RulesPanel({ rules, categories, status, onChanged }: RulesPanelP
                   <div id={panelId} className="acc__panel" hidden={!open}>
                     {open ? (
                       <Table
+                        caption="Rules"
                         columns={[
                           {
                             key: 'conditions', header: 'Matches when',

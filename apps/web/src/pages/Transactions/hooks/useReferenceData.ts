@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
-import type { Account, Category } from '../../../models/index.js'
+import type { AccountOption, Category } from '../../../models/index.js'
 
 /** What {@link useReferenceData} returns. */
 export interface ReferenceData {
   /** The user's accounts. */
-  readonly accounts: readonly Account[]
+  readonly accounts: readonly AccountOption[]
   /** Every category, including disabled ones. */
   readonly categories: readonly Category[]
   /** What a picker offers for a new choice: never a category the user has hidden. */
@@ -21,7 +21,7 @@ export interface ReferenceData {
  * @returns The accounts and categories, and the subset of categories a picker should offer.
  */
 export function useReferenceData(status: ActionStatus): ReferenceData {
-  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accounts, setAccounts] = useState<AccountOption[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const { show } = status
 
@@ -30,7 +30,7 @@ export function useReferenceData(status: ActionStatus): ReferenceData {
   useEffect(() => {
     latest.run(
       (signal) => Promise.all([
-        api.get<Account[]>('/accounts', { signal }),
+        api.get<AccountOption[]>('/accounts?fields=basic', { signal }),
         api.get<Category[]>('/categories', { signal }),
       ]),
       ([accs, cats]) => {

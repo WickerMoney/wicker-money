@@ -88,6 +88,7 @@ export class BudgetService {
             repos.balances,
             monthKey,
             source.filter((l) => l.rollover).map((l) => l.category_id),
+            spend,
           )
 
       const monthly: MonthLine[] = source.map((line) => {
@@ -394,6 +395,7 @@ export class BudgetService {
       repos.balances,
       monthKey,
       lines.filter((l) => l.rollover).map((l) => l.category_id),
+      spend,
     )
 
     const categoryStatuses: LineStatus[] = [

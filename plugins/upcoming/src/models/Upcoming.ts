@@ -1,6 +1,11 @@
 /** One leg of an occurrence: a signed amount on one account. */
 export interface UpcomingLeg {
   readonly accountId: string
+  /**
+   * The account's name. Absent from servers older than names-on-legs; the data
+   * hook then falls back to the account list.
+   */
+  readonly accountName?: string
   readonly amount: string
 }
 
@@ -58,7 +63,7 @@ export interface UpcomingResponse {
   readonly hasItems: boolean
 }
 
-/** `GET /core/accounts/list`: names for the legs of transfers. */
+/** `GET /core/accounts/list`: names for legs that arrive without one (servers older than names-on-legs). */
 export interface AccountListResponse {
   readonly accounts: readonly { readonly id: string; readonly name: string; readonly type: string }[]
 }

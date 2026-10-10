@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Spinner } from '@wickermoney/ui-kit'
+import { Alert, Spinner, useFocusTrap } from '@wickermoney/ui-kit'
 import { api } from '../api/client.js'
 import { useEscapeKey } from '../hooks/useEscapeKey.js'
 import type { SituationGroup } from './SituationGroup.js'
@@ -29,6 +29,7 @@ export function SetupWizard() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const panel = useRef<HTMLDivElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
 
   const { chosen, toggle } = useWizardAnswers(open, status)
   const preview = useSetupPreview(open, chosen)
@@ -46,7 +47,21 @@ export function SetupWizard() {
   // way out is the button, which is a trap on a keyboard.
   useEscapeKey(open, dismiss)
 
-  useEffect(() => { if (open) panel.current?.focus() }, [open, step])
+  // Tab stays inside the dialog, and focus goes back to whatever had it before
+  // the wizard opened once it closes.
+  useFocusTrap(panel, open)
+
+  const ready = status !== null && status.groups.length > 0
+
+  // Focus moves only when the step changes (or the content first appears), not
+  // on every render, so ticking a box never throws the user back to the top.
+  // The heading is what a screen reader should announce for the new step; the
+  // panel itself holds focus while the questions are still loading.
+  useEffect(() => {
+    if (!open) return
+    if (ready) heading.current?.focus()
+    else panel.current?.focus()
+  }, [open, ready, step])
 
   const finish = useCallback(async (situations: readonly string[]) => {
     setBusy(true); setError(null)
@@ -69,7 +84,8 @@ export function SetupWizard() {
         className="wiz__panel"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="wiz-title"
+        aria-labelledby={ready ? 'wiz-title' : undefined}
+        aria-label={ready ? undefined : 'Setup'}
         tabIndex={-1}
         ref={panel}
       >
@@ -77,7 +93,7 @@ export function SetupWizard() {
           <div className="wiz__body"><Spinner label="Loading setup" /></div>
         ) : (
           <>
-            <WizardHeader step={step} groups={groups} onDismiss={dismiss} />
+            <WizardHeader step={step} groups={groups} onDismiss={dismiss} headingRef={heading} />
             <WizardProgress step={step} groups={groups} />
             <div className="wiz__body">
               {error !== null ? <Alert>{error}</Alert> : null}

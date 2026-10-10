@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { EmptyState } from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
-import type { Account, Category } from '../../../models/index.js'
+import type { AccountOption, Category } from '../../../models/index.js'
 import { useEntryFields } from '../hooks/useEntryFields.js'
 import { useSpendEntry } from '../hooks/useSpendEntry.js'
 import { useTransferEntry } from '../hooks/useTransferEntry.js'
@@ -13,7 +13,7 @@ import { TransferForm } from './TransferForm.js'
 /** Props for {@link TransactionEntryForm}. */
 export interface TransactionEntryFormProps {
   /** Accounts a transaction can be recorded against. */
-  readonly accounts: readonly Account[]
+  readonly accounts: readonly AccountOption[]
   /** Categories offered for the new transaction. */
   readonly enabledCategories: readonly Category[]
   /** Busy flag and error message shared with the page. */

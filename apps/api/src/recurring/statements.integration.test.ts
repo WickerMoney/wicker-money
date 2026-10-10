@@ -109,7 +109,7 @@ const BOUNDS: Record<string, { url: (s: Scenario) => string; max: number }> = {
   'transaction-matches': {
     url: (s) => `/api/v1/recurring-items/transaction-matches?transactionIds=${s.page.join(',')}`,
     // describeAt and findSuggestions share one load of items, records, links and tracking starts.
-    max: 15,
+    max: 14,
   },
   suggestions: { url: () => '/api/v1/recurring-items/suggestions', max: 12 },
   upcoming: { url: () => '/api/v1/core/recurring-items/upcoming', max: 11 },

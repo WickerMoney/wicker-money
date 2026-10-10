@@ -1,3 +1,5 @@
+import { constants as zlib } from 'node:zlib'
+import compress from '@fastify/compress'
 import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import Fastify, { type FastifyInstance } from 'fastify'
@@ -72,6 +74,20 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
     trustProxy: config.TRUST_PROXY,
   })
   void app.register(helmet, { global: true })
+  // The image serves the web bundle and the API from this one process, with no
+  // proxy guaranteed in front, so it compresses its own responses. Only types
+  // that compress (the plugin skips images, fonts and anything else already
+  // dense) and only above 1 KiB, where the savings outweigh the CPU. Brotli at
+  // quality 5: the default of 11 would spend hundreds of milliseconds per
+  // response on a 100 KB transaction list for a few percent more. Headers
+  // other than `Content-Encoding`, `Vary: Accept-Encoding` and the length are
+  // left as the route set them.
+  void app.register(compress, {
+    global: true,
+    threshold: 1024,
+    encodings: ['br', 'gzip'],
+    brotliOptions: { params: { [zlib.BROTLI_PARAM_QUALITY]: 5 } },
+  })
   void app.register(cookie)
   const services = createServices(db, new KyselyUnitOfWork(db), config)
   const auth = services.auth
@@ -124,29 +140,33 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
     return reply.code(500).send({ code: 'internal_error', message: 'Something went wrong.' })
   })
 
-  app.get('/healthz', () => ({ status: 'ok', version: APP_VERSION, gitSha: GIT_SHA }))
-  app.get('/readyz', async () => {
-    await pingDatabase(db)
-    return { status: 'ok', version: APP_VERSION, gitSha: GIT_SHA, sdkVersion: SDK_MAJOR_VERSION }
+  // Routes are added once the compression plugin has loaded: it hooks `onRoute`,
+  // so a route defined before then would be silently left uncompressed.
+  app.after(() => {
+    app.get('/healthz', () => ({ status: 'ok', version: APP_VERSION, gitSha: GIT_SHA }))
+    app.get('/readyz', async () => {
+      await pingDatabase(db)
+      return { status: 'ok', version: APP_VERSION, gitSha: GIT_SHA, sdkVersion: SDK_MAJOR_VERSION }
+    })
+
+    registerAuth(app, auth)
+    registerAuthRoutes(app, auth)
+    registerAccountRoutes(app, services)
+    registerCategoryRoutes(app, services)
+    registerOnboardingRoutes(app, services)
+    registerTransactionRoutes(app, services)
+    registerRecurringItemRoutes(app, services)
+    registerPluginRoutes(app, services)
+    registerBundledPluginServers(app, db, services.plugins)
+    registerCoreDataRoutes(app, services)
+    registerSettingsRoutes(app, services)
+
+    // Last, so every route above wins over the static wildcard and the
+    // single-page-app fallback it installs.
+    if (config.WEB_DIST_DIR !== undefined) {
+      registerWebApp(app, { root: config.WEB_DIST_DIR, pluginOrigins: config.PLUGIN_REMOTE_ORIGINS })
+    }
   })
-
-  registerAuth(app, auth)
-  registerAuthRoutes(app, auth)
-  registerAccountRoutes(app, services)
-  registerCategoryRoutes(app, services)
-  registerOnboardingRoutes(app, services)
-  registerTransactionRoutes(app, services)
-  registerRecurringItemRoutes(app, services)
-  registerPluginRoutes(app, services)
-  registerBundledPluginServers(app, db, services.plugins)
-  registerCoreDataRoutes(app, services)
-  registerSettingsRoutes(app, services)
-
-  // Last, so every route above wins over the static wildcard and the
-  // single-page-app fallback it installs.
-  if (config.WEB_DIST_DIR !== undefined) {
-    registerWebApp(app, { root: config.WEB_DIST_DIR, pluginOrigins: config.PLUGIN_REMOTE_ORIGINS })
-  }
 
   return app
 }

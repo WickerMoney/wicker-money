@@ -2,6 +2,7 @@ import { DuplicateKeyError } from '../../data/DuplicateKeyError.js'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import type { ReferenceUsage } from '../../db/usage.js'
 import { ConflictError, NotFoundError, ValidationError } from '../../errors.js'
+import type { AccountBasic } from '../repository/AccountBasic.js'
 import type { AccountChanges } from '../repository/AccountChanges.js'
 import type { AccountWithBalance } from '../repository/AccountWithBalance.js'
 import { describeAccountUsage } from './describeAccountUsage.js'
@@ -38,6 +39,15 @@ export class AccountService {
    */
   list(userId: string, includeArchived: boolean): Promise<AccountWithBalance[]> {
     return this.uow.forUser(userId, ({ accounts }) => accounts.listWithBalances(includeArchived))
+  }
+
+  /**
+   * @param userId - The signed-in user.
+   * @param includeArchived - Whether archived accounts are included.
+   * @returns The user's accounts without balances (no ledger read), ordered by name.
+   */
+  listBasic(userId: string, includeArchived: boolean): Promise<AccountBasic[]> {
+    return this.uow.forUser(userId, ({ accounts }) => accounts.listBasic(includeArchived), { readOnly: true })
   }
 
   /**
