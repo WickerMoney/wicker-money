@@ -1,6 +1,8 @@
 export type { AnalyzeInput } from './AnalyzeInput.js'
 export type { AnalyzeResult } from './AnalyzeResult.js'
 export type { AnalyzedRow } from './AnalyzedRow.js'
+export type { AnalyzePage } from './AnalyzePage.js'
+export type { FlaggedRows } from './FlaggedRows.js'
 export type { AnalyzeSummary } from './AnalyzeSummary.js'
 export type { CategoryResolver } from './CategoryResolver.js'
 export type { CommitInput } from './CommitInput.js'

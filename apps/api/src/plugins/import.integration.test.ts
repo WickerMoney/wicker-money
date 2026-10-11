@@ -527,6 +527,73 @@ describe('saved mappings', () => {
   })
 })
 
+describe('analyze response on a large file', () => {
+  const noId = {
+    ...MAPPING,
+    sourceName: 'Large',
+    columns: { date: 'Date', merchant: 'Description', amount: 'Amount' },
+  }
+  const file = (start: number, n: number) =>
+    ['Date,Description,Amount', ...Array.from({ length: n }, (_, i) => `03/04/2026,SHOP ${start + i},-${start + i + 1}.00`)].join('\n')
+  let big: string
+
+  beforeAll(async () => {
+    big = await newAccount(user, 'Large')
+    const res = await commit({ accountId: big, csv: file(0, 400), fileName: 'seed.csv', ...noId })
+    expect(res.json()).toMatchObject({ imported: 400 })
+  })
+
+  type Page = {
+    summary: { total: number; new: number; needsReview: number }
+    rows: Array<{ rowNumber: number; status: string }>
+    flagged: { total: number; offset: number; rows: Array<{ rowNumber: number; status: string }> }
+  }
+
+  it('returns the counts for every row but only the first 100 rows, and a page of flagged rows', async () => {
+    // 400 repeat existing rows (flagged) followed by 200 new ones.
+    const res = await analyze({ accountId: big, csv: file(0, 400) + '\n' + file(5000, 200).split('\n').slice(1).join('\n'), ...noId })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as Page
+    expect(body.summary).toMatchObject({ total: 600, new: 200, needsReview: 400 })
+    expect(body.rows).toHaveLength(100)
+    expect(body.flagged.total).toBe(400)
+    expect(body.flagged.rows).toHaveLength(400)
+    expect(body.flagged.rows.every((r) => r.status === 'needs-review')).toBe(true)
+  })
+
+  it('pages the flagged rows with flaggedOffset and flaggedLimit', async () => {
+    const csv = file(0, 400)
+    const first = (await analyze({ accountId: big, csv, ...noId, flaggedLimit: 150 })).json() as Page
+    const second = (await analyze({ accountId: big, csv, ...noId, flaggedLimit: 150, flaggedOffset: 150 })).json() as Page
+    const third = (await analyze({ accountId: big, csv, ...noId, flaggedLimit: 150, flaggedOffset: 300 })).json() as Page
+    expect([first, second, third].map((p) => p.flagged.rows.length)).toEqual([150, 150, 100])
+    expect(second.flagged.offset).toBe(150)
+    const all = [...first.flagged.rows, ...second.flagged.rows, ...third.flagged.rows].map((r) => r.rowNumber)
+    expect(all).toEqual(Array.from({ length: 400 }, (_, i) => i + 2))
+  })
+
+  it('answers a request that sends no paging fields as it did before, for a small file', async () => {
+    const res = await analyze({ accountId: big, csv: file(0, 3), ...noId })
+    const body = res.json() as Page
+    expect(body.rows).toHaveLength(3)
+    expect(body.flagged.rows).toHaveLength(3)
+  })
+
+  it('refuses a bad offset or limit on that field', async () => {
+    const res = await analyze({ accountId: big, csv: file(0, 3), ...noId, flaggedOffset: -1 })
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toMatchObject({ issues: [{ path: ['flaggedOffset'] }] })
+    expect((await analyze({ accountId: big, csv: file(0, 3), ...noId, flaggedLimit: 0 })).statusCode).toBe(400)
+  })
+
+  it('imports every new row and only the accepted flagged ones, whatever the analysis showed', async () => {
+    const csv = file(0, 400) + '\n' + file(5000, 200).split('\n').slice(1).join('\n')
+    const res = await commit({ accountId: big, csv, fileName: 'again.csv', ...noId, acceptRowNumbers: [2, 401] })
+    // 200 new rows, none of which the first 100 previewed rows covered, plus two accepted repeats.
+    expect(res.json()).toMatchObject({ imported: 202, flagged: 400 })
+  })
+})
+
 describe('request size limits', () => {
   it('answers 413 to an analyze body over 10 MiB', async () => {
     const res = await analyze({ accountId, csv: 'a'.repeat(11 * 1024 * 1024), ...MAPPING })

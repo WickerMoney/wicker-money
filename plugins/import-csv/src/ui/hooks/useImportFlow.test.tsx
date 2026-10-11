@@ -77,7 +77,7 @@ function commitContext(failures: number) {
   let remaining = failures
   const commits: Body[] = []
   const post = vi.fn(async (path: string, body: Body) => {
-    if (path.endsWith('/analyze')) return { summary: {}, errors: [], rows: [] }
+    if (path.endsWith('/analyze')) return { summary: {}, errors: [], rows: [], flagged: { total: 0, offset: 0, rows: [] } }
     if (path.endsWith('/commit')) {
       commits.push(body)
       if (remaining > 0) {
@@ -214,5 +214,70 @@ describe('useImportFlow errors', () => {
 
     expect(result.current.errors.fields['csv']).toMatch(/no header row/)
     expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useImportFlow loadMoreFlagged', () => {
+  const row = (n: number) => ({
+    rowNumber: n, date: '2026-03-04', merchant: `SHOP ${n}`, amount: '-1.00', notes: null, externalId: null,
+    status: 'needs-review', reason: 'looks like SHOP', matched: null,
+  })
+
+  /** A server that has 5 flagged rows and sends them 2 at a time. */
+  function pagedContext() {
+    const analyses: Body[] = []
+    const post = vi.fn(async (path: string, body: Body) => {
+      if (!path.endsWith('/analyze')) return {}
+      analyses.push(body)
+      const offset = typeof body['flaggedOffset'] === 'number' ? body['flaggedOffset'] : 0
+      const page = [2, 3, 4, 5, 6].slice(offset, offset + 2).map(row)
+      return {
+        summary: { total: 5, new: 0, duplicate: 0, needsReview: 5, errors: 0 },
+        errors: [], rows: page, flagged: { total: 5, offset, rows: page },
+      }
+    })
+    const get = vi.fn(async (path: string) => (path.endsWith('/mappings') ? { mappings: [] } : { accounts: ACCOUNTS }))
+    return { ctx: { api: { get, post } } as unknown as PluginContext, analyses }
+  }
+
+  it('asks for the page after the rows it has, with the file it analysed, and appends the answer', async () => {
+    const { ctx, analyses } = pagedContext()
+    const { result } = await reviewedFlow(ctx)
+    expect(result.current.analysis?.flagged.rows.map((r) => r.rowNumber)).toEqual([2, 3])
+
+    await act(async () => { expect(await result.current.loadMoreFlagged()).toBe(true) })
+    expect(analyses[1]?.['flaggedOffset']).toBe(2)
+    expect(analyses[1]?.['csv']).toBe(analyses[0]?.['csv'])
+    expect(result.current.analysis?.flagged.rows.map((r) => r.rowNumber)).toEqual([2, 3, 4, 5])
+
+    await act(async () => { await result.current.loadMoreFlagged() })
+    expect(result.current.analysis?.flagged.rows.map((r) => r.rowNumber)).toEqual([2, 3, 4, 5, 6])
+  })
+
+  it('lists a row once even when two pages overlap', async () => {
+    const { ctx } = pagedContext()
+    const { result } = await reviewedFlow(ctx)
+    vi.mocked(ctx.api.post).mockResolvedValueOnce({
+      summary: {}, errors: [], rows: [],
+      flagged: { total: 5, offset: 2, rows: [row(3), row(4)] },
+    })
+    await act(async () => { await result.current.loadMoreFlagged() })
+    expect(result.current.analysis?.flagged.rows.map((r) => r.rowNumber)).toEqual([2, 3, 4])
+  })
+
+  it('keeps the rows it has and reports the failure when the page cannot be loaded', async () => {
+    const { ctx } = pagedContext()
+    const { result } = await reviewedFlow(ctx)
+    vi.mocked(ctx.api.post).mockRejectedValueOnce(new Error('network down'))
+    await act(async () => { expect(await result.current.loadMoreFlagged()).toBe(false) })
+    expect(result.current.errors.form).toBe('network down')
+    expect(result.current.analysis?.flagged.rows).toHaveLength(2)
+  })
+
+  it('does nothing before there is an analysis', async () => {
+    const { ctx } = pagedContext()
+    const { result } = renderHook(() => useImportFlow(ctx))
+    await act(async () => { expect(await result.current.loadMoreFlagged()).toBe(false) })
+    expect(ctx.api.post).not.toHaveBeenCalled()
   })
 })

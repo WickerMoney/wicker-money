@@ -76,6 +76,7 @@ export default function ImportPage({ ctx }: PluginPageProps) {
           onAccepted={flow.setAccepted}
           formatMoney={ctx.formatMoney}
           busy={flow.busy}
+          onLoadMore={flow.loadMoreFlagged}
           onCommit={() => void flow.commit()}
           error={flow.errors.form}
         />

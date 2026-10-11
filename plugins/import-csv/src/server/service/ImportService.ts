@@ -5,15 +5,19 @@ import type { ImportUnitOfWork } from '../repository/ImportUnitOfWork.js'
 import type { BatchListRow } from '../repository/BatchListRow.js'
 import type { SavedMappingRow } from '../repository/SavedMappingRow.js'
 import type { SourceMapping } from '../../shared/index.js'
+import { ANALYZE_PREVIEW_ROWS } from './ANALYZE_PREVIEW_ROWS.js'
 import type { AnalyzeInput } from './AnalyzeInput.js'
+import type { AnalyzePage } from './AnalyzePage.js'
 import type { AnalyzeResult } from './AnalyzeResult.js'
 import { BATCH_HISTORY_LIMIT } from './BATCH_HISTORY_LIMIT.js'
 import type { CategoryResolver } from './CategoryResolver.js'
 import { classifyAgainstLedger } from './classifyAgainstLedger.js'
+import { DEFAULT_FLAGGED_LIMIT } from './DEFAULT_FLAGGED_LIMIT.js'
 import type { CommitInput } from './CommitInput.js'
 import type { CommitResult } from './CommitResult.js'
 import { ImportError } from './ImportError.js'
 import { mapFile } from './mapFile.js'
+import { pageOfFlagged } from './pageOfFlagged.js'
 import { MAX_ROW_ERRORS_SHOWN } from './MAX_ROW_ERRORS_SHOWN.js'
 import { requireVisibleAccount } from './requireVisibleAccount.js'
 import type { RevertResult } from './RevertResult.js'
@@ -66,20 +70,37 @@ export class ImportService {
   /**
    * Parses and classifies a file without writing anything.
    *
+   * The whole file is classified, but the response carries a bounded slice of
+   * it: the counts for every row, the first rows of the file, and one page of
+   * the rows the user must decide on. Rows not returned are still handled
+   * correctly by {@link commit}, which classifies the file again and acts on
+   * row numbers, never on what an analysis showed.
+   *
    * @param userId - The authenticated user.
    * @param input - The account, CSV text and mapping.
-   * @returns The summary, the first row errors, and every row with its verdict.
+   * @param page - Which flagged rows to return. Defaults to the first {@link DEFAULT_FLAGGED_LIMIT}.
+   * @returns The summary, the first row errors, the first rows of the file, and a page of flagged rows.
    * @throws {ImportError} `400` when the file has too many rows; `404` when the account is not visible.
    */
-  async analyze(userId: string, input: AnalyzeInput): Promise<AnalyzeResult> {
+  async analyze(
+    userId: string,
+    input: AnalyzeInput,
+    page: AnalyzePage = { offset: 0, limit: DEFAULT_FLAGGED_LIMIT },
+  ): Promise<AnalyzeResult> {
     const { rows, errors } = mapFile(input.csv, input.mapping, this.maxRows)
     return this.uow.run(userId, async (repos) => {
       await requireVisibleAccount(repos.accounts, input.accountId)
       const classified = await classifyAgainstLedger(repos.ledger, input.accountId, rows)
+      const summary = summarize(classified)
       return {
-        summary: { ...summarize(classified), errors: errors.length },
+        summary: { ...summary, errors: errors.length },
         errors: errors.slice(0, MAX_ROW_ERRORS_SHOWN),
-        rows: classified.map(toAnalyzedRow),
+        rows: classified.slice(0, ANALYZE_PREVIEW_ROWS).map(toAnalyzedRow),
+        flagged: {
+          total: summary.needsReview,
+          offset: page.offset,
+          rows: pageOfFlagged(classified, page).map(toAnalyzedRow),
+        },
       }
     })
   }
