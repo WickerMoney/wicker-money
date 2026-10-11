@@ -406,6 +406,58 @@ recurring items are not in the line. The numbers come from
 `GET /api/v1/core/recurring-items/forecast`, computed on the server against your
 today.
 
+### Debt payoff
+
+**Debt payoff** (bundled plugin `plugins/debt-payoff`, id `wickermoney.debt-payoff`)
+keeps a list of debts and builds a payoff plan from them, by the snowball
+(smallest balance first) or avalanche (highest rate first) method. This release
+is the server half only: tables, endpoints and the planning engine. The page
+comes later.
+
+It has its own tables in the `plugin_debt_payoff` schema (migration 029):
+`debts` (name, balance, APR, minimum payment, optional linked account, sort
+order, archived) and `plan_settings` (the saved strategy and monthly extra).
+Money is `numeric(19,4)` in PostgreSQL and a decimal string in TypeScript.
+Both tables are under forced row-level security, and a debt's account link is a
+composite `(user_id, account_id)` key into `core.accounts`, so a debt cannot
+name another person's account even though foreign key checks bypass
+row-level security. Deleting an account together with its history unlinks the
+debt (`ON DELETE SET NULL (account_id)`); a plain delete is refused while a debt
+is linked. The plugin reads `core.accounts` through an ordinary `requiredTables`
+grant and nothing else of the host's; it never reads another plugin's tables.
+
+Endpoints, under `/api/v1/p/wickermoney.debt-payoff`:
+
+| Route | What it does |
+| --- | --- |
+| `GET /debts` (`?includeArchived=true`) | The list, in the person's own order |
+| `POST /debts`, `GET/PUT/DELETE /debts/:id` | Create, read, change (partial; `accountId: null` unlinks) and delete |
+| `GET /settings`, `PUT /settings` | Saved strategy (default `avalanche`) and extra (default `0`) |
+| `GET /plan?strategy&extra&tz` | The plan; values not given in the query come from the saved settings |
+| `GET /account-suggestions` | Loan and credit card accounts, with the debt already tracking each |
+
+**How a plan is computed** (the engine is `src/shared/strategy`, pure functions
+on the SDK's bigint `/money` maths, no floating point anywhere):
+
+- Interest is the nominal APR compounded monthly: `balance * APR / 12`, on the
+  balance at the start of the month, with the payment made at the month's end.
+  A debt's last payment is therefore its balance plus that month's interest.
+- **Rounding rule:** interest is rounded once per debt per month, to four
+  decimal places, half away from zero (the SDK's `divideUnits`). Nothing else is
+  rounded, so a plan's totals add up exactly.
+- The same amount is paid every month: the sum of the minimums plus the extra.
+  When a debt is paid off, its minimum rolls to the next debt in the order.
+  The order is fixed at the start (snowball: balance, then rate, then list
+  position; avalanche: rate, then balance, then list position).
+- A minimum above what is owed pays only what is owed.
+- The plan also carries a minimums-only baseline, so the response says how many
+  months and how much interest the strategy saves.
+- **Limits:** a plan stops at 600 months and reports `capped: true` with a
+  `cappedReason` (`month_limit`, or `balance_limit` when a balance would pass the numeric
+  ceiling, as with a minimum that never covers the interest). At most 50 active
+  debts per person. Balances and payments are capped at 999,999,999,999,999.9999
+  and a rate at 999.9999%.
+
 ## Writing a plugin
 
 A plugin is a Module Federation remote plus a manifest. Two rules are not
