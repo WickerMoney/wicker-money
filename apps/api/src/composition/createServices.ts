@@ -8,6 +8,7 @@ import { CategoryRuleService } from '../categories/service/CategoryRuleService.j
 import { CategoryService } from '../categories/service/CategoryService.js'
 import { OnboardingService } from '../onboarding/service/OnboardingService.js'
 import { PluginService } from '../plugins/service/PluginService.js'
+import type { PluginServiceOptions } from '../plugins/service/PluginServiceOptions.js'
 import { ReportService } from '../core/service/ReportService.js'
 import { RecurringItemService } from '../recurring/service/RecurringItemService.js'
 import { RecurringOccurrenceService } from '../recurring/service/RecurringOccurrenceService.js'
@@ -23,10 +24,13 @@ import { UserAdminService } from '../users/service/UserAdminService.js'
  * @param db - Database handle, still needed by the few pieces that manage their own connections.
  * @param uow - Transaction boundary shared by all services.
  * @param config - Validated configuration.
+ * @param pluginOptions - Overrides for the plugin service; only tests and the browser check pass any.
  * @returns The service registry.
  */
-export function createServices(db: Db, uow: UnitOfWork, config: Config): Services {
-  const plugins = new PluginService(uow, { remoteOrigins: config.PLUGIN_REMOTE_ORIGINS })
+export function createServices(
+  db: Db, uow: UnitOfWork, config: Config, pluginOptions: Pick<PluginServiceOptions, 'bundled'> = {},
+): Services {
+  const plugins = new PluginService(uow, { ...pluginOptions, remoteOrigins: config.PLUGIN_REMOTE_ORIGINS })
   const auth = new AuthService(uow, config)
   return {
     auth,

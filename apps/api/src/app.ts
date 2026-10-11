@@ -22,6 +22,7 @@ import { registerSettingsRoutes } from './settings/routes/index.js'
 import { registerBundledPluginServers } from './plugins/server.js'
 import { registerTransactionRoutes } from './transactions/routes/index.js'
 import { registerUserRoutes } from './users/routes/index.js'
+import type { PluginServiceOptions } from './plugins/service/PluginServiceOptions.js'
 import { registerWebApp } from './web/registerWebApp.js'
 import { APP_VERSION, GIT_SHA } from './version.js'
 
@@ -39,6 +40,11 @@ export interface AppDeps {
    * needs to be assertable rather than assumed.
    */
   readonly logStream?: NodeJS.WritableStream
+  /**
+   * Overrides for the plugin service. Tests and the browser check use `bundled`
+   * to add a fixture manifest to the app; the server never sets it.
+   */
+  readonly pluginOptions?: Pick<PluginServiceOptions, 'bundled'>
 }
 
 /**
@@ -59,7 +65,7 @@ export interface AppDeps {
  * const app = buildApp({ db, config })
  * await app.listen({ port: config.PORT, host: config.HOST })
  */
-export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
+export function buildApp({ db, config, logStream, pluginOptions }: AppDeps): FastifyInstance {
   // `silent` rather than `logger: false`: with the logger disabled outright,
   // `request.log.error` becomes a no-op stub, so the error handler below
   // discards the cause of every 500 and the only trace of the failure is the
@@ -90,7 +96,7 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
     brotliOptions: { params: { [zlib.BROTLI_PARAM_QUALITY]: 5 } },
   })
   void app.register(cookie)
-  const services = createServices(db, new KyselyUnitOfWork(db), config)
+  const services = createServices(db, new KyselyUnitOfWork(db), config, pluginOptions)
   const auth = services.auth
 
   app.setErrorHandler((error, request, reply) => {
