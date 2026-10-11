@@ -17,7 +17,7 @@ function mount(start: string, setTimezone = vi.fn(async (z: string) => z)) {
     const [user, setUser] = useState<CurrentUser>({ id: 'u1', email: 'a@example.com', timezone: start, role: 'owner' })
     const value: AuthState = {
       user, ready: true,
-      signIn: vi.fn(), register: vi.fn(), signOut: vi.fn(),
+      signIn: vi.fn(), register: vi.fn(), signOut: vi.fn(), refreshUser: vi.fn(),
       setTimezone: async (zone) => { setUser({ ...user, timezone: await setTimezone(zone) }) },
     }
     return <AuthCtx.Provider value={value}><TimezoneSection /></AuthCtx.Provider>
