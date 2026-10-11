@@ -1,0 +1,10 @@
+/*
+ * The frame is drawn inside the host's card, so it paints nothing of its own:
+ * the ui-kit gives `body` the page background, which here would show as a
+ * differently coloured box inside the card (the card is the surface colour).
+ * The host's `.plugin-frame__frame` is transparent to match.
+ */
+html,
+body {
+  background: transparent;
+}

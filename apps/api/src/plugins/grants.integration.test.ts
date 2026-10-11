@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
+import { IN_REALM_PLUGIN_IDS } from './bundled.js'
 
 let h: Harness
 let user: TestUser
@@ -50,8 +51,10 @@ describe('plugin registry endpoint', () => {
     const res = await h.app.inject({ method: 'GET', url: '/api/v1/plugins', headers: auth(user) })
     const body = res.json() as { plugins: Array<{ id: string; runtime: string; isolated?: boolean }> }
     expect(body.plugins.length).toBeGreaterThan(0)
-    // Insights is ported; every other bundled plugin stays in the page's own realm.
-    for (const p of body.plugins) expect(p.runtime, p.id).toBe(p.id === 'wickermoney.insights' ? 'isolated' : 'in-realm')
+    // A bundled plugin runs in the page's own realm only while the host lists it.
+    for (const p of body.plugins) expect(p.runtime, p.id).toBe(IN_REALM_PLUGIN_IDS.has(p.id) ? 'in-realm' : 'isolated')
+    expect(body.plugins.find((p) => p.id === 'wickermoney.spending-trends')?.runtime).toBe('isolated')
+    expect(body.plugins.find((p) => p.id === 'wickermoney.budgets')?.runtime).toBe('in-realm')
   })
 })
 

@@ -12,12 +12,19 @@ function manifest(id: string, extra: Partial<PluginManifest> = {}): PluginManife
 }
 
 describe('pluginRuntimeFor', () => {
-  it('keeps the listed bundled plugins in-realm in 0.6.0 and isolates the ported ones', () => {
+  it('keeps the listed bundled plugins in-realm and isolates the rest', () => {
     for (const m of BUNDLED_PLUGINS) {
       expect(pluginRuntimeFor(m, true), m.id).toBe(IN_REALM_PLUGIN_IDS.has(m.id) ? 'in-realm' : 'isolated')
     }
-    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.insights')!, true)).toBe('isolated')
-    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.budgets')!, true)).toBe('in-realm')
+  })
+
+  it('runs spending-trends in a frame, and still in-realm for the plugins not ported', () => {
+    const byId = (id: string): PluginManifest => BUNDLED_PLUGINS.find((m) => m.id === id)!
+    expect(pluginRuntimeFor(byId('wickermoney.spending-trends'), true)).toBe('isolated')
+    expect(pluginRuntimeFor(byId('wickermoney.insights'), true)).toBe('isolated')
+    for (const id of ['wickermoney.budgets', 'wickermoney.import-csv', 'wickermoney.upcoming', 'wickermoney.forecast', 'wickermoney.debt-payoff']) {
+      expect(pluginRuntimeFor(byId(id), true), id).toBe('in-realm')
+    }
   })
 
   it('lists only plugins that are actually bundled', () => {
