@@ -14,6 +14,7 @@ import { KyselySplitRepository } from '../transactions/repository/KyselySplitRep
 import { KyselyTransactionRepository } from '../transactions/repository/KyselyTransactionRepository.js'
 import { KyselyUsageRepository } from '../db/repository/KyselyUsageRepository.js'
 import { KyselyUserRepository } from '../auth/repository/KyselyUserRepository.js'
+import { KyselyUserAdminRepository } from '../users/repository/KyselyUserAdminRepository.js'
 import type { Repositories } from './Repositories.js'
 
 /**
@@ -30,6 +31,7 @@ export function createRepositories(trx: Trx): Repositories {
     categories: new KyselyCategoryRepository(trx),
     categoryRules: new KyselyCategoryRuleRepository(trx),
     users: new KyselyUserRepository(trx),
+    userAdmin: new KyselyUserAdminRepository(trx),
     sessions: new KyselySessionRepository(trx),
     usage: new KyselyUsageRepository(trx),
     onboarding: new KyselyOnboardingRepository(trx),

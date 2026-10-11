@@ -28,6 +28,8 @@ import * as m025 from './025_recurring_match_dismissals.js'
 import * as m026 from './026_first_user_owner.js'
 import * as m027 from './027_budget_account_lines.js'
 import * as m028 from './028_bootstrap_owner_email.js'
+import * as m029 from './029_owner_role_management.js'
+import * as m030 from './030_plugin_debt_payoff.js'
 import * as m031 from './031_erase_instance.js'
 
 /**
@@ -67,6 +69,8 @@ export const MIGRATIONS: Record<string, Migration> = {
   '026_first_user_owner': m026,
   '027_budget_account_lines': m027,
   '028_bootstrap_owner_email': m028,
+  '029_owner_role_management': m029,
+  '030_plugin_debt_payoff': m030,
   '031_erase_instance': m031,
 }
 

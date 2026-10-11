@@ -1,0 +1,44 @@
+import type { PayoffPlan } from '../../shared/index.js'
+import { durationText } from '../helpers/durationText.js'
+
+/** Props for {@link Assumptions}. */
+export interface AssumptionsProps {
+  /** The plan, for the date balances are as of and the limit; `null` before one has loaded. */
+  readonly plan: PayoffPlan | null
+  readonly formatDate: (value: string) => string
+}
+
+/**
+ * What the numbers assume, in plain words. Always on the page, because a payoff
+ * date is only as good as the rules behind it.
+ */
+export function Assumptions({ plan, formatDate }: AssumptionsProps) {
+  return (
+    <ul className="dp-assume">
+      <li>
+        <strong>Interest:</strong> each month a debt adds its yearly rate divided by 12, times what it owed at the
+        start of that month (the nominal rate, compounded monthly). Your card's own statement may differ a little.
+      </li>
+      <li>
+        <strong>Payments:</strong> made at the end of each month, starting a month from{' '}
+        {plan === null ? 'today' : formatDate(plan.startDate)}, when the balances are as you entered them.
+      </li>
+      <li>
+        <strong>Rounding:</strong> interest is rounded once for each debt each month, to four decimal places, with
+        halves rounded away from zero. Nothing else is rounded, so the totals add up exactly.
+      </li>
+      <li>
+        <strong>The same payment every month:</strong> your minimums plus the extra. When a debt is paid off its minimum
+        moves on to the next debt in line.
+      </li>
+      <li>
+        <strong>Order:</strong> worked out once, from today's balances and rates. Snowball goes by smallest balance,
+        avalanche by highest rate.
+      </li>
+      <li>
+        <strong>Left out:</strong> new spending, fees, rate changes and promotional rates. The plan stops after{' '}
+        {plan === null ? '50 years' : durationText(plan.monthLimit)}.
+      </li>
+    </ul>
+  )
+}

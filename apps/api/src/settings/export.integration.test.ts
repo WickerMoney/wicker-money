@@ -11,6 +11,7 @@ import { SettingsService } from './service/SettingsService.js'
 
 const BUDGETS = 'wickermoney.budgets'
 const IMPORT = 'wickermoney.import-csv'
+const DEBT_PAYOFF = 'wickermoney.debt-payoff'
 
 let h: Harness
 
@@ -166,7 +167,7 @@ describe('GET /api/v1/settings/export', () => {
 
   it('includes each bundled plugin\'s own data, and only the caller\'s', async () => {
     const { doc } = await exportFor(alice.user)
-    expect(Object.keys(doc.plugins).sort()).toEqual([BUDGETS, IMPORT].sort())
+    expect(Object.keys(doc.plugins).sort()).toEqual([BUDGETS, DEBT_PAYOFF, IMPORT].sort())
 
     expect(doc.plugins[BUDGETS]?.['budgetLines']).toEqual([
       expect.objectContaining({ category_id: alice.categoryId, period_start: '2026-03-01' }),
@@ -176,6 +177,22 @@ describe('GET /api/v1/settings/export', () => {
       expect.objectContaining({ file_name: 'alice.csv', account_id: alice.accountId }),
     ])
     expect(JSON.stringify(doc.plugins)).not.toContain('bob')
+  })
+
+  it('exports the debt payoff plugin\'s debts and settings, and only the caller\'s', async () => {
+    const mine = await createUser(h)
+    await send(mine, 'POST', '/api/v1/p/wickermoney.debt-payoff/debts',
+      { name: 'Exported card', balance: '500', apr: '19.99', minimumPayment: '25' }, DEBT_PAYOFF)
+    await send(mine, 'PUT', '/api/v1/p/wickermoney.debt-payoff/settings',
+      { strategy: 'snowball', extraPayment: '40' }, DEBT_PAYOFF)
+
+    const { doc } = await exportFor(mine)
+    const exported = doc.plugins[DEBT_PAYOFF] as unknown as { debts: Array<Record<string, unknown>>; settings: Record<string, unknown> | null }
+    expect(exported.debts).toEqual([expect.objectContaining({ name: 'Exported card' })])
+    expect(exported.settings).toEqual(expect.objectContaining({ strategy: 'snowball' }))
+
+    const { doc: theirs } = await exportFor(alice.user)
+    expect(JSON.stringify(theirs.plugins[DEBT_PAYOFF])).not.toContain('Exported card')
   })
 
   it('never includes password hashes or sessions', async () => {
@@ -281,6 +298,24 @@ describe('plugin exporters run under the host-managed role', () => {
     const doc = JSON.parse(chunks.join('')) as { plugins: Record<string, Array<{ role: string }>> }
     expect(doc.plugins[BUDGETS]?.[0]?.role).toBe(pluginRoleName(BUDGETS))
     expect(doc.plugins[IMPORT]?.[0]?.role).toBe(pluginRoleName(IMPORT))
+  })
+
+  it('runs the export, plugin exporters included, under the long statement limit', async () => {
+    const u = await createUser(h)
+    const limit: PluginExporter = async (q) => q`SELECT current_setting('statement_timeout') AS statement_timeout`
+    const service = new SettingsService(new KyselyUnitOfWork(h.db), {
+      config: { ...h.config, DB_STATEMENT_TIMEOUT: 2_000, DB_LONG_STATEMENT_TIMEOUT: 7_000 },
+      plugins: new PluginService(new KyselyUnitOfWork(h.db), { cacheTtlMs: 0 }),
+      exporters: { [BUDGETS]: limit },
+    })
+    const chunks: string[] = []
+    await service.exportUserData(u.id, { write: async (c) => { chunks.push(c) } })
+
+    const doc = JSON.parse(chunks.join('')) as { plugins: Record<string, Array<{ statement_timeout: string }>> }
+    expect(doc.plugins[BUDGETS]?.[0]?.statement_timeout).toBe('7s')
+    // The limit ended with the export's transaction.
+    const { rows } = await sql<{ t: string }>`SELECT current_setting('statement_timeout') AS t`.execute(h.db)
+    expect(rows[0]?.t).not.toBe('7s')
   })
 
   it('cannot read a core table its manifest did not grant', async () => {

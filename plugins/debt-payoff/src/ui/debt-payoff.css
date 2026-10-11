@@ -1,0 +1,168 @@
+/*
+ * Colours come from the host's --wm-* tokens (packages/ui-kit/src/tokens.css),
+ * which switch between light and dark, so this file defines no colour of its
+ * own. Identity is never colour alone: every band has its debt's name beside a
+ * swatch, every date and amount is text, and the chart has a table.
+ */
+.dp { display: flex; flex-direction: column; gap: var(--wm-gap, 16px); min-width: 0; }
+
+.dp-muted { color: var(--wm-text-muted); font-size: 13px; margin: 0; }
+.dp-h3 { margin: 20px 0 8px; font-size: 14px; font-weight: 650; }
+.dp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; justify-content: flex-end; }
+
+/* A swatch beside a name: the colour is a second cue, never the only one. */
+.dp-swatch {
+  flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+  border: 1px solid var(--wm-chart-ink-muted, var(--wm-text-muted));
+}
+.dp-name { display: inline-flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.dp-name .dp-swatch { margin-top: 4px; }
+.dp-sub { display: block; font-size: 12px; color: var(--wm-text-muted); }
+.dp-tag {
+  margin-left: 8px; padding: 1px 6px; border: 1px solid var(--wm-border); border-radius: 999px;
+  font-size: 11px; font-weight: 500; color: var(--wm-text-muted); white-space: nowrap;
+}
+
+/* Starting from an account. */
+.dp-start__list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+
+/* Strategy and extra. */
+.dp-controls { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: flex-start; margin-bottom: 16px; }
+.dp-strategy { flex: 1 1 280px; min-width: 0; }
+.dp-strategy__about { margin-top: 8px; max-width: 46ch; }
+.dp-seg {
+  display: inline-flex; gap: 2px; padding: 2px;
+  background: var(--wm-surface-alt); border: 1px solid var(--wm-border);
+  border-radius: var(--wm-radius-sm, 6px);
+}
+.dp-seg__btn {
+  font: inherit; font-size: 13px; padding: 6px 14px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--wm-text-muted); cursor: pointer;
+}
+.dp-seg__btn:hover:not(:disabled) { color: var(--wm-text); }
+.dp-seg__btn[aria-pressed="true"] {
+  background: var(--wm-surface); color: var(--wm-text); font-weight: 600; box-shadow: var(--wm-shadow);
+}
+.dp-seg__btn:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 1px; }
+.dp-seg__btn:disabled { cursor: progress; opacity: .7; }
+
+.dp-extra { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-start; flex: 1 1 320px; min-width: 0; }
+.dp-extra .wm-field { flex: 1 1 200px; min-width: 0; margin-bottom: 0; }
+.dp-extra__action { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding-top: 22px; }
+
+/* The answer. */
+.dp-headline {
+  margin: 0 0 12px; padding: 10px 12px; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--wm-border); border-left: 3px solid var(--wm-positive);
+  background: var(--wm-surface-alt); border-radius: var(--wm-radius-sm, 6px);
+}
+.dp-notice {
+  margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--wm-border);
+  border-left: 3px solid var(--wm-warning); background: var(--wm-surface-alt);
+  border-radius: var(--wm-radius-sm, 6px);
+}
+.dp-notice p { margin: 0 0 4px; font-size: 13px; }
+.dp-notice p:last-child { margin-bottom: 0; }
+
+.dp-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px 12px; margin: 0 0 8px; }
+.dp-totals-block > .dp-muted { margin-top: 6px; }
+
+/* The chart. */
+.dp-chart { position: relative; min-width: 0; }
+.dp-chart__view { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.dp-chart__plot { position: relative; min-width: 0; }
+.dp-chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+.dp-chart svg:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 2px; border-radius: 4px; }
+.dp-chart__axis { fill: var(--wm-chart-ink-muted, var(--wm-text-muted)); font-size: 11px; }
+.dp-chart__grid { stroke: var(--wm-chart-grid, var(--wm-border)); stroke-width: 1; }
+/* A 2px gap in the surface colour between bands, so neighbours read apart. */
+.dp-chart__area { stroke: var(--wm-chart-surface, var(--wm-surface)); stroke-width: 2; stroke-linejoin: round; fill-opacity: .92; }
+.dp-chart__cursor { stroke: var(--wm-text); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
+
+.dp-tip {
+  position: absolute; top: 0; z-index: 2; pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px; min-width: 150px; max-width: 260px;
+  background: var(--wm-chart-surface, var(--wm-surface)); color: var(--wm-text);
+  border: 1px solid var(--wm-border); border-radius: 6px;
+  padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 14%);
+}
+.dp-tip__date { font-weight: 600; }
+.dp-tip__row { display: flex; align-items: center; gap: 6px; }
+.dp-tip__row strong { margin-left: auto; padding-left: 8px; font-variant-numeric: tabular-nums; }
+.dp-tip__done { color: var(--wm-positive); font-weight: 600; }
+
+.dp-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 12px; }
+.dp-legend li { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The month-by-month table and its pager. */
+.dp-schedule__more { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+
+/* The assumptions. */
+.dp-assume { margin: 0; padding-left: 18px; font-size: 13px; color: var(--wm-text); }
+.dp-assume li { margin: 0 0 6px; max-width: 78ch; }
+
+/* The dialog. */
+.dp-archive { margin: 4px 0 8px; }
+.dp-remove, .dp-confirm { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--wm-border); }
+.dp-confirm p { margin: 0 0 8px; font-size: 13px; }
+.dp-confirm:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 4px; }
+.dp-confirm__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* The dashboard card. */
+.dpw { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dpw__label { margin: 0; font-size: 12px; color: var(--wm-text-muted); }
+.dpw__date { margin: 0; font-size: 24px; font-weight: 650; line-height: 1.2; }
+.dpw--sm .dpw__date { font-size: 20px; }
+.dpw__sub { margin: 0; font-size: 12px; color: var(--wm-text-muted); }
+.dpw__next { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--wm-border); }
+.dpw__next-name { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.dpw__foot { margin-top: 12px; }
+
+/* Phones: one card per debt, and larger touch targets. */
+@media (max-width: 640px) {
+  .dp-debts .wm-table, .dp-debts .wm-table tbody { display: block; }
+  .dp-debts .wm-table thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .dp-debts .wm-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px;
+    padding: 12px 4px; border-bottom: 1px solid var(--wm-border);
+  }
+  .dp-debts .wm-table td { display: block; min-width: 0; padding: 0; border: 0; }
+  .dp-debts .wm-table td:first-child { font-weight: 600; }
+  .dp-debts .wm-table td[data-label]:not(:first-child) {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  }
+  .dp-debts .wm-table td[data-label]:not(:first-child)::before {
+    content: attr(data-label); flex: none; font-size: 12px; font-weight: 600; color: var(--wm-text-muted);
+    font-family: var(--wm-font);
+  }
+  .dp-debts .wm-table td:not([data-label]):last-child { justify-self: end; padding-top: 4px; }
+  .dp-debts .wm-table td.wm-num { text-align: right; }
+
+  /* The same for the payoff order and the schedule: label and value lines. */
+  .dp-order .wm-table, .dp-order .wm-table tbody,
+  .dp-schedule__table .wm-table, .dp-schedule__table .wm-table tbody { display: block; }
+  .dp-order .wm-table thead, .dp-schedule__table .wm-table thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .dp-order .wm-table tr, .dp-schedule__table .wm-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px;
+    padding: 10px 4px; border-bottom: 1px solid var(--wm-border);
+  }
+  .dp-order .wm-table td, .dp-schedule__table .wm-table td {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 0; border: 0;
+  }
+  .dp-order .wm-table td::before, .dp-schedule__table .wm-table td::before {
+    content: attr(data-label); flex: none; font-size: 12px; font-weight: 600; color: var(--wm-text-muted);
+    font-family: var(--wm-font);
+  }
+  .dp-order .wm-table td.wm-num, .dp-schedule__table .wm-table td.wm-num { text-align: right; }
+  .dp-schedule__table .wm-table td[data-col="cleared"]:empty { display: none; }
+
+  .dp-seg__btn { min-height: 40px; padding: 8px 16px; }
+  .dp-extra__action { padding-top: 0; }
+  .dp-actions { justify-content: flex-start; }
+  .dp-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dp-tip { min-width: 130px; max-width: 200px; }
+}
