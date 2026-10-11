@@ -102,6 +102,9 @@ const PROTECTED_ROUTES: readonly string[] = [
   'GET /api/v1/recurring-items/transaction-matches',
   'GET /api/v1/recurring-items/transaction-matches/:transactionId',
 
+  'GET /api/v1/users',
+  'PATCH /api/v1/users/:id/role',
+
   'GET /api/v1/plugins',
   'GET /api/v1/plugins/registry',
   'PATCH /api/v1/plugins/:pluginId',

@@ -308,7 +308,7 @@ notes are also on the docs site under [Upgrading](https://wickermoney.dev/docs/s
 The first account on an instance is its **owner**; every account registered
 after it is a **member**. Members use the app normally, with their own data.
 Only an owner can administer the instance, which today means turning plugins
-on and off. The server checks the role on every owner-only request, so
+on and off and changing other accounts' roles. The server checks the role on every owner-only request, so
 changing it takes effect on that person's next request, with no sign-out.
 
 Who becomes the owner is set by one optional setting, alongside the one that
@@ -330,8 +330,17 @@ address could register it before you do; the variable keeps strangers from
 claiming a fresh instance by accident, it is not a login check. Register
 promptly, then close registration.
 
-There is no screen for changing roles yet. As the database owner
-(`DATABASE_OWNER_URL`):
+**Changing roles.** An owner opens **Settings → People**, which lists every
+account (email, when it joined, role) with a role select for each. Making
+someone an owner applies at once and is how an instance gets a second owner;
+registration still never makes one by itself. Making an owner a member asks
+for confirmation first. An instance always keeps at least one owner: the last
+owner cannot be demoted, and an owner can step down only while another owner
+remains. Members do not see the section. The role applies on the affected
+person's next request; their sessions are not ended.
+
+If you cannot sign in as an owner at all, the screen cannot help, and SQL still
+works as the database owner (`DATABASE_OWNER_URL`):
 
 ```sql
 -- who is an owner

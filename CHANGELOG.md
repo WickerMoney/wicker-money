@@ -23,8 +23,16 @@ curated, human-readable version.
   because `parseManifest` uses it.
 
 ### Added
+- **Owners can change another account's role from Settings → People.** The
+  section lists every account with a role select. Promoting a member makes a
+  second owner; demoting an owner asks for confirmation. The last owner cannot
+  be demoted, and an owner can step down only while another owner remains.
+  Members never see the section. A change applies on that account's next
+  request. New owner-only routes: `GET /api/v1/users` and
+  `PATCH /api/v1/users/:id/role`. Nothing about an account other than its
+  email, role and creation time is returned.
 - **Debt payoff plugin, server half.** A new bundled plugin,
-  `wickermoney.debt-payoff`, with its own tables (migration 029), endpoints for
+  `wickermoney.debt-payoff`, with its own tables (migration 030), endpoints for
   debts and settings, and a snowball and avalanche planner behind
   `GET /api/v1/p/wickermoney.debt-payoff/plan`. The plan is computed exactly in
   integer units of 0.0001, interest compounding monthly at APR/12 and rounded
@@ -182,6 +190,15 @@ curated, human-readable version.
   `#0c7e65` to `#0a7660`: on `--wm-surface-alt` it was 4.51:1 and is now 5.01:1,
   and on white 5.01:1 became 5.57:1. The dark theme is unchanged. A test also
   confirms that recurring bills show a minus sign as well as the red colour.
+
+### Migrations
+- **029_owner_role_management** adds `core.list_users_for_owner()` and
+  `core.set_user_role(uuid, core.user_role)`, `SECURITY DEFINER` functions that
+  only the application role can execute. They check that the caller is an owner,
+  refuse to demote the last owner, and take the lock registration uses so two
+  owners demoting each other at once cannot leave none. No data changes.
+  Registration is unchanged. Its `down` drops both functions and leaves assigned
+  roles as they are.
 
 ## [0.5.0] - 2026-10-10
 
