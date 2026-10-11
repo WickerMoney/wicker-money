@@ -1,26 +1,9 @@
-import { useState } from 'react'
 import { Alert, Button, Surface } from '@wickermoney/ui-kit'
-import { api } from '../../../api/client.js'
-import { localIsoDate } from '../../../lib/localIsoDate.js'
-import { downloadJson } from '../helpers/downloadJson.js'
+import { useDataExport } from '../hooks/useDataExport.js'
 
 /** A button that downloads everything the user owns as one JSON file. */
 export function ExportSection() {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const runExport = async () => {
-    setBusy(true); setError(null)
-    try {
-      const data = await api.get<unknown>('/settings/export')
-      const today = localIsoDate()
-      downloadJson(data, `wickermoney-export-${today}.json`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not export your data.')
-    } finally {
-      setBusy(false)
-    }
-  }
+  const { busy, error, run } = useDataExport()
 
   return (
     <Surface title="Export all data">
@@ -31,7 +14,7 @@ export function ExportSection() {
         readable.
       </p>
       {error !== null ? <Alert>{error}</Alert> : null}
-      <Button variant="primary" onClick={() => { void runExport() }} disabled={busy}>
+      <Button variant="primary" onClick={() => { void run() }} disabled={busy}>
         {busy ? 'Preparing export…' : 'Download my data'}
       </Button>
     </Surface>

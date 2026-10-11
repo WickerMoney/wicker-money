@@ -249,6 +249,32 @@ export class AuthService {
   }
 
   /**
+   * Checks the signed-in user's password again before something that cannot be
+   * undone. A valid access token proves a session, not that the person at the
+   * keyboard knows the password, so destructive actions ask for it.
+   *
+   * A wrong password is a 403, not a 401: the web client treats a 401 as an
+   * expired session, refreshes and retries, and ends the session when the retry
+   * is rejected too, which would sign someone out for mistyping. The failure
+   * carries an issue on `password` so a form can show it beside the field.
+   *
+   * Does not rate-limit; callers that expose it over HTTP do.
+   *
+   * @param userId - The authenticated user.
+   * @param password - The plaintext password typed to confirm.
+   * @throws {AppError} With code `password_incorrect` (403) when it does not match.
+   */
+  async confirmPassword(userId: string, password: string): Promise<void> {
+    const digest = await this.uow.forUser(userId, (repos) => repos.users.findPasswordHash(userId), {
+      readOnly: true,
+    })
+    if (digest === undefined || !(await this.hashSlots.run(() => verifyPassword(digest, password)))) {
+      const message = 'Password is incorrect.'
+      throw new AppError(message, 403, 'password_incorrect', [{ path: ['password'], message }])
+    }
+  }
+
+  /**
    * Sets a new password for the account with `email` and revokes all of its
    * sessions. For an operator with server access; performs no authentication.
    *

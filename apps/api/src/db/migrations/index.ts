@@ -31,6 +31,7 @@ import * as m028 from './028_bootstrap_owner_email.js'
 import * as m029 from './029_owner_role_management.js'
 import * as m030 from './030_plugin_debt_payoff.js'
 import * as m031 from './031_ledger_sort_indexes.js'
+import * as m032 from './032_erase_instance.js'
 
 /**
  * The complete, ordered set of schema migrations, keyed by migration name.
@@ -81,6 +82,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '029_owner_role_management': m029,
   '030_plugin_debt_payoff': m030,
   '031_ledger_sort_indexes': m031,
+  '032_erase_instance': m032,
 }
 
 /** Kysely {@link MigrationProvider} that serves the fixed {@link MIGRATIONS} set. */

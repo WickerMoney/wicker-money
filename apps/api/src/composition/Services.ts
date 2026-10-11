@@ -7,6 +7,7 @@ import type { PluginService } from '../plugins/service/PluginService.js'
 import type { RecurringItemService } from '../recurring/service/RecurringItemService.js'
 import type { RecurringOccurrenceService } from '../recurring/service/RecurringOccurrenceService.js'
 import type { ReportService } from '../core/service/ReportService.js'
+import type { EraseService } from '../settings/service/EraseService.js'
 import type { SettingsService } from '../settings/service/SettingsService.js'
 import type { TransactionService } from '../transactions/service/TransactionService.js'
 import type { UserAdminService } from '../users/service/UserAdminService.js'
@@ -29,6 +30,8 @@ export interface Services {
   readonly users: UserAdminService
   /** Instance configuration report and whole-account data export. */
   readonly settings: SettingsService
+  /** The Settings danger zone: erasing one user's data, and erasing the whole instance. */
+  readonly erase: EraseService
   /** Plugin registry queries. */
   readonly plugins: PluginService
   /** Read-side aggregations for dashboards and plugins. */

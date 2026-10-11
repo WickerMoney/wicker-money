@@ -139,8 +139,9 @@ describe('the window form', () => {
       expect(through.getAttribute('aria-invalid')).toBe('true')
       expect(document.getElementById(through.getAttribute('aria-describedby') ?? '')?.textContent)
         .toMatch(/exactly one calendar month/)
+      // Focus moves in an effect after the errors render, so it is waited for too.
+      expect(document.activeElement).toBe(through)
     })
-    expect(document.activeElement).toBe(screen.getByLabelText('Through'))
   })
 
   it("shows a refusal that is not about one field beside the buttons", async () => {

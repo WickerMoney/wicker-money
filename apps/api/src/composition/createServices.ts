@@ -11,6 +11,7 @@ import { PluginService } from '../plugins/service/PluginService.js'
 import { ReportService } from '../core/service/ReportService.js'
 import { RecurringItemService } from '../recurring/service/RecurringItemService.js'
 import { RecurringOccurrenceService } from '../recurring/service/RecurringOccurrenceService.js'
+import { EraseService } from '../settings/service/EraseService.js'
 import { SettingsService } from '../settings/service/SettingsService.js'
 import { TransactionService } from '../transactions/service/TransactionService.js'
 import { UserAdminService } from '../users/service/UserAdminService.js'
@@ -26,8 +27,9 @@ import { UserAdminService } from '../users/service/UserAdminService.js'
  */
 export function createServices(db: Db, uow: UnitOfWork, config: Config): Services {
   const plugins = new PluginService(uow, { remoteOrigins: config.PLUGIN_REMOTE_ORIGINS })
+  const auth = new AuthService(uow, config)
   return {
-    auth: new AuthService(uow, config),
+    auth,
     users: new UserAdminService(uow),
     accounts: new AccountService(uow),
     transactions: new TransactionService(uow),
@@ -35,6 +37,7 @@ export function createServices(db: Db, uow: UnitOfWork, config: Config): Service
     categoryRules: new CategoryRuleService(uow),
     onboarding: new OnboardingService(uow),
     settings: new SettingsService(uow, { config, plugins }),
+    erase: new EraseService(uow, { auth, config }),
     plugins,
     reports: new ReportService(uow),
     recurringItems: new RecurringItemService(uow),
