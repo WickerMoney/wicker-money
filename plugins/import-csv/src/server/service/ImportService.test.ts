@@ -7,7 +7,6 @@ import { InMemoryImportUnitOfWork } from '../testing/InMemoryImportUnitOfWork.js
 import type { CategoryResolver } from './CategoryResolver.js'
 import { ImportError } from './ImportError.js'
 import { ImportService } from './ImportService.js'
-import { MAX_IMPORT_ROWS } from './MAX_IMPORT_ROWS.js'
 
 const ALICE = 'user-alice'
 const BOB = 'user-bob'
@@ -36,8 +35,11 @@ const CSV = [
 let store: InMemoryImportStore
 let resolver: CategoryResolver
 
-function service(): ImportService {
-  return new ImportService(new InMemoryImportUnitOfWork(store), (rules, subject) => resolver(rules, subject))
+/** The row cap the services below are built with unless a test sets its own. */
+const MAX_IMPORT_ROWS = 200
+
+function service(maxRows = MAX_IMPORT_ROWS): ImportService {
+  return new ImportService(new InMemoryImportUnitOfWork(store), (rules, subject) => resolver(rules, subject), maxRows)
 }
 
 async function failureOf(work: Promise<unknown>): Promise<ImportError> {
@@ -87,13 +89,127 @@ describe('analyze', () => {
     const rows = Array.from({ length: MAX_IMPORT_ROWS + 1 }, (_, i) => `03/04/2026,M${i},-1.00,id-${i}`)
     const error = await failureOf(service().analyze(ALICE, input(['Date,Description,Amount,Id', ...rows].join('\n'))))
     expect(error).toMatchObject({ statusCode: 400, code: 'too_many_rows' })
-    expect(error.message).toContain('50,000')
+    expect(error.message).toContain('200')
+  })
+
+  it('applies the cap it was built with, and says it in the message', async () => {
+    const csv = ['Date,Description,Amount,Id', ...Array.from({ length: 6 }, (_, i) => `03/04/2026,M${i},-1.00,id-${i}`)].join('\n')
+    expect((await failureOf(service(5).analyze(ALICE, input(csv))))).toMatchObject({ code: 'too_many_rows' })
+    expect((await failureOf(service(5).analyze(ALICE, input(csv)))).message).toBe(
+      'That file has 6 rows; the limit is 5 per import. Split it and import in parts.',
+    )
+    expect((await service(6).analyze(ALICE, input(csv))).summary.total).toBe(6)
+  })
+
+  it('counts rows that cannot be read towards the cap', async () => {
+    const csv = ['Date,Description,Amount,Id', '03/04/2026,OK,-1.00,a', 'not-a-date,BAD,-1.00,b', '03/05/2026,OK2,-1.00,c'].join('\n')
+    expect(await failureOf(service(2).analyze(ALICE, input(csv)))).toMatchObject({ code: 'too_many_rows' })
+    expect((await service(3).analyze(ALICE, input(csv))).summary).toMatchObject({ total: 2, errors: 1 })
   })
 
   it('accepts a file exactly at the row cap', async () => {
     const rows = Array.from({ length: MAX_IMPORT_ROWS }, (_, i) => `03/04/2026,M${i},-1.00,id-${i}`)
     const result = await service().analyze(ALICE, input(['Date,Description,Amount,Id', ...rows].join('\n')))
     expect(result.summary.total).toBe(MAX_IMPORT_ROWS)
+  })
+})
+
+/** `n` distinct rows without transaction ids: M<start>... each its own merchant and amount. */
+function rowsWithoutIds(start: number, n: number): string[] {
+  return Array.from({ length: n }, (_, i) => `03/04/2026,M${start + i},-${start + i + 1}.00`)
+}
+const NO_ID_HEADER = 'Date,Description,Amount'
+const noIdFile = (...parts: string[][]) => [NO_ID_HEADER, ...parts.flat()].join('\n')
+
+describe('analyze returns a bounded slice of a large file', () => {
+  const BIG = 1000
+
+  it('returns the first 100 rows, the counts for all of them, and an empty flagged page', async () => {
+    const result = await service(BIG).analyze(ALICE, input(noIdFile(rowsWithoutIds(0, 300)), { mapping: NO_ID_MAPPING }))
+    expect(result.summary).toEqual({ total: 300, new: 300, duplicate: 0, needsReview: 0, errors: 0 })
+    expect(result.rows).toHaveLength(100)
+    expect(result.rows[0]).toMatchObject({ rowNumber: 2, merchant: 'M0', status: 'new' })
+    expect(result.rows[99]).toMatchObject({ rowNumber: 101, merchant: 'M99' })
+    expect(result.flagged).toEqual({ total: 0, offset: 0, rows: [] })
+  })
+
+  it('still returns every row of a file no longer than the preview', async () => {
+    const result = await service(BIG).analyze(ALICE, input(noIdFile(rowsWithoutIds(0, 100)), { mapping: NO_ID_MAPPING }))
+    expect(result.rows).toHaveLength(100)
+  })
+
+  describe('with an account that already holds the first 250 rows', () => {
+    beforeEach(async () => {
+      await service(BIG).commit(ALICE, input(noIdFile(rowsWithoutIds(0, 250)), { mapping: NO_ID_MAPPING }))
+    })
+
+    // 120 flagged rows (M130..M249 repeat existing ones) interleaved after 130 new rows.
+    const mixed = () => noIdFile(rowsWithoutIds(1000, 130), rowsWithoutIds(130, 120), rowsWithoutIds(2000, 50))
+
+    it('counts every verdict, returns flagged rows only from the flagged list, and none of the new ones', async () => {
+      const result = await service(BIG).analyze(ALICE, input(mixed(), { mapping: NO_ID_MAPPING }))
+      expect(result.summary).toEqual({ total: 300, new: 180, duplicate: 0, needsReview: 120, errors: 0 })
+      expect(result.rows).toHaveLength(100)
+      expect(result.rows.every((r) => r.status === 'new')).toBe(true)
+      expect(result.flagged.total).toBe(120)
+      expect(result.flagged.rows).toHaveLength(120)
+      expect(result.flagged.rows.every((r) => r.status === 'needs-review' && r.matched !== null)).toBe(true)
+      // File order: the first flagged row is the 131st data row, which is row 132.
+      expect(result.flagged.rows[0]).toMatchObject({ rowNumber: 132, merchant: 'M130' })
+    })
+
+    it('pages through the flagged rows in file order without gaps or repeats', async () => {
+      const seen: number[] = []
+      for (let offset = 0; ; offset += 50) {
+        const page = await service(BIG).analyze(ALICE, input(mixed(), { mapping: NO_ID_MAPPING }), { offset, limit: 50 })
+        expect(page.flagged.total).toBe(120)
+        expect(page.flagged.offset).toBe(offset)
+        seen.push(...page.flagged.rows.map((r) => r.rowNumber))
+        if (page.flagged.rows.length < 50) break
+      }
+      expect(seen).toHaveLength(120)
+      expect(new Set(seen).size).toBe(120)
+      expect(seen).toEqual([...seen].sort((a, b) => a - b))
+    })
+
+    it('returns an empty page past the end, still with the true total', async () => {
+      const page = await service(BIG).analyze(ALICE, input(mixed(), { mapping: NO_ID_MAPPING }), { offset: 500, limit: 50 })
+      expect(page.flagged).toEqual({ total: 120, offset: 500, rows: [] })
+    })
+
+    it('imports rows the analysis did not show, and only the flagged ones the user accepted', async () => {
+      // Row 132 is on the first page of a 50-row view; row 250 is on the third.
+      const shown = await service(BIG).analyze(ALICE, input(mixed(), { mapping: NO_ID_MAPPING }), { offset: 0, limit: 50 })
+      expect(shown.flagged.rows.map((r) => r.rowNumber)).not.toContain(250)
+
+      const result = await service(BIG).commit(
+        ALICE,
+        input(mixed(), { mapping: NO_ID_MAPPING, fileName: 'mixed.csv', acceptRowNumbers: [132, 250] }),
+      )
+      // 180 new rows (all but 100 never shown) + the two accepted ones; 118 flagged rows left out.
+      expect(result).toMatchObject({ imported: 182, flagged: 120, failed: 0 })
+      const merchants = new Set(store.transactions.map((t) => t.merchant))
+      expect(merchants.has('M1129')).toBe(true) // a new row beyond the preview
+      expect(merchants.has('M2049')).toBe(true) // the last new row
+      expect(store.transactions.filter((t) => t.merchant === 'M130')).toHaveLength(2) // accepted: row 132
+      expect(store.transactions.filter((t) => t.merchant === 'M131')).toHaveLength(1) // flagged, not accepted
+    })
+  })
+
+  it('imports every row of a file much larger than the preview, as the summary said', async () => {
+    const file = input(noIdFile(rowsWithoutIds(0, 500)), { mapping: NO_ID_MAPPING })
+    const analysis = await service(BIG).analyze(ALICE, file)
+    expect(analysis.rows).toHaveLength(100)
+    const result = await service(BIG).commit(ALICE, file)
+    expect(result.imported).toBe(analysis.summary.new)
+    expect(store.transactions).toHaveLength(500)
+  })
+
+  it('counts exact duplicates in the summary without returning them', async () => {
+    await service(BIG).commit(ALICE, input(CSV))
+    const again = await service(BIG).analyze(ALICE, input(CSV))
+    expect(again.summary).toMatchObject({ duplicate: 3, needsReview: 0 })
+    expect(again.flagged.rows).toEqual([])
   })
 })
 
@@ -276,7 +392,7 @@ describe('commit with an idempotency key', () => {
         })
       },
     }
-    const loser = await new ImportService(racing, () => null).commit(ALICE, input(CSV, { idempotencyKey: KEY }))
+    const loser = await new ImportService(racing, () => null, MAX_IMPORT_ROWS).commit(ALICE, input(CSV, { idempotencyKey: KEY }))
     expect(loser).toEqual({ ...first, replayed: true })
     expect(store.batches).toHaveLength(1)
   })

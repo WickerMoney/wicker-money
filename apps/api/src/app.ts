@@ -159,7 +159,10 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
     registerRecurringItemRoutes(app, services)
     registerUserRoutes(app, services)
     registerPluginRoutes(app, services)
-    registerBundledPluginServers(app, db, services.plugins)
+    registerBundledPluginServers(app, db, services.plugins, {
+      longStatementTimeoutMillis: config.DB_LONG_STATEMENT_TIMEOUT,
+      importMaxRows: config.IMPORT_MAX_ROWS,
+    })
     registerCoreDataRoutes(app, services)
     registerSettingsRoutes(app, services)
 

@@ -86,7 +86,12 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
   } as NodeJS.ProcessEnv)
 
   configureTenantContext(config.AUTH_SECRET)
-  const db = createDb(config.DATABASE_URL)
+  // Same wiring as index.ts, so a test that sets the pool or statement limits
+  // exercises the path an operator's settings take.
+  const db = createDb(config.DATABASE_URL, {
+    max: config.DB_POOL_MAX,
+    statementTimeoutMillis: config.DB_STATEMENT_TIMEOUT,
+  })
   const app = buildApp({ db, config })
   await app.ready()
 

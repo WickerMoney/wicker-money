@@ -283,6 +283,24 @@ describe('plugin exporters run under the host-managed role', () => {
     expect(doc.plugins[IMPORT]?.[0]?.role).toBe(pluginRoleName(IMPORT))
   })
 
+  it('runs the export, plugin exporters included, under the long statement limit', async () => {
+    const u = await createUser(h)
+    const limit: PluginExporter = async (q) => q`SELECT current_setting('statement_timeout') AS statement_timeout`
+    const service = new SettingsService(new KyselyUnitOfWork(h.db), {
+      config: { ...h.config, DB_STATEMENT_TIMEOUT: 2_000, DB_LONG_STATEMENT_TIMEOUT: 7_000 },
+      plugins: new PluginService(new KyselyUnitOfWork(h.db), { cacheTtlMs: 0 }),
+      exporters: { [BUDGETS]: limit },
+    })
+    const chunks: string[] = []
+    await service.exportUserData(u.id, { write: async (c) => { chunks.push(c) } })
+
+    const doc = JSON.parse(chunks.join('')) as { plugins: Record<string, Array<{ statement_timeout: string }>> }
+    expect(doc.plugins[BUDGETS]?.[0]?.statement_timeout).toBe('7s')
+    // The limit ended with the export's transaction.
+    const { rows } = await sql<{ t: string }>`SELECT current_setting('statement_timeout') AS t`.execute(h.db)
+    expect(rows[0]?.t).not.toBe('7s')
+  })
+
   it('cannot read a core table its manifest did not grant', async () => {
     const u = await createUser(h)
     const snoop: PluginExporter = async (q) => q`SELECT count(*) FROM core.recurring_items`
