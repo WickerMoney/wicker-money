@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { registerWebApp } from './registerWebApp.js'
 
 const INDEX = '<!doctype html><title>Wicker Money</title><div id="root"></div>'
+const FRAME = '<!doctype html><title>Plugin</title><div id="root"></div>'
 
 let sandbox: string
 let root: string
@@ -35,6 +36,7 @@ beforeAll(() => {
   writeFileSync(join(root, 'index.html'), INDEX)
   writeFileSync(join(root, 'assets', 'index-abc123.js'), 'export const shell = 1')
   writeFileSync(join(root, 'plugins', 'demo', 'remoteEntry.js'), 'export const remote = 1')
+  writeFileSync(join(root, 'plugin-frame.html'), FRAME)
   writeFileSync(join(root, '.env'), 'AUTH_SECRET=do-not-serve')
   // Outside the served directory: must stay unreachable however the path is spelled.
   writeFileSync(join(sandbox, 'secret.txt'), 'outside the web root')
@@ -148,5 +150,75 @@ describe('startup', () => {
     expect(() =>
       registerWebApp(Fastify(), { root, pluginOrigins: ['https://a.example.com; script-src *'] }),
     ).toThrow(/cannot go in a Content-Security-Policy/)
+  })
+})
+
+describe('the sandboxed plugin frame document', () => {
+  const get = async (url: string, headers: Record<string, string> = {}, origins: readonly string[] = []) =>
+    (await appWith(origins)).inject({ method: 'GET', url, headers })
+
+  it('is served at its own path with a sandbox policy and not the app policy', async () => {
+    const res = await get('/plugin-frame', { host: 'money.example.com' })
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toBe(FRAME)
+    expect(res.headers['content-type']).toContain('text/html')
+    const csp = String(res.headers['content-security-policy'])
+    expect(csp).toContain('sandbox allow-scripts')
+    expect(csp).not.toContain('allow-same-origin')
+    expect(csp).toContain("connect-src 'none'")
+    expect(csp).toContain("frame-ancestors 'self'")
+    expect(csp).toContain("script-src 'self' http://money.example.com;")
+    expect(res.headers['cache-control']).toBe('no-cache')
+    expect(res.headers['vary']).toContain('Host')
+  })
+
+  it('may be framed by our own pages, which Helmet permits with its default', async () => {
+    const res = await get('/plugin-frame')
+    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN')
+  })
+
+  it('lists the operator plugin origins, and only for the frame', async () => {
+    const res = await get('/plugin-frame', { host: 'money.example.com' }, ['https://plugins.example.com'])
+    expect(String(res.headers['content-security-policy'])).toContain('https://plugins.example.com')
+  })
+
+  it('is not served under the name of the file, so it cannot get the app policy', async () => {
+    const res = await get('/plugin-frame.html')
+    expect(res.statusCode).toBe(404)
+    expect(res.json()).toMatchObject({ error: 'Not Found' })
+  })
+
+  it('answers 404 when the build has no frame, instead of the app shell', async () => {
+    rmSync(join(root, 'plugin-frame.html'))
+    try {
+      const res = await get('/plugin-frame')
+      expect(res.statusCode).toBe(404)
+      expect(res.body).not.toContain('Wicker Money')
+    } finally {
+      writeFileSync(join(root, 'plugin-frame.html'), FRAME)
+    }
+  })
+})
+
+describe('reading build output from a sandboxed frame', () => {
+  const get = async (url: string) => (await appWith()).inject({ method: 'GET', url })
+
+  it('lets any origin read the hashed assets and plugin remotes, which are public', async () => {
+    expect((await get('/assets/index-abc123.js')).headers['access-control-allow-origin']).toBe('*')
+    expect((await get('/plugins/demo/remoteEntry.js')).headers['access-control-allow-origin']).toBe('*')
+  })
+
+  it('does not extend that to the app shell or the API', async () => {
+    expect((await get('/')).headers['access-control-allow-origin']).toBeUndefined()
+    expect((await get('/api/v1/ping')).headers['access-control-allow-origin']).toBeUndefined()
+    expect((await get('/healthz')).headers['access-control-allow-origin']).toBeUndefined()
+  })
+
+  it('answers no preflight for the API', async () => {
+    const res = await (await appWith()).inject({
+      method: 'OPTIONS', url: '/api/v1/ping',
+      headers: { origin: 'null', 'access-control-request-method': 'GET' },
+    })
+    expect(res.headers['access-control-allow-origin']).toBeUndefined()
   })
 })
