@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmit": false,
+    "declaration": true,
+    "types": ["node"]
+  },
+  "//": "The server half and the shared domain logic only; the page and widget arrive with the UI half and are built by vite as a Module Federation remote, which must not be pulled into a Node build.",
+  "include": ["src/server/**/*", "src/shared/**/*"],
+  "//exclude": "Tests are source, not output. Without this tsc emits compiled copies of every test next to the code, vitest finds both, and the compiled copy is only as fresh as the last build.",
+  "exclude": ["**/*.test.ts", "src/server/testing/**"]
+}
