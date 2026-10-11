@@ -10,14 +10,14 @@
  *  - what the browser reported (CSP violations, console, failed requests, new windows, net log).
  *
  * Needs `pnpm build` (apps/web/dist), a migrated test database (see apps/api/src/testing/harness.ts) and a
- * Chromium: `CHROMIUM_PATH`, else /opt/pw-browsers/chromium where there is one, else the browser that
- * `playwright-core install chromium` put in place (CI does that; a cloud sandbox with a preinstalled browser must not).
+ * Chromium: `CHROMIUM_PATH`, else Playwright's full Chromium (CI installs it with `playwright-core install chromium`;
+ * a cloud sandbox with a preinstalled browser must not).
  *
  *   pnpm --filter @wickermoney/web test:hostile      (from the repo root; see DEVELOPMENT.md)
  *
  * `ONLY=<phase>[,<phase>]` runs some phases while iterating; CI runs all of them.
  */
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,8 +39,13 @@ import { BLOCKED, type BlockSpec } from './specs.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const webRoot = join(here, '../..')
-/** `CHROMIUM_PATH`, else the preinstalled browser if there is one, else the one playwright-core installed (CI). */
-const CHROMIUM = process.env['CHROMIUM_PATH'] ?? (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined)
+/**
+ * `CHROMIUM_PATH` if set, else Playwright's own full Chromium (`channel: 'chromium'`), found through PLAYWRIGHT_BROWSERS_PATH
+ * in a sandbox that ships one and in ~/.cache/ms-playwright after `playwright-core install chromium` in CI. Not the default
+ * headless shell: the app's frame handshake never completes in it ("The host did not send init in time"), and the existing
+ * `test:browser` check fails the same way, so the cause is the shell and not this suite.
+ */
+const CHROMIUM = process.env['CHROMIUM_PATH']
 const ONLY = (process.env['ONLY'] ?? '').split(',').filter((s) => s !== '')
 const wants = (phase: string): boolean => ONLY.length === 0 || ONLY.includes(phase)
 const VICTIM_NAME = 'Neighbour'
@@ -145,7 +150,12 @@ async function boot(w: World, where: 'dashboard' | 'page' = 'dashboard'): Promis
     w.hostile = w.page.frames().find((f) => isFrame(f, 'Page', 'page'))!
     w.victim = null
   }
-  await w.hostile.waitForFunction(() => (window as unknown as { __hostile?: unknown }).__hostile !== undefined, null, { timeout: 30_000 })
+  await w.hostile.waitForFunction(() => (window as unknown as { __hostile?: unknown }).__hostile !== undefined, null, { timeout: 30_000 }).catch(async (e: unknown) => {
+    // A frame that never ran the fixture is worth a description in a CI log: what it is, and what the browser said.
+    const state = await w.hostile.evaluate(() => ({ href: location.href.slice(0, 120), body: document.body?.innerText.slice(0, 200), scripts: [...document.scripts].map((s) => s.src) })).catch((x: unknown) => String(x))
+    console.error('hostile frame never mounted:', JSON.stringify(state), '\nconsole:', JSON.stringify(w.log.console.slice(-15)), '\nfailed:', JSON.stringify(w.log.requestUrls.filter((u) => u.url.includes('/plugins/')).slice(-10).map((u) => u.url)))
+    throw e
+  })
   await w.hostile.evaluate((cfg) => { (window as unknown as { __hostile: { configure(c: unknown): void } }).__hostile.configure(cfg) },
     { attacker: w.attacker.origin, host: w.base, udpPort: w.attacker.udpPort })
 }
@@ -634,7 +644,7 @@ async function main(): Promise<void> {
   const apiLog = new ApiLog()
   const server = await startServer(dist, apiLog)
   const browser = await pw.chromium.launch({
-    ...(CHROMIUM !== undefined ? { executablePath: CHROMIUM } : {}),
+    ...(CHROMIUM !== undefined ? { executablePath: CHROMIUM } : { channel: 'chromium' as const }),
     args: ['--no-sandbox', '--host-resolver-rules=MAP attacker.test 127.0.0.1', `--log-net-log=${netlog}`, '--net-log-capture-mode=Everything'],
   })
   console.log(`engine: chromium ${browser.version()}`)
