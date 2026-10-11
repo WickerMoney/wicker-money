@@ -150,7 +150,7 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
       return { status: 'ok', version: APP_VERSION, gitSha: GIT_SHA, sdkVersion: SDK_MAJOR_VERSION }
     })
 
-    registerAuth(app, auth)
+    registerAuth(app, auth, services.plugins)
     registerAuthRoutes(app, auth)
     registerAccountRoutes(app, services)
     registerCategoryRoutes(app, services)
@@ -158,7 +158,7 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
     registerTransactionRoutes(app, services)
     registerRecurringItemRoutes(app, services)
     registerUserRoutes(app, services)
-    registerPluginRoutes(app, services)
+    registerPluginRoutes(app, services, config)
     registerBundledPluginServers(app, db, services.plugins, {
       longStatementTimeoutMillis: config.DB_LONG_STATEMENT_TIMEOUT,
       importMaxRows: config.IMPORT_MAX_ROWS,

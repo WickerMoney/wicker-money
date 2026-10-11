@@ -6,6 +6,7 @@ import { IMPORT_PLUGIN_ID, registerImportRoutes } from '@wickermoney/plugin-impo
 import type {
   Query, RegisterRoute, RuleForMatching, RuleSubject, RunAsPlugin,
 } from '@wickermoney/plugin-sdk/server'
+import { PluginRouteDeniedError } from '../auth/PluginRouteDeniedError.js'
 import { asPlugin, type Db } from '../db/client.js'
 import { pluginRoleName } from '../db/plugin-roles.js'
 import { resolveCategory } from '../categories/engine.js'
@@ -100,9 +101,11 @@ function readIssues(value: unknown): readonly ValidationIssue[] | undefined {
  * out-of-process isolation (its own process, credentials and resource limits)
  * before it may run server-side.
  *
- * The `x-wickermoney-plugin` request header on core data routes is advisory
- * identification set by the host's own client; it is checked against the
- * registry and the manifest's grants, but it is not authentication.
+ * Who is calling a plugin's routes is decided by the bearer token: the user's
+ * own access token (the host), or a plugin token for exactly this plugin. A
+ * plugin token for another plugin is refused. The `x-wickermoney-plugin`
+ * header on core data routes is advisory and never identifies a caller; see
+ * `requireTableGrant`.
  *
  * @param app - The Fastify instance to register plugin routes on.
  * @param db - The database handle used to open per-plugin transactions.
@@ -133,7 +136,13 @@ export function registerBundledPluginServers(
         url: `${base}${path}`,
         ...(options?.bodyLimit === undefined ? {} : { bodyLimit: options.bodyLimit }),
         handler: async (request: FastifyRequest, reply) => {
-          const user = await app.requireAuth(request)
+          const { user, plugin: principal } = await app.requireActor(request)
+          // A plugin token reaches only its own plugin's routes. The token hook
+          // already refuses another plugin's namespace; this keeps the handler
+          // safe on its own if that hook is ever bypassed or changed.
+          if (principal !== undefined && principal.pluginId !== pluginId) {
+            throw new PluginRouteDeniedError('This route belongs to another plugin.')
+          }
 
           // A disabled plugin's endpoints disappear with it. Checked per
           // request rather than at boot so toggling `core.plugins` takes effect

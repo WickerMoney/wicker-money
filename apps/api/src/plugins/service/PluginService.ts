@@ -107,6 +107,17 @@ export class PluginService {
   }
 
   /**
+   * @param pluginId - A plugin manifest id.
+   * @returns Whether a plugin with this id is registered, enabled or not. A plugin that is
+   * registered but switched off, or whose manifest does not load, is registered; an id nobody
+   * ever registered is not.
+   */
+  async isRegistered(pluginId: string): Promise<boolean> {
+    const rows = await this.uow.forSystem(({ pluginRegistry }) => pluginRegistry.listAll(), { readOnly: true })
+    return rows.some((row) => row.plugin_id === pluginId)
+  }
+
+  /**
    * Enables or disables a plugin and drops the cached registry, so the change
    * takes effect on the next request.
    *
