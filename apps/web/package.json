@@ -18,7 +18,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p browser-check/hostile/tsconfig.json",
     "test": "vitest run",
     "test:browser": "cd ../api && tsx ../web/browser-check/run.ts",
-    "test:hostile": "cd ../api && tsx ../web/browser-check/hostile/run.ts",
+    "test:hostile": "pnpm --filter @wickermoney/api exec tsx ../web/browser-check/hostile/run.ts",
     "dev": "vite",
     "preview": "vite preview"
   },
