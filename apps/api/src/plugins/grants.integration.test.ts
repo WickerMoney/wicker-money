@@ -50,8 +50,8 @@ describe('plugin registry endpoint', () => {
     const res = await h.app.inject({ method: 'GET', url: '/api/v1/plugins', headers: auth(user) })
     const body = res.json() as { plugins: Array<{ id: string; runtime: string; isolated?: boolean }> }
     expect(body.plugins.length).toBeGreaterThan(0)
-    // Nothing is ported yet: every bundled plugin stays in the page's own realm.
-    for (const p of body.plugins) expect(p.runtime, p.id).toBe('in-realm')
+    // Insights is ported; every other bundled plugin stays in the page's own realm.
+    for (const p of body.plugins) expect(p.runtime, p.id).toBe(p.id === 'wickermoney.insights' ? 'isolated' : 'in-realm')
   })
 })
 
