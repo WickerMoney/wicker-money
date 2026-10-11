@@ -99,7 +99,7 @@ export function setUnauthorizedHandler(fn: () => void): void {
  * @param res - A response whose status is not successful.
  * @returns An `ApiError` carrying the HTTP status and error code.
  */
-async function parseError(res: Response): Promise<ApiError> {
+export async function parseError(res: Response): Promise<ApiError> {
   let code = 'request_failed'
   let message = `Request failed (${res.status})`
   let issues: ApiError['issues'] = []
