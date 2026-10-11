@@ -340,14 +340,19 @@ describe('invariants over varied inputs', () => {
       const strategy: Strategy = random() < 0.5 ? 'snowball' : 'avalanche'
       const p = plan(debts, strategy, cents(Math.floor(random() * 50_000)))
 
+      // Up to 600 months a run: plain checks that throw, not an expect() per
+      // month, which is what made this test slow enough to time out on a CI runner.
+      const budget = BigInt(p.monthlyBudget.replace('.', ''))
       let previous = BigInt(p.startingBalance.replace('.', ''))
       for (const m of p.schedule) {
         const next = BigInt(m.balance.replace('.', ''))
         const interest = BigInt(m.interest.replace('.', ''))
         const payment = BigInt(m.payment.replace('.', ''))
-        expect(previous + interest - payment).toBe(next)
-        expect(next).toBeGreaterThanOrEqual(0n)
-        expect(payment).toBeLessThanOrEqual(BigInt(p.monthlyBudget.replace('.', '')))
+        if (previous + interest - payment !== next || next < 0n || payment > budget) {
+          throw new Error(
+            `run ${run}, ${m.date}: previous ${previous} + interest ${interest} - payment ${payment} gives ${next}, budget ${budget}`,
+          )
+        }
         previous = next
       }
       const owed = BigInt(p.startingBalance.replace('.', ''))
@@ -357,7 +362,7 @@ describe('invariants over varied inputs', () => {
       if (!p.capped) expect(previous).toBe(0n)
       expect(p.schedule.length).toBe(p.months)
     }
-  })
+  }, 30_000)
 
   it('never takes longer than minimums only, and never costs more interest, when the minimums cover the interest', () => {
     const random = lcg(777)
