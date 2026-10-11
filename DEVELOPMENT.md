@@ -125,6 +125,90 @@ database key is missing or does not match the running secret, so run `migrate`
 again after rotating `AUTH_SECRET`. `pnpm --filter @wickermoney/api migrate reapply`
 re-runs every migration's idempotent `up` to repair a database that has drifted.
 
+### Pool, timeouts and import limits
+
+Four settings bound how much database work one API process does. Defaults match
+the behaviour before they existed, except the import row cap (below).
+
+| Setting | Default | What it does |
+|---|---|---|
+| `DB_POOL_MAX` | `10` | Connections the API may hold open (2 to 200). Every request holds one for the length of its transaction. PostgreSQL's `max_connections` must cover it for each API process. |
+| `DB_STATEMENT_TIMEOUT` | `30000` | Longest one SQL statement may run, in **milliseconds** (1000 to 3600000, so `30` is rejected, not read as seconds). |
+| `DB_LONG_STATEMENT_TIMEOUT` | `300000` | The same limit for CSV import and the data export only, milliseconds, not lower than the one above. Set per transaction by the host, so it ends with the transaction. A plugin route opts in with `longRunning: true` in `RegisterRoute`'s options. |
+| `IMPORT_MAX_ROWS` | `100000` | Data rows one CSV import may contain, counting unreadable ones. The 8 MB file limit applies as well and is not configurable. |
+
+**Why 100,000 rows.** An 8 MB file holds about 109k bank-style rows, 67k with a
+memo column, and 374k rows of minimal text, so the size limit alone does not
+bound the work. Measured on 2 vCPUs with a local PostgreSQL 16 and a pool of 10,
+against the real API process:
+
+| Rows | File | Analyze | Commit | API memory, analyze / commit | Event-loop stall |
+|---|---|---|---|---|---|
+| 25,000 | 1.7 MB | 0.3 s | 4.4 s | +51 / +21 MB | 0.23 s |
+| 50,000 | 3.7 MB | 0.5 s | 7-9 s | +92 / +107 MB | 0.41 s |
+| 100,000 | 7.4 MB | 1.0 s | 17 s | +190 / +110 MB | 0.7-0.8 s |
+| 108,840 | 8.0 MB | 1.0 s | 15-18 s | +206 / +135 MB | 0.8-0.9 s |
+| 373,585 | 8.0 MB | 2.1 s | 48 s | +194 / +317 MB | 1.1-1.3 s |
+
+Commit time is linear (about 150 microseconds a row, mostly PostgreSQL), and it
+is the time a pooled connection and the account's import lock are held. 100,000
+rows keeps it near 15-18 seconds here, which leaves a slower host room under a
+reverse proxy that cuts requests off at 60 seconds. On a small device, lower it.
+These are one machine's numbers, not a benchmark: the shape (linear in rows) is
+the useful part.
+
+**Concurrent imports share the pool.** Ten simultaneous 50,000-row commits held
+all ten connections for about 45 seconds, and 8 of 106 other requests made in
+that time (readiness checks and an authenticated list) failed waiting for a
+connection. With `DB_POOL_MAX=20` none did, at the cost of slower individual
+imports on two vCPUs. If several people import at once, raise the pool and check
+PostgreSQL's `max_connections`.
+
+`analyze` answers with the counts for the whole file, its first 100 rows and a
+page of up to 500 possible duplicates (`flaggedOffset` and `flaggedLimit` ask
+for another page), instead of every row: 19 KB instead of 21 MB for an 8 MB
+file. `commit` classifies the file itself, so rows never shown are handled the
+same way.
+
+### PgBouncer
+
+Run the API through PgBouncer in **transaction** mode only if you need to
+multiplex more API connections than PostgreSQL should hold. Nothing in the app
+depends on a session: the tenant binding and role switch are
+`set_config(..., true)` and `SET LOCAL ROLE`, which end with the transaction, and
+the import lock is `pg_advisory_xact_lock`.
+
+What was tested: PgBouncer 1.22.0, `pool_mode = transaction`,
+`default_pool_size = 4` under the API's pool of 10 (so connections really are
+shared), and the full integration suite run through it. It does not work as
+installed, and it works with one change:
+
+- The API sends `statement_timeout` and `idle_in_transaction_session_timeout` as
+  connection startup parameters. PgBouncer refuses them (`unsupported startup
+  parameter`) and the API cannot connect. Add
+  `ignore_startup_parameters = statement_timeout,idle_in_transaction_session_timeout`
+  to `pgbouncer.ini`.
+- Those two limits then **no longer apply** through the pooler, whatever
+  `DB_STATEMENT_TIMEOUT` says. Put them on the role instead, and reconnect
+  PgBouncer's server connections (`RECONNECT`) so new ones pick them up:
+
+  ```sql
+  ALTER ROLE wickermoney_app SET statement_timeout = '30s';
+  ALTER ROLE wickermoney_app SET idle_in_transaction_session_timeout = '60s';
+  ```
+
+  (`DB_LONG_STATEMENT_TIMEOUT` still applies, since it is set inside the
+  transaction, and overrides the role's value for import and export.)
+- With that, 1,011 of 1,014 integration tests passed. The three that did not
+  check the pool's own default limit (`statementTimeout.integration.test.ts`),
+  which is the ignored parameter above, not a data problem.
+
+Not tested: session or statement pool modes (statement mode cannot work, as
+transactions span statements), other PgBouncer versions, other poolers, running
+migrations through a pooler (point `DATABASE_OWNER_URL` at PostgreSQL directly),
+and any production load. Treat it as supported for the setup above and verify
+the rest yourself.
+
 ### Security notes
 
 Row-level security trusts `core.current_user_id()`, which returns a user id only
