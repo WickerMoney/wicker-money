@@ -697,6 +697,12 @@ Consequences for contributors:
   yet.
 - Third-party plugin install stays unsupported, and `PLUGIN_REMOTE_ORIGINS`
   stays empty by default, until UI plugins are isolated.
+- The SDK now defines the contract for isolated UI plugins
+  (`@wickermoney/plugin-sdk/isolated`, experimental: a message protocol over a
+  `MessagePort`, an in-frame client, and the optional manifest flag
+  `isolated`). Only the contract exists. The web app does not yet host a plugin
+  in a frame, so every UI plugin still runs in the host's origin and the table
+  above is unchanged.
 
 ### When a plugin is turned off
 
