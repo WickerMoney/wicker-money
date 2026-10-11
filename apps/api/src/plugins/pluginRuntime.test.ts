@@ -12,10 +12,12 @@ function manifest(id: string, extra: Partial<PluginManifest> = {}): PluginManife
 }
 
 describe('pluginRuntimeFor', () => {
-  it('keeps the listed bundled plugins in-realm in 0.6.0', () => {
+  it('keeps the listed bundled plugins in-realm in 0.6.0 and isolates the ported ones', () => {
     for (const m of BUNDLED_PLUGINS) {
-      expect(pluginRuntimeFor(m, true), m.id).toBe('in-realm')
+      expect(pluginRuntimeFor(m, true), m.id).toBe(IN_REALM_PLUGIN_IDS.has(m.id) ? 'in-realm' : 'isolated')
     }
+    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.insights')!, true)).toBe('isolated')
+    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.budgets')!, true)).toBe('in-realm')
   })
 
   it('lists only plugins that are actually bundled', () => {
@@ -35,7 +37,9 @@ describe('pluginRuntimeFor', () => {
   })
 
   it('lets the isolated flag move a listed plugin towards isolation, never away', () => {
-    expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: true }), true)).toBe('isolated')
-    expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: false }), true)).toBe('in-realm')
+    expect(pluginRuntimeFor(manifest('wickermoney.budgets', { isolated: true }), true)).toBe('isolated')
+    expect(pluginRuntimeFor(manifest('wickermoney.budgets', { isolated: false }), true)).toBe('in-realm')
+    // A ported plugin is isolated whatever its manifest says.
+    expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: false }), true)).toBe('isolated')
   })
 })

@@ -129,3 +129,9 @@
 
 /* The chart/table switch, right-aligned above the plot. */
 .viz__view { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+
+/* The table view scrolls inside the widget instead of making the widget as tall as the range is long:
+   24 months is about 1,000 px, more than a sandboxed frame may be. Focusable, so the focus ring needs a
+   rule of its own. */
+.viz__table { max-height: 400px; overflow-y: auto; }
+.viz__table:focus-visible { outline: 2px solid var(--wm-text); outline-offset: 2px; }

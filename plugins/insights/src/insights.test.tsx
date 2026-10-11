@@ -336,6 +336,15 @@ describe('the income and spending chart as a table', () => {
     expect(screen.getByRole('group', { name: /as a table/i })).toBeTruthy()
   })
 
+  it('puts the table in a focusable, bounded scroller and gives the table a caption', async () => {
+    render(<TrendWidget ctx={ctxWith(many)} size="lg" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Show as table' }))
+    const group = screen.getByRole('group', { name: /as a table/i })
+    expect(group.getAttribute('tabindex')).toBe('0')
+    expect(group.className).toContain('viz__table')
+    expect(within(screen.getByRole('table')).getByText(/income and spending per month over/i).tagName).toBe('CAPTION')
+  })
+
   it('goes back to the chart', async () => {
     render(<TrendWidget ctx={ctxWith(many)} size="lg" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Show as table' }))
