@@ -33,6 +33,10 @@ describe('defaults', () => {
       REGISTRATION_ENABLED: true,
       TRUST_PROXY: false,
       PLUGIN_REMOTE_ORIGINS: [],
+      DB_POOL_MAX: 10,
+      DB_STATEMENT_TIMEOUT: 30_000,
+      DB_LONG_STATEMENT_TIMEOUT: 300_000,
+      IMPORT_MAX_ROWS: 100_000,
     })
     expect(config.COOKIE_SECURE).toBeUndefined()
     expect(config.BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
@@ -117,6 +121,61 @@ describe('boolean variables', () => {
       }
     },
   )
+})
+
+describe('database pool and statement timeout', () => {
+  it('accepts values in range', () => {
+    expect(loadConfig(env({ DB_POOL_MAX: '25', DB_STATEMENT_TIMEOUT: '60000' }))).toMatchObject({
+      DB_POOL_MAX: 25,
+      DB_STATEMENT_TIMEOUT: 60_000,
+    })
+    expect(loadConfig(env({ DB_POOL_MAX: '2' })).DB_POOL_MAX).toBe(2)
+    expect(loadConfig(env({ DB_POOL_MAX: '200' })).DB_POOL_MAX).toBe(200)
+  })
+
+  it.each(['0', '1', '201', '-3', '2.5', 'many', ''])('rejects DB_POOL_MAX=%j', (value) => {
+    expect(failure({ DB_POOL_MAX: value })).toContain('DB_POOL_MAX')
+  })
+
+  it.each(['0', '30', '999', '3600001', '-1', '1.5', 'soon', ''])('rejects DB_STATEMENT_TIMEOUT=%j', (value) => {
+    expect(failure({ DB_STATEMENT_TIMEOUT: value })).toContain('DB_STATEMENT_TIMEOUT')
+  })
+
+  it('has a longer limit for import and export that may not be lower than the default one', () => {
+    expect(loadConfig(env({ DB_LONG_STATEMENT_TIMEOUT: '900000' })).DB_LONG_STATEMENT_TIMEOUT).toBe(900_000)
+    expect(loadConfig(env({ DB_STATEMENT_TIMEOUT: '60000', DB_LONG_STATEMENT_TIMEOUT: '60000' }))).toMatchObject({
+      DB_STATEMENT_TIMEOUT: 60_000,
+      DB_LONG_STATEMENT_TIMEOUT: 60_000,
+    })
+    for (const bad of ['0', '30', '3600001', '2.5', 'long']) {
+      expect(failure({ DB_LONG_STATEMENT_TIMEOUT: bad })).toContain('DB_LONG_STATEMENT_TIMEOUT')
+    }
+  })
+
+  it('refuses a long limit below the default one, and a raised default that overtakes the long one', () => {
+    expect(failure({ DB_STATEMENT_TIMEOUT: '60000', DB_LONG_STATEMENT_TIMEOUT: '30000' })).toContain(
+      'DB_LONG_STATEMENT_TIMEOUT must not be lower than DB_STATEMENT_TIMEOUT',
+    )
+    // Raising only the default past the long default is a mistake worth catching.
+    expect(failure({ DB_STATEMENT_TIMEOUT: '400000' })).toContain('DB_LONG_STATEMENT_TIMEOUT')
+  })
+
+  it('is reported alongside other problems', () => {
+    const message = failure({ DB_POOL_MAX: '1', DB_STATEMENT_TIMEOUT: '30', PORT: 'eighty' })
+    for (const variable of ['DB_POOL_MAX', 'DB_STATEMENT_TIMEOUT', 'PORT']) expect(message).toContain(variable)
+  })
+})
+
+describe('IMPORT_MAX_ROWS', () => {
+  it('accepts a whole number from 1 to a million', () => {
+    expect(loadConfig(env({ IMPORT_MAX_ROWS: '1' })).IMPORT_MAX_ROWS).toBe(1)
+    expect(loadConfig(env({ IMPORT_MAX_ROWS: '120000' })).IMPORT_MAX_ROWS).toBe(120_000)
+    expect(loadConfig(env({ IMPORT_MAX_ROWS: '1000000' })).IMPORT_MAX_ROWS).toBe(1_000_000)
+  })
+
+  it.each(['0', '-5', '1000001', '2.5', 'lots', ''])('rejects %j', (value) => {
+    expect(failure({ IMPORT_MAX_ROWS: value })).toContain('IMPORT_MAX_ROWS')
+  })
 })
 
 describe('BOOTSTRAP_OWNER_EMAIL', () => {

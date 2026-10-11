@@ -57,6 +57,12 @@ export interface ImportFlow {
   readonly onFile: (file: File) => Promise<void>
   /** Checks the file for duplicates and moves to the review step. */
   readonly analyze: () => Promise<void>
+  /**
+   * Loads the next page of possible duplicates from the server into `analysis`.
+   * The file is analysed again, with the mapping and account it was first
+   * analysed with, so the list stays one list.
+   */
+  readonly loadMoreFlagged: () => Promise<boolean>
   /** Saves the mapping, writes the transactions and moves to the done step. */
   readonly commit: () => Promise<void>
   /** Discards the current file and returns to the first step. */
@@ -121,6 +127,10 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
   // key and the server imports at most once. Anything that starts a new
   // review (a new file, a fresh analysis, a reset) drops it.
   const commitKey = useRef<string | null>(null)
+
+  // What the shown analysis was made from. Paging asks the server about the
+  // same file the same way even if the mapping controls have moved since.
+  const analyzedWith = useRef<{ accountId: string; mapping: SourceMapping } | null>(null)
 
   useEffect(() => {
     let live = true
@@ -239,6 +249,7 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
         accountId, csv, ...mapping,
       })
       setAnalysis(r)
+      analyzedWith.current = { accountId, mapping }
       setAccepted(new Set())
       commitKey.current = null
       setStage('review')
@@ -248,6 +259,29 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       setBusy(false)
     }
   }, [ctx, accountId, csv, mapping, refuse, showErrors])
+
+  const loadMoreFlagged = useCallback(async (): Promise<boolean> => {
+    const basis = analyzedWith.current
+    if (analysis === null || basis === null) return false
+    try {
+      const r = await ctx.api.post<AnalyzeResult>(`${IMPORT_API_BASE}/analyze`, {
+        accountId: basis.accountId, csv, ...basis.mapping,
+        flaggedOffset: analysis.flagged.offset + analysis.flagged.rows.length,
+      })
+      setAnalysis((current) => {
+        if (current === null) return current
+        // Keep a row once, by its place in the file, so a page that overlaps
+        // (the ledger moved between requests) cannot list it twice.
+        const have = new Set(current.flagged.rows.map((row) => row.rowNumber))
+        const added = r.flagged.rows.filter((row) => !have.has(row.rowNumber))
+        return { ...current, flagged: { ...current.flagged, total: r.flagged.total, rows: [...current.flagged.rows, ...added] } }
+      })
+      return true
+    } catch (e) {
+      showErrors(formErrorsFrom(e, FIELDS, 'Could not load more rows.'))
+      return false
+    }
+  }, [ctx, analysis, csv, showErrors])
 
   const commit = useCallback(async () => {
     if (refuse()) return
@@ -277,6 +311,7 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
     setParsed(null)
     setFileName('')
     setAnalysis(null)
+    analyzedWith.current = null
     setResult(null)
     setAccepted(new Set())
     setMatchedSource(null)
@@ -303,6 +338,6 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
     setSourceName: (next: string) => { setSourceName(next); clearField('sourceName') },
     preview, analysis,
     accepted, setAccepted, result, historyKey, matchedSource,
-    onFile, analyze, commit, reset, refreshHistory,
+    onFile, analyze, loadMoreFlagged, commit, reset, refreshHistory,
   }
 }

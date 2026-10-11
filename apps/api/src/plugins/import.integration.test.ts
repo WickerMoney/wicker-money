@@ -527,6 +527,73 @@ describe('saved mappings', () => {
   })
 })
 
+describe('analyze response on a large file', () => {
+  const noId = {
+    ...MAPPING,
+    sourceName: 'Large',
+    columns: { date: 'Date', merchant: 'Description', amount: 'Amount' },
+  }
+  const file = (start: number, n: number) =>
+    ['Date,Description,Amount', ...Array.from({ length: n }, (_, i) => `03/04/2026,SHOP ${start + i},-${start + i + 1}.00`)].join('\n')
+  let big: string
+
+  beforeAll(async () => {
+    big = await newAccount(user, 'Large')
+    const res = await commit({ accountId: big, csv: file(0, 400), fileName: 'seed.csv', ...noId })
+    expect(res.json()).toMatchObject({ imported: 400 })
+  })
+
+  type Page = {
+    summary: { total: number; new: number; needsReview: number }
+    rows: Array<{ rowNumber: number; status: string }>
+    flagged: { total: number; offset: number; rows: Array<{ rowNumber: number; status: string }> }
+  }
+
+  it('returns the counts for every row but only the first 100 rows, and a page of flagged rows', async () => {
+    // 400 repeat existing rows (flagged) followed by 200 new ones.
+    const res = await analyze({ accountId: big, csv: file(0, 400) + '\n' + file(5000, 200).split('\n').slice(1).join('\n'), ...noId })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as Page
+    expect(body.summary).toMatchObject({ total: 600, new: 200, needsReview: 400 })
+    expect(body.rows).toHaveLength(100)
+    expect(body.flagged.total).toBe(400)
+    expect(body.flagged.rows).toHaveLength(400)
+    expect(body.flagged.rows.every((r) => r.status === 'needs-review')).toBe(true)
+  })
+
+  it('pages the flagged rows with flaggedOffset and flaggedLimit', async () => {
+    const csv = file(0, 400)
+    const first = (await analyze({ accountId: big, csv, ...noId, flaggedLimit: 150 })).json() as Page
+    const second = (await analyze({ accountId: big, csv, ...noId, flaggedLimit: 150, flaggedOffset: 150 })).json() as Page
+    const third = (await analyze({ accountId: big, csv, ...noId, flaggedLimit: 150, flaggedOffset: 300 })).json() as Page
+    expect([first, second, third].map((p) => p.flagged.rows.length)).toEqual([150, 150, 100])
+    expect(second.flagged.offset).toBe(150)
+    const all = [...first.flagged.rows, ...second.flagged.rows, ...third.flagged.rows].map((r) => r.rowNumber)
+    expect(all).toEqual(Array.from({ length: 400 }, (_, i) => i + 2))
+  })
+
+  it('answers a request that sends no paging fields as it did before, for a small file', async () => {
+    const res = await analyze({ accountId: big, csv: file(0, 3), ...noId })
+    const body = res.json() as Page
+    expect(body.rows).toHaveLength(3)
+    expect(body.flagged.rows).toHaveLength(3)
+  })
+
+  it('refuses a bad offset or limit on that field', async () => {
+    const res = await analyze({ accountId: big, csv: file(0, 3), ...noId, flaggedOffset: -1 })
+    expect(res.statusCode).toBe(400)
+    expect(res.json()).toMatchObject({ issues: [{ path: ['flaggedOffset'] }] })
+    expect((await analyze({ accountId: big, csv: file(0, 3), ...noId, flaggedLimit: 0 })).statusCode).toBe(400)
+  })
+
+  it('imports every new row and only the accepted flagged ones, whatever the analysis showed', async () => {
+    const csv = file(0, 400) + '\n' + file(5000, 200).split('\n').slice(1).join('\n')
+    const res = await commit({ accountId: big, csv, fileName: 'again.csv', ...noId, acceptRowNumbers: [2, 401] })
+    // 200 new rows, none of which the first 100 previewed rows covered, plus two accepted repeats.
+    expect(res.json()).toMatchObject({ imported: 202, flagged: 400 })
+  })
+})
+
 describe('request size limits', () => {
   it('answers 413 to an analyze body over 10 MiB', async () => {
     const res = await analyze({ accountId, csv: 'a'.repeat(11 * 1024 * 1024), ...MAPPING })
@@ -544,15 +611,84 @@ describe('request size limits', () => {
     expect(res.body).toContain('8 MB')
   })
 
-  it('answers 400 to a file with more than 50,000 rows', async () => {
-    const rows = Array.from({ length: 50_001 }, (_, i) => `03/04/2026,M${i},-1.00,cap-${i}`)
-    const csv = ['Date,Description,Amount,Id', ...rows].join('\n')
-    for (const send of [analyze, commit]) {
-      const res = await send({ accountId, csv, ...MAPPING })
-      expect(res.statusCode).toBe(400)
-      expect(res.body).toContain('50,000')
+  it('answers 400 to a file over the configured row limit, on analyze and commit', async () => {
+    const capped = await createHarness({ IMPORT_MAX_ROWS: '5' })
+    try {
+      const u = await createUser(capped)
+      const created = await capped.app.inject({
+        method: 'POST', url: '/api/v1/accounts', headers: auth(u),
+        payload: { name: 'Cap', accountType: 'checking', openingBalance: '0.00' },
+      })
+      const account = (created.json() as { id: string }).id
+      const body = (n: number) => ({
+        accountId: account, ...MAPPING,
+        csv: ['Date,Description,Amount,Id', ...Array.from({ length: n }, (_, i) => `03/04/2026,M${i},-1.00,cap-${i}`)].join('\n'),
+      })
+      for (const route of ['analyze', 'commit']) {
+        const post = (n: number) =>
+          capped.app.inject({ method: 'POST', url: `${BASE}/${route}`, headers: headers(u), payload: body(n) })
+        const over = await post(6)
+        expect(over.statusCode).toBe(400)
+        expect(over.json()).toMatchObject({
+          code: 'too_many_rows',
+          message: 'That file has 6 rows; the limit is 5 per import. Split it and import in parts.',
+        })
+        expect((await post(5)).statusCode).toBe(200)
+      }
+      // The refused 6-row commit wrote nothing; the accepted 5-row one wrote its rows.
+      const count = await asUser(capped.db, u.id, async (trx) => {
+        const { rows } = await sql<{ n: string }>`
+          SELECT count(*)::text AS n FROM core.transactions WHERE account_id = ${account}
+        `.execute(trx)
+        return rows[0]?.n
+      })
+      expect(count).toBe('5')
+    } finally {
+      await capped.close()
     }
   })
+})
+
+describe('statement limit', () => {
+  let short: Harness
+  let shortUser: TestUser
+  let shortAccount: string
+
+  beforeAll(async () => {
+    // Every statement is cancelled after one second unless the route asked for
+    // the long limit, which these tests give ten.
+    short = await createHarness({ DB_STATEMENT_TIMEOUT: '1000', DB_LONG_STATEMENT_TIMEOUT: '10000' })
+    shortUser = await createUser(short)
+    const res = await short.app.inject({
+      method: 'POST', url: '/api/v1/accounts', headers: auth(shortUser),
+      payload: { name: 'Limit', accountType: 'checking', openingBalance: '0.00' },
+    })
+    shortAccount = (res.json() as { id: string }).id
+  })
+  afterAll(async () => { await short.close() })
+
+  /** Holds the import lock for the account, as a concurrent import would, for `seconds`. */
+  function holdAccountLock(seconds: number): Promise<void> {
+    return asUser(short.db, shortUser.id, async (trx) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`import-csv:${shortUser.id}:${shortAccount}`}::text, 0))`.execute(trx)
+      await sql`SELECT pg_sleep(${seconds})`.execute(trx)
+    }, { statementTimeoutMillis: 10_000 })
+  }
+
+  it.each(['commit', 'analyze'] as const)(
+    'lets %s wait behind another import for longer than the default limit',
+    async (route) => {
+      const holding = holdAccountLock(1.6)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      const payload = { accountId: shortAccount, csv: CSV, ...MAPPING, idempotencyKey: `limit-${route}` }
+      const res = await short.app.inject({
+        method: 'POST', url: `${BASE}/${route}`, headers: headers(shortUser), payload,
+      })
+      await holding
+      // analyze takes no lock; it must simply not be cut short either way.
+      expect(res.statusCode).toBe(200)
+    },
+  )
 })
 
 /**

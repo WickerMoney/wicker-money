@@ -10,6 +10,11 @@ export interface ReviewStepProps {
   readonly onAccepted: (next: ReadonlySet<number>) => void
   readonly formatMoney: (value: string) => string
   readonly busy: boolean
+  /**
+   * Fetches the next page of possible duplicates from the server; resolves to
+   * whether it did. Called when the user asks for rows beyond those loaded.
+   */
+  readonly onLoadMore: () => Promise<boolean>
   readonly onCommit: () => void
   /** Why the import was refused, when it is not about one field. */
   readonly error?: string | null
@@ -25,18 +30,33 @@ export interface ReviewStepProps {
  * ticked. Dropping both kinds silently would let a second identical coffee vanish
  * with no record that it ever existed.
  *
- * A file can flag thousands of rows, so the list shows one page at a time; rows
- * beyond it are still imported only if ticked, and the count says how many are
+ * A file can flag thousands of rows, so the list shows one page at a time and
+ * the server sends them in pages too. "Show more" reveals rows already loaded,
+ * and asks the server for the next page when they run out. A row that is not on
+ * screen is still not imported unless ticked, and the count says how many are
  * hidden.
  */
 export function ReviewStep({
-  analysis, accepted, onAccepted, formatMoney, busy, onCommit, error = null,
+  analysis, accepted, onAccepted, formatMoney, busy, onLoadMore, onCommit, error = null,
 }: ReviewStepProps) {
-  const { summary, rows } = analysis
-  const flagged = rows.filter((r) => r.status === 'needs-review')
+  const { summary } = analysis
+  const loaded = analysis.flagged.rows
+  const total = analysis.flagged.total
   const [shown, setShown] = useState(REVIEW_PAGE_SIZE)
-  const visible = flagged.slice(0, shown)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const visible = loaded.slice(0, shown)
   const willImport = summary.new + accepted.size
+
+  const showMore = async () => {
+    const next = shown + REVIEW_PAGE_SIZE
+    if (loaded.length < Math.min(next, total)) {
+      setLoadingMore(true)
+      const ok = await onLoadMore()
+      setLoadingMore(false)
+      if (!ok) return
+    }
+    setShown(next)
+  }
 
   const toggle = (rowNumber: number) => {
     const next = new Set(accepted)
@@ -61,7 +81,7 @@ export function ReviewStep({
         </p>
       ) : null}
 
-      {flagged.length > 0 ? (
+      {total > 0 ? (
         <>
           <h3 className="imp__subhead">
             Possible duplicates — tick any that are genuinely new
@@ -95,13 +115,13 @@ export function ReviewStep({
               ))}
             </tbody>
           </table>
-          {flagged.length > visible.length ? (
+          {total > visible.length ? (
             <div className="imp__actions">
-              <Button onClick={() => setShown((n) => n + REVIEW_PAGE_SIZE)}>
-                Show {Math.min(REVIEW_PAGE_SIZE, flagged.length - visible.length)} more
+              <Button disabled={loadingMore} onClick={() => void showMore()}>
+                {loadingMore ? 'Loading…' : `Show ${Math.min(REVIEW_PAGE_SIZE, total - visible.length)} more`}
               </Button>
               <span className="imp__hint">
-                Showing {visible.length} of {flagged.length} possible duplicates.
+                Showing {visible.length} of {total} possible duplicates.
               </span>
             </div>
           ) : null}

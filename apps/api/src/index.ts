@@ -15,7 +15,10 @@ import { APP_VERSION, GIT_SHA } from './version.js'
 
 const config = loadConfig()
 configureTenantContext(config.AUTH_SECRET)
-const db = createDb(config.DATABASE_URL)
+const db = createDb(config.DATABASE_URL, {
+  max: config.DB_POOL_MAX,
+  statementTimeoutMillis: config.DB_STATEMENT_TIMEOUT,
+})
 
 try {
   await assertSchemaReady(db)

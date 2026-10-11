@@ -72,6 +72,44 @@ const schema = z.object({
   AUTH_MAX_CONCURRENT_HASHES: z.coerce.number().int().positive().default(4),
 
   /**
+   * Largest number of connections in the database pool. Every request holds one
+   * for the length of its transaction, so this bounds concurrent database work
+   * per API process; the PostgreSQL server must allow at least this many
+   * (`max_connections`) for each process you run. Two is the floor: a request
+   * never needs a second connection while it holds one, but a pool of one would
+   * turn any accidental nesting into a hang instead of a slow request.
+   */
+  DB_POOL_MAX: z.coerce.number().int().min(2).max(200).default(10),
+  /**
+   * Longest one SQL statement may run, in milliseconds (PostgreSQL
+   * `statement_timeout`). The floor of 1000 is deliberate: a value meant as
+   * seconds (`30`) would otherwise be accepted and cancel nearly every query.
+   */
+  DB_STATEMENT_TIMEOUT: z.coerce.number().int().min(1_000).max(3_600_000).default(30_000),
+  /**
+   * The statement limit, in milliseconds, for routes that legitimately run
+   * longer: a CSV import (waiting its turn on the account lock counts) and the
+   * data export. Applied to those routes' transactions only; every other route
+   * keeps `DB_STATEMENT_TIMEOUT`. Must not be lower than it.
+   */
+  DB_LONG_STATEMENT_TIMEOUT: z.coerce.number().int().min(1_000).max(3_600_000).default(300_000),
+
+  /**
+   * The most data rows one CSV import may contain, counting rows that cannot be
+   * read. A larger file is refused with a message naming this limit. Each
+   * import parses the file in the API process and holds a database transaction
+   * for its length, so this bounds what one request can cost; the file size
+   * limit (8 MB) applies as well and is not configurable.
+   *
+   * The default is the largest count that, measured, keeps one import's commit
+   * near 15-18 seconds on two vCPUs with a local database, which leaves a
+   * slower host room under a 60 second proxy timeout. It admits a typical
+   * 8 MB bank file; a file of very short rows can pack several times more
+   * rows than that into 8 MB, and this is what refuses it.
+   */
+  IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(1_000_000).default(100_000),
+
+  /**
    * Whether the refresh cookie carries the `Secure` attribute. Defaults to
    * `true` in production. Set to `false` only for plain-HTTP local use.
    */
@@ -132,6 +170,9 @@ const schema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+}).refine((c) => c.DB_LONG_STATEMENT_TIMEOUT >= c.DB_STATEMENT_TIMEOUT, {
+  path: ['DB_LONG_STATEMENT_TIMEOUT'],
+  message: 'DB_LONG_STATEMENT_TIMEOUT must not be lower than DB_STATEMENT_TIMEOUT',
 })
 
 /** Validated application configuration, with defaults applied. */

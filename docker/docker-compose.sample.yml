@@ -77,6 +77,14 @@ services:
       - AUTH_ACCESS_TTL_SECONDS=${AUTH_ACCESS_TTL_SECONDS:-900}
       - AUTH_REFRESH_TTL_SECONDS=${AUTH_REFRESH_TTL_SECONDS:-2592000}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Database pool size and the per-statement limits in milliseconds (the
+      # long one is for import and export). The defaults match what the app
+      # does without them; see .env.example.
+      - DB_POOL_MAX=${DB_POOL_MAX:-10}
+      - DB_STATEMENT_TIMEOUT=${DB_STATEMENT_TIMEOUT:-30000}
+      - DB_LONG_STATEMENT_TIMEOUT=${DB_LONG_STATEMENT_TIMEOUT:-300000}
+      # Most data rows one CSV import may contain; see .env.example.
+      - IMPORT_MAX_ROWS=${IMPORT_MAX_ROWS:-100000}
     networks:
       - wickermoney_default
     volumes:
