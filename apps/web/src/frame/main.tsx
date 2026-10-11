@@ -1,4 +1,5 @@
 import '@wickermoney/ui-kit'
+import './frame.css'
 import { mountPlugin } from './mountPlugin.js'
 
 const root = document.getElementById('root')
