@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { BUDGETS_PLUGIN_ID, registerBudgetRoutes } from '@wickermoney/plugin-budgets/server'
+import { DEBT_PAYOFF_PLUGIN_ID, registerDebtPayoffRoutes } from '@wickermoney/plugin-debt-payoff/server'
 import { IMPORT_PLUGIN_ID, registerImportRoutes } from '@wickermoney/plugin-import-csv/server'
 import type {
   Query, RegisterRoute, RuleForMatching, RuleSubject, RunAsPlugin,
@@ -196,6 +197,10 @@ export function registerBundledPluginServers(
   // its own figures — so it destructures only the two deps it uses. A plugin
   // taking less than it is offered is the shape to encourage.
   mount(BUDGETS_PLUGIN_ID, registerBudgetRoutes)
+  // Debt payoff likewise takes only `route` and `runAsPlugin`. Its tables are
+  // its own schema plus a read grant on core accounts; it has no grant on the
+  // ledger or on another plugin's tables, so the role cannot read them.
+  mount(DEBT_PAYOFF_PLUGIN_ID, registerDebtPayoffRoutes)
 }
 
 /** Everything the host hands a bundled plugin's `register` function to mount its routes and reach core behaviour. */

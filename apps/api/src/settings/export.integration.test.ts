@@ -11,6 +11,7 @@ import { SettingsService } from './service/SettingsService.js'
 
 const BUDGETS = 'wickermoney.budgets'
 const IMPORT = 'wickermoney.import-csv'
+const DEBT_PAYOFF = 'wickermoney.debt-payoff'
 
 let h: Harness
 
@@ -166,7 +167,7 @@ describe('GET /api/v1/settings/export', () => {
 
   it('includes each bundled plugin\'s own data, and only the caller\'s', async () => {
     const { doc } = await exportFor(alice.user)
-    expect(Object.keys(doc.plugins).sort()).toEqual([BUDGETS, IMPORT].sort())
+    expect(Object.keys(doc.plugins).sort()).toEqual([BUDGETS, DEBT_PAYOFF, IMPORT].sort())
 
     expect(doc.plugins[BUDGETS]?.['budgetLines']).toEqual([
       expect.objectContaining({ category_id: alice.categoryId, period_start: '2026-03-01' }),
@@ -176,6 +177,22 @@ describe('GET /api/v1/settings/export', () => {
       expect.objectContaining({ file_name: 'alice.csv', account_id: alice.accountId }),
     ])
     expect(JSON.stringify(doc.plugins)).not.toContain('bob')
+  })
+
+  it('exports the debt payoff plugin\'s debts and settings, and only the caller\'s', async () => {
+    const mine = await createUser(h)
+    await send(mine, 'POST', '/api/v1/p/wickermoney.debt-payoff/debts',
+      { name: 'Exported card', balance: '500', apr: '19.99', minimumPayment: '25' }, DEBT_PAYOFF)
+    await send(mine, 'PUT', '/api/v1/p/wickermoney.debt-payoff/settings',
+      { strategy: 'snowball', extraPayment: '40' }, DEBT_PAYOFF)
+
+    const { doc } = await exportFor(mine)
+    const exported = doc.plugins[DEBT_PAYOFF] as unknown as { debts: Array<Record<string, unknown>>; settings: Record<string, unknown> | null }
+    expect(exported.debts).toEqual([expect.objectContaining({ name: 'Exported card' })])
+    expect(exported.settings).toEqual(expect.objectContaining({ strategy: 'snowball' }))
+
+    const { doc: theirs } = await exportFor(alice.user)
+    expect(JSON.stringify(theirs.plugins[DEBT_PAYOFF])).not.toContain('Exported card')
   })
 
   it('never includes password hashes or sessions', async () => {

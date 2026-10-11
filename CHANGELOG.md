@@ -31,6 +31,17 @@ curated, human-readable version.
   request. New owner-only routes: `GET /api/v1/users` and
   `PATCH /api/v1/users/:id/role`. Nothing about an account other than its
   email, role and creation time is returned.
+- **Debt payoff plugin.** A new bundled plugin,
+  `wickermoney.debt-payoff`, with its own tables (migration 030), endpoints for
+  debts and settings, and a snowball and avalanche planner behind
+  `GET /api/v1/p/wickermoney.debt-payoff/plan`. The plan is computed exactly in
+  integer units of 0.0001, interest compounding monthly at APR/12 and rounded
+  once per debt per month, half away from zero; it stops at 600 months and says
+  so. It also appears in the settings export. A "Debt payoff" page lists your
+  debts, adds and edits them, and shows the plan with a chart (and a table view
+  of it); a dashboard widget shows the debt-free date and the next debt in line.
+  The plugin can read your accounts so a debt can track a loan or credit card,
+  and nothing else of the host's.
 - **`@wickermoney/plugin-sdk/date`**, a stable entry point for the calendar
   helpers `addDays` and `addMonths`. They moved here from the experimental
   `/recurrence` entry point so that first-party code (Budgets, the API, the web
