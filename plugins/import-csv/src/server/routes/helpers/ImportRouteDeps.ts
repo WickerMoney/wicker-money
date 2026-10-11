@@ -34,4 +34,10 @@ export interface ImportRouteDeps {
    * for the same merchant.
    */
   readonly resolveCategory: CategoryResolver
+  /**
+   * The most data rows one import may contain. A decision about how much work a
+   * request may cause, so it belongs to the host (`IMPORT_MAX_ROWS`), which knows
+   * the size of its database pool, not to the plugin.
+   */
+  readonly maxRows: number
 }

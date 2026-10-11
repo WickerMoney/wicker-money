@@ -16,7 +16,7 @@ import { readCommitRequest } from '../helpers/readCommitRequest.js'
  * first commit's outcome and `replayed: true`.
  *
  * Responds `200` with `{ batchId, imported, skipped, flagged, failed }`. Responds
- * `400` for an invalid account id, mapping, CSV or idempotency key, or a file over 50,000 rows;
+ * `400` for an invalid account id, mapping, CSV or idempotency key, or a file over the row limit (`IMPORT_MAX_ROWS`);
  * `404` when the account is not visible to the user; `413` when the body exceeds
  * 10 MiB; and `500` if the batch row cannot be created.
  *

@@ -36,6 +36,7 @@ describe('defaults', () => {
       DB_POOL_MAX: 10,
       DB_STATEMENT_TIMEOUT: 30_000,
       DB_LONG_STATEMENT_TIMEOUT: 300_000,
+      IMPORT_MAX_ROWS: 50_000,
     })
     expect(config.COOKIE_SECURE).toBeUndefined()
     expect(config.BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
@@ -162,6 +163,18 @@ describe('database pool and statement timeout', () => {
   it('is reported alongside other problems', () => {
     const message = failure({ DB_POOL_MAX: '1', DB_STATEMENT_TIMEOUT: '30', PORT: 'eighty' })
     for (const variable of ['DB_POOL_MAX', 'DB_STATEMENT_TIMEOUT', 'PORT']) expect(message).toContain(variable)
+  })
+})
+
+describe('IMPORT_MAX_ROWS', () => {
+  it('accepts a whole number from 1 to a million', () => {
+    expect(loadConfig(env({ IMPORT_MAX_ROWS: '1' })).IMPORT_MAX_ROWS).toBe(1)
+    expect(loadConfig(env({ IMPORT_MAX_ROWS: '120000' })).IMPORT_MAX_ROWS).toBe(120_000)
+    expect(loadConfig(env({ IMPORT_MAX_ROWS: '1000000' })).IMPORT_MAX_ROWS).toBe(1_000_000)
+  })
+
+  it.each(['0', '-5', '1000001', '2.5', 'lots', ''])('rejects %j', (value) => {
+    expect(failure({ IMPORT_MAX_ROWS: value })).toContain('IMPORT_MAX_ROWS')
   })
 })
 

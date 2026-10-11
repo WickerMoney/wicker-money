@@ -20,7 +20,7 @@ export type { ImportRouteDeps } from './helpers/ImportRouteDeps.js'
  */
 export function registerImportRoutes(deps: ImportRouteDeps): void {
   const uow = new QueryImportUnitOfWork(deps.runAsPlugin, deps.getRulesForMatching)
-  const service = new ImportService(uow, deps.resolveCategory)
+  const service = new ImportService(uow, deps.resolveCategory, deps.maxRows)
   registerListMappings(deps, service)
   registerSaveMapping(deps, service)
   registerAnalyzeImport(deps, service)

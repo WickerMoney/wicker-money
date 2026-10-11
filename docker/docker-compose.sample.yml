@@ -83,6 +83,8 @@ services:
       - DB_POOL_MAX=${DB_POOL_MAX:-10}
       - DB_STATEMENT_TIMEOUT=${DB_STATEMENT_TIMEOUT:-30000}
       - DB_LONG_STATEMENT_TIMEOUT=${DB_LONG_STATEMENT_TIMEOUT:-300000}
+      # Most data rows one CSV import may contain; see .env.example.
+      - IMPORT_MAX_ROWS=${IMPORT_MAX_ROWS:-50000}
     networks:
       - wickermoney_default
     volumes:

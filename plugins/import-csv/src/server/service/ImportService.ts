@@ -33,10 +33,12 @@ export class ImportService {
   /**
    * @param uow - Opens the per-request transaction and hands out repositories.
    * @param resolveCategory - The host's category rule engine.
+   * @param maxRows - The most data rows one import may contain (the host's `IMPORT_MAX_ROWS`).
    */
   constructor(
     private readonly uow: ImportUnitOfWork,
     private readonly resolveCategory: CategoryResolver,
+    private readonly maxRows: number,
   ) {}
 
   /**
@@ -70,7 +72,7 @@ export class ImportService {
    * @throws {ImportError} `400` when the file has too many rows; `404` when the account is not visible.
    */
   async analyze(userId: string, input: AnalyzeInput): Promise<AnalyzeResult> {
-    const { rows, errors } = mapFile(input.csv, input.mapping)
+    const { rows, errors } = mapFile(input.csv, input.mapping, this.maxRows)
     return this.uow.run(userId, async (repos) => {
       await requireVisibleAccount(repos.accounts, input.accountId)
       const classified = await classifyAgainstLedger(repos.ledger, input.accountId, rows)
@@ -108,7 +110,7 @@ export class ImportService {
    *   account is not visible; `500` when the batch row cannot be created.
    */
   async commit(userId: string, input: CommitInput): Promise<CommitResult> {
-    const { rows, errors } = mapFile(input.csv, input.mapping)
+    const { rows, errors } = mapFile(input.csv, input.mapping, this.maxRows)
     const key = input.idempotencyKey
 
     try {

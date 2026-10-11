@@ -95,6 +95,15 @@ const schema = z.object({
   DB_LONG_STATEMENT_TIMEOUT: z.coerce.number().int().min(1_000).max(3_600_000).default(300_000),
 
   /**
+   * The most data rows one CSV import may contain, counting rows that cannot be
+   * read. A larger file is refused with a message naming this limit. Each
+   * import parses the file in the API process and holds a database transaction
+   * for its length, so this bounds what one request can cost; the file size
+   * limit (8 MB) applies as well and is not configurable.
+   */
+  IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(1_000_000).default(50_000),
+
+  /**
    * Whether the refresh cookie carries the `Secure` attribute. Defaults to
    * `true` in production. Set to `false` only for plain-HTTP local use.
    */

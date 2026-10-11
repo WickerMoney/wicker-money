@@ -544,14 +544,45 @@ describe('request size limits', () => {
     expect(res.body).toContain('8 MB')
   })
 
-  it('answers 400 to a file with more than 50,000 rows', async () => {
-    const rows = Array.from({ length: 50_001 }, (_, i) => `03/04/2026,M${i},-1.00,cap-${i}`)
-    const csv = ['Date,Description,Amount,Id', ...rows].join('\n')
-    for (const send of [analyze, commit]) {
-      const res = await send({ accountId, csv, ...MAPPING })
-      expect(res.statusCode).toBe(400)
-      expect(res.body).toContain('50,000')
+  it('answers 400 to a file over the configured row limit, on analyze and commit', async () => {
+    const capped = await createHarness({ IMPORT_MAX_ROWS: '5' })
+    try {
+      const u = await createUser(capped)
+      const created = await capped.app.inject({
+        method: 'POST', url: '/api/v1/accounts', headers: auth(u),
+        payload: { name: 'Cap', accountType: 'checking', openingBalance: '0.00' },
+      })
+      const account = (created.json() as { id: string }).id
+      const body = (n: number) => ({
+        accountId: account, ...MAPPING,
+        csv: ['Date,Description,Amount,Id', ...Array.from({ length: n }, (_, i) => `03/04/2026,M${i},-1.00,cap-${i}`)].join('\n'),
+      })
+      for (const route of ['analyze', 'commit']) {
+        const post = (n: number) =>
+          capped.app.inject({ method: 'POST', url: `${BASE}/${route}`, headers: headers(u), payload: body(n) })
+        const over = await post(6)
+        expect(over.statusCode).toBe(400)
+        expect(over.json()).toMatchObject({
+          code: 'too_many_rows',
+          message: 'That file has 6 rows; the limit is 5 per import. Split it and import in parts.',
+        })
+        expect((await post(5)).statusCode).toBe(200)
+      }
+      // The refused 6-row commit wrote nothing; the accepted 5-row one wrote its rows.
+      const count = await asUser(capped.db, u.id, async (trx) => {
+        const { rows } = await sql<{ n: string }>`
+          SELECT count(*)::text AS n FROM core.transactions WHERE account_id = ${account}
+        `.execute(trx)
+        return rows[0]?.n
+      })
+      expect(count).toBe('5')
+    } finally {
+      await capped.close()
     }
+  })
+
+  it('uses a 50,000 row limit unless told otherwise', () => {
+    expect(h.config.IMPORT_MAX_ROWS).toBe(50_000)
   })
 })
 

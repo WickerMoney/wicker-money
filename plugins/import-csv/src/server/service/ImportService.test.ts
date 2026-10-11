@@ -7,7 +7,6 @@ import { InMemoryImportUnitOfWork } from '../testing/InMemoryImportUnitOfWork.js
 import type { CategoryResolver } from './CategoryResolver.js'
 import { ImportError } from './ImportError.js'
 import { ImportService } from './ImportService.js'
-import { MAX_IMPORT_ROWS } from './MAX_IMPORT_ROWS.js'
 
 const ALICE = 'user-alice'
 const BOB = 'user-bob'
@@ -36,8 +35,11 @@ const CSV = [
 let store: InMemoryImportStore
 let resolver: CategoryResolver
 
-function service(): ImportService {
-  return new ImportService(new InMemoryImportUnitOfWork(store), (rules, subject) => resolver(rules, subject))
+/** The row cap the services below are built with unless a test sets its own. */
+const MAX_IMPORT_ROWS = 200
+
+function service(maxRows = MAX_IMPORT_ROWS): ImportService {
+  return new ImportService(new InMemoryImportUnitOfWork(store), (rules, subject) => resolver(rules, subject), maxRows)
 }
 
 async function failureOf(work: Promise<unknown>): Promise<ImportError> {
@@ -87,7 +89,22 @@ describe('analyze', () => {
     const rows = Array.from({ length: MAX_IMPORT_ROWS + 1 }, (_, i) => `03/04/2026,M${i},-1.00,id-${i}`)
     const error = await failureOf(service().analyze(ALICE, input(['Date,Description,Amount,Id', ...rows].join('\n'))))
     expect(error).toMatchObject({ statusCode: 400, code: 'too_many_rows' })
-    expect(error.message).toContain('50,000')
+    expect(error.message).toContain('200')
+  })
+
+  it('applies the cap it was built with, and says it in the message', async () => {
+    const csv = ['Date,Description,Amount,Id', ...Array.from({ length: 6 }, (_, i) => `03/04/2026,M${i},-1.00,id-${i}`)].join('\n')
+    expect((await failureOf(service(5).analyze(ALICE, input(csv))))).toMatchObject({ code: 'too_many_rows' })
+    expect((await failureOf(service(5).analyze(ALICE, input(csv)))).message).toBe(
+      'That file has 6 rows; the limit is 5 per import. Split it and import in parts.',
+    )
+    expect((await service(6).analyze(ALICE, input(csv))).summary.total).toBe(6)
+  })
+
+  it('counts rows that cannot be read towards the cap', async () => {
+    const csv = ['Date,Description,Amount,Id', '03/04/2026,OK,-1.00,a', 'not-a-date,BAD,-1.00,b', '03/05/2026,OK2,-1.00,c'].join('\n')
+    expect(await failureOf(service(2).analyze(ALICE, input(csv)))).toMatchObject({ code: 'too_many_rows' })
+    expect((await service(3).analyze(ALICE, input(csv))).summary).toMatchObject({ total: 2, errors: 1 })
   })
 
   it('accepts a file exactly at the row cap', async () => {
@@ -276,7 +293,7 @@ describe('commit with an idempotency key', () => {
         })
       },
     }
-    const loser = await new ImportService(racing, () => null).commit(ALICE, input(CSV, { idempotencyKey: KEY }))
+    const loser = await new ImportService(racing, () => null, MAX_IMPORT_ROWS).commit(ALICE, input(CSV, { idempotencyKey: KEY }))
     expect(loser).toEqual({ ...first, replayed: true })
     expect(store.batches).toHaveLength(1)
   })
