@@ -21,6 +21,7 @@ curated, human-readable version.
   (`PluginManifest`, `TableGrant`, `WidgetContribution`, `PageContribution`) and
   `checkRemoteEntry` are unchanged. `zod` is still a dependency of the SDK,
   because `parseManifest` uses it.
+
 ### Added
 - **Owners can change another account's role from Settings → People.** The
   section lists every account with a role select. Promoting a member makes a
@@ -37,6 +38,45 @@ curated, human-readable version.
   has no dependencies, so importing it pulls in nothing else from the SDK.
   `/recurrence` and the package root still export both helpers, so existing
   imports keep working; new code should import from `/date`.
+- **`useFocusTrap` in `@wickermoney/ui-kit`.** A hook that keeps Tab and
+  Shift+Tab inside a container while it is active: Tab from the last tabbable
+  element wraps to the first, Shift+Tab from the first wraps to the last, and, if
+  focus is outside the container, the next Tab pulls it in. By default it puts
+  focus back on whatever had it before the trap turned on once the trap turns off;
+  pass `{ restoreFocus: false }` when the caller returns focus somewhere more
+  specific. For hand-rolled modals that are not a native `<dialog>`. Exported
+  from the package root with the `FocusTrapOptions` type. Additive.
+- **A "Show as table" button on the Insights income and spending chart and on
+  the Spending trends chart.** The figures were reachable only by hovering or
+  focusing a bar. The button swaps the bars for a table of the same numbers and
+  back: month, income, spending and net for Insights; month, one column per
+  category shown and a total for Spending trends, which follows the category
+  filter so the table and the bars never disagree. The Insights donut has no
+  toggle, because its legend already lists every value.
+- **`caption` on the ui-kit `Table`.** An optional name for the table, rendered
+  as a visually hidden `<caption>` that a screen reader announces. Additive. The
+  tables on the core pages use it; see **Fixed**.
+- **`GET /api/v1/accounts?fields=basic`.** Returns each account's `id`, `name`,
+  `accountType`, `currencyCode`, `spendable` and `archivedAt` and nothing else:
+  no balance, opening balance or buffer, and none of the sum over every
+  transaction that the full list pays for. `includeArchived` works as before.
+  Leaving `fields` out or sending `full` gives the unchanged full list; any other
+  value is a `400`. The Transactions page fills its account pickers from it.
+- **`accountName` on every leg of `GET /api/v1/core/recurring-items/upcoming`.**
+  The name of the account the leg is on, archived accounts included, so a client
+  can describe a transfer to an account that is not in the outlook's own
+  `accounts` list without asking for the account list. Additive: nothing was
+  removed or renamed. The Upcoming widget now makes one request instead of two.
+  Against an older host that sends no names it still falls back to
+  `/core/accounts/list`, and only when a leg names an account the outlook does
+  not list; it still renders if that request fails.
+- **`truncated` flags on recurring matching.** Candidates for matching come from
+  the newest 500 matching transactions per account. A very busy account could
+  drop the oldest, with no sign that it had. `GET /api/v1/recurring-items/:id/occurrences/:date/candidates`
+  now returns `truncated` on each leg, and `GET /api/v1/recurring-items/suggestions`
+  returns a top-level `truncated`, true when a query hit that cap and a match
+  needing one of the oldest rows may be missing. Additive; the app does not show
+  it yet.
 
 ### Changed
 - **The host and Budgets import the date helpers from `/date`.** The API, the
@@ -48,6 +88,99 @@ curated, human-readable version.
   after every stable release, so it was more often stale than useful; it is no
   longer updated. `:latest` is still stable releases only and `:edge` is
   unchanged. The npm `next` dist-tag for the SDK and UI kit is unchanged.
+- **Core pages load when you first visit them.** Accounts, Categories,
+  Recurring, Settings and Transactions are separate chunks, fetched on first
+  visit with a spinner labelled `Loading <page>`, and a message if a chunk cannot
+  be fetched. The Dashboard stays in the main chunk, and the tab title and the
+  focus move still happen the moment you navigate, not when the chunk lands.
+  Measured with `vite build` on the merged tree, the main chunk went from about
+  261 kB (79 kB gzipped) to about 150 kB (47 kB gzipped): about 98 kB from the
+  split and another 13 kB from the `sideEffects` entry below.
+- **`@wickermoney/ui-kit` declares its side effects.** Its `package.json` now
+  lists `./dist/index.js`, which imports the two stylesheets for their effect, and
+  `./dist/*.css` as the only files with side effects, so a bundler can drop the
+  components a consumer never imports. Nothing is exported differently.
+- **The Transactions page does less work.** Selecting a row or typing in the edit
+  dialog no longer re-renders every row; a render-count test holds 25 rows to one
+  render each through both. Recurring matches are requested for the rows on
+  screen: re-reading a list that returns the same rows asks for nothing, a page
+  turn or filter change waits 150 ms so a burst of them asks once, and an edit
+  asks for matches at once, alongside the list re-read instead of after it. An
+  answer to a question that has since been replaced is dropped.
+- **The host tells the federation runtime which React it runs.** `loader.ts`
+  declared `react` and `react-dom` as 19.0.0 while the app runs 19.3.0; it now
+  reads the versions from the installed packages. The runtime prefers the highest
+  version on offer, so a stale lower claim could let a plugin's own copy win and
+  load React twice. Plugins already reuse the host's React, so nothing changes
+  today.
+- **Budgets reads the ledger at most three times per month request.** Each
+  window used to cost its own scan of the ledger, so a month with N windows read
+  it up to N + 2 times. All windows now ask for their spend in one query, each
+  clipped to its own start and end, and the carry-forward history scans only the
+  earlier months and only the categories that roll over, taking the shown month
+  from the read the request already holds. Figures are unchanged; new tests cover
+  windows that start or end mid-month, sit back to back on one category, cross a
+  year end or net to nothing.
+- **Recurring matching reads less.** `match`, `override` and `unmatch` now read
+  today and the occurrence's records, links and tracking starts once, then re-read
+  only what the write can have changed. Data statements per request, measured with
+  the new statement tests: match 16 to 13 (9, down from 14, when the transaction is
+  already matched), matching a transfer 17 to 14, unmatch 12 to 11, override 17 to
+  14. The Transactions page's recurring-matches request no longer reads the
+  transactions of dismissed pairs it never shows and describes only the occurrences
+  the suggestions have not already described: 14 to 13 statements on a page with a
+  dismissal. Candidate dates and amounts are parsed once per row instead of building
+  a `Decimal` for every transaction on every call; a test holds the new ranking to
+  the old one over 400 generated rows. Performance only: the responses are the same
+  apart from the `truncated` flags above.
+- **The API compresses its own responses.** The image serves the web bundle and
+  the API from one process, with no proxy guaranteed in front, so it now
+  compresses with `@fastify/compress`: brotli (quality 5) or gzip, for responses
+  over 1 KiB, skipping types that are already dense such as images. A compressed
+  response carries `Vary: Accept-Encoding`; nothing else about it changes. On the
+  seeded demo data, a 200-row transactions page went from 103 kB to 8.7 kB with
+  brotli (9.6 kB with gzip), and the main script from 150 kB to 45 kB. **Behind a
+  reverse proxy, do not compress twice:** leave compression off for this upstream, or make sure
+  the proxy passes a response that already has a `Content-Encoding` header through
+  untouched. This release has no setting to turn the app's own compression off.
+
+### Fixed
+- **The setup wizard and the phone navigation drawer manage focus.** The wizard
+  had no focus trap, did not return focus when it closed, pulled focus back to
+  the panel on every step, and its loading state had no accessible name. Tab now
+  stays inside it, focus goes back to whatever opened it, the heading takes focus
+  once per step (and when the questions first appear), and the loading dialog is
+  named "Setup". The drawer uses the same `useFocusTrap`, so Tab wraps inside it;
+  its Escape handling and the focus return to the menu button are unchanged. Not
+  yet checked with a screen reader.
+- **Chart marks are exposed to assistive technology.** The donut, the income and
+  spending chart and the stacked spending-trends chart put focusable
+  `role="listitem"` marks inside `<svg role="img">`. An image makes its children
+  presentational, so the marks dropped out of the accessibility tree. Each `<svg>`
+  is now `role="list"` with the same label. Not yet checked with a screen reader.
+- **The forecast chart's day readout is announced.** The tooltip carried
+  `aria-live` and mounted together with its text, which screen readers often skip.
+  The chart now keeps a visually hidden `role="status"` region mounted at all
+  times, whose text follows the focused or hovered day; the visual tooltip is
+  `aria-hidden`, so a day is not read twice.
+- **Table headers have scopes, names and no empty cells.** The ui-kit `Table`
+  emits `scope="col"`, and a column with an empty header (a column of row buttons)
+  gets a visually hidden "Actions" label in the header cell only, so the phone
+  card layouts print nothing new. Accounts, Categories, Rules, Recurring,
+  Transactions and the Settings server configuration are named with `caption`;
+  Import CSV's batch history, mapping preview and review tables gained `scope`, and
+  the batch history's action column a labelled header.
+- **The account menu is a disclosure, not an ARIA menu.** It declared
+  `role="menu"` with no arrow-key handling. The trigger now has `aria-expanded` and
+  `aria-controls` and opens a group of ordinary buttons reached with Tab; the theme
+  buttons use `aria-pressed` instead of `menuitemradio`. Escape and a click outside
+  still close it.
+- **The plugin switch announces "Saving…".** The On, Off and Saving text was
+  `aria-hidden`; it is now a `role="status"` region.
+- **Light-mode `--wm-positive` has more contrast.** The token moved from
+  `#0c7e65` to `#0a7660`: on `--wm-surface-alt` it was 4.51:1 and is now 5.01:1,
+  and on white 5.01:1 became 5.57:1. The dark theme is unchanged. A test also
+  confirms that recurring bills show a minus sign as well as the red colour.
 
 ### Migrations
 - **029_owner_role_management** adds `core.list_users_for_owner()` and
