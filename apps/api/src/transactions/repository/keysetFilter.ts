@@ -13,9 +13,14 @@ import type { TransactionPosition } from './TransactionPosition.js'
  * `<` descending, which is exactly lexicographic order. Mixing directions
  * (primary descending, id ascending) would make that comparison wrong.
  *
- * PostgreSQL turns the leading column of a row comparison into an index bound
- * by itself, so an index on the sort column starts at the position rather than
- * reading everything before it.
+ * PostgreSQL can turn the row comparison into an index bound, so an index that
+ * ends `(sort column, id)` starts at the position rather than reading
+ * everything before it. Row-level security limits that: while a policy applies,
+ * only leakproof operators may be used as index conditions. Date, text and uuid
+ * comparisons are leakproof, so date and merchant pages start at the position.
+ * Numeric comparison is not, so the amount predicate stays a filter: an amount
+ * page reads the user's rows in order from the start and discards them until it
+ * reaches the position (about 60-75 ms at 220,000 rows, whatever the index).
  *
  * @param sort - The column being sorted on.
  * @param direction - The sort direction.
