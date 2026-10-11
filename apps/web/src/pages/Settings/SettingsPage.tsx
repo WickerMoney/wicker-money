@@ -7,9 +7,9 @@ import { PluginsSection } from './components/PluginsSection.js'
 import { TimezoneSection } from './components/TimezoneSection.js'
 
 /**
- * The settings page: About, Time zone, Plugins, People (owners only), Config, 
- * Export and the danger zone, one surface per section. Plugins and People are reachable
- * directly as `/settings#plugins` and `/settings#people`.
+ * The settings page: About, Time zone, Plugins, People (owners only), Config,
+ * Export and the danger zone, one surface per section. Plugins and People are
+ * reachable directly as `/settings#plugins` and `/settings#people`.
  *
  * Plugin-contributed settings pages do not render inside this component. They
  * are ordinary routed plugin pages that the app shell groups into the same

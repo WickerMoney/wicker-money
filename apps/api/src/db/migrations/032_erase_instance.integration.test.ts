@@ -7,10 +7,10 @@ import { BUNDLED_PLUGINS } from '../../plugins/bundled.js'
 import { TEST_APP_ROLE, TEST_ADMIN_DATABASE_URL, auth, createHarness, createUser, type Harness, type TestUser } from '../../testing/harness.js'
 import { familyIdOf, rowsOwnedBy, setRole, userTables } from '../../testing/userData.js'
 import type { Trx } from '../Trx.js'
-import { down, up } from './031_erase_instance.js'
+import { down, up } from './032_erase_instance.js'
 
 /**
- * Migration 031: `core.erase_instance` and `core.instance_activity`.
+ * Migration 032: `core.erase_instance` and `core.instance_activity`.
  *
  * Nothing here commits an erase. The destructive calls run inside a
  * transaction that is rolled back after the assertions, so every other suite

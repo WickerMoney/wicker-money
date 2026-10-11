@@ -24,7 +24,7 @@ function mount(role: 'owner' | 'member' = 'owner', check: InstanceEraseCheck = C
   const signOut = vi.fn(async () => {})
   const auth: AuthState = {
     user: { id: 'u1', email: 'me@example.com', timezone: 'UTC', role }, ready: true,
-    signIn: vi.fn(), register: vi.fn(), setTimezone: vi.fn(), signOut,
+    signIn: vi.fn(), register: vi.fn(), setTimezone: vi.fn(), refreshUser: vi.fn(), signOut,
   }
   const post = vi.spyOn(api, 'post').mockResolvedValue(undefined)
   const get = vi.spyOn(api, 'get').mockImplementation(async (path: string) => {

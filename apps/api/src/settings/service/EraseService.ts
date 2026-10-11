@@ -58,7 +58,7 @@ export interface EraseInstanceInput extends EraseMyDataInput {
  * names the tables, and the erase refuses to start if the database holds a
  * table with a `user_id` column the plan does not name.
  *
- * **Erase this instance** is one database function (migration 031) that
+ * **Erase this instance** is one database function (migration 032) that
  * empties every account and every plugin schema. See {@link InstanceEraseCheck}
  * for the conditions that stop it.
  */

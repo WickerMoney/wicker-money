@@ -221,7 +221,14 @@ curated, human-readable version.
 
 ### Migrations
 
-- **031_erase_instance** adds `core.erase_instance()` and
+- **029_owner_role_management** adds `core.list_users_for_owner()` and
+  `core.set_user_role(uuid, core.user_role)`, `SECURITY DEFINER` functions that
+  only the application role can execute. They check that the caller is an owner,
+  refuse to demote the last owner, and take the lock registration uses so two
+  owners demoting each other at once cannot leave none. No data changes.
+  Registration is unchanged. Its `down` drops both functions and leaves assigned
+  roles as they are.
+- **032_erase_instance** adds `core.erase_instance()` and
   `core.instance_activity(uuid)`, `SECURITY DEFINER` functions that only the
   application role may run and that refuse anyone who is not an owner right now.
   `erase_instance` truncates `core.users`, every core table with a `user_id` and
@@ -230,13 +237,6 @@ curated, human-readable version.
   fail and roll back. `instance_activity` counts live sessions and accounts other
   than the caller's. No data changes when it runs. Its `down` drops both
   functions; an erased instance stays erased.
-- **029_owner_role_management** adds `core.list_users_for_owner()` and
-  `core.set_user_role(uuid, core.user_role)`, `SECURITY DEFINER` functions that
-  only the application role can execute. They check that the caller is an owner,
-  refuse to demote the last owner, and take the lock registration uses so two
-  owners demoting each other at once cannot leave none. No data changes.
-  Registration is unchanged. Its `down` drops both functions and leaves assigned
-  roles as they are.
 
 ## [0.5.0] - 2026-10-10
 

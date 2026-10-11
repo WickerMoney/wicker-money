@@ -1,4 +1,5 @@
 import { BUDGETS_PLUGIN_ID } from '@wickermoney/plugin-budgets/server'
+import { DEBT_PAYOFF_PLUGIN_ID } from '@wickermoney/plugin-debt-payoff/server'
 import { IMPORT_PLUGIN_ID } from '@wickermoney/plugin-import-csv/server'
 import { pluginSchemaName } from '../../db/plugin-roles.js'
 
@@ -31,6 +32,7 @@ export interface PluginErasePlan {
 export const PLUGIN_ERASE_PLANS: readonly PluginErasePlan[] = [
   { pluginId: IMPORT_PLUGIN_ID, tables: ['batch_transactions', 'import_batches', 'source_mappings'] },
   { pluginId: BUDGETS_PLUGIN_ID, tables: ['account_lines', 'budget_lines'] },
+  { pluginId: DEBT_PAYOFF_PLUGIN_ID, tables: ['debts', 'plan_settings'] },
 ]
 
 /**

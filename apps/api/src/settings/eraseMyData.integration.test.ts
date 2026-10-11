@@ -165,12 +165,12 @@ describe('POST /api/v1/settings/erase-my-data', () => {
     const accounts = await h.app.inject({ method: 'GET', url: '/api/v1/accounts', headers: auth(again) })
     expect(accounts.json()).toEqual([])
     const exported = JSON.parse((await h.app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: auth(again) })).body) as {
-      core: Record<string, unknown>; plugins: Record<string, Record<string, unknown[]>>
+      core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>>
     }
     for (const [key, value] of Object.entries(exported.core)) {
       if (key !== 'profile') expect(value, key).toEqual([])
     }
-    for (const data of Object.values(exported.plugins)) for (const rows of Object.values(data)) expect(rows).toEqual([])
+    for (const data of Object.values(exported.plugins)) for (const [name, rows] of Object.entries(data)) expect(rows ?? [], name).toEqual([])
   })
 
   it('never touches another user: erasing Alice leaves Bob\'s rows, in every table, exactly as they were', async () => {

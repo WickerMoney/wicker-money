@@ -29,7 +29,7 @@ export function createServices(db: Db, uow: UnitOfWork, config: Config): Service
   const plugins = new PluginService(uow, { remoteOrigins: config.PLUGIN_REMOTE_ORIGINS })
   const auth = new AuthService(uow, config)
   return {
-    auth: new AuthService(uow, config),
+    auth,
     users: new UserAdminService(uow),
     accounts: new AccountService(uow),
     transactions: new TransactionService(uow),

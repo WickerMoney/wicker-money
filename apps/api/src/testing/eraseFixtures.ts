@@ -12,6 +12,7 @@ import { auth, type Harness, type TestUser } from './harness.js'
 
 const BUDGETS = 'wickermoney.budgets'
 const IMPORT = 'wickermoney.import-csv'
+const DEBTS = 'wickermoney.debt-payoff'
 
 /** Ids of the main things a {@link seedHousehold} call created. */
 export interface Household {
@@ -37,7 +38,7 @@ async function call(
  * Gives `user` at least one row in every table the schema has for user data:
  * accounts, a category and a child category, a rule with a condition, a split
  * transaction, a recurring bill with an overridden occurrence and a dismissed
- * suggestion, a budget line and an account allowance, an import with its saved
+ * suggestion, a budget line and an account allowance, a debt and its payoff settings, an import with its saved
  * mapping and batch, a finished setup wizard and (because the user signed in) a
  * session.
  *
@@ -92,6 +93,12 @@ export async function seedHousehold(h: Harness, user: TestUser, label: string): 
 
   await call(h, user, 'PUT', `/api/v1/p/${BUDGETS}/line`, { month: '2031-03', categoryId: groceriesId, planned: '400.0000', rollover: false }, BUDGETS)
   await call(h, user, 'PUT', `/api/v1/p/${BUDGETS}/account-line`, { month: '2031-03', accountId: checkingId, planned: '150.00' }, BUDGETS)
+
+  const card = await call(h, user, 'POST', '/api/v1/accounts', { name: `${label} card`, accountType: 'credit_card', initialBalance: '0.00' })
+  await call(h, user, 'POST', `/api/v1/p/${DEBTS}/debts`, {
+    name: `${label} card`, balance: '1000.00', apr: '12', minimumPayment: '100.00', accountId: card['id'] as string,
+  }, DEBTS)
+  await call(h, user, 'PUT', `/api/v1/p/${DEBTS}/settings`, { strategy: 'snowball', extraPayment: '50' }, DEBTS)
 
   await call(h, user, 'POST', `/api/v1/p/${IMPORT}/mappings`, {
     sourceName: `${label} Saved Bank`,

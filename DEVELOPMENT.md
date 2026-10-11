@@ -520,7 +520,7 @@ over, and add account deletion as its own action if it is wanted.
 **Erase this entire instance** (`GET` and `POST /api/v1/settings/erase-instance`,
 owners only). Row-level security shows an owner only their own rows and the app
 role may not `TRUNCATE`, so this cannot be queries the API sends. It calls
-`core.erase_instance()` (migration 031), a `SECURITY DEFINER` function that
+`core.erase_instance()` (migration 032), a `SECURITY DEFINER` function that
 re-checks the caller is an owner. It truncates `core.users`, every core table
 with a `user_id` and every table in a `plugin_` schema, found in the catalog each
 time. It leaves `core.plugins`, `core.app_deployments`, the tenant-context key
@@ -552,6 +552,7 @@ reach the new table through the API so the tests prove it was emptied.
 commits between the check and the deletion could leave a row behind for a user
 who has just been signed out. Access tokens are checked against their session on
 every request, so ending the sessions rejects them at once.
+
 ### Debt payoff
 
 **Debt payoff** (bundled plugin `plugins/debt-payoff`, id `wickermoney.debt-payoff`)
