@@ -705,9 +705,10 @@ Consequences for contributors:
   (`@wickermoney/plugin-sdk/isolated`, experimental) and the web app hosts it.
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
-  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. In this
-  release every bundled plugin is still listed, so the first row of the table
-  above still describes all of them; the list shrinks as plugins are ported.
+  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights` has
+  been ported and is no longer listed; the other bundled plugins still are, so
+  the first row of the table above still describes them. The list shrinks as
+  plugins are ported.
 
 ### Isolated plugin frames
 
@@ -783,6 +784,33 @@ sequenceDiagram
   the API against it (`WEB_DIST_DIR`), or run `pnpm --filter @wickermoney/web
   test:browser`, which builds a fixture plugin that tries to escape and drives
   Chromium through the real API. It is not part of `pnpm test`.
+
+**Porting a plugin (what Insights needed).** A component written against
+`PluginWidgetProps` runs unchanged; the work is in what it imports and where it
+draws.
+
+- Import from `/runtime`, `/money` and `/date`, never the SDK root. Every frame
+  downloads and parses its plugin's chunk on its own, so the root's Zod schemas
+  (about 85 kB) cost once per frame, not once per page.
+- Keep tooltips, menus and popovers inside the widget's own rectangle. A frame
+  cannot draw outside it and protocol 1 has no host-rendered overlay, so an
+  overlay that crosses the edge is cut off. Measure the overlay and clamp it
+  (Insights' `TrendTooltip`), or `navigate` to a page.
+- Bound anything whose height grows with the data. A widget frame is at most
+  800 px tall; past that the frame scrolls on its own, a second scroll area
+  inside the card.
+- A widget frame below the fold is not laid out until it is scrolled into view
+  (Chromium throttles the rendering of off-screen cross-origin frames), so it
+  stays at the minimum height until then. Do not depend on a widget's size
+  before it has been on screen.
+- The frame's document has only the ui-kit styles and the plugin's own;
+  `adoptPluginStyles` writes to the frame's document, which works because the
+  frame CSP allows inline style.
+
+`apps/web/browser-check/insights.ts` runs the real dashboard with Insights in
+the page and in a frame and compares them (sizes at `sm` to `full`, light and
+dark, desktop and phone width, clipped overlays, Tab order, the table view,
+axe, and timing and memory). See `apps/web/browser-check/README.md`.
 
 ### Plugin tokens
 
