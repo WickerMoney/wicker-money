@@ -45,6 +45,14 @@ describe('plugin registry endpoint', () => {
       { table: 'categories', access: 'read' },
     ])
   })
+
+  it('tells the web app where each plugin runs, beside the manifest and not inside it', async () => {
+    const res = await h.app.inject({ method: 'GET', url: '/api/v1/plugins', headers: auth(user) })
+    const body = res.json() as { plugins: Array<{ id: string; runtime: string; isolated?: boolean }> }
+    expect(body.plugins.length).toBeGreaterThan(0)
+    // Nothing is ported yet: every bundled plugin stays in the page's own realm.
+    for (const p of body.plugins) expect(p.runtime, p.id).toBe('in-realm')
+  })
 })
 
 /**

@@ -5,17 +5,46 @@ import { SDK_MAJOR_VERSION } from '@wickermoney/plugin-sdk'
  * Plugins that ship in the image and are enabled on first boot.
  *
  * Their manifests use the same shape, `requiredTables` and loader as a
- * third-party plugin's, and the browser half of a bundled plugin gets no more
- * than a third-party one: the same `ctx`, the same grants. That keeps the SDK
- * exercised by the code most likely to find its gaps.
+ * third-party plugin's. The browser half is where they differ today, and only
+ * for the ids in {@link IN_REALM_PLUGIN_IDS}: those run inside the app's own
+ * page, in its realm and origin, with the user's whole session within reach
+ * (see "Plugin trust model" in `DEVELOPMENT.md`). That is more than a
+ * third-party plugin gets, because a third-party UI plugin only ever runs in a
+ * sandboxed frame behind the broker. Every other plugin does too, bundled or
+ * not, once its manifest says `isolated: true`.
  *
- * Server code is the exception, and it is not equal footing. A plugin with
- * `contributes.endpoints` has a server half that the API imports and runs in
- * its own process (see `registerBundledPluginServers`), so it is as trusted as
- * the API itself; only a bundled plugin may do that. Its database access is
- * still limited to its manifest's tables by its PostgreSQL role, but nothing
- * else about it is sandboxed.
+ * Server code is a second exception, and it is not equal footing either. A
+ * plugin with `contributes.endpoints` has a server half that the API imports
+ * and runs in its own process (see `registerBundledPluginServers`), so it is as
+ * trusted as the API itself; only a bundled plugin may do that. Its database
+ * access is still limited to its manifest's tables by its PostgreSQL role, but
+ * nothing else about it is sandboxed.
  */
+/**
+ * The bundled plugins whose UI still runs inside the app's own page.
+ *
+ * This is the isolation marker, and it lives here, in the host, on purpose:
+ * it is not a field of the SDK's manifest schema, so no manifest, bundled or
+ * third-party, can ask for in-realm mode. A plugin that is not in this set
+ * runs in the sandboxed frame (`pluginRuntimeFor`), and so does a listed one
+ * whose manifest says `isolated: true`, because that flag can only move a
+ * plugin towards isolation.
+ *
+ * In 0.6.0 `insights` and `spending-trends` are listed only because they are
+ * not ported yet. Their port deletes the id from this set (or sets
+ * `isolated: true` on the manifest); `budgets`, `import-csv`, `upcoming`,
+ * `forecast` and `debt-payoff` stay.
+ */
+export const IN_REALM_PLUGIN_IDS: ReadonlySet<string> = new Set([
+  'wickermoney.insights',
+  'wickermoney.spending-trends',
+  'wickermoney.budgets',
+  'wickermoney.import-csv',
+  'wickermoney.upcoming',
+  'wickermoney.forecast',
+  'wickermoney.debt-payoff',
+])
+
 export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
   {
     id: 'wickermoney.insights',
