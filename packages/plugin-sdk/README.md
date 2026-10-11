@@ -53,7 +53,7 @@ module documentation (`@stable` or `@experimental`).
 | `@wickermoney/plugin-sdk/money` | stable | Exact money arithmetic on decimal strings | The web app, the Budgets, Insights and Spending Trends plugins, and the API's tests |
 | `@wickermoney/plugin-sdk/server` | stable | The server-side contract between the host and a bundled plugin's `register` function | The API, Budgets and Import CSV |
 | `@wickermoney/plugin-sdk/date` | stable | The `addDays` and `addMonths` calendar helpers | The API, the web app and Budgets |
-| `@wickermoney/plugin-sdk/isolated` | experimental | The runtime contract for UI plugins that run in a sandboxed frame: protocol, validators, in-frame client. Stays experimental until the isolation work has shipped and settled | The web app's frame host and broker. No bundled plugin is ported yet |
+| `@wickermoney/plugin-sdk/isolated` | experimental | The runtime contract for UI plugins that run in a sandboxed frame: protocol, validators, in-frame client. Stays experimental until the isolation work has shipped and settled | The web app's frame host and broker, and the Spending Trends plugin (it is written against `/runtime` and runs in a frame unchanged) |
 | `@wickermoney/plugin-sdk/recurrence` | experimental | Recurring-item date maths and projections. It still re-exports `addDays` and `addMonths` so older imports work; import them from `/date` | The API and the web app. No plugin uses the projections yet |
 
 The root also re-exports the `/date`, `/recurrence`, `/money` and `/server` exports. It does
@@ -326,8 +326,8 @@ So today:
 - Operators should keep `PLUGIN_REMOTE_ORIGINS` empty unless they fully trust
   every origin listed.
 - The [isolated runtime](#isolated-runtime-experimental) is hosted by the web app,
-  but no bundled plugin uses it yet and there is no install flow, so everything
-  above still describes the plugins that exist today.
+  and Spending Trends runs in it, but the other bundled plugins still run in the
+  page and there is no install flow, so everything above still describes them.
 - Declare `requiredTables` honestly anyway. It is what the database enforces
   for your server code, and the contract a future isolation model will rely on.
 

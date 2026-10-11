@@ -705,9 +705,10 @@ Consequences for contributors:
   (`@wickermoney/plugin-sdk/isolated`, experimental) and the web app hosts it.
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
-  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. In this
-  release every bundled plugin is still listed, so the first row of the table
-  above still describes all of them; the list shrinks as plugins are ported.
+  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. The list
+  shrinks as plugins are ported. Spending Trends is the first bundled plugin
+  that runs in a frame, so for it the first row of the table above no longer
+  applies; it still describes every plugin that is listed.
 
 ### Isolated plugin frames
 
