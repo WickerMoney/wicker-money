@@ -18,6 +18,7 @@ export default defineConfig({
       filename: 'remoteEntry.js',
       exposes: {
         './DebtPayoffPage': './src/ui/DebtPayoffPage.tsx',
+        './DebtFreeWidget': './src/ui/DebtFreeWidget.tsx',
       },
       shared: {
         react: { singleton: true, requiredVersion: '^19.0.0' },

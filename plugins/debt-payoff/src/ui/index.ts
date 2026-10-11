@@ -5,3 +5,4 @@
  * `remoteEntry.js` using the names the manifest exposes.
  */
 export { default as DebtPayoffPage } from './DebtPayoffPage.js'
+export { default as DebtFreeWidget } from './DebtFreeWidget.js'
