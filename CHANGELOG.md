@@ -37,7 +37,7 @@ curated, human-readable version.
   either place. It is additive: `SDK_MAJOR_VERSION` stays `0`, `/runtime` is
   unchanged and no existing manifest needs editing. The web app hosts it (next entry),
   and it stays experimental until the isolation work has shipped and settled.
-- **The web app can run a UI plugin in a sandboxed frame (nothing is ported yet).**
+- **The web app can run a UI plugin in a sandboxed frame.**
   A plugin that is not in-realm renders in `<iframe sandbox="allow-scripts">`
   (never `allow-same-origin`), loaded from a new `GET /plugin-frame` document
   that the API serves with its own CSP (`sandbox allow-scripts; default-src
@@ -48,8 +48,9 @@ curated, human-readable version.
   it reports, pushes theme and locale changes, and takes keyboard focus when it
   leaves the frame. `GET /api/v1/plugins` now reports each plugin's `runtime`
   (`in-realm` or `isolated`) beside its manifest; the list of bundled plugins
-  that still run in the page is a host-internal set, not a manifest field. All
-  seven bundled plugins are still in it, so they run exactly as before. There is
+  that still run in the page is a host-internal set, not a manifest field. Insights
+  is the first bundled plugin to move out of it (see Changed); the other six run
+  exactly as before. There is
   still no install flow for third-party plugins. See `DEVELOPMENT.md` "Isolated
   plugin frames".
 - **An optional `isolated` flag on the plugin manifest.** `isolated: true`
@@ -162,6 +163,24 @@ curated, human-readable version.
   Not used to protect the data export; see `ROADMAP.md`.
 
 ### Changed
+- **The Insights widgets run in sandboxed frames.** "Money in and out" and
+  "Where it went" now render in `<iframe sandbox="allow-scripts">` behind the
+  broker instead of in the app's own page, so Insights code can no longer reach
+  the user's session, cookies or the rest of the page. What a person sees is
+  the same, with three differences: a widget below the fold keeps its minimum
+  height until it is scrolled into view (Chromium does not run an off-screen
+  cross-origin frame's layout observers), the first widgets take a little longer
+  to appear because each frame loads its own copy of React, and the chart's table
+  view scrolls inside the widget (400 px) instead of making it as tall as the
+  range. Budgets, CSV import, Upcoming, Forecast and Debt payoff are unchanged
+  and still run in the page. Spending Trends moves in a separate change.
+- **The Insights trend tooltip stays inside the chart.** On the first and last
+  month it used to hang past the chart's edge (and was cut off by the card on a
+  phone).
+- **The Insights trend widget is 85 kB smaller.** It imported one function from
+  the SDK root, which pulled the Zod manifest schemas into the widget. It now
+  carries its own copy of the month arithmetic, checked against the SDK's by a
+  test.
 - **`x-wickermoney-plugin` is no longer an identity.** A request is attributed
   to a plugin by its plugin token. The header is ignored on such a request, and
   on the host's own token it can only hold the request to the named plugin's

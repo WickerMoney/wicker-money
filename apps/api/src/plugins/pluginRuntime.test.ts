@@ -24,6 +24,8 @@ describe('pluginRuntimeFor', () => {
     for (const id of ['wickermoney.budgets', 'wickermoney.import-csv', 'wickermoney.upcoming', 'wickermoney.forecast', 'wickermoney.debt-payoff']) {
       expect(pluginRuntimeFor(byId(id), true), id).toBe('in-realm')
     }
+    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.insights')!, true)).toBe('isolated')
+    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.budgets')!, true)).toBe('in-realm')
   })
 
   it('lists only plugins that are actually bundled', () => {
@@ -43,7 +45,9 @@ describe('pluginRuntimeFor', () => {
   })
 
   it('lets the isolated flag move a listed plugin towards isolation, never away', () => {
-    expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: true }), true)).toBe('isolated')
-    expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: false }), true)).toBe('in-realm')
+    expect(pluginRuntimeFor(manifest('wickermoney.budgets', { isolated: true }), true)).toBe('isolated')
+    expect(pluginRuntimeFor(manifest('wickermoney.budgets', { isolated: false }), true)).toBe('in-realm')
+    // A ported plugin is isolated whatever its manifest says.
+    expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: false }), true)).toBe('isolated')
   })
 })

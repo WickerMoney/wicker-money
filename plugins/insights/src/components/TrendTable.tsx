@@ -27,8 +27,21 @@ export function TrendTable({ months, rangeLabel, formatMoney }: TrendTableProps)
     { key: 'net', header: 'Net', numeric: true, render: (m) => formatMoney(m.net) },
   ]
   return (
-    <div role="group" aria-label={`Income and spending per month over ${rangeLabel}, as a table`}>
-      <Table columns={columns} rows={months} rowKey={(m) => m.month} />
+    // The wrapper scrolls, so the widget's height stays bounded however many months the range has
+    // (a sandboxed frame is at most 800 px tall and would otherwise scroll by itself, cutting the
+    // table off). It is focusable so a keyboard can scroll it.
+    <div
+      className="viz__table"
+      role="group"
+      tabIndex={0}
+      aria-label={`Income and spending per month over ${rangeLabel}, as a table`}
+    >
+      <Table
+        columns={columns}
+        rows={months}
+        rowKey={(m) => m.month}
+        caption={`Income and spending per month over ${rangeLabel}`}
+      />
     </div>
   )
 }
