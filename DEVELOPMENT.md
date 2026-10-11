@@ -410,9 +410,15 @@ today.
 
 **Debt payoff** (bundled plugin `plugins/debt-payoff`, id `wickermoney.debt-payoff`)
 keeps a list of debts and builds a payoff plan from them, by the snowball
-(smallest balance first) or avalanche (highest rate first) method. This release
-is the server half only: tables, endpoints and the planning engine. The page
-comes later.
+(smallest balance first) or avalanche (highest rate first) method. It has a
+server half (tables, endpoints and the planning engine) and a browser half: a
+"Debt payoff" page in the main navigation and a "Debt-free date" dashboard
+widget, built as a Module Federation remote like Budgets. The page lists the
+debts (a table, and cards on a phone), adds and edits them in the shared
+dialog, takes the strategy and the extra amount, and shows the totals, a
+balance chart with a "Show as table" view, the payoff order and the
+assumptions below. The page does no money arithmetic: it asks `GET /plan` and
+shows the result.
 
 It has its own tables in the `plugin_debt_payoff` schema (migration 029):
 `debts` (name, balance, APR, minimum payment, optional linked account, sort
