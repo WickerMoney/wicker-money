@@ -48,6 +48,21 @@ export const pluginManifestSchema = z.object({
    * script tag.
    */
   remoteEntry: remoteEntrySchema,
+  /**
+   * True if the plugin is built for the isolated runtime
+   * (`@wickermoney/plugin-sdk/isolated`): its modules run in a sandboxed frame
+   * and reach the host only through the message protocol.
+   *
+   * This says what the plugin was built for. It is not a grant and not a
+   * request for privilege: it can only move a plugin towards isolation. Which
+   * runtime a plugin actually gets is the host's decision, and the host never
+   * runs a plugin it did not ship in the page's own realm, whatever this says.
+   * Absent means `false`.
+   *
+   * Optional with no default, unlike the other fields, so existing manifests
+   * (and code that builds a `PluginManifest` by hand) stay valid unchanged.
+   */
+  isolated: z.boolean().optional(),
   /** What the plugin adds to the application. Defaults to nothing. */
   contributes: z
     .object({
