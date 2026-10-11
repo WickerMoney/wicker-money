@@ -20,6 +20,9 @@ import { readCommitRequest } from '../helpers/readCommitRequest.js'
  * `404` when the account is not visible to the user; `413` when the body exceeds
  * 10 MiB; and `500` if the batch row cannot be created.
  *
+ * The route is `longRunning`: it runs under the host's long statement limit,
+ * because it waits for the account lock behind a concurrent import.
+ *
  * @param deps - The host's `route` registrar.
  * @param service - The import service.
  */
@@ -28,6 +31,6 @@ export function registerCommitImport({ route }: Pick<ImportRouteDeps, 'route'>, 
     'POST',
     '/commit',
     ({ userId, body }) => service.commit(userId, readCommitRequest(body)),
-    { bodyLimit: IMPORT_BODY_LIMIT },
+    { bodyLimit: IMPORT_BODY_LIMIT, longRunning: true },
   )
 }

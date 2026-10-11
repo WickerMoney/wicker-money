@@ -12,6 +12,10 @@ import { readAnalyzeRequest } from '../helpers/readAnalyzeRequest.js'
  * invalid account id, mapping or CSV, or a file over 50,000 rows; `404` when
  * the account is not visible to the user; and `413` when the body exceeds 10 MiB.
  *
+ * The route is `longRunning`: it runs under the host's long statement limit,
+ * because it reads the account's existing transactions across the file's
+ * whole date range in one statement.
+ *
  * @param deps - The host's `route` registrar.
  * @param service - The import service.
  */
@@ -20,6 +24,6 @@ export function registerAnalyzeImport({ route }: Pick<ImportRouteDeps, 'route'>,
     'POST',
     '/analyze',
     ({ userId, body }) => service.analyze(userId, readAnalyzeRequest(body)),
-    { bodyLimit: IMPORT_BODY_LIMIT },
+    { bodyLimit: IMPORT_BODY_LIMIT, longRunning: true },
   )
 }

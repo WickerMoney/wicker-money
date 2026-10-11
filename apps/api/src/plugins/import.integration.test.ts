@@ -555,6 +555,48 @@ describe('request size limits', () => {
   })
 })
 
+describe('statement limit', () => {
+  let short: Harness
+  let shortUser: TestUser
+  let shortAccount: string
+
+  beforeAll(async () => {
+    // Every statement is cancelled after one second unless the route asked for
+    // the long limit, which these tests give ten.
+    short = await createHarness({ DB_STATEMENT_TIMEOUT: '1000', DB_LONG_STATEMENT_TIMEOUT: '10000' })
+    shortUser = await createUser(short)
+    const res = await short.app.inject({
+      method: 'POST', url: '/api/v1/accounts', headers: auth(shortUser),
+      payload: { name: 'Limit', accountType: 'checking', openingBalance: '0.00' },
+    })
+    shortAccount = (res.json() as { id: string }).id
+  })
+  afterAll(async () => { await short.close() })
+
+  /** Holds the import lock for the account, as a concurrent import would, for `seconds`. */
+  function holdAccountLock(seconds: number): Promise<void> {
+    return asUser(short.db, shortUser.id, async (trx) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${`import-csv:${shortUser.id}:${shortAccount}`}::text, 0))`.execute(trx)
+      await sql`SELECT pg_sleep(${seconds})`.execute(trx)
+    }, { statementTimeoutMillis: 10_000 })
+  }
+
+  it.each(['commit', 'analyze'] as const)(
+    'lets %s wait behind another import for longer than the default limit',
+    async (route) => {
+      const holding = holdAccountLock(1.6)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      const payload = { accountId: shortAccount, csv: CSV, ...MAPPING, idempotencyKey: `limit-${route}` }
+      const res = await short.app.inject({
+        method: 'POST', url: `${BASE}/${route}`, headers: headers(shortUser), payload,
+      })
+      await holding
+      // analyze takes no lock; it must simply not be cut short either way.
+      expect(res.statusCode).toBe(200)
+    },
+  )
+})
+
 /**
  * Database-level isolation of the plugin role.
  *
