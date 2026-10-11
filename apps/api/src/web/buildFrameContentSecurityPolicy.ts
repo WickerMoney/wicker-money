@@ -48,7 +48,10 @@ export function buildFrameContentSecurityPolicy(
     'sandbox allow-scripts',
     "default-src 'none'",
     `script-src ${sources.join(' ')}`,
-    "style-src 'unsafe-inline'",
+    // Stylesheets from the same places scripts come from: a federated plugin
+    // ships a CSS file beside its entry. Inline style is how the host's theme
+    // tokens and the plugin's own style attributes are applied.
+    `style-src 'unsafe-inline' ${sources.join(' ')}`,
     "connect-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",

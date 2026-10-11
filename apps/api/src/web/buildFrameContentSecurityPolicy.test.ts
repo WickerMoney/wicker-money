@@ -35,6 +35,11 @@ describe('buildFrameContentSecurityPolicy', () => {
     expect(buildFrameContentSecurityPolicy('http://[::1]:8080')).toContain("script-src 'self' http://[::1]:8080;")
   })
 
+  it('lets stylesheets come from the same places as scripts, and inline style', () => {
+    const d = directives(buildFrameContentSecurityPolicy('https://money.example.com', ['https://plugins.example.com']))
+    expect(d).toContain("style-src 'unsafe-inline' 'self' https://money.example.com https://plugins.example.com")
+  })
+
   it('adds the operator plugin origins after it', () => {
     expect(buildFrameContentSecurityPolicy('https://money.example.com', ['https://plugins.example.com'])).toContain(
       "script-src 'self' https://money.example.com https://plugins.example.com;",
