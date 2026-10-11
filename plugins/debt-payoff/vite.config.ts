@@ -45,6 +45,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     setupFiles: ['./vitest.setup.ts'],
+    // The page tests drive a real dialog and chart in jsdom. They take 1 to 4 seconds on a
+    // CI runner against a 5 second default, so a slow runner turns them into flakes.
+    testTimeout: 20_000,
     css: true,
   },
 })
