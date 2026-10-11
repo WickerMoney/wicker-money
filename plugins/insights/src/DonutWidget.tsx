@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { PluginWidgetProps } from '@wickermoney/plugin-sdk'
+import type { PluginWidgetProps } from '@wickermoney/plugin-sdk/runtime'
 import { sumMoney } from '@wickermoney/plugin-sdk/money'
 import { Alert, EmptyState, Spinner } from '@wickermoney/ui-kit'
 import { DonutLegend } from './components/DonutLegend.js'
