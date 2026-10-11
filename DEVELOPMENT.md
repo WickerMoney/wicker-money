@@ -86,6 +86,18 @@ lookup, refresh lookup. Each is a narrow `SECURITY DEFINER` function
 things possible without authentication is three functions in one reviewable
 file.
 
+Owners changing roles is the one other place the application reaches past
+row-level security (migration 029). An owner sees only their own `core.users`
+row, so `core.list_users_for_owner()` and `core.set_user_role()` are
+`SECURITY DEFINER` too. They re-check, from the signed tenant context, that the
+caller is an owner, return only id, email, role and creation time, and take
+the advisory lock that registration uses for "is there an owner yet?" so the
+last-owner count is decided one change at a time. They refuse to run above
+`READ COMMITTED`, where that count could be stale. The routes are
+`GET /api/v1/users` and `PATCH /api/v1/users/:id/role`; the API's
+`requireOwner` runs first, and the role is read from the database on every
+request, never carried in a token.
+
 Those functions run with the privileges of the role that owns them, which is
 the role that ran the migrations. `core.users` and `core.sessions` therefore
 have `ENABLE ROW LEVEL SECURITY` but **not** `FORCE` (migration 007): FORCE

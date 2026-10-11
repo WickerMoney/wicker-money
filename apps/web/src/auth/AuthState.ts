@@ -19,6 +19,13 @@ export interface AuthState {
    * rejects with an `ApiError` if the server refuses the zone.
    */
   readonly setTimezone: (timezone: string) => Promise<void>
+  /**
+   * Re-reads the signed-in user from the server and updates `user` to match.
+   * For after something changed the account from outside this component, such
+   * as an owner changing their own role: the role the app holds decides which
+   * controls it offers, and the server only ever reports a role fresh.
+   */
+  readonly refreshUser: () => Promise<void>
   /** Ends the session on the server and always clears it locally, even if the request fails. */
   readonly signOut: () => Promise<void>
 }

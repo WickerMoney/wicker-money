@@ -64,6 +64,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setTimezone: async (timezone) => {
         setUser(await api.patch<CurrentUser>('/auth/me', { timezone }))
       },
+      refreshUser: async () => {
+        setUser(await api.get<CurrentUser>('/auth/me'))
+      },
       signOut: async () => {
         try {
           await api.post('/auth/logout', undefined, { headers: CSRF_HEADERS })

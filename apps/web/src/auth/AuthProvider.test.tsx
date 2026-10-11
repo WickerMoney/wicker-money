@@ -144,6 +144,31 @@ describe('signing in', () => {
     expect(auth.user?.timezone).toBe('America/Chicago')
   })
 
+  it('re-reads the user, role included, when asked to', async () => {
+    fetchMock.mockResolvedValue(json({ accessToken: 'tok', user: USER }))
+    mount()
+    await screen.findByText('in:a@example.com')
+    expect(auth.user?.role).toBe('owner')
+    fetchMock.mockResolvedValue(json({ ...USER, role: 'member' }))
+
+    await act(async () => { await auth.refreshUser() })
+
+    const get = callsTo('/auth/me')[0]![1]
+    expect(get.method).toBe('GET')
+    expect(auth.user?.role).toBe('member')
+  })
+
+  it('keeps the user it has when the re-read fails', async () => {
+    fetchMock.mockResolvedValue(json({ accessToken: 'tok', user: USER }))
+    mount()
+    await screen.findByText('in:a@example.com')
+    fetchMock.mockResolvedValue(json({ code: 'internal_error', message: 'Something went wrong.' }, 500))
+
+    await expect(auth.refreshUser()).rejects.toThrow('Something went wrong.')
+
+    expect(auth.user?.role).toBe('owner')
+  })
+
   it('surfaces a rejected login and stays signed out', async () => {
     mount()
     await screen.findByText('signed-out')
