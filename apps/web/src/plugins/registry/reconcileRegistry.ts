@@ -25,6 +25,11 @@ export function reconcileRegistry(previous: PluginRegistry | null, next: PluginR
   const samePlugins =
     plugins.length === previous.plugins.length && plugins.every((m, i) => m === previous.plugins[i])
   const sameFailures = JSON.stringify(previous.failures) === JSON.stringify(next.failures)
-  if (samePlugins && sameFailures) return previous
-  return { plugins, failures: sameFailures ? previous.failures : next.failures }
+  const sameRuntimes = JSON.stringify(previous.runtimes) === JSON.stringify(next.runtimes)
+  if (samePlugins && sameFailures && sameRuntimes) return previous
+  return {
+    plugins,
+    failures: sameFailures ? previous.failures : next.failures,
+    ...(next.runtimes !== undefined ? { runtimes: sameRuntimes ? previous.runtimes! : next.runtimes } : {}),
+  }
 }

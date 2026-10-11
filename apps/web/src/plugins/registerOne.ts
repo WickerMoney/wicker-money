@@ -1,6 +1,7 @@
 import { registerRemotes } from '@module-federation/runtime'
 import { REMOTE_ENTRY_TYPE, federationName, parseManifest, type PluginManifest } from '@wickermoney/plugin-sdk'
 import type { PluginLoadFailure } from './PluginLoadFailure.js'
+import type { PluginRuntime } from './PluginRuntime.js'
 
 /**
  * Remote names already handed to the federation runtime in this page.
@@ -19,15 +20,19 @@ const registered = new Set<string>()
  *
  * @param raw - One entry of the server's plugin list, not yet trusted.
  * @param failures - Receives a failure entry when the manifest is invalid or the remote cannot be registered.
+ * @param runtime - Where the plugin runs. An `isolated` plugin's remote is never registered with the host's federation runtime: its code must not be fetched or evaluated in this page's realm, only in its frame.
  * @returns The manifest when it registered, otherwise `undefined`.
  */
-export function registerOne(raw: unknown, failures: PluginLoadFailure[]): PluginManifest | undefined {
+export function registerOne(
+  raw: unknown, failures: PluginLoadFailure[], runtime: PluginRuntime = 'in-realm',
+): PluginManifest | undefined {
   const { manifest, error } = parseManifest(raw)
   if (manifest === undefined) {
     const id = typeof raw === 'object' && raw !== null && 'id' in raw ? String(raw.id) : 'unknown'
     failures.push({ pluginId: id, reason: error ?? 'invalid manifest' })
     return undefined
   }
+  if (runtime === 'isolated') return manifest
   const name = federationName(manifest.id)
   if (registered.has(name)) return manifest
   try {

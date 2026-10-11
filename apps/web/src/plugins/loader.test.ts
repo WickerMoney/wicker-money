@@ -20,6 +20,8 @@ function manifest(overrides: Record<string, unknown> = {}) {
     remoteEntry: '/plugins/insights/remoteEntry.js',
     requiredTables: [{ table: 'transactions', access: 'read' }],
     contributes: { widgets: [], pages: [] },
+    // The API always says where a plugin runs; these tests are about in-realm ones.
+    runtime: 'in-realm',
     ...overrides,
   }
 }
@@ -95,6 +97,26 @@ describe('loadPluginRegistry', () => {
     expect(registerRemotes).toHaveBeenCalledTimes(1)
   })
 
+  it('records where each plugin runs', async () => {
+    apiGet.mockResolvedValue({ plugins: [manifest(), manifest({ id: 'acme.sandboxed', runtime: 'isolated' })] })
+    const { runtimes } = await loadPluginRegistry()
+    expect(runtimes).toEqual({ 'wickermoney.insights': 'in-realm', 'acme.sandboxed': 'isolated' })
+  })
+
+  it('never registers an isolated plugin with the page\'s federation runtime', async () => {
+    apiGet.mockResolvedValue({ plugins: [manifest({ id: 'acme.sandboxed', runtime: 'isolated' })] })
+    const { plugins } = await loadPluginRegistry()
+    expect(plugins.map((p) => p.id)).toEqual(['acme.sandboxed'])
+    expect(registerRemotes).not.toHaveBeenCalled()
+  })
+
+  it.each([undefined, 'in_realm', 'trusted', 7, null])('treats runtime %s as isolated', async (runtime) => {
+    apiGet.mockResolvedValue({ plugins: [manifest({ runtime })] })
+    const { runtimes } = await loadPluginRegistry()
+    expect(runtimes).toEqual({ 'wickermoney.insights': 'isolated' })
+    expect(registerRemotes).not.toHaveBeenCalled()
+  })
+
   it('keeps failures reported by the server', async () => {
     apiGet.mockResolvedValue({
       plugins: [],
@@ -113,6 +135,13 @@ describe('loadPluginModule', () => {
 
     await expect(loadPluginModule('wickermoney.insights', './TrendWidget')).resolves.toBe('the-component')
     expect(loadRemote).toHaveBeenCalledWith('wickermoney_insights/TrendWidget')
+  })
+
+  it('refuses to load an isolated plugin into the page', async () => {
+    apiGet.mockResolvedValue({ plugins: [manifest({ id: 'acme.sandboxed', runtime: 'isolated' })] })
+    await loadPluginRegistry()
+    await expect(loadPluginModule('acme.sandboxed', './Widget')).rejects.toThrow(/runs isolated/)
+    expect(loadRemote).not.toHaveBeenCalled()
   })
 
   it('fails loudly when the remote exposes nothing under that key', async () => {

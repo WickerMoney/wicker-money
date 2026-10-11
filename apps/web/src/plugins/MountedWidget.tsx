@@ -4,7 +4,9 @@ import type {
 } from '@wickermoney/plugin-sdk'
 import { Spinner, Surface } from '@wickermoney/ui-kit'
 import { ErrorBoundary } from '../shell/ErrorBoundary.js'
+import { IsolatedPluginFrame } from './isolated/IsolatedPluginFrame.js'
 import { loadPluginModule } from './loader.js'
+import { usePluginRuntime } from './usePluginRuntime.js'
 
 /** Props for {@link MountedWidget}. */
 export interface MountedWidgetProps {
@@ -19,13 +21,41 @@ export interface MountedWidgetProps {
 }
 
 /**
- * Mounts one plugin widget.
+ * Mounts one plugin widget, in the page or in a sandboxed frame.
+ *
+ * Which one is the registry's call ({@link usePluginRuntime}), not the
+ * plugin's. Both live in the same card, so the grid cannot tell them apart.
+ */
+export function MountedWidget(props: MountedWidgetProps) {
+  const runtime = usePluginRuntime(props.manifest.id)
+  return runtime === 'isolated' ? <IsolatedWidget {...props} /> : <InRealmWidget {...props} />
+}
+
+/** An isolated widget: one frame per widget (see ADR 0005 and the 0.6.0 plan for why). */
+function IsolatedWidget({ manifest, contribution, ctx, range }: MountedWidgetProps) {
+  const label = `${manifest.name} · ${contribution.title}`
+  return (
+    <div className={`slot-item slot-item--${contribution.defaultSize}`}>
+      <Surface title={contribution.title}>
+        <ErrorBoundary label={label}>
+          <IsolatedPluginFrame
+            manifest={manifest} module={contribution.module} title={contribution.title}
+            kind="widget" ctx={ctx} size={contribution.defaultSize} range={range}
+          />
+        </ErrorBoundary>
+      </Surface>
+    </div>
+  )
+}
+
+/**
+ * Mounts one in-realm plugin widget.
  *
  * Wrapped in its own error boundary and its own Suspense boundary: a widget that
  * fails to load and a widget that throws while rendering are different failures,
  * and neither should take out its neighbour.
  */
-export function MountedWidget({ manifest, contribution, ctx, range }: MountedWidgetProps) {
+function InRealmWidget({ manifest, contribution, ctx, range }: MountedWidgetProps) {
   const Widget = useMemo(
     () =>
       lazy(async () => {
