@@ -69,6 +69,32 @@ curated, human-readable version.
   returns a top-level `truncated`, true when a query hit that cap and a match
   needing one of the oldest rows may be missing. Additive; the app does not show
   it yet.
+- **A danger zone at the bottom of Settings, with two separate erase actions.**
+  - **Erase my data** is for every account. It deletes the signed-in user's rows
+    from every core table and every plugin schema (including a plugin that is
+    switched off, because switching one off keeps its data) and ends all of their
+    sessions. The password and the typed phrase `erase my data` are required, and
+    the dialog offers the data export first. **The account row is kept**, so the
+    person can sign in again with an empty account; deleting the login as well is
+    a different action and is not part of this one.
+  - **Erase this entire instance** is for an owner. It empties every account and
+    every plugin schema for everyone, signs everyone out, and leaves an instance
+    that registers a first owner again. It sits in its own section with its own
+    dialog, needs the owner's password and the phrase `erase this instance`, shows
+    the database name, and refuses while other sessions are live unless they are
+    acknowledged. It also refuses when the instance could not set up an owner
+    again: `REGISTRATION_ENABLED=false`, or `BOOTSTRAP_OWNER_EMAIL` naming an
+    address other than the erasing owner's. Which plugins are switched on is kept.
+  - New endpoints: `POST /api/v1/settings/erase-my-data`,
+    `GET` and `POST /api/v1/settings/erase-instance`. A wrong password is `403`
+    `password_incorrect`, not `401`, so the web app does not treat it as an expired
+    session. Both are rate limited per user.
+  - **A table that holds user data but is not in the erase plan stops the erase**
+    (`500 erase_unplanned_tables`, nothing deleted) and fails a test that lists
+    every table with a `user_id` column. See "Erasing data" in `DEVELOPMENT.md`.
+    No plugin SDK entry point was added.
+- **`AuthService.confirmPassword`**, a reusable "type your password again" check.
+  Not used to protect the data export; see `ROADMAP.md`.
 
 ### Changed
 - **The host and Budgets import the date helpers from `/date`.** The API, the
@@ -173,6 +199,18 @@ curated, human-readable version.
   `#0c7e65` to `#0a7660`: on `--wm-surface-alt` it was 4.51:1 and is now 5.01:1,
   and on white 5.01:1 became 5.57:1. The dark theme is unchanged. A test also
   confirms that recurring bills show a minus sign as well as the red colour.
+
+### Migrations
+
+- **031_erase_instance** adds `core.erase_instance()` and
+  `core.instance_activity(uuid)`, `SECURITY DEFINER` functions that only the
+  application role may run and that refuse anyone who is not an owner right now.
+  `erase_instance` truncates `core.users`, every core table with a `user_id` and
+  every table in a `plugin_` schema, in one statement without `CASCADE`, so a
+  table outside that list that still references one inside it makes the erase
+  fail and roll back. `instance_activity` counts live sessions and accounts other
+  than the caller's. No data changes when it runs. Its `down` drops both
+  functions; an erased instance stays erased.
 
 ## [0.5.0] - 2026-10-10
 

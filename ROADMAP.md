@@ -31,10 +31,8 @@ Polish after the plugin manager:
   Recurring column was added. It fits at 1366 px wide and above. Narrower than
   that the date wraps onto two lines, and below about 1190 px the table scrolls
   sideways, so the row actions are out of view until you scroll.
-- A settings danger zone: "erase my data" (delete the calling user's own rows
-  across core and every plugin schema) and, for an owner, "erase this entire
-  instance" (drop every user and reset every plugin schema to empty), as two
-  distinct, separately-confirmed actions.
+- Ask for the password again before the data export downloads. The erase
+  actions already do; `AuthService.confirmPassword` is the reusable check.
 
 ## Next
 

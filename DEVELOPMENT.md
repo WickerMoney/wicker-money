@@ -406,6 +406,57 @@ recurring items are not in the line. The numbers come from
 `GET /api/v1/core/recurring-items/forecast`, computed on the server against your
 today.
 
+### Erasing data
+
+Settings → danger zone has two actions. They are different code paths on purpose.
+
+**Erase my data** (`POST /api/v1/settings/erase-my-data`, any signed-in user).
+Needs the password and the phrase `erase my data`, checks the password with
+`AuthService.confirmPassword`, then in one transaction as that user deletes
+their rows from each plugin schema (as the plugin's own database role, so a
+plugin's row-level security and grants apply as they do for its routes), then
+from each core table, clears the setup-wizard record, and deletes their
+sessions last. **Decision: the account row is kept.** Deleting the login too
+is a different action with its own consequences (the email becomes free, the
+last owner could leave), so it is not folded in here: sign in again and start
+over, and add account deletion as its own action if it is wanted.
+
+**Erase this entire instance** (`GET` and `POST /api/v1/settings/erase-instance`,
+owners only). Row-level security shows an owner only their own rows and the app
+role may not `TRUNCATE`, so this cannot be queries the API sends. It calls
+`core.erase_instance()` (migration 031), a `SECURITY DEFINER` function that
+re-checks the caller is an owner. It truncates `core.users`, every core table
+with a `user_id` and every table in a `plugin_` schema, found in the catalog each
+time. It leaves `core.plugins`, `core.app_deployments`, the tenant-context key
+and migration bookkeeping alone. The API adds: the password, the phrase
+`erase this instance`, a refusal while other sessions are live unless
+`acknowledgeActiveSessions` is `true`, and two blockers (the preflight reports
+them and the POST answers `409` with the same code):
+
+| Blocker | When | Why |
+| --- | --- | --- |
+| `registration_disabled` | `REGISTRATION_ENABLED=false` | nobody could register a first owner |
+| `bootstrap_owner_mismatch` | `BOOTSTRAP_OWNER_EMAIL` is another address | only that address could become owner |
+
+After an erase the first registration becomes the owner under migration 028's
+rules.
+
+**Adding a table that holds user data.** A table with a `user_id` column must be
+named in `apps/api/src/settings/service/ERASE_PLAN.ts`: a core table in
+`CORE_ERASE_ORDER` (children before parents), a plugin table in that plugin's
+entry in `PLUGIN_ERASE_PLANS`. A new bundled plugin schema needs an entry too.
+There is no hook in the plugin SDK for this. The erase compares the plan with
+the catalog in the same transaction and, if a `user_id` table is missing, answers
+`500 erase_unplanned_tables` and deletes nothing, and
+`settings/eraseMyData.integration.test.ts` fails in CI. The instance erase needs
+nothing from you: it reads the catalog. `testing/eraseFixtures.ts` must also
+reach the new table through the API so the tests prove it was emptied.
+
+**Limits.** An erase does not stop requests already in flight: a write that
+commits between the check and the deletion could leave a row behind for a user
+who has just been signed out. Access tokens are checked against their session on
+every request, so ending the sessions rejects them at once.
+
 ## Writing a plugin
 
 A plugin is a Module Federation remote plus a manifest. Two rules are not
@@ -502,7 +553,7 @@ request carrying its `x-wickermoney-plugin` header gets `403 grant_denied`.
 (A request that omits the header is not attributed to the plugin, so a
 disabled plugin's already-loaded code is not stopped from calling core routes;
 see [Plugin trust model](#plugin-trust-model).)
-Its schema, rows and role are kept. Do not assume a plugin's code runs at
+Its schema, rows and role are kept ("Erase my data" still empties them for the user; see [Erasing data](#erasing-data)). Do not assume a plugin's code runs at
 every page load, and do not delete data on unmount.
 
 **Validation errors.** A bundled plugin's server can attach
