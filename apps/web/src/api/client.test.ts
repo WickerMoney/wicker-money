@@ -361,6 +361,16 @@ describe('the response cache', () => {
     expect(responseCache.size('u1') + responseCache.size('u2')).toBe(0)
   })
 
+  it('is kept by a POST marked readOnly, such as minting a plugin token', async () => {
+    setAccessToken('tok-1')
+    route(() => json({}))
+    await remember()
+
+    await api.post('/plugins/x/token', undefined, { readOnly: true })
+
+    expect(responseCache.size('u1')).toBe(1)
+  })
+
   it('is dropped before a write is sent and again when it settles', async () => {
     setAccessToken('tok-1')
     let release!: () => void

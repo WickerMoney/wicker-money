@@ -709,3 +709,9 @@
 }
 .people-announcement { margin: 8px 0 0; min-height: 1.4em; font-size: 13px; }
 .people-row .wm-field__control[aria-disabled="true"] { opacity: .55; cursor: progress; }
+
+/* Isolated plugin frames. The slot decides the width; the frame reports its height. */
+.plugin-frame { position: relative; width: 100%; }
+.plugin-frame__frame { display: block; width: 100%; border: 0; background: transparent; color-scheme: normal; }
+.plugin-frame__status { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: var(--wm-space-3, 0.75rem); }
+.plugin-frame[data-status="loading"] > .plugin-frame__status { position: absolute; inset: 0; }

@@ -679,7 +679,9 @@ that talks about plugin "permissions", "scoping" or "sandboxing".
 | Per-plugin PostgreSQL role (`plugin-roles.ts`) | Refuses queries outside the manifest's `requiredTables` | For **server-side** plugin code (bundled plugins' `runAsPlugin`) that behaves: a guardrail, not a sandbox, because crafted SQL can leave the role |
 | `assertSafePluginSql` (the plugin query runner) | Refuses statement text that changes the role or session settings | **No.** It reads text, and a `DO` block with dynamic `EXECUTE` gets past it. It exists to catch mistakes |
 | Row-level security | Keeps every query inside the signed-in user's rows | Yes, for tenants, including after the SQL leaves the plugin role (the tenant context is signed) |
-| Plugin token + route classification (`auth/pluginTokens.ts`, `auth/pluginRouteAccess.ts`) | The server tells a plugin's request from the host's by a signed token, and gives that token only its plugin's granted `/core` reads and its own `/p/<id>/` routes | **Server side: yes. Nothing in the UI uses it yet**, so for UI code in the host page, **no**: that code can still reach the host's own access token. See [Plugin tokens](#plugin-tokens) |
+| Plugin token + route classification (`auth/pluginTokens.ts`, `auth/pluginRouteAccess.ts`) | The server tells a plugin's request from the host's by a signed token, and gives that token only its plugin's granted `/core` reads and its own `/p/<id>/` routes | **Server side: yes.** The broker uses it for every plugin that runs in a frame. Plugins that run in the host page (the in-realm ones, below) do not use it, so for them: **no**. That code can still reach the host's own access token. See [Plugin tokens](#plugin-tokens) |
+| Sandboxed frame and its document (`IsolatedPluginFrame`, `GET /plugin-frame`) | The UI of a plugin that is not in-realm runs in `<iframe sandbox="allow-scripts">`, whose document the API serves with `sandbox allow-scripts; default-src 'none'; connect-src 'none'; ...`: an opaque origin, so no host cookies, storage or DOM, and no direct network from script | **Yes, for the code in the frame**, with the exceptions listed in ADR 0005's verification log (Chromium sends some requests that CSP does not govern, such as `<link rel=prerender>` and WebRTC). See [Isolated plugin frames](#isolated-plugin-frames) |
+| Broker (`apps/web/src/plugins/isolated/broker.ts`) | The only code that holds a plugin token. Checks the manifest grants and a path allow-list, then the per-user response cache, then the network; rate-limits and validates every message | **Yes**, it is the single door out of the frame |
 | `x-wickermoney-plugin` header + `requireTableGrant` | Holds a host-token request that names a plugin to that plugin's manifest | **No.** Advisory: it can narrow a host request, never identify one, and a caller can omit it. A plugin token is never attributed by it |
 | Scoped `ctx.api` client in `apps/web/src/plugins/context.ts` | Fails fast on an ungranted path | **No.** Developer ergonomics; plugin code can call `fetch` |
 | `PLUGIN_REMOTE_ORIGINS` and the CSP | Limit where plugin code may be loaded from | No. They choose whose code is trusted, not what it may do |
@@ -697,24 +699,101 @@ Consequences for contributors:
   be reachable by plugins is closed by classifying it as denied for plugin
   tokens (next section), which the header cannot undo.
 - Third-party plugin install stays unsupported, and `PLUGIN_REMOTE_ORIGINS`
-  stays empty by default, until UI plugins are isolated.
-- The SDK now defines the contract for isolated UI plugins
-  (`@wickermoney/plugin-sdk/isolated`, experimental: a message protocol over a
-  `MessagePort`, an in-frame client, and the optional manifest flag
-  `isolated`). Only the contract exists. The web app does not yet host a plugin
-  in a frame, so every UI plugin still runs in the host's origin and the table
-  above is unchanged.
+  stays empty by default. The host can now run a plugin in a frame, but there
+  is no install flow and the hostile-plugin test suite is not written yet.
+- The SDK defines the contract for isolated UI plugins
+  (`@wickermoney/plugin-sdk/isolated`, experimental) and the web app hosts it.
+  Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
+  runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
+  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. In this
+  release every bundled plugin is still listed, so the first row of the table
+  above still describes all of them; the list shrinks as plugins are ported.
+
+### Isolated plugin frames
+
+A plugin whose runtime is `isolated` (everything not in `IN_REALM_PLUGIN_IDS`,
+plus any bundled plugin whose manifest says `isolated: true`) never loads into
+the host page. `GET /api/v1/plugins` reports each plugin's `runtime` beside its
+manifest; the web app treats anything but an explicit `in-realm` as isolated, and
+does not register an isolated plugin's remote with its own Module Federation
+runtime (`loadPluginModule` refuses it too).
+
+```mermaid
+sequenceDiagram
+  participant P as Host page
+  participant B as Broker (host)
+  participant F as Frame (opaque origin)
+  participant A as API
+  P->>F: iframe src=/plugin-frame#id,entry,module,kind
+  A-->>F: frame document + CSP (sandbox allow-scripts, connect-src none)
+  F->>P: wm.hello (window message)
+  P->>F: wm.connect + MessagePort (only if event.source is this iframe)
+  F->>B: ready (port)
+  B-->>F: init (session, locale, theme, size/range)
+  F->>B: request GET /core/transactions/...
+  B->>B: grants, path allow-list, then per-user cache
+  B->>A: mint plugin token (host credentials), then the request with the plugin token only
+  A-->>B: response
+  B-->>F: response
+```
+
+- **The frame document** is `GET /plugin-frame` (`registerWebApp`), built from
+  `apps/web/plugin-frame.html` by a second Vite build (`vite.frame.config.ts`)
+  into the same `dist`. It has its own CSP built per request
+  (`buildFrameContentSecurityPolicy`), `cache-control: no-cache`, and is not
+  served by the static handler. The target plugin travels in the URL fragment, so
+  the document is one file for every plugin. Assets and plugin files under
+  `/assets/` and `/plugins/` carry `access-control-allow-origin: *`, because a
+  sandboxed frame fetches its modules in CORS mode from an opaque origin. That
+  header is only for public build output; API routes get none.
+- **Who may connect.** The host's `message` listener accepts a `wm.hello` only
+  when `event.source` is that iframe's `contentWindow`. It never looks at
+  `event.origin`: every sandboxed frame's origin is the string `"null"`. After the
+  handshake the `MessagePort` is the credential. A frame that reloads itself says
+  hello again and gets a fresh port, but not a fresh rate limit.
+- **The broker** runs, per request: path and grant check (a `/core` read of a
+  granted table, or the plugin's own `/p/<id>/`; nothing else, no dot segments or
+  encoded separators) → body size → the same per-user response cache the in-page
+  client uses (5 s, cleared by any write) → the network with the plugin token as
+  the only credential (`credentials: 'omit'`). The check comes first on purpose:
+  a cache hit never reaches the server, so the server's default-deny cannot refuse
+  it. The token is minted lazily with the host's credentials, refreshed 30 s before
+  it expires, re-minted once on a 401, and never sent over the port. If the signed-in
+  user changes, the connection is cut. A frame that floods the port, sends malformed
+  or oversize messages, or re-handshakes too often is rate-limited and then cut off.
+- **Size.** The host owns the width (the slot's grid); the frame reports its
+  content height and the host clamps it: widgets 96–800 px, pages 240–20 000 px.
+- **Theme and locale.** `init` carries the `--wm-*` tokens and the scheme read from
+  the host page; a new `theme` message follows any change of `data-theme`, the
+  root's style or the operating system preference. The frame applies them with
+  `applyHostTheme`.
+- **Focus.** A frame cannot hand focus to the page around it, so the in-frame app
+  reports Tab at its first or last control (`focus-out`) and the host moves focus
+  to the next or previous control on the page. `focus-in` goes the other way.
+- **Dialogs and overlays.** Protocol 1 has no host-rendered dialog (the decision
+  recorded with the protocol). A dialog inside a widget frame is clipped by the
+  frame, so a widget that needs one navigates to a page (`navigate`), whose frame
+  is full height. The broker ignores a `dialog` message like any unknown type.
+- **One frame per widget.** A frame is one rectangle, and a plugin's widgets sit
+  in different cards and slots, so a frame per plugin could not place them. The
+  measured cost is in the 0.6.0 plan; on Chromium 141 it was about 9 MiB and
+  150 ms for each frame after the first.
+- **Development.** `pnpm dev` (Vite) does not serve `/plugin-frame`: that route
+  belongs to the API, with its CSP. To exercise a frame, build the web app and run
+  the API against it (`WEB_DIST_DIR`), or run `pnpm --filter @wickermoney/web
+  test:browser`, which builds a fixture plugin that tries to escape and drives
+  Chromium through the real API. It is not part of `pnpm test`.
 
 ### Plugin tokens
 
 A plugin token is a short-lived JWT that speaks for one plugin. It exists so
 the server can tell a plugin's request from the host's without trusting a
-header. It is the server half of plugin isolation: the host's broker is meant to
-hold it for a sandboxed plugin, so the plugin never sees the user's own access
-token. **That broker does not exist yet.** Nothing in the web app mints or sends
-a plugin token today, and a UI plugin running in the host page can still reach
-the host's own access token, so these tokens do not make in-page plugin code
-safe.
+header. It is the server half of plugin isolation: the host's broker (see
+[Isolated plugin frames](#isolated-plugin-frames)) holds it for a sandboxed
+plugin, so the plugin never sees the user's own access token. The web app mints
+and sends a plugin token only for plugins that run in a frame. A plugin running
+in the host page (the in-realm ones) does not use one, and can still reach the
+host's own access token, so these tokens do not make in-page plugin code safe.
 
 **Minting.** `POST /api/v1/plugins/:pluginId/token` needs the user's own access
 token (a plugin token cannot mint another) and returns

@@ -99,7 +99,7 @@ export function setUnauthorizedHandler(fn: () => void): void {
  * @param res - A response whose status is not successful.
  * @returns An `ApiError` carrying the HTTP status and error code.
  */
-async function parseError(res: Response): Promise<ApiError> {
+export async function parseError(res: Response): Promise<ApiError> {
   let code = 'request_failed'
   let message = `Request failed (${res.status})`
   let issues: ApiError['issues'] = []
@@ -276,12 +276,12 @@ async function retryAfterUnauthorized(
  *
  * @param path - Path relative to the API root (`/api/v1`), starting with `/`.
  * @param options - Fetch options plus `anonymous` (omit the bearer token),
- * `pluginId` (identifies the calling plugin to the server) and `signal`.
+ * `pluginId` (identifies the calling plugin to the server), `readOnly` and `signal`.
  * @returns The parsed body, or `undefined` for a 204.
  * @throws {ApiError} On any non-2xx response.
  */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  if (!isRead(options.method)) {
+  if (!isRead(options.method) && options.readOnly !== true) {
     // A write may change anything a remembered read reported. Drop it all
     // before sending, so no read started from here on joins a stale one, and
     // again once it settles, so a read that overlapped the write cannot have
@@ -304,7 +304,8 @@ function isRead(method: string | undefined): boolean {
 
 /** The request pipeline behind {@link request}: headers, refresh, retry and parsing. */
 async function perform<T>(path: string, options: RequestOptions): Promise<T> {
-  const { pluginId, anonymous, headers, ...init } = options
+  const { pluginId, anonymous, readOnly, headers, ...init } = options
+  void readOnly // read by `request` to decide on the cache; not a fetch option
   const isAnonymous = anonymous === true
   const merged = buildRequestHeaders(headers, init.body !== undefined, pluginId)
 

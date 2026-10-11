@@ -89,7 +89,10 @@ export function PluginRegistryProvider({
   }, [refresh, minRefetchIntervalMs])
 
   const value = useMemo<PluginRegistryState | null>(
-    () => (registry === null ? null : { plugins: registry.plugins, failures: registry.failures, refresh }),
+    () => (registry === null ? null : {
+      plugins: registry.plugins, failures: registry.failures,
+      ...(registry.runtimes !== undefined ? { runtimes: registry.runtimes } : {}), refresh,
+    }),
     [registry, refresh],
   )
 

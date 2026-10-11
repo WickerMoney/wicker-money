@@ -1,5 +1,6 @@
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
 import type { PluginLoadFailure } from '../PluginLoadFailure.js'
+import type { PluginRuntime } from '../PluginRuntime.js'
 
 /** The loaded plugin registry as the shell sees it, and a way to fetch it again. */
 export interface PluginRegistryState {
@@ -7,6 +8,8 @@ export interface PluginRegistryState {
   readonly plugins: readonly PluginManifest[]
   /** Plugins the server or the host could not load. */
   readonly failures: readonly PluginLoadFailure[]
+  /** Where each plugin's UI runs, by manifest id; see `PluginRegistry.runtimes`. */
+  readonly runtimes?: Readonly<Record<string, PluginRuntime>>
   /**
    * Fetches the registry again and applies it: newly enabled plugins mount,
    * disabled ones unmount. Never rejects; a failed fetch keeps what was there.

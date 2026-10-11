@@ -35,9 +35,23 @@ curated, human-readable version.
   (`parsePluginMessage`) and an in-frame client, `connectToHost`, that rebuilds
   the same `PluginContext` so a component written against `/runtime` runs in
   either place. It is additive: `SDK_MAJOR_VERSION` stays `0`, `/runtime` is
-  unchanged and no existing manifest needs editing. No host loads a frame yet,
-  so nothing about the UI plugin trust model has changed. It stays experimental
-  until the isolation work has shipped and settled.
+  unchanged and no existing manifest needs editing. The web app hosts it (next entry),
+  and it stays experimental until the isolation work has shipped and settled.
+- **The web app can run a UI plugin in a sandboxed frame (nothing is ported yet).**
+  A plugin that is not in-realm renders in `<iframe sandbox="allow-scripts">`
+  (never `allow-same-origin`), loaded from a new `GET /plugin-frame` document
+  that the API serves with its own CSP (`sandbox allow-scripts; default-src
+  'none'; connect-src 'none'`). A broker in the host page is the only code that
+  holds a plugin token: it checks the manifest grants and a path allow-list,
+  then the per-user response cache, then the network, and rate-limits and
+  validates every message. The host owns the frame's width and clamps the height
+  it reports, pushes theme and locale changes, and takes keyboard focus when it
+  leaves the frame. `GET /api/v1/plugins` now reports each plugin's `runtime`
+  (`in-realm` or `isolated`) beside its manifest; the list of bundled plugins
+  that still run in the page is a host-internal set, not a manifest field. All
+  seven bundled plugins are still in it, so they run exactly as before. There is
+  still no install flow for third-party plugins. See `DEVELOPMENT.md` "Isolated
+  plugin frames".
 - **An optional `isolated` flag on the plugin manifest.** `isolated: true`
   declares that a plugin was built for the isolated runtime. It is not a grant:
   it can only move a plugin towards isolation, and the host decides which
@@ -52,9 +66,9 @@ curated, human-readable version.
   everything else: sign-in and refresh, the data export, settings, plugin
   management, the host's own data routes and other plugins' routes. Every
   `/api/v1` route is classified in `apps/api/src/auth/pluginRouteAccess.ts`, a
-  route left out is denied, and a test fails when one is. Nothing in the web app
-  uses these tokens yet, so plugin code in the host page is not sandboxed; see
-  `DEVELOPMENT.md` "Plugin tokens".
+  route left out is denied, and a test fails when one is. The web app uses them
+  only for plugins that run in a frame; plugin code in the host page is not
+  sandboxed. See `DEVELOPMENT.md` "Plugin tokens".
 - **Owners can change another account's role from Settings → People.** The
   section lists every account with a role select. Promoting a member makes a
   second owner; demoting an owner asks for confirmation. The last owner cannot
