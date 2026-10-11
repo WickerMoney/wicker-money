@@ -22,6 +22,14 @@ curated, human-readable version.
   `checkRemoteEntry` are unchanged. `zod` is still a dependency of the SDK,
   because `parseManifest` uses it.
 ### Added
+- **Owners can change another account's role from Settings → People.** The
+  section lists every account with a role select. Promoting a member makes a
+  second owner; demoting an owner asks for confirmation. The last owner cannot
+  be demoted, and an owner can step down only while another owner remains.
+  Members never see the section. A change applies on that account's next
+  request. New owner-only routes: `GET /api/v1/users` and
+  `PATCH /api/v1/users/:id/role`. Nothing about an account other than its
+  email, role and creation time is returned.
 - **`@wickermoney/plugin-sdk/date`**, a stable entry point for the calendar
   helpers `addDays` and `addMonths`. They moved here from the experimental
   `/recurrence` entry point so that first-party code (Budgets, the API, the web
@@ -40,6 +48,15 @@ curated, human-readable version.
   after every stable release, so it was more often stale than useful; it is no
   longer updated. `:latest` is still stable releases only and `:edge` is
   unchanged. The npm `next` dist-tag for the SDK and UI kit is unchanged.
+
+### Migrations
+- **029_owner_role_management** adds `core.list_users_for_owner()` and
+  `core.set_user_role(uuid, core.user_role)`, `SECURITY DEFINER` functions that
+  only the application role can execute. They check that the caller is an owner,
+  refuse to demote the last owner, and take the lock registration uses so two
+  owners demoting each other at once cannot leave none. No data changes.
+  Registration is unchanged. Its `down` drops both functions and leaves assigned
+  roles as they are.
 
 ## [0.5.0] - 2026-10-10
 
