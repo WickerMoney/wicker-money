@@ -312,9 +312,26 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
     permissions: [],
     remoteEntry: '/plugins/debt-payoff/remoteEntry.js',
     contributes: {
-      // The page and the dashboard widget arrive with the UI half of the plugin.
-      pages: [],
-      widgets: [],
+      pages: [
+        {
+          path: 'debt-payoff',
+          title: 'Debt payoff',
+          // After Budgets (25) and before Import (30): it is planning, like them.
+          nav: { label: 'Debt payoff', section: 'main', order: 27 },
+          module: './DebtPayoffPage',
+        },
+      ],
+      widgets: [
+        {
+          id: 'debt-free',
+          slot: 'dashboard.secondary',
+          title: 'Debt-free date',
+          // Small: a date and the next debt in line. It is also laid out for md.
+          defaultSize: 'sm',
+          order: 30,
+          module: './DebtFreeWidget',
+        },
+      ],
       endpoints: true,
       // Same bundled-only trust boundary as endpoints: exportDebtPayoffData
       // reads plugin_debt_payoff, a schema core does not know exists.
