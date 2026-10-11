@@ -14,7 +14,7 @@ pg.types.setTypeParser(pg.types.builtins.DATE, (v) => v)
 export type Db = Kysely<Database>
 
 /**
- * Creates a Kysely instance backed by a `pg` connection pool (max 10).
+ * Creates a Kysely instance backed by a `pg` connection pool (10 connections unless `options.max` says otherwise).
  *
  * The connection's role determines what row-level security applies; see
  * {@link asUser}, {@link asSystem} and {@link asPlugin} for scoped access.

@@ -72,6 +72,21 @@ const schema = z.object({
   AUTH_MAX_CONCURRENT_HASHES: z.coerce.number().int().positive().default(4),
 
   /**
+   * Largest number of connections in the database pool. Every request holds one
+   * for the length of its transaction, so this bounds concurrent database work
+   * per API process; the PostgreSQL server must allow at least this many
+   * (`max_connections`) for each process you run. Two is the floor: a request
+   * never needs a second connection while it holds one, but a pool of one would
+   * turn any accidental nesting into a hang instead of a slow request.
+   */
+  DB_POOL_MAX: z.coerce.number().int().min(2).max(200).default(10),
+  /**
+   * Longest one SQL statement may run, in milliseconds (PostgreSQL
+   * `statement_timeout`). The floor of 1000 is deliberate: a value meant as
+   * seconds (`30`) would otherwise be accepted and cancel nearly every query.
+   */
+  DB_STATEMENT_TIMEOUT: z.coerce.number().int().min(1_000).max(3_600_000).default(30_000),
+  /**
    * Whether the refresh cookie carries the `Secure` attribute. Defaults to
    * `true` in production. Set to `false` only for plain-HTTP local use.
    */
