@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { BUDGETS_PLUGIN_ID, registerBudgetRoutes } from '@wickermoney/plugin-budgets/server'
 import { IMPORT_PLUGIN_ID, registerImportRoutes } from '@wickermoney/plugin-import-csv/server'
@@ -105,8 +106,22 @@ function readIssues(value: unknown): readonly ValidationIssue[] | undefined {
  * @param app - The Fastify instance to register plugin routes on.
  * @param db - The database handle used to open per-plugin transactions.
  * @param plugins - The plugin registry, consulted on every request.
+ * @param limits - Host limits for plugin routes. `longStatementTimeoutMillis`
+ *   is the statement limit for a route registered with `longRunning`; other
+ *   routes keep the pool's default.
  */
-export function registerBundledPluginServers(app: FastifyInstance, db: Db, plugins: PluginService): void {
+export function registerBundledPluginServers(
+  app: FastifyInstance,
+  db: Db,
+  plugins: PluginService,
+  limits: { readonly longStatementTimeoutMillis: number },
+): void {
+  // The statement limit of the route now running. A plugin's `runAsPlugin` is
+  // handed over once, at registration, and cannot know which route calls it, so
+  // the route wrapper records the choice for the length of the handler and
+  // `runAsPlugin` reads it when it opens the transaction.
+  const routeStatementTimeout = new AsyncLocalStorage<number>()
+
   const mount = (pluginId: string, register: (deps: PluginServerDeps) => void): void => {
     const role = pluginRoleName(pluginId)
     const base = `/api/v1/p/${pluginId}`
@@ -131,12 +146,17 @@ export function registerBundledPluginServers(app: FastifyInstance, db: Db, plugi
           }
 
           try {
-            const result = await handler({
-              userId: user.id,
-              body: request.body,
-              params: request.params as Record<string, string>,
-              query: request.query as Record<string, string | undefined>,
-            })
+            const run = () =>
+              handler({
+                userId: user.id,
+                body: request.body,
+                params: request.params as Record<string, string>,
+                query: request.query as Record<string, string | undefined>,
+              })
+            const result =
+              options?.longRunning === true
+                ? await routeStatementTimeout.run(limits.longStatementTimeoutMillis, run)
+                : await run()
             return reply.send(result)
           } catch (error) {
             // A plugin cannot import the host's AppError — it has no dependency
@@ -152,7 +172,16 @@ export function registerBundledPluginServers(app: FastifyInstance, db: Db, plugi
 
     register({
       route,
-      runAsPlugin: (userId, fn) => asPlugin(db, role, userId, (trx) => fn(queryRunner(trx))),
+      runAsPlugin: (userId, fn) => {
+        const statementTimeoutMillis = routeStatementTimeout.getStore()
+        return asPlugin(
+          db,
+          role,
+          userId,
+          (trx) => fn(queryRunner(trx)),
+          statementTimeoutMillis === undefined ? undefined : { statementTimeoutMillis },
+        )
+      },
       // Fetching is injected alongside matching, not just matching, so the
       // plugin never has to know the rule resolution order or the row shape
       // of a condition. `q` is already the tagged-template runner that

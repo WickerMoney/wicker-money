@@ -35,6 +35,7 @@ describe('defaults', () => {
       PLUGIN_REMOTE_ORIGINS: [],
       DB_POOL_MAX: 10,
       DB_STATEMENT_TIMEOUT: 30_000,
+      DB_LONG_STATEMENT_TIMEOUT: 300_000,
     })
     expect(config.COOKIE_SECURE).toBeUndefined()
     expect(config.BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
@@ -137,6 +138,25 @@ describe('database pool and statement timeout', () => {
 
   it.each(['0', '30', '999', '3600001', '-1', '1.5', 'soon', ''])('rejects DB_STATEMENT_TIMEOUT=%j', (value) => {
     expect(failure({ DB_STATEMENT_TIMEOUT: value })).toContain('DB_STATEMENT_TIMEOUT')
+  })
+
+  it('has a longer limit for import and export that may not be lower than the default one', () => {
+    expect(loadConfig(env({ DB_LONG_STATEMENT_TIMEOUT: '900000' })).DB_LONG_STATEMENT_TIMEOUT).toBe(900_000)
+    expect(loadConfig(env({ DB_STATEMENT_TIMEOUT: '60000', DB_LONG_STATEMENT_TIMEOUT: '60000' }))).toMatchObject({
+      DB_STATEMENT_TIMEOUT: 60_000,
+      DB_LONG_STATEMENT_TIMEOUT: 60_000,
+    })
+    for (const bad of ['0', '30', '3600001', '2.5', 'long']) {
+      expect(failure({ DB_LONG_STATEMENT_TIMEOUT: bad })).toContain('DB_LONG_STATEMENT_TIMEOUT')
+    }
+  })
+
+  it('refuses a long limit below the default one, and a raised default that overtakes the long one', () => {
+    expect(failure({ DB_STATEMENT_TIMEOUT: '60000', DB_LONG_STATEMENT_TIMEOUT: '30000' })).toContain(
+      'DB_LONG_STATEMENT_TIMEOUT must not be lower than DB_STATEMENT_TIMEOUT',
+    )
+    // Raising only the default past the long default is a mistake worth catching.
+    expect(failure({ DB_STATEMENT_TIMEOUT: '400000' })).toContain('DB_LONG_STATEMENT_TIMEOUT')
   })
 
   it('is reported alongside other problems', () => {

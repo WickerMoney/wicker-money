@@ -87,6 +87,14 @@ const schema = z.object({
    */
   DB_STATEMENT_TIMEOUT: z.coerce.number().int().min(1_000).max(3_600_000).default(30_000),
   /**
+   * The statement limit, in milliseconds, for routes that legitimately run
+   * longer: a CSV import (waiting its turn on the account lock counts) and the
+   * data export. Applied to those routes' transactions only; every other route
+   * keeps `DB_STATEMENT_TIMEOUT`. Must not be lower than it.
+   */
+  DB_LONG_STATEMENT_TIMEOUT: z.coerce.number().int().min(1_000).max(3_600_000).default(300_000),
+
+  /**
    * Whether the refresh cookie carries the `Secure` attribute. Defaults to
    * `true` in production. Set to `false` only for plain-HTTP local use.
    */
@@ -147,6 +155,9 @@ const schema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
+}).refine((c) => c.DB_LONG_STATEMENT_TIMEOUT >= c.DB_STATEMENT_TIMEOUT, {
+  path: ['DB_LONG_STATEMENT_TIMEOUT'],
+  message: 'DB_LONG_STATEMENT_TIMEOUT must not be lower than DB_STATEMENT_TIMEOUT',
 })
 
 /** Validated application configuration, with defaults applied. */
