@@ -679,7 +679,8 @@ that talks about plugin "permissions", "scoping" or "sandboxing".
 | Per-plugin PostgreSQL role (`plugin-roles.ts`) | Refuses queries outside the manifest's `requiredTables` | For **server-side** plugin code (bundled plugins' `runAsPlugin`) that behaves: a guardrail, not a sandbox, because crafted SQL can leave the role |
 | `assertSafePluginSql` (the plugin query runner) | Refuses statement text that changes the role or session settings | **No.** It reads text, and a `DO` block with dynamic `EXECUTE` gets past it. It exists to catch mistakes |
 | Row-level security | Keeps every query inside the signed-in user's rows | Yes, for tenants, including after the SQL leaves the plugin role (the tenant context is signed) |
-| `x-wickermoney-plugin` header + `requireTableGrant` | Holds a request that names a plugin to that plugin's manifest | **No.** A request with no header is the host application, so a UI plugin can omit it |
+| Plugin token + route classification (`auth/pluginTokens.ts`, `auth/pluginRouteAccess.ts`) | The server tells a plugin's request from the host's by a signed token, and gives that token only its plugin's granted `/core` reads and its own `/p/<id>/` routes | **Server side: yes. Nothing in the UI uses it yet**, so for UI code in the host page, **no**: that code can still reach the host's own access token. See [Plugin tokens](#plugin-tokens) |
+| `x-wickermoney-plugin` header + `requireTableGrant` | Holds a host-token request that names a plugin to that plugin's manifest | **No.** Advisory: it can narrow a host request, never identify one, and a caller can omit it. A plugin token is never attributed by it |
 | Scoped `ctx.api` client in `apps/web/src/plugins/context.ts` | Fails fast on an ungranted path | **No.** Developer ergonomics; plugin code can call `fetch` |
 | `PLUGIN_REMOTE_ORIGINS` and the CSP | Limit where plugin code may be loaded from | No. They choose whose code is trusted, not what it may do |
 
@@ -693,20 +694,74 @@ Consequences for contributors:
   a connection the plugin cannot leave is the real fix, and it belongs with
   plugin isolation.
 - Do not rely on the plugin header for access control. A route that must not
-  be reachable by UI plugins needs a different mechanism, which does not exist
-  yet.
+  be reachable by plugins is closed by classifying it as denied for plugin
+  tokens (next section), which the header cannot undo.
 - Third-party plugin install stays unsupported, and `PLUGIN_REMOTE_ORIGINS`
   stays empty by default, until UI plugins are isolated.
+
+### Plugin tokens
+
+A plugin token is a short-lived JWT that speaks for one plugin. It exists so
+the server can tell a plugin's request from the host's without trusting a
+header. It is the server half of plugin isolation: the host's broker is meant to
+hold it for a sandboxed plugin, so the plugin never sees the user's own access
+token. **That broker does not exist yet.** Nothing in the web app mints or sends
+a plugin token today, and a UI plugin running in the host page can still reach
+the host's own access token, so these tokens do not make in-page plugin code
+safe.
+
+**Minting.** `POST /api/v1/plugins/:pluginId/token` needs the user's own access
+token (a plugin token cannot mint another) and returns
+`{ token, expiresAt, pluginId, grants }`. It answers `404 not_found` for an id
+nobody registered and `404 plugin_disabled` for a plugin that is switched off or
+whose manifest does not load. Nothing is stored.
+
+**What is in the token.** Same key, issuer and algorithm (HS256) as an access
+token, but audience `<AUTH_AUDIENCE>:plugin`, so neither kind verifies as the
+other. Claims: `sub` and `email` (the user), `sid` (the session it was minted
+under), `plg` (the plugin id), `tbl` (the plugin's `requiredTables`, `write`
+beating `read`), `jti`, `iat` and `exp`. It lives five minutes and a token older
+than fifteen is refused whatever it says. Because it carries `sid`, logging out
+or changing the password ends it with the session.
+
+**What it can reach.** Default deny, decided in one file,
+`apps/api/src/auth/pluginRouteAccess.ts`, by the route's registered pattern:
+
+- the eight `GET /api/v1/core/*` reads, each mapped to the tables it needs
+  (`upcoming` and `forecast` need `recurring_items` and `accounts`);
+- everything under `/api/v1/p/<the plugin's own id>/`.
+
+Everything else answers `403 plugin_route_denied` before its handler runs:
+`/auth/*`, `/settings/*` (including the export), `/plugins/*` (including
+minting), `/users/*`, the host's own accounts, categories, rules, transactions,
+onboarding and recurring-item routes, and every other plugin's namespace. An
+owner's plugin token has no owner powers.
+
+On a route it may reach, the server also checks that the plugin is still enabled
+(`403 plugin_disabled`) and holds each needed table at the needed level
+(`403 grant_denied`). The grants it applies are the token's, narrowed to the
+plugin's *current* manifest, so a manifest that has since lost a table takes
+effect before the token expires. An expired, forged or revoked token answers
+`401`, like any access token.
+
+**Adding a route.** Add it to `PLUGIN_ROUTE_ACCESS` in the same change: `DENIED`
+for almost everything, or `needs([table, access], ...)` for a `/core` read a
+plugin should get. A route left out is denied, and `pluginRouteAccess.test.ts`
+fails until it is listed (it also fails on an entry for a route that no longer
+exists, and on a plugin namespace for a plugin that is not bundled). The guard
+for a plugin-accessible route is `requireTableGrant`, or `app.requireActor` for
+a plugin's own routes; `requireAuth` accepts the host's access token only.
 
 ### When a plugin is turned off
 
 An owner can turn any plugin off from Settings → Plugins. The host unmounts the
 plugin's pages and widgets (a remote already loaded stays in memory but is no
 longer rendered), its own routes answer `404 plugin_disabled`, and a core data
-request carrying its `x-wickermoney-plugin` header gets `403 grant_denied`.
-(A request that omits the header is not attributed to the plugin, so a
-disabled plugin's already-loaded code is not stopped from calling core routes;
-see [Plugin trust model](#plugin-trust-model).)
+request carrying its `x-wickermoney-plugin` header gets `403 grant_denied`. A
+plugin token for it answers `403 plugin_disabled` on every route.
+(A request made with the host's token that omits the header is not attributed
+to the plugin, so a disabled plugin's already-loaded code is not stopped from
+calling core routes; see [Plugin trust model](#plugin-trust-model).)
 Its schema, rows and role are kept ("Erase my data" still empties them for the user; see [Erasing data](#erasing-data)). Do not assume a plugin's code runs at
 every page load, and do not delete data on unmount.
 

@@ -23,6 +23,18 @@ curated, human-readable version.
   because `parseManifest` uses it.
 
 ### Added
+- **Plugin-scoped access tokens, and default-deny for them (server side).**
+  `POST /api/v1/plugins/:pluginId/token` mints a five-minute token that speaks
+  for one plugin: its own audience, the plugin id and the plugin's granted
+  tables as claims, bound to the session it was minted under. A plugin token can
+  reach only the `GET /api/v1/core/*` reads its plugin was granted and its own
+  `/api/v1/p/<id>/` routes. It is refused (`403 plugin_route_denied`) on
+  everything else: sign-in and refresh, the data export, settings, plugin
+  management, the host's own data routes and other plugins' routes. Every
+  `/api/v1` route is classified in `apps/api/src/auth/pluginRouteAccess.ts`, a
+  route left out is denied, and a test fails when one is. Nothing in the web app
+  uses these tokens yet, so plugin code in the host page is not sandboxed; see
+  `DEVELOPMENT.md` "Plugin tokens".
 - **Owners can change another account's role from Settings → People.** The
   section lists every account with a role select. Promoting a member makes a
   second owner; demoting an owner asks for confirmation. The last owner cannot
@@ -116,6 +128,11 @@ curated, human-readable version.
   Not used to protect the data export; see `ROADMAP.md`.
 
 ### Changed
+- **`x-wickermoney-plugin` is no longer an identity.** A request is attributed
+  to a plugin by its plugin token. The header is ignored on such a request, and
+  on the host's own token it can only hold the request to the named plugin's
+  manifest, as before. First-party plugins that run in the host page still send
+  it; it was never a security boundary and still is not.
 - **The host and Budgets import the date helpers from `/date`.** The API, the
   web app, the seed data and Budgets now import `addDays` and `addMonths` from
   `@wickermoney/plugin-sdk/date`. No behaviour change.
