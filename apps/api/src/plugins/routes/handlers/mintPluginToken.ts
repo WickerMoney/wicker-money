@@ -11,8 +11,9 @@ import type { PluginService } from '../../service/PluginService.js'
  * it makes on that plugin's behalf.
  *
  * Host only. The caller must hold the user's own access token. A plugin token
- * cannot mint another (or a longer-lived copy of itself): it is not an access
- * token, so `requireAuth` does not accept it.
+ * cannot mint another (or a longer-lived copy of itself): the route is
+ * classified as denied for plugin tokens (`403 plugin_route_denied`), and
+ * `requireAuth` would not accept one either.
  *
  * Responds `200` with `{ token, expiresAt, pluginId, grants }`, where `grants`
  * lists the plugin's `requiredTables` as `{ table, access }` entries (the same

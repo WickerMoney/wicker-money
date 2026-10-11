@@ -150,7 +150,7 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
       return { status: 'ok', version: APP_VERSION, gitSha: GIT_SHA, sdkVersion: SDK_MAJOR_VERSION }
     })
 
-    registerAuth(app, auth)
+    registerAuth(app, auth, services.plugins)
     registerAuthRoutes(app, auth)
     registerAccountRoutes(app, services)
     registerCategoryRoutes(app, services)

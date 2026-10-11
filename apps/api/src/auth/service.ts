@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from './password.js'
 import type { AuthUser } from './service/AuthUser.js'
 import { canonicalTimezone } from './service/canonicalTimezone.js'
 import type { UserIdentity } from './repository/UserIdentity.js'
+import { verifyPluginToken, type PluginTokenClaims } from './pluginTokens.js'
 import { Semaphore } from './Semaphore.js'
 import type { AuthPolicy } from './service/AuthPolicy.js'
 import type { AuthSession } from './service/AuthSession.js'
@@ -304,6 +305,25 @@ export class AuthService {
    */
   async authenticate(token: string): Promise<AccessClaims | null> {
     const claims = await verifyAccessToken(this.config, token)
+    if (claims === null) return null
+    const active = await this.uow.forSystem((repos) => repos.sessions.isFamilyActive(claims.sid), {
+      readOnly: true,
+    })
+    return active ? claims : null
+  }
+
+  /**
+   * Authenticates a plugin token: its signature, expiry, issuer, audience and
+   * claims must be valid and the session it was minted under must still be
+   * live, so logging out or changing the password ends a plugin's access too.
+   *
+   * Whether the plugin is enabled and what it may do are the caller's checks.
+   *
+   * @param token - Signed plugin token (JWT).
+   * @returns The token's claims, or `null` if it is invalid, expired, an access token or its session was revoked.
+   */
+  async authenticatePlugin(token: string): Promise<PluginTokenClaims | null> {
+    const claims = await verifyPluginToken(this.config, token)
     if (claims === null) return null
     const active = await this.uow.forSystem((repos) => repos.sessions.isFamilyActive(claims.sid), {
       readOnly: true,

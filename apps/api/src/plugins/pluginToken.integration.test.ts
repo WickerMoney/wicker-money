@@ -100,7 +100,8 @@ describe('POST /api/v1/plugins/:pluginId/token', () => {
     const res = await h.app.inject({
       method: 'POST', url: `/api/v1/plugins/${INSIGHTS}/token`, headers: { authorization: `Bearer ${token}` },
     })
-    expect(res.statusCode).toBe(401)
+    expect(res.statusCode).toBe(403)
+    expect(res.json().code).toBe('plugin_route_denied')
   })
 
   it('answers 404 not_found for a plugin id that was never registered', async () => {
