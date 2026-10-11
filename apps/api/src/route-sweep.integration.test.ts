@@ -1,13 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { enumerateRoutes, type RouteKey } from './testing/enumerateRoutes.js'
 import { createHarness, type Harness } from './testing/harness.js'
 
 let h: Harness
-
-/** One registered route: an HTTP method and its full URL pattern. */
-interface RouteKey {
-  readonly method: string
-  readonly path: string
-}
 
 const asKey = (r: RouteKey): string => `${r.method} ${r.path}`
 
@@ -142,31 +137,6 @@ const PROTECTED_ROUTES: readonly string[] = [
   'GET /api/v1/settings/erase-instance',
   'POST /api/v1/settings/erase-instance',
 ]
-
-/**
- * Reads the route tree Fastify prints and flattens it into method + full path.
- *
- * Each printed line is `<tree drawing><segment> (<METHODS>)`; the drawing's
- * width (four characters per level) gives the nesting, and a segment extends
- * its parent's path. `HEAD` is Fastify's automatic twin of every `GET`, so it
- * is dropped here and asserted separately.
- */
-function enumerateRoutes(tree: string): RouteKey[] {
-  const routes: RouteKey[] = []
-  const parents: string[] = []
-  for (const line of tree.split('\n')) {
-    if (line.trim() === '') continue
-    const match = /^((?:│ {3}| {4})*)(?:├── |└── )(\S+) \(([A-Z, ]+)\)$/.exec(line)
-    if (match === null) throw new Error(`Unparseable route line: ${JSON.stringify(line)}`)
-    const depth = (match[1] as string).length / 4
-    const path = (parents[depth - 1] ?? '') + (match[2] as string)
-    parents[depth] = path
-    for (const method of (match[3] as string).split(', ')) {
-      if (method !== 'HEAD') routes.push({ method, path })
-    }
-  }
-  return routes
-}
 
 /** Replaces `:id` style parameters with a well-formed UUID so validation cannot answer before authentication. */
 const concrete = (path: string): string =>
