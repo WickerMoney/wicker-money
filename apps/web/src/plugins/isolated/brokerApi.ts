@@ -34,13 +34,15 @@ const BASE = '/api/v1'
  * The real network side of the broker.
  *
  * `mint` goes through the host's client, which holds the user's access token
- * and refreshes it. `send` deliberately does not: it uses the plugin token as
+ * and refreshes it. It is a POST that changes nothing the user can read, so it
+ * is marked `readOnly` and does not empty the response cache (otherwise every
+ * frame that starts would invalidate what its neighbours just fetched). `send` deliberately does not: it uses the plugin token as
  * the only credential, omits cookies, and never retries with the host's token,
  * so a request made for a plugin can never carry more authority than the
  * plugin token has.
  */
 export const hostBrokerApi: BrokerApi = {
-  mint: (pluginId) => api.post<MintedToken>(`/plugins/${encodeURIComponent(pluginId)}/token`),
+  mint: (pluginId) => api.post<MintedToken>(`/plugins/${encodeURIComponent(pluginId)}/token`, undefined, { readOnly: true }),
 
   async send({ method, path, body, token, signal }) {
     const headers = new Headers({ authorization: `Bearer ${token}`, accept: 'application/json' })
