@@ -266,6 +266,34 @@ describe('AuthService sessions and access tokens', () => {
   })
 })
 
+describe('AuthService password confirmation', () => {
+  it('accepts the account password and changes nothing', async () => {
+    const one = await service.register('a@example.com', PASSWORD)
+    await expect(service.confirmPassword(one.user.id, PASSWORD)).resolves.toBeUndefined()
+    expect(await service.authenticate(one.accessToken)).not.toBeNull()
+  })
+
+  it('refuses a wrong password with 403 password_incorrect and an issue on the password field', async () => {
+    const one = await service.register('a@example.com', PASSWORD)
+    const failure = await service.confirmPassword(one.user.id, 'not-the-password').catch((e: unknown) => e)
+    expect(failure).toBeInstanceOf(AppError)
+    expect(failure).toMatchObject({
+      statusCode: 403,
+      code: 'password_incorrect',
+      issues: [{ path: ['password'], message: 'Password is incorrect.' }],
+    })
+    // A failed confirmation is not a failed session: the caller stays signed in.
+    expect(await service.authenticate(one.accessToken)).not.toBeNull()
+  })
+
+  it('refuses an account that does not exist the same way, not as a different error', async () => {
+    await expect(service.confirmPassword(randomUUID(), PASSWORD)).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'password_incorrect',
+    })
+  })
+})
+
 describe('AuthService accounts', () => {
   it('normalises the email on register, login and reset', async () => {
     const created = await service.register('  Mixed@Example.COM ', PASSWORD)
