@@ -647,10 +647,6 @@ describe('request size limits', () => {
       await capped.close()
     }
   })
-
-  it('uses a 50,000 row limit unless told otherwise', () => {
-    expect(h.config.IMPORT_MAX_ROWS).toBe(50_000)
-  })
 })
 
 describe('statement limit', () => {

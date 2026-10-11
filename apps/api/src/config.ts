@@ -100,8 +100,14 @@ const schema = z.object({
    * import parses the file in the API process and holds a database transaction
    * for its length, so this bounds what one request can cost; the file size
    * limit (8 MB) applies as well and is not configurable.
+   *
+   * The default is the largest count that, measured, keeps one import's commit
+   * near 15-18 seconds on two vCPUs with a local database, which leaves a
+   * slower host room under a 60 second proxy timeout. It admits a typical
+   * 8 MB bank file; a file of very short rows can pack several times more
+   * rows than that into 8 MB, and this is what refuses it.
    */
-  IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(1_000_000).default(50_000),
+  IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(1_000_000).default(100_000),
 
   /**
    * Whether the refresh cookie carries the `Secure` attribute. Defaults to

@@ -36,7 +36,7 @@ describe('defaults', () => {
       DB_POOL_MAX: 10,
       DB_STATEMENT_TIMEOUT: 30_000,
       DB_LONG_STATEMENT_TIMEOUT: 300_000,
-      IMPORT_MAX_ROWS: 50_000,
+      IMPORT_MAX_ROWS: 100_000,
     })
     expect(config.COOKIE_SECURE).toBeUndefined()
     expect(config.BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
