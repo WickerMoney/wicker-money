@@ -13,6 +13,9 @@
  * exactly as they are from `@wickermoney/plugin-sdk/recurrence`: an export
  * keeps the tier of the entry point it comes from, however it is imported.
  *
+ * `@wickermoney/plugin-sdk/isolated` (`@experimental`) is deliberately not
+ * re-exported here; import it from its own entry point.
+ *
  * @stable
  */
 export {

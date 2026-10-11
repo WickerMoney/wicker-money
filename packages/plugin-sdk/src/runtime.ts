@@ -7,6 +7,10 @@
  * Types plus one small helper, so importing this costs a plugin bundle almost
  * nothing. It needs `react` 19 as a type dependency only.
  *
+ * These types describe a plugin that runs in the host's own page. A plugin
+ * that runs in a sandboxed frame gets the same `PluginContext` rebuilt from a
+ * message protocol: see `@wickermoney/plugin-sdk/isolated`.
+ *
  * Stability: `@stable`. Every bundled UI plugin builds against it.
  *
  * @stable

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as date from './date/index.js'
 import * as root from './index.js'
+import * as isolated from './isolated/index.js'
 import * as money from './money/index.js'
 import * as recurrence from './recurrence/index.js'
 import * as runtime from './runtime.js'
@@ -20,6 +21,25 @@ const names = (ns: object): string[] => Object.keys(ns).sort()
 describe('public runtime surface', () => {
   it('/runtime', () => {
     expect(names(runtime)).toEqual(['adoptPluginStyles'])
+  })
+
+  it('/isolated', () => {
+    expect(names(isolated)).toEqual([
+      'ISOLATED_PROTOCOL_VERSION',
+      'MAX_NOTIFY_LENGTH',
+      'MAX_PATH_LENGTH',
+      'MAX_REPORTED_HEIGHT',
+      'MAX_THEME_TOKENS',
+      'PLUGIN_ERROR_CODES',
+      'PluginApiError',
+      'applyHostTheme',
+      'connectOverPort',
+      'connectToHost',
+      'parseFrameHello',
+      'parseHostMessage',
+      'parseHostReply',
+      'parsePluginMessage',
+    ])
   })
 
   it('/date', () => {

@@ -23,6 +23,10 @@
       "types": "./dist/runtime.d.ts",
       "default": "./dist/runtime.js"
     },
+    "./isolated": {
+      "types": "./dist/isolated/index.d.ts",
+      "default": "./dist/isolated/index.js"
+    },
     "./date": {
       "types": "./dist/date/index.d.ts",
       "default": "./dist/date/index.js"

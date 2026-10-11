@@ -28,6 +28,7 @@ plugin as a Module Federation singleton.
 | Import | Use it for | Contents |
 |---|---|---|
 | `@wickermoney/plugin-sdk/runtime` | Plugin UI code (browser) | Types for the React components a plugin exports (`PluginWidgetProps`, `PluginPageProps`, `PluginContext`, ...), and `adoptPluginStyles` |
+| `@wickermoney/plugin-sdk/isolated` | Plugin UI code that runs in a sandboxed frame (browser), and the host's broker | The message protocol between a plugin frame and the host, validators for it, and the in-frame client: `connectToHost`, `PluginApiError`, `applyHostTheme`. Experimental |
 | `@wickermoney/plugin-sdk/date` | Anything (browser or Node) | Calendar-date arithmetic on `YYYY-MM-DD` strings: `addDays` and `addMonths` |
 | `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `scheduledOccurrences`, `nextScheduledOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals`, the calendar helpers `addDays` and `addMonths`, with per-occurrence overrides (skip, move, change the legs) |
 | `@wickermoney/plugin-sdk/money` | Anything (browser or Node) | Exact money arithmetic on decimal strings: `addMoney`, `sumMoney`, `compareMoney`, `equalMoney`, `moneyToUnits`, `divideUnits`, ... |
@@ -52,9 +53,11 @@ module documentation (`@stable` or `@experimental`).
 | `@wickermoney/plugin-sdk/money` | stable | Exact money arithmetic on decimal strings | The web app, the Budgets, Insights and Spending Trends plugins, and the API's tests |
 | `@wickermoney/plugin-sdk/server` | stable | The server-side contract between the host and a bundled plugin's `register` function | The API, Budgets and Import CSV |
 | `@wickermoney/plugin-sdk/date` | stable | The `addDays` and `addMonths` calendar helpers | The API, the web app and Budgets |
+| `@wickermoney/plugin-sdk/isolated` | experimental | The runtime contract for UI plugins that run in a sandboxed frame: protocol, validators, in-frame client. Stays experimental until the isolation work has shipped and settled | Nothing yet: the host side and the first plugin ports are separate changes |
 | `@wickermoney/plugin-sdk/recurrence` | experimental | Recurring-item date maths and projections. It still re-exports `addDays` and `addMonths` so older imports work; import them from `/date` | The API and the web app. No plugin uses the projections yet |
 
-The root also re-exports the `/date`, `/recurrence`, `/money` and `/server` exports. An
+The root also re-exports the `/date`, `/recurrence`, `/money` and `/server` exports. It does
+not re-export `/isolated`: a frame has no use for the Zod manifest code the root carries. An
 export keeps the tier of the entry point it comes from, however it is
 imported, so `occurrences` is experimental even when imported from the root.
 
@@ -226,6 +229,64 @@ export default function RunwayWidget({ ctx, size, range }: PluginWidgetProps) {
 Money crosses the contract as a **decimal string**, never a JavaScript
 `number`. Use `ctx.formatMoney` to display it.
 
+## Isolated runtime (experimental)
+
+`/runtime` hands a plugin a `PluginContext`, an object of functions. A function cannot
+cross the boundary of a sandboxed frame, so a plugin that runs in one uses
+`/isolated` instead: a small message protocol over a `MessagePort`, and a client that
+rebuilds the same `PluginContext` inside the frame. A component written against
+`PluginWidgetProps` or `PluginPageProps` runs in either place.
+
+```ts
+import { connectToHost } from '@wickermoney/plugin-sdk/isolated'
+
+const host = await connectToHost()             // hello, port, init; applies the host's theme
+host.observeSize(document.body)                // the host sets the frame height from this
+render(<Widget ctx={host.ctx} size={host.getState().size!} />)
+
+host.subscribe((change) => { /* theme, locale, props, route, focus-in */ })
+```
+
+A manifest marks a plugin as built for this runtime with `isolated: true`. That is a
+declaration of what the plugin was built for, not a grant: it can only move a plugin
+towards isolation, and the host decides which runtime a plugin gets. The flag is
+optional, and an existing manifest without it loads exactly as before.
+
+Protocol version 1. After a one-time window handshake (the frame says `wm.hello`; the
+host answers `wm.connect` with a transferred port, or `wm.refuse`), everything travels
+on the port:
+
+| Direction | Message | Purpose |
+|---|---|---|
+| frame to host | `ready` | The port is live; the host answers `init` |
+| frame to host | `request` / `cancel` | `GET`, `POST`, `PUT` or `DELETE` of a path relative to the API root, with an optional `cache` mode; `cancel` for an aborted call |
+| frame to host | `navigate` | Go to an in-app path |
+| frame to host | `resize` | The content height in CSS pixels; the host owns the width |
+| frame to host | `focus-out` | Focus left past the last (`next`) or before the first (`previous`) element |
+| frame to host | `notify` | Reserved; a host answers `not_supported` until the `notify` permission exists |
+| host to frame | `init` | Plugin id, widget or page, session, locale, theme, size and range, first path |
+| host to frame | `response` | The JSON value, or an error: `code`, `message`, optional `status` and `issues` |
+| host to frame | `theme`, `locale`, `props`, `route` | Updates after `init` |
+| host to frame | `focus-in` | Move focus to the frame's first or last focusable element |
+
+What differs from the in-realm `ctx.api`:
+
+- `RequestInit` is narrowed to `signal` and `cache`. Headers and credentials are the
+  host's to set; any other option is refused with `invalid_request` rather than
+  silently dropped.
+- A failed call rejects with `PluginApiError`, which has the same `status`, `code` and
+  `issues` as the host's own `ApiError` (`status` is `0` when there was no HTTP response),
+  so `formErrorsFrom` and existing `catch` blocks work unchanged. An aborted call has
+  `name === 'AbortError'`.
+- There is no `localStorage`, cookie or network of its own in the frame. A widget frame
+  clips overlays, so a widget that needs a dialog should `navigate` to its page, whose
+  frame is full height. Protocol 1 has no host-rendered dialog.
+
+The host must run `parsePluginMessage` on every message a frame sends and identify the
+frame by the `MessagePort` and `event.source`, never by `event.origin` (which is
+`"null"` for a sandboxed frame). Unknown message types are ignored by both sides, so
+adding one is not a version bump.
+
 ## Two rules that fail at runtime, not build time
 
 1. **The remote entry must be an ES module.** The host loads remotes with a
@@ -264,6 +325,9 @@ So today:
   reviewed.
 - Operators should keep `PLUGIN_REMOTE_ORIGINS` empty unless they fully trust
   every origin listed.
+- The [isolated runtime](#isolated-runtime-experimental) contract is defined, but
+  no host loads it yet, so nothing above has changed. This section describes the
+  boundary that exists today.
 - Declare `requiredTables` honestly anyway. It is what the database enforces
   for your server code, and the contract a future isolation model will rely on.
 

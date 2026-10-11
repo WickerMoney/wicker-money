@@ -61,6 +61,15 @@ describe('parseManifest', () => {
     expect(() => parseManifest(null)).not.toThrow()
     expect(parseManifest(null).error).toBeDefined()
   })
+  it('leaves isolated absent unless the manifest sets it', () => {
+    expect(parseManifest(valid).manifest?.isolated).toBeUndefined()
+    expect(parseManifest({ ...valid, isolated: true }).manifest?.isolated).toBe(true)
+    expect(parseManifest({ ...valid, isolated: false }).manifest?.isolated).toBe(false)
+  })
+
+  it('refuses a non-boolean isolated flag', () => {
+    expect(parseManifest({ ...valid, isolated: 'yes' }).error).toContain('isolated')
+  })
 })
 
 describe('pagePath', () => {

@@ -23,6 +23,26 @@ curated, human-readable version.
   because `parseManifest` uses it.
 
 ### Added
+- **`@wickermoney/plugin-sdk/isolated`, the contract for UI plugins that run in a
+  sandboxed frame (experimental).** A `PluginContext` is an object of functions
+  and cannot cross a frame boundary, so this entry point defines a message
+  protocol (version 1) over a `MessagePort` instead: `request` for `GET`,
+  `POST`, `PUT` and `DELETE` with a plugin-visible error (`code`, `status`,
+  `issues`), `navigate`, `resize`, `focus-out`, a reserved `notify`, and from
+  the host `init`, `response`, `theme`, `locale`, `props`, `route` and
+  `focus-in`, after a `wm.hello` / `wm.connect` handshake that carries the
+  protocol version. It includes validators the host runs on every frame message
+  (`parsePluginMessage`) and an in-frame client, `connectToHost`, that rebuilds
+  the same `PluginContext` so a component written against `/runtime` runs in
+  either place. It is additive: `SDK_MAJOR_VERSION` stays `0`, `/runtime` is
+  unchanged and no existing manifest needs editing. No host loads a frame yet,
+  so nothing about the UI plugin trust model has changed. It stays experimental
+  until the isolation work has shipped and settled.
+- **An optional `isolated` flag on the plugin manifest.** `isolated: true`
+  declares that a plugin was built for the isolated runtime. It is not a grant:
+  it can only move a plugin towards isolation, and the host decides which
+  runtime a plugin gets. Absent means `false`, so existing manifests are
+  unaffected.
 - **Plugin-scoped access tokens, and default-deny for them (server side).**
   `POST /api/v1/plugins/:pluginId/token` mints a five-minute token that speaks
   for one plugin: its own audience, the plugin id and the plugin's granted
