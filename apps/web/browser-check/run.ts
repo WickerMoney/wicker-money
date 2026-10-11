@@ -29,6 +29,7 @@ import { KyselyUnitOfWork } from '../../api/src/data/KyselyUnitOfWork.js'
 import { configureTenantContext } from '../../api/src/db/configureTenantContext.js'
 import { createDb } from '../../api/src/db/client.js'
 import { BUNDLED_PLUGINS } from '../../api/src/plugins/bundled.js'
+import { pluginRuntimeFor } from '../../api/src/plugins/pluginRuntime.js'
 import { PluginService } from '../../api/src/plugins/service/PluginService.js'
 import { TEST_ADMIN_DATABASE_URL, TEST_AUTH_SECRET, TEST_DATABASE_URL, migrateTestDatabase } from '../../api/src/testing/harness.js'
 
@@ -96,7 +97,9 @@ async function startServer(dist: string, manifest: PluginManifest) {
   } as NodeJS.ProcessEnv)
   configureTenantContext(config.AUTH_SECRET)
   const db = createDb(config.DATABASE_URL, { max: config.DB_POOL_MAX, statementTimeoutMillis: config.DB_STATEMENT_TIMEOUT })
-  const bundled = [...BUNDLED_PLUGINS, manifest]
+  // Only the fixture may run in a frame here: the checks count frames, token mints and reads, and a
+  // bundled plugin that has been ported would add its own. Ported plugins are checked by their own port.
+  const bundled = [...BUNDLED_PLUGINS.filter((m) => pluginRuntimeFor(m, true) === 'in-realm'), manifest]
   const app = buildApp({ db, config, pluginOptions: { bundled } })
   await app.ready()
   await new PluginService(new KyselyUnitOfWork(db), { bundled }).seedBundled()
