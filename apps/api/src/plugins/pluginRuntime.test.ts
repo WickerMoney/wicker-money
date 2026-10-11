@@ -21,11 +21,10 @@ describe('pluginRuntimeFor', () => {
   it('runs spending-trends in a frame, and still in-realm for the plugins not ported', () => {
     const byId = (id: string): PluginManifest => BUNDLED_PLUGINS.find((m) => m.id === id)!
     expect(pluginRuntimeFor(byId('wickermoney.spending-trends'), true)).toBe('isolated')
+    expect(pluginRuntimeFor(byId('wickermoney.insights'), true)).toBe('isolated')
     for (const id of ['wickermoney.budgets', 'wickermoney.import-csv', 'wickermoney.upcoming', 'wickermoney.forecast', 'wickermoney.debt-payoff']) {
       expect(pluginRuntimeFor(byId(id), true), id).toBe('in-realm')
     }
-    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.insights')!, true)).toBe('isolated')
-    expect(pluginRuntimeFor(BUNDLED_PLUGINS.find((m) => m.id === 'wickermoney.budgets')!, true)).toBe('in-realm')
   })
 
   it('lists only plugins that are actually bundled', () => {
