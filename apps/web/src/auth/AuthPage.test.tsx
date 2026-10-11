@@ -12,7 +12,7 @@ function mount(over: Partial<AuthState> = {}) {
   const value: AuthState = {
     user: null, ready: true,
     signIn: vi.fn(async () => {}), register: vi.fn(async () => {}), signOut: vi.fn(async () => {}),
-    setTimezone: vi.fn(async () => {}), ...over,
+    setTimezone: vi.fn(async () => {}), refreshUser: vi.fn(async () => {}), ...over,
   }
   render(<AuthCtx.Provider value={value}><AuthPage /></AuthCtx.Provider>)
   return { value, user: userEvent.setup() }

@@ -668,3 +668,28 @@
 /* A plugin page whose plugin is switched off or did not load. */
 .plugin-off .wm-empty { padding: 40px 16px; }
 .plugin-off .wm-btn { text-decoration: none; display: inline-block; }
+
+/* Settings: people. One row per account, with a role select. On a phone the
+   email gets the full width and the select sits under it. */
+.people-intro { margin: 0 0 12px; }
+.people-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.people-row {
+  display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between;
+  padding: 12px 14px; border: 1px solid var(--wm-border); border-radius: var(--wm-radius-sm);
+  background: var(--wm-surface);
+}
+.people-row__who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; flex: 1 1 240px; }
+.people-row__who .tag { margin-left: 0; }
+.people-row__email { font-weight: 600; overflow-wrap: anywhere; }
+.people-row__joined { flex: 1 0 100%; font-size: 12px; }
+.people-row__role { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; flex: 0 1 220px; }
+.people-row__role .wm-field { flex: 1 1 160px; margin: 0; }
+.people-notice { margin: 0; }
+.people-notice:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .people-row { flex-direction: column; }
+  .people-row__who, .people-row__role { flex: none; width: 100%; }
+  .people-row__role .wm-field { flex: 1 1 100%; }
+}
+.people-announcement { margin: 8px 0 0; min-height: 1.4em; font-size: 13px; }
+.people-row .wm-field__control[aria-disabled="true"] { opacity: .55; cursor: progress; }

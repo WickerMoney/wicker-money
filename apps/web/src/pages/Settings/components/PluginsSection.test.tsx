@@ -41,7 +41,7 @@ let refresh: ReturnType<typeof vi.fn<() => Promise<void>>>
 function mount(loaded: readonly PluginManifest[] = [], role: 'owner' | 'member' = 'owner') {
   const auth = {
     user: { id: 'u1', email: `${role}@example.com`, timezone: 'UTC', role }, ready: true,
-    signIn: vi.fn(), register: vi.fn(), signOut: vi.fn(), setTimezone: vi.fn(),
+    signIn: vi.fn(), register: vi.fn(), signOut: vi.fn(), setTimezone: vi.fn(), refreshUser: vi.fn(),
   }
   render(
     <MemoryRouter>

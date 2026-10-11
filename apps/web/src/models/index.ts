@@ -12,6 +12,7 @@ export type {
 } from './MatchCandidate.js'
 export type { MigrationPlan } from './MigrationPlan.js'
 export type { OccurrenceStatus } from './OccurrenceStatus.js'
+export type { Person } from './Person.js'
 export type { PluginEnabledChange } from './PluginEnabledChange.js'
 export type { RecurrenceFrequency } from './RecurrenceFrequency.js'
 export type { RecurringItem, RecurringLeg } from './RecurringItem.js'
@@ -21,6 +22,7 @@ export type { RegisteredPlugin } from './RegisteredPlugin.js'
 export type {
   OccurrenceLeg, RecurringOccurrence, RecurringOccurrenceList, SettledTransaction,
 } from './RecurringOccurrence.js'
+export type { RoleChange } from './RoleChange.js'
 export type { Rule } from './Rule.js'
 export type { RuleCondition } from './RuleCondition.js'
 export type { RulePreview } from './RulePreview.js'
