@@ -2,6 +2,7 @@ import type { Trx } from '../db/Trx.js'
 import { KyselyAccountRepository } from '../accounts/repository/KyselyAccountRepository.js'
 import { KyselyCategoryRepository } from '../categories/repository/KyselyCategoryRepository.js'
 import { KyselyCategoryRuleRepository } from '../categories/repository/KyselyCategoryRuleRepository.js'
+import { KyselyEraseRepository } from '../settings/repository/KyselyEraseRepository.js'
 import { KyselyExportRepository } from '../settings/repository/KyselyExportRepository.js'
 import { KyselyOnboardingRepository } from '../onboarding/repository/KyselyOnboardingRepository.js'
 import { KyselyPluginRegistryRepository } from '../plugins/repository/KyselyPluginRegistryRepository.js'
@@ -35,6 +36,7 @@ export function createRepositories(trx: Trx): Repositories {
     pluginRegistry: new KyselyPluginRegistryRepository(trx),
     reports: new KyselyReportRepository(trx),
     exports: new KyselyExportRepository(trx),
+    erase: new KyselyEraseRepository(trx),
     recurringItems: new KyselyRecurringItemRepository(trx),
     recurringOccurrences: new KyselyRecurringOccurrenceRepository(trx),
   }

@@ -125,6 +125,9 @@ const PROTECTED_ROUTES: readonly string[] = [
 
   'GET /api/v1/settings/config',
   'GET /api/v1/settings/export',
+  'POST /api/v1/settings/erase-my-data',
+  'GET /api/v1/settings/erase-instance',
+  'POST /api/v1/settings/erase-instance',
 ]
 
 /**

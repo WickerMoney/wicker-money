@@ -9,6 +9,7 @@ import type { OnboardingRepository } from '../onboarding/repository/OnboardingRe
 import type { PluginRegistryRepository } from '../plugins/repository/PluginRegistryRepository.js'
 import type { RecurringItemRepository } from '../recurring/repository/RecurringItemRepository.js'
 import type { RecurringOccurrenceRepository } from '../recurring/repository/RecurringOccurrenceRepository.js'
+import type { EraseRepository } from '../settings/repository/EraseRepository.js'
 import type { ExportRepository } from '../settings/repository/ExportRepository.js'
 import type { SplitRepository } from '../transactions/repository/SplitRepository.js'
 import type { TransactionRepository } from '../transactions/repository/TransactionRepository.js'
@@ -46,6 +47,8 @@ export interface Repositories {
   readonly reports: ReportRepository
   /** Whole-account data reads for export. */
   readonly exports: ExportRepository
+  /** Deleting a user's rows across core and every plugin schema, and erasing an instance. */
+  readonly erase: EraseRepository
   readonly recurringItems: RecurringItemRepository
   /** Skipped, moved and re-priced occurrences, and the transactions that settle them. */
   readonly recurringOccurrences: RecurringOccurrenceRepository

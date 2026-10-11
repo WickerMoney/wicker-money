@@ -9,6 +9,8 @@ export interface RequestUser {
   readonly id: string
   /** User's email address. */
   readonly email: string
+  /** The session family the access token was issued under (the token's `sid` claim). */
+  readonly sessionFamilyId: string
 }
 
 declare module 'fastify' {
@@ -60,7 +62,7 @@ export function registerAuth(app: FastifyInstance, auth: AuthService): void {
     const claims = await auth.authenticate(header.slice('Bearer '.length))
     if (claims === null) throw new UnauthorizedError('Access token is invalid or expired.')
 
-    const user: RequestUser = { id: claims.sub, email: claims.email }
+    const user: RequestUser = { id: claims.sub, email: claims.email, sessionFamilyId: claims.sid }
     request.user = user
     return user
   })
