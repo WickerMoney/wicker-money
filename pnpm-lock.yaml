@@ -53,6 +53,9 @@ importers:
       '@wickermoney/plugin-budgets':
         specifier: workspace:*
         version: link:../../plugins/budgets
+      '@wickermoney/plugin-debt-payoff':
+        specifier: workspace:*
+        version: link:../../plugins/debt-payoff
       '@wickermoney/plugin-import-csv':
         specifier: workspace:*
         version: link:../../plugins/import-csv
