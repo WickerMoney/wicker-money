@@ -46,7 +46,9 @@ export class SettingsService {
    *
    * The whole export runs in one read-only `repeatable read` transaction, so
    * core tables and plugin data describe the same instant even if the user is
-   * changing things while it runs. Tables are read a page at a time and each
+   * changing things while it runs. It runs under the long statement limit
+   * (`DB_LONG_STATEMENT_TIMEOUT`), since a plugin's exporter reads its tables
+   * in one statement. Tables are read a page at a time and each
    * page is handed to the sink before the next is read, so memory does not
    * grow with the size of the ledger.
    *
@@ -84,7 +86,11 @@ export class SettingsService {
         )
         await sink.write('}}')
       },
-      { isolation: 'repeatable read', readOnly: true },
+      {
+        isolation: 'repeatable read',
+        readOnly: true,
+        statementTimeoutMillis: this.deps.config.DB_LONG_STATEMENT_TIMEOUT,
+      },
     )
   }
 }

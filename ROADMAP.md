@@ -27,8 +27,10 @@ promise: items move, shrink or disappear, and there are no dates.
 Polish after the plugin manager:
 
 - A screen for owners to change another account's role, instead of SQL.
-- A layout pass on the Transactions table, which is crowded since the
-  Recurring column was added (dates and merchants wrap, row actions clip).
+- A layout pass on the Transactions table, which has been crowded since the
+  Recurring column was added. It fits at 1366 px wide and above. Narrower than
+  that the date wraps onto two lines, and below about 1190 px the table scrolls
+  sideways, so the row actions are out of view until you scroll.
 - A settings danger zone: "erase my data" (delete the calling user's own rows
   across core and every plugin schema) and, for an owner, "erase this entire
   instance" (drop every user and reset every plugin schema to empty), as two

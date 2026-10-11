@@ -21,6 +21,7 @@ import { registerRecurringItemRoutes } from './recurring/routes/index.js'
 import { registerSettingsRoutes } from './settings/routes/index.js'
 import { registerBundledPluginServers } from './plugins/server.js'
 import { registerTransactionRoutes } from './transactions/routes/index.js'
+import { registerUserRoutes } from './users/routes/index.js'
 import { registerWebApp } from './web/registerWebApp.js'
 import { APP_VERSION, GIT_SHA } from './version.js'
 
@@ -156,8 +157,12 @@ export function buildApp({ db, config, logStream }: AppDeps): FastifyInstance {
     registerOnboardingRoutes(app, services)
     registerTransactionRoutes(app, services)
     registerRecurringItemRoutes(app, services)
+    registerUserRoutes(app, services)
     registerPluginRoutes(app, services)
-    registerBundledPluginServers(app, db, services.plugins)
+    registerBundledPluginServers(app, db, services.plugins, {
+      longStatementTimeoutMillis: config.DB_LONG_STATEMENT_TIMEOUT,
+      importMaxRows: config.IMPORT_MAX_ROWS,
+    })
     registerCoreDataRoutes(app, services)
     registerSettingsRoutes(app, services)
 

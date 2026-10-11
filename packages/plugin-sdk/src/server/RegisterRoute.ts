@@ -13,10 +13,14 @@ import type { RouteMethod } from './RouteMethod.js'
  * @param path - The path relative to the plugin's base, such as `/batches/:id/revert`.
  * @param handler - Handles one request.
  * @param options - `bodyLimit` raises the request-body limit, in bytes, for this route only.
+ *   `longRunning` asks the host to run the route's database work under its
+ *   longer statement limit (`DB_LONG_STATEMENT_TIMEOUT`) instead of the default.
+ *   Set it only on a route that does bulk work, such as a file import; the host
+ *   chooses the limit, and a plugin cannot set or lift it from SQL.
  */
 export type RegisterRoute = (
   method: RouteMethod,
   path: string,
   handler: (ctx: RouteContext) => Promise<unknown>,
-  options?: { readonly bodyLimit?: number },
+  options?: { readonly bodyLimit?: number; readonly longRunning?: boolean },
 ) => void
