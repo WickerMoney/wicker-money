@@ -12,9 +12,17 @@ function manifest(id: string, extra: Partial<PluginManifest> = {}): PluginManife
 }
 
 describe('pluginRuntimeFor', () => {
-  it('keeps the listed bundled plugins in-realm in 0.6.0', () => {
+  it('keeps the listed bundled plugins in-realm and isolates the rest', () => {
     for (const m of BUNDLED_PLUGINS) {
-      expect(pluginRuntimeFor(m, true), m.id).toBe('in-realm')
+      expect(pluginRuntimeFor(m, true), m.id).toBe(IN_REALM_PLUGIN_IDS.has(m.id) ? 'in-realm' : 'isolated')
+    }
+  })
+
+  it('runs spending-trends in a frame, and still in-realm for the plugins not ported', () => {
+    const byId = (id: string): PluginManifest => BUNDLED_PLUGINS.find((m) => m.id === id)!
+    expect(pluginRuntimeFor(byId('wickermoney.spending-trends'), true)).toBe('isolated')
+    for (const id of ['wickermoney.budgets', 'wickermoney.import-csv', 'wickermoney.upcoming', 'wickermoney.forecast', 'wickermoney.debt-payoff']) {
+      expect(pluginRuntimeFor(byId(id), true), id).toBe('in-realm')
     }
   })
 
