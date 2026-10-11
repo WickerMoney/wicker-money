@@ -41,3 +41,19 @@ runtime, `SAMPLES=n` sets the number of timing samples, `INSIGHTS_WIDGETS=1` kee
 only the first widget (to price the second frame), `SHOTS_DIR` keeps screenshots.
 `AXE_PATH` is not a dependency of the repo; install `axe-core` anywhere and point
 at its `axe.min.js`.
+
+## Hostile plugin suite (`hostile/`)
+
+`pnpm --filter @wickermoney/web test:hostile` runs a plugin that is written to misbehave
+(`hostile/fixture/Hostile.tsx`) against the real API and Chromium, next to a harmless neighbour frame, and judges every
+attempt from evidence the plugin cannot forge: what a server on another origin received (HTTP, bare TCP and UDP), what the
+API received (auth kind, status and a marker the fixture puts on every URL it builds), and what the browser logged
+(content security policy violations, console, failed requests, new windows, and the net log for DNS).
+
+- `specs.ts` is the table of attempts the browser must stop, with the mechanism it has to name.
+- `run.ts` holds the phases: setup, credentials, blocked, broker, malformed, flood, spoof, navigation, residual, tokens and
+  lifecycle. `ONLY=broker,flood pnpm --filter @wickermoney/web test:hostile` runs some while iterating.
+- The channels the policy does not govern are **pinned** in `RESIDUAL_PINNED`. A browser upgrade that closes one, or opens
+  another, fails the suite so the change is noticed and the ADR 0005 table is updated.
+- A call made over the DevTools protocol may `eval` where a page may not, so attempts that depend on the policy run from a
+  timer inside the page.
