@@ -14,7 +14,7 @@ pg.types.setTypeParser(pg.types.builtins.DATE, (v) => v)
 export type Db = Kysely<Database>
 
 /**
- * Creates a Kysely instance backed by a `pg` connection pool (max 10).
+ * Creates a Kysely instance backed by a `pg` connection pool (10 connections unless `options.max` says otherwise).
  *
  * The connection's role determines what row-level security applies; see
  * {@link asUser}, {@link asSystem} and {@link asPlugin} for scoped access.
@@ -58,6 +58,25 @@ export interface TransactionOptions {
   readonly isolation?: 'read committed' | 'repeatable read' | 'serializable'
   /** Open the transaction read-only, so any write fails. */
   readonly readOnly?: boolean
+  /**
+   * Statement limit for this transaction, in milliseconds, replacing the pool's
+   * default (`statement_timeout`) until it ends. For routes that do bulk work.
+   */
+  readonly statementTimeoutMillis?: number
+}
+
+/**
+ * Sets `statement_timeout` for the rest of the open transaction.
+ *
+ * `set_config(..., true)` is transaction-local, like the tenant context, so the
+ * value cannot leak to the next checkout of a pooled connection, and the value
+ * is a bound parameter rather than interpolated text.
+ *
+ * @param trx - An open transaction.
+ * @param millis - The limit in milliseconds.
+ */
+async function setStatementTimeout(trx: Transaction<Database>, millis: number): Promise<void> {
+  await sql`SELECT set_config('statement_timeout', ${String(Math.trunc(millis))}, true)`.execute(trx)
 }
 
 /** Starts a Kysely transaction builder configured from `options`. */
@@ -101,6 +120,7 @@ export async function asUser<T>(
 ): Promise<T> {
   return beginTransaction(db, options).execute(async (trx) => {
     await bindTenantContext(trx, userId)
+    if (options?.statementTimeoutMillis !== undefined) await setStatementTimeout(trx, options.statementTimeoutMillis)
     return fn(trx)
   })
 }
@@ -121,7 +141,10 @@ export async function asSystem<T>(
   fn: (trx: Transaction<Database>) => Promise<T>,
   options?: TransactionOptions,
 ): Promise<T> {
-  return beginTransaction(db, options).execute(fn)
+  return beginTransaction(db, options).execute(async (trx) => {
+    if (options?.statementTimeoutMillis !== undefined) await setStatementTimeout(trx, options.statementTimeoutMillis)
+    return fn(trx)
+  })
 }
 
 /** A plain lowercase PostgreSQL identifier, the only shape a role name may take here. */
@@ -188,6 +211,9 @@ export async function setLocalRole(trx: Transaction<Database>, role: string): Pr
  * @param role - Plugin database role to assume (lowercase identifier, max 63 chars).
  * @param userId - Id bound to `app.user_id` for the duration of the transaction.
  * @param fn - Work to run in the transaction.
+ * @param options - Only `statementTimeoutMillis` applies: a plugin route that
+ *   asked for the host's long statement limit passes it here. It is set before
+ *   the role switch, by the host.
  * @returns Whatever `fn` returns.
  * @throws {Error} If `role` is not a plain lowercase identifier, or the tenant
  *   context has not been configured.
@@ -197,6 +223,7 @@ export async function asPlugin<T>(
   role: string,
   userId: string,
   fn: (trx: Transaction<Database>) => Promise<T>,
+  options?: Pick<TransactionOptions, 'statementTimeoutMillis'>,
 ): Promise<T> {
   // Fail before a transaction is opened, not inside one.
   assertRoleName(role)
@@ -206,6 +233,7 @@ export async function asPlugin<T>(
     // a failure there would leave the transaction running as the plugin with
     // no user bound — which RLS would treat as "no rows" rather than an error.
     await bindTenantContext(trx, userId)
+    if (options?.statementTimeoutMillis !== undefined) await setStatementTimeout(trx, options.statementTimeoutMillis)
     await setLocalRole(trx, role)
     return fn(trx)
   })

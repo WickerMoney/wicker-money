@@ -300,7 +300,7 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
      * It is needed to offer "start from my loan and credit card accounts" and to
      * check that a debt links to one of the person's own loan or credit card
      * accounts. The debts, balances and rates are the plugin's own (migration
-     * 029), typed in by the person, so it has no use for `transactions`.
+     * 030), typed in by the person, so it has no use for `transactions`.
      *
      * Absent, each deliberately: `transactions` (balances are entered, not
      * summed from the ledger), `recurring_items` (turning a payment into a

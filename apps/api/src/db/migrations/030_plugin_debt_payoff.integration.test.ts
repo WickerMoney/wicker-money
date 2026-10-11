@@ -3,10 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDb, type Db } from '../client.js'
 import { createHarness, TEST_ADMIN_DATABASE_URL, type Harness } from '../../testing/harness.js'
 import type { Executor } from './support/index.js'
-import { down, up } from './029_plugin_debt_payoff.js'
+import { down, up } from './030_plugin_debt_payoff.js'
 
 /**
- * Migration 029: the debt payoff plugin's own schema.
+ * Migration 030: the debt payoff plugin's own schema.
  *
  * Behaviour through the API (CRUD, isolation between two people, the account
  * link rules) is covered in `plugins/debtPayoff.integration.test.ts`; the

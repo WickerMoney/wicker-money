@@ -1,6 +1,7 @@
 import type { AccountRepository } from '../accounts/repository/AccountRepository.js'
 import type { SessionRepository } from '../auth/repository/SessionRepository.js'
 import type { UserRepository } from '../auth/repository/UserRepository.js'
+import type { UserAdminRepository } from '../users/repository/UserAdminRepository.js'
 import type { CategoryRepository } from '../categories/repository/CategoryRepository.js'
 import type { CategoryRuleRepository } from '../categories/repository/CategoryRuleRepository.js'
 import type { ReportRepository } from '../core/repository/ReportRepository.js'
@@ -34,6 +35,8 @@ export interface Repositories {
   readonly categoryRules: CategoryRuleRepository
   /** User identities. */
   readonly users: UserRepository
+  /** Owner-only listing of accounts and role changes. */
+  readonly userAdmin: UserAdminRepository
   /** Refresh-token sessions. */
   readonly sessions: SessionRepository
   /** Discovery of rows that reference a parent row, across schemas. */

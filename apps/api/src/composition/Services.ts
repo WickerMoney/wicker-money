@@ -9,6 +9,7 @@ import type { RecurringOccurrenceService } from '../recurring/service/RecurringO
 import type { ReportService } from '../core/service/ReportService.js'
 import type { SettingsService } from '../settings/service/SettingsService.js'
 import type { TransactionService } from '../transactions/service/TransactionService.js'
+import type { UserAdminService } from '../users/service/UserAdminService.js'
 
 /** Every application service, constructed once at startup and shared by all requests. */
 export interface Services {
@@ -24,6 +25,8 @@ export interface Services {
   readonly categoryRules: CategoryRuleService
   /** Setup wizard: previews and applies the starter category set. */
   readonly onboarding: OnboardingService
+  /** Owner-only account administration: listing accounts and changing roles. */
+  readonly users: UserAdminService
   /** Instance configuration report and whole-account data export. */
   readonly settings: SettingsService
   /** Plugin registry queries. */
