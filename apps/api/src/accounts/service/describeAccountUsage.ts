@@ -11,6 +11,10 @@ const FRIENDLY: Record<string, string> = {
   'core.recurring_occurrence_legs': 'changed occurrence amount',
   // The budgets plugin's allowance on the account (migration 027).
   'plugin_budgets.account_lines': 'budget allowance',
+  // The debt payoff plugin's debt that tracks the account (migration 029).
+  // A plain delete is refused while linked; deleting with history unlinks the debt
+  // (ON DELETE SET NULL), it never deletes it.
+  'plugin_debt_payoff.debts': 'debt',
 }
 
 /**

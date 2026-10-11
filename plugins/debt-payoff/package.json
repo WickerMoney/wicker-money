@@ -1,0 +1,40 @@
+{
+  "name": "@wickermoney/plugin-debt-payoff",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WickerMoney/wicker-money.git",
+    "directory": "plugins/debt-payoff"
+  },
+  "homepage": "https://github.com/WickerMoney/wicker-money#readme",
+  "bugs": {
+    "url": "https://github.com/WickerMoney/wicker-money/issues"
+  },
+  "type": "module",
+  "exports": {
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "default": "./dist/shared/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.server.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@wickermoney/plugin-sdk": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
+  }
+}

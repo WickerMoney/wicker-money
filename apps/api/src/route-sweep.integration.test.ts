@@ -123,6 +123,16 @@ const PROTECTED_ROUTES: readonly string[] = [
   'PUT /api/v1/p/wickermoney.budgets/account-line',
   'DELETE /api/v1/p/wickermoney.budgets/account-line',
 
+  'GET /api/v1/p/wickermoney.debt-payoff/debts',
+  'POST /api/v1/p/wickermoney.debt-payoff/debts',
+  'GET /api/v1/p/wickermoney.debt-payoff/debts/:id',
+  'PUT /api/v1/p/wickermoney.debt-payoff/debts/:id',
+  'DELETE /api/v1/p/wickermoney.debt-payoff/debts/:id',
+  'GET /api/v1/p/wickermoney.debt-payoff/settings',
+  'PUT /api/v1/p/wickermoney.debt-payoff/settings',
+  'GET /api/v1/p/wickermoney.debt-payoff/plan',
+  'GET /api/v1/p/wickermoney.debt-payoff/account-suggestions',
+
   'GET /api/v1/settings/config',
   'GET /api/v1/settings/export',
 ]

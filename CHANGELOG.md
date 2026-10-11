@@ -23,6 +23,15 @@ curated, human-readable version.
   because `parseManifest` uses it.
 
 ### Added
+- **Debt payoff plugin, server half.** A new bundled plugin,
+  `wickermoney.debt-payoff`, with its own tables (migration 029), endpoints for
+  debts and settings, and a snowball and avalanche planner behind
+  `GET /api/v1/p/wickermoney.debt-payoff/plan`. The plan is computed exactly in
+  integer units of 0.0001, interest compounding monthly at APR/12 and rounded
+  once per debt per month, half away from zero; it stops at 600 months and says
+  so. It also appears in the settings export. There is no page yet. The plugin
+  can read your accounts so a debt can track a loan or credit card, and nothing
+  else of the host's.
 - **`@wickermoney/plugin-sdk/date`**, a stable entry point for the calendar
   helpers `addDays` and `addMonths`. They moved here from the experimental
   `/recurrence` entry point so that first-party code (Budgets, the API, the web

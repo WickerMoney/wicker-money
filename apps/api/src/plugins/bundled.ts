@@ -287,4 +287,38 @@ export const BUNDLED_PLUGINS: readonly PluginManifest[] = [
       exporters: false,
     },
   },
+  {
+    id: 'wickermoney.debt-payoff',
+    name: 'Debt Payoff',
+    version: '0.1.0',
+    description: 'Snowball and avalanche payoff plans for your loans and credit cards: when you will be debt free, and the interest it saves.',
+    author: 'Wicker',
+    sdkVersion: SDK_MAJOR_VERSION,
+    /**
+     * Read-only access to `accounts`, and nothing else on core.
+     *
+     * It is needed to offer "start from my loan and credit card accounts" and to
+     * check that a debt links to one of the person's own loan or credit card
+     * accounts. The debts, balances and rates are the plugin's own (migration
+     * 029), typed in by the person, so it has no use for `transactions`.
+     *
+     * Absent, each deliberately: `transactions` (balances are entered, not
+     * summed from the ledger), `recurring_items` (turning a payment into a
+     * recurring item is a later step that crosses plugins, and cross-plugin
+     * data access is out of scope), and every other plugin's tables, which no
+     * manifest can name.
+     */
+    requiredTables: [{ table: 'accounts', access: 'read' }],
+    permissions: [],
+    remoteEntry: '/plugins/debt-payoff/remoteEntry.js',
+    contributes: {
+      // The page and the dashboard widget arrive with the UI half of the plugin.
+      pages: [],
+      widgets: [],
+      endpoints: true,
+      // Same bundled-only trust boundary as endpoints: exportDebtPayoffData
+      // reads plugin_debt_payoff, a schema core does not know exists.
+      exporters: true,
+    },
+  },
 ]
