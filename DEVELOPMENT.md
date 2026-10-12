@@ -684,7 +684,7 @@ that talks about plugin "permissions", "scoping" or "sandboxing".
 | Broker (`apps/web/src/plugins/isolated/broker.ts`) | The only code that holds a plugin token. Checks the manifest grants and a path allow-list, then the per-user response cache, then the network; rate-limits and validates every message | **Yes**, it is the single door out of the frame |
 | `x-wickermoney-plugin` header + `requireTableGrant` | Holds a host-token request that names a plugin to that plugin's manifest | **No.** Advisory: it can narrow a host request, never identify one, and a caller can omit it. A plugin token is never attributed by it |
 | Scoped `ctx.api` client in `apps/web/src/plugins/context.ts` | Fails fast on an ungranted path | **No.** Developer ergonomics; plugin code can call `fetch` |
-| `PLUGIN_REMOTE_ORIGINS` and the CSP | Limit where plugin code may be loaded from | No. They choose whose code is trusted, not what it may do |
+| `PLUGIN_REMOTE_ORIGINS`, the frame's CSP and the manifest `integrity` pin | A remote origin is allowed in the frame's policy only (never the page's), and the frame has the browser verify each pinned file before the plugin runs | They decide whose code may *load*; the frame and broker rows decide what it may *do*. A pin covers only the files it lists, and is only as good as where the operator took it from. See [Third-party plugins](#third-party-plugins-added-by-an-operator) |
 
 Consequences for contributors:
 
@@ -698,9 +698,12 @@ Consequences for contributors:
 - Do not rely on the plugin header for access control. A route that must not
   be reachable by plugins is closed by classifying it as denied for plugin
   tokens (next section), which the header cannot undo.
-- Third-party plugin install stays unsupported, and `PLUGIN_REMOTE_ORIGINS`
-  stays empty by default. The host can now run a plugin in a frame, but there
-  is no install flow and the hostile-plugin test suite is not written yet.
+- There is still no install flow, catalog or signing for third-party plugins.
+  `PLUGIN_REMOTE_ORIGINS` and `PLUGIN_MANIFEST_DIR` stay empty by default, and
+  nothing about start-up changes when they are. Do not write docs that say
+  isolation makes a third-party plugin *safe*: it contains the plugin's UI, with
+  the known gaps in ADR 0005, and server-side plugin code stays first-party
+  only (ADR 0007).
 - The SDK defines the contract for isolated UI plugins
   (`@wickermoney/plugin-sdk/isolated`, experimental) and the web app hosts it.
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
@@ -815,8 +818,8 @@ axe, and timing and memory). See `apps/web/browser-check/README.md`.
 ### Hostile plugin suite
 
 ADR 0005's trust boundary is only worth what it survives, so a plugin written to
-misbehave runs against it on every pull request. `pnpm test:hostile` runs two
-halves, and CI runs both as the required check **Hostile plugin suite**.
+misbehave runs against it on every pull request. `pnpm test:hostile` runs
+three parts, and CI runs them as the required check **Hostile plugin suite**.
 
 - **Server half** (`apps/api/src/plugins/hostilePluginToken.integration.test.ts`,
   PostgreSQL). The route classes a plugin token must be refused on are written
@@ -839,13 +842,20 @@ halves, and CI runs both as the required check **Hostile plugin suite**.
   disabled while open. Each is judged by what a server on another origin, the
   API and the browser report, never by the plugin's own account. See
   `apps/web/browser-check/README.md`.
+- **Remote-origin half** (`apps/web/browser-check/hostile/remote.ts`, Chromium,
+  needs `openssl` for a throwaway certificate). A real federated build is served
+  over https from a second origin and listed with a pin: a matching build loads in
+  the frame and only there; a changed chunk and a changed entry are refused before
+  any of their code runs; an origin that is not allowlisted is blocked and gets no
+  request; crafted manifests are refused or stay isolated. `pnpm test:hostile`
+  runs it after the hostile browser half.
 
 Two unit tests belong to the same gate and run in `pnpm test`:
 `sandboxAttributes.test.tsx` (the sandbox attribute is exactly `allow-scripts`,
 and `allow-same-origin` appears nowhere in code) and
 `plugins/service/permissions.test.ts` (every `PERMISSIONS` value is implemented
-or refused at load; the refusal is still to be built and is marked `it.fails`
-until it is).
+or refused at load, and a manifest that declares a refused one fails to load with
+a reason that names it).
 
 Needs `pnpm build`, a test database (see above) and Chromium. In CI the browser
 comes from `playwright-core install chromium`; in a sandbox that ships one,
@@ -855,6 +865,72 @@ laptop; the CI job, including install, build and browser download, is
 estimated at 5 to 7 minutes. A channel the frame policy does not govern is
 **pinned** in the browser half: a browser upgrade that closes or opens one fails
 the suite so that the ADR table is updated with it.
+
+### Third-party plugins (added by an operator)
+
+There is **no install flow, no catalog and no signing**. The only way in is the
+operator's own hands, and it is deliberately small.
+
+```mermaid
+flowchart LR
+  D[PLUGIN_MANIFEST_DIR<br/>*.json, read once at boot] --> R[readManifestDirectory<br/>files only, size and count caps,<br/>no bundled id]
+  R --> A{PluginService admission}
+  A -->|parseManifest, refused permission,<br/>server code, origin, pin| X[Refused: reason on the plugin list]
+  A -->|ok| S[Registered switched off]
+  S -->|owner enables| F[Isolated frame only]
+  O[PLUGIN_REMOTE_ORIGINS] -.->|frame CSP only| F
+```
+
+1. Host the plugin's build on an https origin that sends
+   `Access-Control-Allow-Origin` (the frame fetches in CORS mode from an opaque
+   origin), and put the origin in `PLUGIN_REMOTE_ORIGINS`.
+2. Copy its manifest into `PLUGIN_MANIFEST_DIR` with an `integrity` map for
+   **every** `.js` file of the build, then restart the API. The directory is read
+   once; there is no reload.
+3. Switch the plugin on as an owner (`PATCH /api/v1/plugins/:id`, or the plugin
+   list). It is registered off, and a restart does not turn it back on or off.
+
+Make the pin from the files you reviewed, not by fetching them from the origin:
+
+```bash
+cd path/to/the/build
+find . -name '*.js' | sed 's#^\./##' | sort | while read -r f; do
+  printf '"%s": "sha384-%s",\n' "$f" "$(openssl dgst -sha384 -binary "$f" | openssl base64 -A)"
+done
+```
+
+```powershell
+Get-ChildItem -Recurse -Filter *.js | ForEach-Object {
+  $hex = (Get-FileHash -Algorithm SHA384 $_.FullName).Hash
+  $b64 = [Convert]::ToBase64String([byte[]]($hex -split '(?<=\G..)(?=.)' | ForEach-Object { [Convert]::ToByte($_, 16) }))
+  '"{0}": "sha384-{1}",' -f ($_.FullName.Substring($PWD.Path.Length + 1) -replace '\\', '/'), $b64
+}
+```
+
+What the code enforces, each with the test that says so:
+
+| Rule | Where | Test |
+| --- | --- | --- |
+| A non-bundled manifest has no `endpoints` or `exporters`, and never gets in-realm mode | `service/admission.ts` (`serverCodeRefusal`), `pluginRuntime.ts` | `externalPlugins.test.ts`, `pluginRuntime.test.ts`, `externalPlugins.integration.test.ts` |
+| An entry the host does not serve is always isolated, whatever `isolated` says | `pluginRuntimeFor`, `isHostServedEntry` | `pluginRuntime.test.ts` (crafted values included) |
+| The page never registers a remote entry | `apps/web/src/plugins/registerOne.ts` | `loader.test.ts` |
+| The page's CSP does not name a plugin origin | `buildContentSecurityPolicy` | `buildContentSecurityPolicy.test.ts`, `registerWebApp.test.ts` |
+| A plugin the image did not ship, or a remote entry, needs a pin that lists its entry file | `admission.ts` (`pinRefusal`), `checkRemoteEntryIntegrity` | `integrity.test.ts`, `PluginService.test.ts` |
+| The browser verifies every pinned file before the runtime starts; a remote entry with no pin is not loaded | `apps/web/src/frame/verifyPinnedFiles.ts` | `verifyPinnedFiles.test.ts`, and `hostile/remote.ts` in Chromium |
+| A manifest never replaces a bundled id; files only, capped | `manifestDirectory.ts` | `manifestDirectory.test.ts` |
+| An origin outside `PLUGIN_REMOTE_ORIGINS` is not loadable and receives no request | frame CSP, `checkRemoteEntry` | `hostile/remote.ts`, `PluginService.test.ts` |
+
+**What a third-party UI plugin can do:** read the eight `GET /api/v1/core/*`
+routes for the tables in its `requiredTables`, and nothing else. No endpoints,
+exporters, storage or scheduled work (ADR 0007), and a `write` grant on a core
+table has no route it can use.
+
+**Limits of the pin**, which the docs must keep saying: only listed files are
+checked (a file the entry loads that you did not list loads unchecked); style
+sheets are not covered; the pin travels to the frame in the URL fragment, which
+decides what the *host* loads, and a plugin that is already running hostile code
+gains nothing from changing it; a manifest taken from the server that serves the
+code proves nothing; Chromium 141 only.
 
 ### Plugin tokens
 
