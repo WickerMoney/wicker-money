@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/ApiError.js'
@@ -26,7 +26,9 @@ function mount(role: 'owner' | 'member' = 'owner', check: InstanceEraseCheck = C
     user: { id: 'u1', email: 'me@example.com', timezone: 'UTC', role }, ready: true,
     signIn: vi.fn(), register: vi.fn(), setTimezone: vi.fn(), refreshUser: vi.fn(), signOut,
   }
-  const post = vi.spyOn(api, 'post').mockResolvedValue(undefined)
+  const post = vi.spyOn(api, 'post').mockImplementation(async (path: string) => (
+    path === '/settings/export-ticket' ? { ticket: 'tkt' } : undefined
+  ) as never)
   const get = vi.spyOn(api, 'get').mockImplementation(async (path: string) => {
     if (path === '/settings/erase-instance') return check
     if (path === '/settings/export') return { accounts: [] }
@@ -168,23 +170,96 @@ describe('Erase my data', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('Too many attempts. Try again later.')
   })
 
-  it('offers the export first, and downloads without erasing anything', async () => {
+  const exportDialog = () => screen.getByRole('dialog', { name: 'Confirm your password' })
+
+  async function startExport(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first…' }))
+    await user.type(within(exportDialog()).getByLabelText('Your password'), 'export-pw')
+  }
+
+  it('offers the export first, asks for the password in its own dialog, and downloads without erasing anything', async () => {
     const { user, get, post } = await open()
-    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first' }))
+    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first…' }))
+    expect(within(exportDialog()).getByText(/Enter your password to download/)).toBeTruthy()
+    // Nothing is requested until the password is entered and sent.
+    expect(post).not.toHaveBeenCalled()
+    expect(get).not.toHaveBeenCalled()
+
+    await user.type(within(exportDialog()).getByLabelText('Your password'), 'export-pw')
+    await user.click(within(exportDialog()).getByRole('button', { name: 'Download my data' }))
 
     await waitFor(() => { expect(downloadJson).toHaveBeenCalledTimes(1) })
-    expect(get).toHaveBeenCalledWith('/settings/export')
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(post).toHaveBeenCalledWith('/settings/export-ticket', { password: 'export-pw' }, { readOnly: true })
+    expect(get).toHaveBeenCalledWith('/settings/export', { headers: { 'x-wickermoney-export-ticket': 'tkt' } })
     expect(downloadJson.mock.calls[0]?.[0]).toEqual({ accounts: [] })
     expect(await within(dialog()).findByText('Downloaded.')).toBeTruthy()
-    expect(post).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalledWith('/settings/erase-my-data', expect.anything())
+    // The password step is gone; the erase dialog is where it was.
+    expect(screen.queryByRole('dialog', { name: 'Confirm your password' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Erase my data' })).toBeTruthy()
   })
 
-  it('reports a failed export without closing or erasing', async () => {
+  it('puts a wrong export password under the password field of the export dialog, not the erase dialog', async () => {
+    const { user, post, get } = await open()
+    post.mockRejectedValueOnce(new ApiError('Password is incorrect.', 403, 'password_incorrect', [
+      { path: ['password'], message: 'Password is incorrect.' },
+    ]))
+    await startExport(user)
+    await user.click(within(exportDialog()).getByRole('button', { name: 'Download my data' }))
+
+    await waitFor(() => { expect(within(exportDialog()).getByLabelText('Your password').getAttribute('aria-invalid')).toBe('true') })
+    expect(get).not.toHaveBeenCalled()
+    expect(downloadJson).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Erase my data' })).toBeTruthy()
+  })
+
+  it('reports a failed export beside the export buttons without closing, downloading or erasing', async () => {
     const { user, get, post } = await open()
     get.mockRejectedValue(new Error('Export failed.'))
-    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first' }))
+    await startExport(user)
+    await user.click(within(exportDialog()).getByRole('button', { name: 'Download my data' }))
 
-    expect((await within(dialog()).findByRole('alert')).textContent).toBe('Export failed.')
+    expect((await within(exportDialog()).findByRole('alert')).textContent).toBe('Export failed.')
+    expect(downloadJson).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalledWith('/settings/erase-my-data', expect.anything())
+    expect(screen.getByRole('dialog', { name: 'Erase my data' })).toBeTruthy()
+  })
+
+  it('never lets Enter in the export password box submit the erase form behind it', async () => {
+    const { user, post, signOut } = await open()
+    // The erase form is complete, so a leaked submit event would erase for real.
+    await user.type(screen.getByLabelText('Type "erase my data" to confirm'), 'erase my data')
+    await user.type(within(dialog()).getByLabelText('Your password'), 'erase-pw')
+    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first…' }))
+    await user.type(within(exportDialog()).getByLabelText('Your password'), 'export-pw{Enter}')
+
+    await waitFor(() => { expect(downloadJson).toHaveBeenCalledTimes(1) })
+    expect(post.mock.calls.map((c) => c[0])).toEqual(['/settings/export-ticket'])
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it('closing the export step, even with the dialog\'s own close event, leaves the erase dialog open', async () => {
+    // A browser fires `close` on the top dialog when Escape is pressed; React passes that event up to
+    // every enclosing dialog's onClose unless it is stopped, which would close the erase dialog too.
+    const { user } = await open()
+    await user.type(screen.getByLabelText('Type "erase my data" to confirm'), 'erase my data')
+    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first…' }))
+    fireEvent(exportDialog(), new Event('close'))
+
+    expect(screen.queryByRole('dialog', { name: 'Confirm your password' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Erase my data' })).toBeTruthy()
+    expect((screen.getByLabelText('Type "erase my data" to confirm') as HTMLInputElement).value).toBe('erase my data')
+  })
+
+  it('keeps what was typed in the erase form when the export step is cancelled', async () => {
+    const { user, post } = await open()
+    await user.type(screen.getByLabelText('Type "erase my data" to confirm'), 'erase my data')
+    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first…' }))
+    await user.click(within(exportDialog()).getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Confirm your password' })).toBeNull()
+    expect((screen.getByLabelText('Type "erase my data" to confirm') as HTMLInputElement).value).toBe('erase my data')
     expect(post).not.toHaveBeenCalled()
   })
 
@@ -365,5 +440,18 @@ describe('Erase this entire instance', () => {
     await user.click(within(dialog()).getByRole('button', { name: 'Cancel' }))
     expect(post).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('asks for the password before its own export download, the same way, and erases nothing', async () => {
+    const { user, post, get } = await open()
+    await within(dialog()).findByText('wickermoney')
+    await user.click(within(dialog()).getByRole('button', { name: 'Download my data first…' }))
+    const step = screen.getByRole('dialog', { name: 'Confirm your password' })
+    await user.type(within(step).getByLabelText('Your password'), 'export-pw')
+    await user.click(within(step).getByRole('button', { name: 'Download my data' }))
+
+    await waitFor(() => { expect(downloadJson).toHaveBeenCalledTimes(1) })
+    expect(post.mock.calls.map((c) => c[0])).toEqual(['/settings/export-ticket'])
+    expect(get).toHaveBeenCalledWith('/settings/export', { headers: { 'x-wickermoney-export-ticket': 'tkt' } })
   })
 })

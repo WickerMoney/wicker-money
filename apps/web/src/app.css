@@ -612,17 +612,21 @@
 /* Settings: danger zone. Two separate surfaces with a red edge, so the erase
    actions look different from the harmless ones above them. On a phone the
    buttons span the width and the dialog's own buttons stack, so neither
-   destructive button sits under a thumb that was aiming at Cancel. */
+   destructive button sits under a thumb that was aiming at Cancel. The export
+   and its password step (`.export-actions`, `.password-step`) follow the same
+   rules. */
 .danger-zone { display: flex; flex-direction: column; gap: var(--wm-gap); }
 .danger-zone .wm-surface { border-color: var(--wm-negative); }
 .danger-ack { margin: 0 0 12px; padding: 8px 10px; border-radius: var(--wm-radius-sm); background: var(--wm-surface-alt); }
 .danger-export { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 12px; }
 .danger-export .form-hint { flex: 1 1 100%; margin: 0; }
+.export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 @media (max-width: 560px) {
   .danger-zone .wm-btn { width: 100%; }
   .danger-export .wm-btn { width: 100%; }
-  .erase-form .wm-dialog__actions { flex-direction: column-reverse; }
-  .erase-form .wm-dialog__actions .wm-btn { width: 100%; }
+  .export-actions .wm-btn { width: 100%; }
+  .erase-form .wm-dialog__actions, .password-step .wm-dialog__actions { flex-direction: column-reverse; }
+  .erase-form .wm-dialog__actions .wm-btn, .password-step .wm-dialog__actions .wm-btn { width: 100%; }
 }
 
 /* Recurring matching on the Transactions page and dismissed suggestions on the Recurring page. */
