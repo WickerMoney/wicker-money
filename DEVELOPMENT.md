@@ -812,6 +812,50 @@ the page and in a frame and compares them (sizes at `sm` to `full`, light and
 dark, desktop and phone width, clipped overlays, Tab order, the table view,
 axe, and timing and memory). See `apps/web/browser-check/README.md`.
 
+### Hostile plugin suite
+
+ADR 0005's trust boundary is only worth what it survives, so a plugin written to
+misbehave runs against it on every pull request. `pnpm test:hostile` runs two
+halves, and CI runs both as the required check **Hostile plugin suite**.
+
+- **Server half** (`apps/api/src/plugins/hostilePluginToken.integration.test.ts`,
+  PostgreSQL). The route classes a plugin token must be refused on are written
+  out in the test, a second statement of `PLUGIN_ROUTE_ACCESS`: authentication,
+  settings, export and the erase routes, plugin management and token minting,
+  owner role management, and the host's own data screens. Each is called with a
+  valid plugin token, the CSRF header and the refresh cookie, and has to answer
+  `403 plugin_route_denied`, with data, roles, plugins, the session and the
+  password unchanged afterwards. Moving a route out of the denied set is an edit
+  in two files on purpose. It also covers a token's other ways to fail: expired,
+  past its maximum age, tampered, `alg: none`, signed with another key, revoked by
+  logout or a password change, minted for another plugin, and used after the
+  plugin is disabled.
+- **Browser half** (`apps/web/browser-check/hostile/`, Chromium). A hostile
+  widget runs beside an honest neighbour frame and attempts about 140 things:
+  reading the host token or cookies, `fetch`, XHR, WebSocket, `sendBeacon`, images,
+  fonts, workers, nested frames, forms, popups, top navigation and `ctx.navigate`
+  to hostile paths, every route above through the broker and with a stolen token,
+  malformed, oversized and flooding messages, forged handshakes, and being
+  disabled while open. Each is judged by what a server on another origin, the
+  API and the browser report, never by the plugin's own account. See
+  `apps/web/browser-check/README.md`.
+
+Two unit tests belong to the same gate and run in `pnpm test`:
+`sandboxAttributes.test.tsx` (the sandbox attribute is exactly `allow-scripts`,
+and `allow-same-origin` appears nowhere in code) and
+`plugins/service/permissions.test.ts` (every `PERMISSIONS` value is implemented
+or refused at load; the refusal is still to be built and is marked `it.fails`
+until it is).
+
+Needs `pnpm build`, a test database (see above) and Chromium. In CI the browser
+comes from `playwright-core install chromium`; in a sandbox that ships one,
+point `CHROMIUM_PATH` at it and do not install another. Expect about 2.5
+minutes for the browser half and under 10 seconds for the server half on a
+laptop; the CI job, including install, build and browser download, is
+estimated at 5 to 7 minutes. A channel the frame policy does not govern is
+**pinned** in the browser half: a browser upgrade that closes or opens one fails
+the suite so that the ADR table is updated with it.
+
 ### Plugin tokens
 
 A plugin token is a short-lived JWT that speaks for one plugin. It exists so

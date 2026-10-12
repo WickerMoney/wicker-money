@@ -21,6 +21,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
+    "test:hostile": "pnpm --filter @wickermoney/api test:hostile && pnpm --filter @wickermoney/web test:hostile",
     "typecheck": "turbo run typecheck",
     "lint": "eslint .",
     "dev": "turbo run dev"

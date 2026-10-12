@@ -38,6 +38,66 @@ jobs:
       - run: pnpm build
       - run: pnpm test
 
+  # ADR 0005, stage 4: a plugin written to misbehave, run against the real API
+  # and Chromium. It needs PostgreSQL (row-level security does not exist in a
+  # fake) and a pinned browser, so it is its own job and a required check. It
+  # reads the same three things `pnpm test:hostile` reads locally; see
+  # DEVELOPMENT.md, "Hostile plugin suite".
+  hostile-plugins:
+    name: Hostile plugin suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TEST_ADMIN_DATABASE_URL: postgresql://wickermoney:ownerpw@localhost:5432/wickermoney_test
+      TEST_DATABASE_URL: postgresql://wickermoney_app_test:testpw@localhost:5432/wickermoney_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The owner of the test database must not be a superuser (the harness
+      # refuses to run if it is), but needs CREATEROLE: the suite makes its own
+      # application roles.
+      - name: Create the test database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE wickermoney LOGIN CREATEROLE PASSWORD 'ownerpw'" \
+            -c "CREATE DATABASE wickermoney_test OWNER wickermoney"
+
+      # The browser suite serves the built web app.
+      - run: pnpm build
+
+      # Chromium at the version the pinned playwright-core drives, so a result
+      # means the same thing on every run. Cached by that version.
+      - id: playwright
+        run: echo "version=$(pnpm --filter @wickermoney/web exec playwright-core --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: pnpm --filter @wickermoney/web exec playwright-core install --with-deps chromium
+
+      - run: pnpm test:hostile
+
   # Builds the image without pushing it, natively on both architectures, so a
   # broken Dockerfile (or an argon2 native-module problem on arm64) fails
   # before a tag does.
