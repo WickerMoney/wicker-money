@@ -39,6 +39,16 @@ Particularly interesting, because the design leans on them:
 
 - Anything that lets one user read or modify another user's rows (tenant
   isolation is enforced with PostgreSQL row-level security).
+- A way out of the plugin boundary. A UI plugin that runs in the isolated
+  runtime is confined to a sandboxed frame and reaches data only through the
+  host, with a short-lived token that carries just its manifest's grants. These
+  are in scope: reading or changing data outside those grants; obtaining the
+  user's session token or refresh cookie; reaching authentication, the data
+  export, the erase actions, plugin management or another plugin's routes; and
+  getting the host to run a plugin file that does not match its integrity pin, or
+  to run a plugin served from another origin inside the app's own page. Plugins
+  that still run inside the app's own page are not behind this boundary (see
+  "Who runs where").
 - A bundled plugin's server-side code reaching a table its manifest never
   requested through its normal query path (guarded by a per-plugin PostgreSQL
   role; see "Things worth knowing" for what that does not cover).
@@ -53,32 +63,91 @@ Out of scope:
   `BOOTSTRAP_OWNER_EMAIL` is set, the first account to register on such an
   instance becomes its owner; the variable does not verify the address, so it
   does not stop someone who knows it from registering it first.
-- Vulnerabilities in third-party plugins (see below).
+- Vulnerabilities in a third-party plugin's own code. The boundary is meant to
+  contain such a plugin, and a bug inside it is that author's to fix.
+- What an isolated plugin can already read with its grants, and sending that out
+  through the channels listed under "Known gaps" below.
 
 ## Things worth knowing
 
 - Financial data is sensitive. Please keep it out of issues, logs and reports.
-- Third-party plugin install is not supported. Plugin isolation does not exist
-  yet, so plugin code runs fully trusted. Do not run plugin code you have not
-  reviewed.
-- **UI plugins are not sandboxed.** A plugin's front-end code runs in the app's
-  own origin, with the signed-in user's access to the whole API. Its manifest's
-  `requiredTables` and the `x-wickermoney-plugin` header are not a security
-  boundary for that code: a UI plugin can call any `/api/v1/*` route the user
-  can, including data export, by simply leaving the header off. What *is*
-  enforced is row-level security for every query and, for the server-side code
-  of bundled plugins, the per-plugin PostgreSQL role (with the limit described
-  below).
-- Keep `PLUGIN_REMOTE_ORIGINS` empty unless you fully trust every origin you
-  list. A listed origin can run code with the same access as the app itself.
-- A report that a UI plugin can reach data outside its `requiredTables` is a
-  known limitation, not a vulnerability, until third-party install is
-  supported. Isolation for UI plugins is tracked as a requirement for that.
-- **The per-plugin PostgreSQL role is a guardrail for server-side plugin code,
-  not a sandbox.** The plugin query runner refuses statements that change the
-  role or session settings, but it reads SQL text, so a crafted statement (a
-  `DO` block that builds `RESET ROLE` at run time, for instance) can return to
-  the application role and lose the manifest's table limits. Row-level security
-  still holds: such a statement reads no other user's rows. A report of that is
-  a known limitation, not a vulnerability, until third-party install is
-  supported.
+
+### Who runs where
+
+| Plugin | Where its UI runs | Trust |
+| --- | --- | --- |
+| Insights, Spending Trends | A sandboxed frame | Confined to its grants (below) |
+| Budgets, Import CSV, Upcoming, Forecast, Debt payoff | **The app's own page** | **Fully trusted, not sandboxed** |
+| A third-party plugin an operator has added | A sandboxed frame, always | Confined to its grants (below) |
+
+The bundled plugins in the second row have not been moved into frames yet. Their
+front-end code runs in the app's own origin with the signed-in user's access to
+the whole API; their manifest's `requiredTables` and the `x-wickermoney-plugin`
+header are not a security boundary for that code. They ship in the image and
+are reviewed with the rest of the application.
+
+### What the isolated runtime protects
+
+An isolated plugin's UI runs in an `<iframe sandbox="allow-scripts">` whose
+document carries its own content security policy. It has no access to the app's
+cookies, storage or DOM and no network of its own. Its only way out is a message
+channel to the host, which checks each request against the plugin's grants and
+forwards it with a plugin-specific token. The server gives that token nothing but
+a few read-only aggregate routes for the tables the manifest lists, and the
+plugin's own `/p/<id>/` routes. Every other route, including sign-in, refresh,
+export, erase and plugin management, is refused for it. A hostile-plugin test
+suite attempts about 140 escapes, and a remote-origin test drives a real build
+through the integrity pin, in Chromium on every pull request.
+
+### What it does not protect
+
+- **Server-side plugin code stays first-party.** A plugin's own endpoints,
+  scheduled work and exporters run in the API process, and nothing here can
+  contain that. They are refused for any plugin that is not in the image. The
+  per-plugin PostgreSQL role is a guardrail for the bundled plugins' server code,
+  not a sandbox: the query runner reads SQL text, so a crafted statement (a `DO`
+  block that builds `RESET ROLE` at run time, for instance) can return to the
+  application role and lose the manifest's table limits. Row-level security still
+  holds: such a statement reads no other user's rows. A report of that is a known
+  limitation, not a vulnerability.
+- **A plugin keeps what it is granted.** A plugin can read what its grants allow
+  and what the host tells it about the session (the user's email and id). The
+  grant, not the sandbox, limits what it can learn.
+- **Known gaps** (checked in Chromium 141 only; Firefox and Safari have not been
+  tested). The frame's content security policy does not cover every way a
+  browser can send a request. `<link rel=prerender>` and WebRTC (STUN and TURN)
+  still reach an address the plugin chooses, and can carry what the plugin holds
+  in the URL or the TURN username. A frame can also send anonymous GET requests
+  to URLs on the app's own origin, which return nothing to it. These are known
+  limitations, not vulnerabilities, until they are closed. Reports that they work
+  in another browser, or of a further channel of the same kind, are welcome.
+- **Newness.** The boundary is new code. The broker and the token path have not
+  been through an independent security review.
+
+### Third-party plugins
+
+There is no install flow, no catalog and no signing. The only way to add a
+third-party plugin is for the operator to do it by hand:
+
+1. Put the plugin's build on an https origin and list that origin in
+   `PLUGIN_REMOTE_ORIGINS` (empty by default; with it empty, nothing changes).
+2. Copy its manifest, with an `integrity` map of Subresource Integrity values for
+   every file of the build, into the directory named by `PLUGIN_MANIFEST_DIR`, and
+   restart the API.
+3. Switch the plugin on as an owner. It starts off.
+
+A third-party plugin gets no server-side code, no storage and no scheduled work.
+It can read only the read-only core aggregates (eight routes) for the tables its
+manifest lists.
+
+The integrity pin makes the browser refuse a file whose bytes differ from the
+ones you pinned. It covers only the files it lists, not stylesheets, and is only
+as good as the place you took the hashes from: take them from the build you
+reviewed, not from the server that will serve it. It does not tell you the code
+is safe; read it before you pin it. The origin must answer with cross-origin
+headers, and listing an origin means trusting it to serve what you pinned and
+nothing it chooses later.
+
+Treat a third-party plugin as code you have chosen to run inside a cage that has
+known gaps (above), not as code that is safe to run. If you would not give it the
+aggregates it asks for, do not add it.
