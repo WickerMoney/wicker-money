@@ -7,21 +7,23 @@ import { registerEraseMyData } from './handlers/eraseMyData.js'
 import { registerExportUserData } from './handlers/exportUserData.js'
 import { registerGetInstanceEraseCheck } from './handlers/getInstanceEraseCheck.js'
 import { registerGetSettingsConfig } from './handlers/getSettingsConfig.js'
+import { registerIssueExportTicket } from './handlers/issueExportTicket.js'
 import { createEraseRateLimit } from './helpers/createEraseRateLimit.js'
 
 /**
  * Registers the Settings endpoints under `/api/v1/settings`.
  *
- * The two erase actions live in their own encapsulated scope, which carries the
- * rate limiter they share (opt-in per route, counters in memory and so per
- * process, as for the auth endpoints).
+ * The two erase actions and the export ticket live in their own encapsulated
+ * scope, which carries the rate limiter they share (opt-in per route, counters
+ * in memory and so per process, as for the auth endpoints). All three ask for
+ * the password again, so one allowance covers guessing across them.
  *
  * @param app - The Fastify instance to register routes on; needs `@fastify/cookie` registered.
  * @param services - The application services.
  */
-export function registerSettingsRoutes(app: FastifyInstance, { settings, erase, auth }: Services): void {
+export function registerSettingsRoutes(app: FastifyInstance, { settings, erase, exportTickets, auth }: Services): void {
   registerGetSettingsConfig(app, settings)
-  registerExportUserData(app, settings)
+  registerExportUserData(app, settings, exportTickets)
 
   void app.register(async (scope) => {
     await scope.register(rateLimit, {
@@ -30,6 +32,7 @@ export function registerSettingsRoutes(app: FastifyInstance, { settings, erase, 
     })
     const limit = createEraseRateLimit(scope, auth.policy)
 
+    registerIssueExportTicket(scope, exportTickets, limit)
     registerEraseMyData(scope, erase, auth.policy, limit)
     registerGetInstanceEraseCheck(scope, erase)
     registerEraseInstance(scope, erase, auth.policy, limit)

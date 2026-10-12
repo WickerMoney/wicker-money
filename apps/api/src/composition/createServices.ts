@@ -13,6 +13,7 @@ import { ReportService } from '../core/service/ReportService.js'
 import { RecurringItemService } from '../recurring/service/RecurringItemService.js'
 import { RecurringOccurrenceService } from '../recurring/service/RecurringOccurrenceService.js'
 import { EraseService } from '../settings/service/EraseService.js'
+import { ExportTicketService } from '../settings/service/ExportTicketService.js'
 import { SettingsService } from '../settings/service/SettingsService.js'
 import { TransactionService } from '../transactions/service/TransactionService.js'
 import { UserAdminService } from '../users/service/UserAdminService.js'
@@ -42,6 +43,7 @@ export function createServices(
     onboarding: new OnboardingService(uow),
     settings: new SettingsService(uow, { config, plugins }),
     erase: new EraseService(uow, { auth, config }),
+    exportTickets: new ExportTicketService({ auth }),
     plugins,
     reports: new ReportService(uow),
     recurringItems: new RecurringItemService(uow),

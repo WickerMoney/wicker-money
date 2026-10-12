@@ -79,9 +79,10 @@ export const PLUGIN_ROUTE_ACCESS: Readonly<Record<string, PluginRouteAccess>> = 
   'GET /api/v1/auth/me': DENIED,
   'PATCH /api/v1/auth/me': DENIED,
 
-  // Instance settings, the full data export and the erase actions.
+  // Instance settings, the full data export (and the ticket it needs) and the erase actions.
   'GET /api/v1/settings/config': DENIED,
   'GET /api/v1/settings/export': DENIED,
+  'POST /api/v1/settings/export-ticket': DENIED,
   'POST /api/v1/settings/erase-my-data': DENIED,
   'GET /api/v1/settings/erase-instance': DENIED,
   'POST /api/v1/settings/erase-instance': DENIED,

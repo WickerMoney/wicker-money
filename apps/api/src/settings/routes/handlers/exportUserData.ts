@@ -1,5 +1,6 @@
 import { PassThrough } from 'node:stream'
 import type { FastifyInstance } from 'fastify'
+import { EXPORT_TICKET_HEADER, type ExportTicketService } from '../../service/ExportTicketService.js'
 import type { SettingsService } from '../../service/SettingsService.js'
 import { createStreamSink } from '../helpers/createStreamSink.js'
 
@@ -11,16 +12,28 @@ import { createStreamSink } from '../helpers/createStreamSink.js'
  * large ledger does not have to fit in memory. Responds `200` with
  * `{ exportedAt, core, plugins }`, `content-type: application/json` and a
  * `content-disposition` header naming the file `wickermoney-export-<date>.json`;
- * `401` without a valid token. A failure before the first byte is a normal
+ * `401` without a valid token.
+ *
+ * **Needs a recent password confirmation.** The request must carry a ticket
+ * from `POST /api/v1/settings/export-ticket` in the `x-wickermoney-export-ticket`
+ * header. Without one it is `403 export_confirmation_required`; with one that
+ * is unknown, expired, already used or someone else's, `403 export_ticket_invalid`.
+ * A ticket works once. The check runs before anything is read.
+ *
+ * A failure before the first byte is a normal
  * error response; a failure after it aborts the connection, leaving a
  * truncated (and therefore unparseable) document rather than a plausible one.
  *
  * @param app - The Fastify instance to register the route on.
  * @param service - The settings service.
+ * @param tickets - Spends the ticket the request must carry.
  */
-export function registerExportUserData(app: FastifyInstance, service: SettingsService): void {
+export function registerExportUserData(
+  app: FastifyInstance, service: SettingsService, tickets: ExportTicketService,
+): void {
   app.get('/api/v1/settings/export', async (request, reply) => {
     const user = await app.requireAuth(request)
+    tickets.redeem(request.headers[EXPORT_TICKET_HEADER] as string | undefined, user)
 
     const body = new PassThrough()
     const sink = createStreamSink(body)
