@@ -29,3 +29,25 @@ describe('parseFrameFragment', () => {
     expect(parseFrameFragment('', base)).toHaveProperty('error')
   })
 })
+
+describe('parseFrameFragment integrity', () => {
+  const pin = { 'remoteEntry.js': `sha384-${'A'.repeat(64)}` }
+
+  it('carries a valid pin', () => {
+    const result = parseFrameFragment(frag({ ...ok, integrity: JSON.stringify(pin) }), base)
+    expect(result).toMatchObject({ integrity: pin })
+  })
+
+  it('has none when the host sent none', () => {
+    expect(parseFrameFragment(frag(ok), base)).not.toHaveProperty('integrity')
+  })
+
+  it.each([
+    ['text that is not JSON', 'nope'],
+    ['a JSON array', '[]'],
+    ['a key that climbs', JSON.stringify({ '../x.js': pin['remoteEntry.js'] })],
+    ['a value that is not an SRI hash', JSON.stringify({ 'remoteEntry.js': 'abc' })],
+  ])('refuses %s', (_name, integrity) => {
+    expect(parseFrameFragment(frag({ ...ok, integrity }), base)).toHaveProperty('error')
+  })
+})

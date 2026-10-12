@@ -1,3 +1,4 @@
+import { parseIntegrity } from '@wickermoney/plugin-sdk'
 import type { FrameKind } from '@wickermoney/plugin-sdk/isolated'
 
 /** What the host asked this frame to mount, read from the URL fragment. */
@@ -9,6 +10,8 @@ export interface FrameParams {
   /** The exposed module key, for example `./TrendWidget`. */
   readonly module: string
   readonly kind: FrameKind
+  /** The manifest's integrity pin, file path to SRI value, when the host sent one. */
+  readonly integrity?: Readonly<Record<string, string>>
 }
 
 const PLUGIN_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/
@@ -24,6 +27,9 @@ const MODULE_KEY = /^\.\/[A-Za-z0-9_-]+$/
  * entry may actually load from is not decided here: the frame document's CSP
  * allows scripts from the API's own origin and the operator's configured plugin
  * origins and nothing else.
+ *
+ * An `integrity` value is the manifest's pin as JSON and is checked with the SDK's
+ * own rules. Whether a pin is required is decided when the module loads.
  *
  * @param hash - `location.hash`.
  * @param base - The frame document's URL, to resolve a relative entry against.
@@ -41,5 +47,11 @@ export function parseFrameFragment(hash: string, base: string): FrameParams | { 
   let entry: URL
   try { entry = new URL(rawEntry, base) } catch { return { error: 'The plugin entry is not a URL.' } }
   if (entry.protocol !== 'https:' && entry.protocol !== 'http:') return { error: 'The plugin entry must be an http(s) URL.' }
-  return { pluginId, entry: entry.href, module, kind }
+  const rawIntegrity = params.get('integrity')
+  if (rawIntegrity === null) return { pluginId, entry: entry.href, module, kind }
+  let decoded: unknown
+  try { decoded = JSON.parse(rawIntegrity) } catch { return { error: 'The integrity pin is not valid JSON.' } }
+  const pin = parseIntegrity(decoded)
+  if ('error' in pin) return { error: `The integrity pin is not valid: ${pin.error}` }
+  return { pluginId, entry: entry.href, module, kind, integrity: pin.integrity }
 }

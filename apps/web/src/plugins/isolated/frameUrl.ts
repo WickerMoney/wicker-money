@@ -12,6 +12,8 @@ export interface FrameTarget {
   /** The exposed module key, such as `./TrendWidget`. */
   readonly module: string
   readonly kind: FrameKind
+  /** The manifest's integrity pin, when it has one. The frame verifies the files before it loads them. */
+  readonly integrity?: Readonly<Record<string, string>>
 }
 
 /**
@@ -28,5 +30,6 @@ export function frameUrl(target: FrameTarget): string {
   const params = new URLSearchParams({
     id: target.pluginId, entry: target.remoteEntry, module: target.module, kind: target.kind,
   })
+  if (target.integrity !== undefined) params.set('integrity', JSON.stringify(target.integrity))
   return `${PLUGIN_FRAME_PATH}#${params.toString()}`
 }
