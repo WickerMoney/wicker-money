@@ -59,12 +59,12 @@ Polish after the plugin manager:
 - Editing an occurrence from the calendar widget, and a month grid view.
 - Suggesting recurring items by detecting patterns in transaction history.
 - Themes as a data-only plugin type (a validated set of design tokens, no code).
-- Third-party plugin install. This depends on plugin isolation, which does not
-  exist yet; today plugin code runs fully trusted, in the host's origin, and a
-  plugin's table grants do not restrict its front-end code. A bundled plugin's
-  server-side SQL is checked for honest mistakes, not sandboxed. Until
-  isolation is designed and built, `PLUGIN_REMOTE_ORIGINS` is for origins you
-  fully trust.
+- Third-party plugin install: a flow, a catalog and signing. Today an operator
+  can add a third-party UI plugin by hand (a manifest with an integrity pin in
+  `PLUGIN_MANIFEST_DIR`), and it runs only in a sandboxed frame with the table
+  reads it is granted. It has no server-side code: that needs a connection
+  boundary the project does not have, so it stays first-party only. Some
+  bundled plugins still run in the app's own page until they are ported.
 - Freezing the plugin API (`SDK_MAJOR_VERSION`) ahead of 1.0. The plugin SDK's
   entry points now carry stability tiers (see its README); the freeze applies
   to the stable ones.
