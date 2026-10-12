@@ -208,8 +208,9 @@ Each bundled plugin's server code runs under its own database role, which is
 granted exactly the tables its manifest lists. A query against any other table
 is refused.
 
-It is **not** enforced against your plugin's UI code. See
-[Trust model](#trust-model) below.
+For your plugin's UI code, the broker and the server hold a plugin that runs in a
+frame to these grants; a plugin that still runs in the app's own page is not held
+to them. See [Trust model](#trust-model).
 
 ### Widget
 
@@ -249,7 +250,8 @@ host.subscribe((change) => { /* theme, locale, props, route, focus-in */ })
 
 A manifest marks a plugin as built for this runtime with `isolated: true`. That is a
 declaration of what the plugin was built for, not a grant: it can only move a plugin
-towards isolation, and the host decides which runtime a plugin gets. The flag is
+towards isolation, and the host decides which runtime a plugin gets. A plugin the
+image did not ship always gets the frame, whatever the flag says. The flag is
 optional, and an existing manifest without it loads exactly as before.
 
 Protocol version 1. After a one-time window handshake (the frame says `wm.hello`; the
@@ -308,28 +310,96 @@ adding one is not a version bump.
 
 ## Trust model
 
-UI plugins (widgets and pages loaded over Module Federation) run **fully
-trusted, in the host application's origin**. They share the page, its memory and
-the signed-in user's session with the host. The host's scoped client, the
-`x-wickermoney-plugin` header and the manifest check in `ctx.api` are
-developer feedback, not a security boundary: UI code that wants to can call any
-`/api/v1/*` route as the user, including routes outside its `requiredTables`.
+Where a plugin's UI runs decides what it can do.
 
-What is enforced against plugin code is the per-plugin PostgreSQL role, and only
-for server-side code (`contributes.endpoints`, bundled plugins only).
+| Plugin | UI runs in | What contains it |
+| --- | --- | --- |
+| Bundled, ported (Insights, Spending Trends) | A sandboxed frame | The sandbox and the host's broker (below) |
+| Bundled, not ported yet (Budgets, Import CSV, Upcoming, Forecast, Debt payoff) | **The app's own page** | Nothing: fully trusted, in the host's origin, with the signed-in user's session. `requiredTables`, the `x-wickermoney-plugin` header and the checks in `ctx.api` are developer feedback there, not a boundary |
+| Third-party (a manifest the operator added) | A sandboxed frame, **always** | The sandbox and the broker |
 
-So today:
+Which row a plugin is in is decided by the host, never by the manifest. In-page
+mode is a host-internal list of bundled plugin ids. `isolated: true` can only
+move a plugin towards the frame. A manifest cannot ask for the page, and a
+plugin whose `remoteEntry` is not served by the host has no path into it.
 
-- Third-party plugin install is not supported. Treat every UI plugin as code
-  with full access to the user's data, and only run plugins you wrote or have
-  reviewed.
-- Operators should keep `PLUGIN_REMOTE_ORIGINS` empty unless they fully trust
-  every origin listed.
-- The [isolated runtime](#isolated-runtime-experimental) is hosted by the web app,
-  and Spending Trends runs in it, but the other bundled plugins still run in the
-  page and there is no install flow, so everything above still describes them.
-- Declare `requiredTables` honestly anyway. It is what the database enforces
-  for your server code, and the contract a future isolation model will rely on.
+### What the frame gives you, and what it takes away
+
+In a frame your code has no cookies, `localStorage`, IndexedDB, host DOM, or
+network of its own. It talks to the host over the
+[isolated runtime](#isolated-runtime-experimental), and the host answers a
+request only if it is a `GET` of a core route for a table your manifest lists in
+`requiredTables`, or a call to your own `/p/<id>/` routes (a third-party plugin has none). The server then holds
+the request to a token that carries only those grants. Nothing else is
+reachable, including sign-in, the data export and other plugins.
+
+### What a third-party plugin can do
+
+- **Read the core aggregates it is granted.** Eight read-only `GET /api/v1/core/*`
+  routes, each needing the tables listed in the manifest.
+- **Nothing server-side.** No endpoints, no exporters, no scheduled work and no
+  storage of its own (a server half is first-party only, because the per-plugin
+  database role is a guardrail and not a sandbox). A manifest that asks for
+  `contributes.endpoints` or `contributes.exporters` is refused, with a reason.
+- **No write.** A `write` grant on a core table has no route it can use.
+- **No permissions.** `network:outbound`, `schedule:daily` and `notify` are
+  reserved, not implemented, and a manifest that declares one is refused.
+
+### Integrity pin
+
+A plugin the image did not ship, and any plugin served from another origin,
+must pin its build with the manifest's `integrity` field: Subresource Integrity
+values keyed by path relative to the directory of `remoteEntry`.
+
+```json
+"remoteEntry": "https://plugins.example.com/cash-runway/remoteEntry.js",
+"integrity": {
+  "remoteEntry.js": "sha384-...",
+  "assets/RunwayWidget-1a2b3c.js": "sha384-..."
+}
+```
+
+The host has the browser check each listed file before the plugin runs
+(`<link rel=modulepreload integrity=...>`), and a file whose bytes differ is not
+loaded; the widget shows the reason. Limits, because a pin is easy to
+over-trust:
+
+- **List every file of the build.** Only listed files are verified. A file the
+  entry loads that you did not list loads unchecked. A pin that does not list the
+  entry file is refused.
+- **Stylesheets are not covered.**
+- **The hash is only as good as its source.** Take it from the build you
+  reviewed, not from the server that will serve it. A manifest fetched from the
+  same place as the code proves nothing.
+- **It does not say the code is safe**, only that it is the code you pinned.
+- **The remote origin must send CORS headers**
+  (`Access-Control-Allow-Origin`), because the frame fetches in CORS mode.
+- Tested in Chromium 141 only.
+
+Generate the values from the built files:
+
+```bash
+openssl dgst -sha384 -binary assets/RunwayWidget-1a2b3c.js | openssl base64 -A | sed 's/^/sha384-/'
+```
+
+```powershell
+$hex = (Get-FileHash -Algorithm SHA384 'assets\RunwayWidget-1a2b3c.js').Hash
+'sha384-' + [Convert]::ToBase64String([byte[]]($hex -split '(?<=\G..)(?=.)' | ForEach-Object { [Convert]::ToByte($_, 16) }))
+```
+
+### What this does not give you
+
+- There is **no install flow, no catalog and no signing**. An operator copies the
+  manifest into the directory named by `PLUGIN_MANIFEST_DIR`, lists the origin in
+  `PLUGIN_REMOTE_ORIGINS`, restarts the API and switches the plugin on.
+- The sandbox has **known gaps** in Chromium 141: `<link rel=prerender>` and
+  WebRTC reach an address the plugin chooses and can carry what it holds (the
+  user's email and id, and what its grants allow it to read). Other browsers
+  were not tested. Admission control (the operator choosing what to pin) is the
+  backstop, so only add a plugin you have read.
+- The broker and token path have not had an independent security review.
+- `requiredTables` is a **declaration** for your UI code, and what the grant
+  holds the broker and server to. Declare it honestly.
 
 ## Server-side code
 
