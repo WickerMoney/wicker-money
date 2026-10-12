@@ -81,7 +81,9 @@ describe('loading the registry', () => {
 })
 
 describe('remote entry origins', () => {
-  const remote = manifest('remote', 'https://plugins.example.com/remote/remoteEntry.js')
+  // An entry on another origin needs an integrity pin whoever lists it (see externalPlugins.test.ts for the rule itself).
+  const PIN = { 'remoteEntry.js': 'sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC' }
+  const remote = { ...manifest('remote', 'https://plugins.example.com/remote/remoteEntry.js'), integrity: PIN }
 
   it('refuses a remote origin when none is allowed (same-origin only by default)', async () => {
     const s = service({ bundled: [alpha, remote] })
@@ -98,6 +100,15 @@ describe('remote entry origins', () => {
     const { plugins, failures } = await s.loadRegistry()
     expect(plugins.map((p) => p.manifest.id)).toEqual(['wickermoney.alpha', 'wickermoney.remote'])
     expect(failures).toEqual([])
+  })
+
+  it('refuses an allowed origin without a pin, because an entry on another origin is never loaded unchecked', async () => {
+    const unpinned = { ...remote, integrity: undefined }
+    const s = service({ bundled: [alpha, unpinned], remoteOrigins: ['https://plugins.example.com'] })
+    await s.seedBundled()
+    const { plugins, failures } = await s.loadRegistry()
+    expect(plugins.map((p) => p.manifest.id)).toEqual(['wickermoney.alpha'])
+    expect(failures[0]?.reason).toContain('no integrity pin')
   })
 
   it('refuses a different origin than the one allowed', async () => {

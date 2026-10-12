@@ -1,8 +1,10 @@
 import { checkRemoteEntry, parseManifest, type PluginManifest } from '@wickermoney/plugin-sdk'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import { BUNDLED_PLUGINS } from '../bundled.js'
+import { pinRefusal, serverCodeRefusal, type PluginSource } from './admission.js'
 import { DEFAULT_REGISTRY_TTL_MS } from './DEFAULT_REGISTRY_TTL_MS.js'
 import type { EnabledChange } from './EnabledChange.js'
+import type { ExternalPlugin } from './ExternalPlugin.js'
 import type { LoadedPlugin } from './LoadedPlugin.js'
 import type { PluginLoadFailure } from './PluginLoadFailure.js'
 import type { PluginRegistrySnapshot } from './PluginRegistrySnapshot.js'
@@ -10,10 +12,14 @@ import { refusedPermission } from './permissionPolicy.js'
 import type { PluginServiceOptions } from './PluginServiceOptions.js'
 import type { RegisteredPlugin } from './RegisteredPlugin.js'
 
-/** A manifest that passed every check, or the reason it did not. */
+/**
+ * A manifest that passed every check, or the reason it did not. `source` is
+ * where the manifest came from, found by looking it up here and never by
+ * trusting the registry row's `bundled` column.
+ */
 type Checked =
-  | { readonly manifest: PluginManifest; readonly reason?: undefined }
-  | { readonly manifest?: undefined; readonly reason: string }
+  | { readonly manifest: PluginManifest; readonly source: PluginSource; readonly reason?: undefined }
+  | { readonly manifest?: undefined; readonly source?: PluginSource; readonly reason: string }
 
 /**
  * Plugin registry: which plugins are enabled and whether their manifests are
@@ -26,6 +32,7 @@ type Checked =
  */
 export class PluginService {
   private readonly bundled: readonly PluginManifest[]
+  private readonly external: ReadonlyMap<string, ExternalPlugin>
   private readonly remoteOrigins: readonly string[]
   private readonly ttlMs: number
   private readonly now: () => number
@@ -42,6 +49,13 @@ export class PluginService {
     options: PluginServiceOptions = {},
   ) {
     this.bundled = options.bundled ?? BUNDLED_PLUGINS
+    const external = new Map<string, ExternalPlugin>()
+    for (const plugin of options.external ?? []) {
+      const id = (plugin.manifest as { id?: unknown } | null)?.id
+      // A bundled id is never taken over, and the first file to claim an id keeps it.
+      if (typeof id === 'string' && !external.has(id) && !this.bundled.some((m) => m.id === id)) external.set(id, plugin)
+    }
+    this.external = external
     this.remoteOrigins = options.remoteOrigins ?? []
     this.ttlMs = options.cacheTtlMs ?? DEFAULT_REGISTRY_TTL_MS
     this.now = options.now ?? Date.now
@@ -58,6 +72,27 @@ export class PluginService {
     await this.uow.forSystem(async ({ pluginRegistry }) => {
       for (const manifest of this.bundled) {
         await pluginRegistry.upsertBundled(manifest.id, manifest.version)
+      }
+    })
+    this.clearCache()
+  }
+
+  /**
+   * Registers the operator's third-party plugins, switched off.
+   *
+   * A manifest in `PLUGIN_MANIFEST_DIR` is a request to be considered, not a
+   * decision to run it: its row is created disabled, and an owner turns it on
+   * from the plugin list, where its refusal reason (if it has one) is already
+   * showing. An existing row keeps its enabled flag, so a restart never
+   * re-enables a plugin an owner switched off, and never switches one on.
+   *
+   * Call it with {@link seedBundled}; they are separate because they differ in
+   * the one thing that matters, whether the plugin starts out running.
+   */
+  async seedExternal(): Promise<void> {
+    await this.uow.forSystem(async ({ pluginRegistry }) => {
+      for (const [id, plugin] of this.external) {
+        await pluginRegistry.upsertExternal(id, versionOf(plugin.manifest))
       }
     })
     this.clearCache()
@@ -146,16 +181,16 @@ export class PluginService {
     const rows = await this.uow.forSystem(({ pluginRegistry }) => pluginRegistry.listAll(), { readOnly: true })
     return rows.map((row) => {
       const checked = this.check(row.plugin_id)
-      const raw = this.bundled.find((m) => m.id === row.plugin_id)
+      const raw = this.candidate(row.plugin_id)?.manifest as { name?: unknown } | undefined
       const manifest = checked.manifest
       return {
         id: row.plugin_id,
         // An invalid manifest still usually carries a readable name.
-        name: manifest?.name ?? raw?.name ?? row.plugin_id,
+        name: manifest?.name ?? (typeof raw?.name === 'string' ? raw.name : row.plugin_id),
         description: manifest?.description ?? null,
         author: manifest?.author ?? null,
         version: manifest?.version ?? row.version,
-        bundled: row.bundled,
+        bundled: checked.source === undefined ? row.bundled : checked.source === 'bundled',
         enabled: row.enabled,
         status: !row.enabled ? 'disabled' : manifest === undefined ? 'failed' : 'enabled',
         failure: checked.reason ?? null,
@@ -204,30 +239,54 @@ export class PluginService {
     const failures: PluginLoadFailure[] = []
 
     for (const row of rows) {
-      const { manifest, reason } = this.check(row.plugin_id)
+      const { manifest, source, reason } = this.check(row.plugin_id)
       if (manifest === undefined) failures.push({ pluginId: row.plugin_id, reason })
-      else plugins.push({ manifest, bundled: row.bundled })
+      // `bundled` is where the manifest was found, not what the row says: a row
+      // is data in the database, and nothing in it may promote a plugin.
+      else plugins.push({ manifest, bundled: source === 'bundled' })
     }
 
     return { plugins, failures }
   }
 
+  /** The manifest the host knows for an id, and where it came from. Bundled wins; an external manifest never shadows one. */
+  private candidate(pluginId: string): { readonly manifest: unknown; readonly source: PluginSource } | undefined {
+    const bundled = this.bundled.find((m) => m.id === pluginId)
+    if (bundled !== undefined) return { manifest: bundled, source: 'bundled' }
+    const external = this.external.get(pluginId)
+    return external === undefined ? undefined : { manifest: external.manifest, source: 'external' }
+  }
+
   /**
-   * Validates one plugin's manifest and remote entry origin.
+   * Validates one plugin's manifest and applies the admission rules.
+   *
+   * Every manifest gets the same checks in the same order: its shape, the
+   * permissions the host refuses, the rule that only a bundled plugin has a
+   * server half, the origin its `remoteEntry` comes from, and the integrity
+   * pin that a plugin the image did not ship (or any remote entry) needs.
    *
    * @param pluginId - The registered plugin id.
-   * @returns The validated manifest, or why it cannot be loaded.
+   * @returns The validated manifest and its source, or why it cannot be loaded.
    */
   private check(pluginId: string): Checked {
-    const candidate = this.bundled.find((m) => m.id === pluginId)
-    // Registered in the database but absent from the image: a stale row.
-    if (candidate === undefined) return { reason: 'no manifest found for this plugin id' }
-    const { manifest, error } = parseManifest(candidate)
-    if (manifest === undefined) return { reason: error ?? 'invalid manifest' }
-    const permission = refusedPermission(manifest.permissions)
-    if (permission !== undefined) return { reason: permission }
-    const refusal = checkRemoteEntry(manifest.remoteEntry, this.remoteOrigins)
-    if (refusal !== undefined) return { reason: refusal }
-    return { manifest }
+    const found = this.candidate(pluginId)
+    // Registered in the database but absent from the image and from the manifest directory: a stale row.
+    if (found === undefined) return { reason: 'no manifest found for this plugin id' }
+    const { source } = found
+    const { manifest, error } = parseManifest(found.manifest)
+    if (manifest === undefined) return { source, reason: error ?? 'invalid manifest' }
+    const refusal =
+      refusedPermission(manifest.permissions) ??
+      serverCodeRefusal(manifest, source) ??
+      checkRemoteEntry(manifest.remoteEntry, this.remoteOrigins) ??
+      pinRefusal(manifest, source)
+    if (refusal !== undefined) return { source, reason: refusal }
+    return { manifest, source }
   }
+}
+
+/** The version to register for a manifest that has not been validated: its own if it is a short string. */
+function versionOf(manifest: unknown): string {
+  const version = (manifest as { version?: unknown } | null)?.version
+  return typeof version === 'string' && version !== '' && version.length <= 50 ? version : '0.0.0'
 }

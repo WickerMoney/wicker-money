@@ -36,6 +36,16 @@ export class KyselyPluginRegistryRepository implements PluginRegistryRepository 
   }
 
   /** @inheritdoc */
+  async upsertExternal(pluginId: string, version: string): Promise<void> {
+    await this.trx
+      .insertInto('core.plugins')
+      .values({ plugin_id: pluginId, version, enabled: false, bundled: false, settings: {} })
+      // `bundled` is corrected too: a row that said `true` for this id came from an image that shipped it, and this one does not.
+      .onConflict((oc) => oc.column('plugin_id').doUpdateSet({ version, bundled: false }))
+      .execute()
+  }
+
+  /** @inheritdoc */
   async setEnabled(pluginId: string, enabled: boolean): Promise<boolean> {
     const result = await this.trx
       .updateTable('core.plugins')

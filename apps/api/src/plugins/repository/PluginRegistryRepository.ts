@@ -21,6 +21,19 @@ export interface PluginRegistryRepository {
   upsertBundled(pluginId: string, version: string): Promise<void>
 
   /**
+   * Registers a third-party plugin switched off, or refreshes its version if it is already registered.
+   *
+   * An existing row keeps its `enabled` flag: a restart never switches a plugin
+   * on that an owner left off, and never switches one off that an owner turned on.
+   * A new row is disabled, so nothing the operator drops in a directory runs
+   * until an owner says so.
+   *
+   * @param pluginId - The plugin's manifest id.
+   * @param version - The version its manifest declares.
+   */
+  upsertExternal(pluginId: string, version: string): Promise<void>
+
+  /**
    * Enables or disables a plugin.
    *
    * @param pluginId - The plugin's manifest id.

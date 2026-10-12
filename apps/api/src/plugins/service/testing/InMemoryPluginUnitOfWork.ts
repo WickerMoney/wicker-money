@@ -39,6 +39,11 @@ export class InMemoryPluginUnitOfWork implements UnitOfWork {
       if (existing === undefined) this.rows.push({ pluginId, version, enabled: true, bundled: true })
       else existing.version = version
     },
+    upsertExternal: async (pluginId, version): Promise<void> => {
+      const existing = this.rows.find((r) => r.pluginId === pluginId)
+      if (existing === undefined) this.rows.push({ pluginId, version, enabled: false, bundled: false })
+      else { existing.version = version; existing.bundled = false }
+    },
     setEnabled: async (pluginId, enabled): Promise<boolean> => {
       const existing = this.rows.find((r) => r.pluginId === pluginId)
       if (existing === undefined) return false
