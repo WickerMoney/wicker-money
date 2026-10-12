@@ -57,3 +57,13 @@ API received (auth kind, status and a marker the fixture puts on every URL it bu
   another, fails the suite so the change is noticed and the ADR 0005 table is updated.
 - A call made over the DevTools protocol may `eval` where a page may not, so attempts that depend on the policy run from a
   timer inside the page.
+
+## Remote-origin check (`hostile/remote.ts`)
+
+`test:hostile` runs it after the hostile suite. It serves a real federated build over https from a second origin (a throwaway
+self-signed certificate, so it needs `openssl`), allowlists that origin, lists the build as a third-party plugin with an
+integrity pin, and drives Chromium: a build that matches its pin loads in the frame and only there; a changed chunk and a
+changed entry are refused before any of their code runs; an origin that is not allowlisted is blocked and receives no request;
+and crafted manifests (server code, `isolated: false`, no pin, an origin that is not allowlisted) are refused or still isolated.
+A frame opened by hand with no pin is covered by the unit tests (`src/frame/verifyPinnedFiles.test.ts`), because the browser only
+reaches that check after the host handshake.
