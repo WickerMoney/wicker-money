@@ -111,6 +111,7 @@ describe('public runtime surface', () => {
       'addMonths',
       'adoptPluginStyles',
       'checkRemoteEntry',
+      'checkRemoteEntryIntegrity',
       'compareMoney',
       'dailyBalances',
       'divideUnits',

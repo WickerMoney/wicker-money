@@ -21,6 +21,7 @@
 export {
   CORE_TABLES,
   checkRemoteEntry,
+  checkRemoteEntryIntegrity,
   PERMISSIONS,
   REMOTE_ENTRY_TYPE,
   SDK_MAJOR_VERSION,

@@ -1,4 +1,5 @@
 export { checkRemoteEntry } from './checkRemoteEntry.js'
+export { checkRemoteEntryIntegrity } from './checkRemoteEntryIntegrity.js'
 export { CORE_TABLES } from './CORE_TABLES.js'
 export type { CoreTableName } from './CoreTableName.js'
 export { federationName } from './federationName.js'

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { integritySchema } from './integritySchema.js'
 import { PERMISSIONS } from './PERMISSIONS.js'
 import { pageContributionSchema } from './pageContributionSchema.js'
 import { remoteEntrySchema } from './remoteEntrySchema.js'
@@ -48,6 +49,26 @@ export const pluginManifestSchema = z.object({
    * script tag.
    */
   remoteEntry: remoteEntrySchema,
+  /**
+   * Subresource Integrity values for the files of the plugin's build, keyed by
+   * path relative to the directory of `remoteEntry` (the entry itself is
+   * `remoteEntry.js`, a chunk is `assets/chunk-1a2b3c.js`).
+   *
+   * A host verifies each listed file before the plugin's code runs and does not
+   * load a file whose bytes differ. It is how an operator vouches for one build
+   * of a plugin the image did not ship: a host requires it for every such plugin
+   * and for any entry it does not serve itself, and ignores it for a bundled
+   * plugin served from the image. Only listed files are verified; a file the
+   * entry loads that is not listed loads unchecked, so list the whole build.
+   * Stylesheets are not covered.
+   *
+   * The hash is only as trustworthy as where it came from: a manifest fetched
+   * from the same place as the code it pins proves nothing. Take it from the
+   * file you reviewed, not from the server that will serve it.
+   *
+   * Optional with no default, so existing manifests stay valid unchanged.
+   */
+  integrity: integritySchema.optional(),
   /**
    * True if the plugin is built for the isolated runtime
    * (`@wickermoney/plugin-sdk/isolated`): its modules run in a sandboxed frame
