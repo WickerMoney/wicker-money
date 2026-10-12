@@ -6,6 +6,7 @@ import type { EnabledChange } from './EnabledChange.js'
 import type { LoadedPlugin } from './LoadedPlugin.js'
 import type { PluginLoadFailure } from './PluginLoadFailure.js'
 import type { PluginRegistrySnapshot } from './PluginRegistrySnapshot.js'
+import { refusedPermission } from './permissionPolicy.js'
 import type { PluginServiceOptions } from './PluginServiceOptions.js'
 import type { RegisteredPlugin } from './RegisteredPlugin.js'
 
@@ -223,6 +224,8 @@ export class PluginService {
     if (candidate === undefined) return { reason: 'no manifest found for this plugin id' }
     const { manifest, error } = parseManifest(candidate)
     if (manifest === undefined) return { reason: error ?? 'invalid manifest' }
+    const permission = refusedPermission(manifest.permissions)
+    if (permission !== undefined) return { reason: permission }
     const refusal = checkRemoteEntry(manifest.remoteEntry, this.remoteOrigins)
     if (refusal !== undefined) return { reason: refusal }
     return { manifest }

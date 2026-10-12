@@ -1,8 +1,10 @@
 /**
  * Capabilities beyond table access that a plugin may ask the host for.
  *
- * These are declarations only. Nothing in the host enforces them yet, so a
- * plugin that omits one is not prevented from doing the thing it names.
+ * The names are reserved. A host that cannot enforce a permission refuses a
+ * manifest that declares it, with a message naming it, rather than loading the
+ * plugin and ignoring the declaration. The Wicker Money host enforces none of
+ * these yet, so a manifest that lists one does not load.
  *
  * - `network:outbound` - make outgoing network requests.
  * - `schedule:daily` - run work once a day.
