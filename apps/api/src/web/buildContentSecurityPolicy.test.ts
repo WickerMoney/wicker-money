@@ -24,22 +24,12 @@ describe('buildContentSecurityPolicy', () => {
     expect(directive(policy, 'form-action')).toBe("form-action 'self'")
   })
 
-  it('allows the configured plugin origins for scripts and connections only', () => {
-    const policy = buildContentSecurityPolicy(['https://plugins.example.com', 'https://cdn.example.org:8443'])
-    expect(directive(policy, 'script-src')).toBe("script-src 'self' https://plugins.example.com https://cdn.example.org:8443")
-    expect(directive(policy, 'connect-src')).toBe("connect-src 'self' https://plugins.example.com https://cdn.example.org:8443")
+  it('does not take a plugin origin: remote plugin code runs only in the frame, so the page never needs one', () => {
+    // Every other part of the policy is unchanged whoever is allowlisted for the frame.
+    const policy = buildContentSecurityPolicy()
+    expect(policy).not.toMatch(/https?:/)
     expect(directive(policy, 'style-src')).toBe("style-src 'self' 'unsafe-inline'")
     expect(directive(policy, 'default-src')).toBe("default-src 'self'")
-  })
-
-  it.each([
-    ['a directive smuggled after the origin', "https://a.example.com; script-src *"],
-    ['plain http', 'http://plugins.example.com'],
-    ['a path', 'https://plugins.example.com/remotes'],
-    ['a wildcard scheme source', '*'],
-    ['whitespace', 'https://a.example.com https://b.example.com'],
-    ['an empty string', ''],
-  ])('refuses %s', (_label, origin) => {
-    expect(() => buildContentSecurityPolicy([origin])).toThrow(/cannot go in a Content-Security-Policy/)
+    expect(buildContentSecurityPolicy.length).toBe(0)
   })
 })

@@ -54,7 +54,9 @@ export function registerWebApp(app: FastifyInstance, { root, pluginOrigins }: We
   if (!existsSync(join(dir, 'index.html'))) {
     throw new Error(`WEB_DIST_DIR '${root}' has no index.html. Point it at the built apps/web/dist directory.`)
   }
-  const policy = buildContentSecurityPolicy(pluginOrigins)
+  // Plugin origins belong to the frame's policy only; build it once here so a bad value fails at startup, not per request.
+  buildFrameContentSecurityPolicy(undefined, pluginOrigins)
+  const policy = buildContentSecurityPolicy()
   const frameFile = join(dir, PLUGIN_FRAME_FILE)
 
   void app.register(fastifyStatic, {
