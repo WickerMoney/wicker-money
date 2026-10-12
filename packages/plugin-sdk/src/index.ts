@@ -30,6 +30,7 @@ export {
   federationName,
   isCompatible,
   pagePath,
+  parseIntegrity,
   parseManifest,
 } from './manifest/index.js'
 export type {

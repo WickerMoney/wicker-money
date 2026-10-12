@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  SDK_MAJOR_VERSION, checkRemoteEntry, checkRemoteEntryIntegrity, isCompatible, pagePath, parseManifest,
+  SDK_MAJOR_VERSION, checkRemoteEntry, isCompatible, pagePath, parseManifest,
 } from './index.js'
 
 const valid = {

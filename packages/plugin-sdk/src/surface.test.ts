@@ -134,6 +134,7 @@ describe('public runtime surface', () => {
       'normalizeMoney',
       'occurrences',
       'pagePath',
+      'parseIntegrity',
       'parseManifest',
       'rangeLabel',
       'resolveRange',

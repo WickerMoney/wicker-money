@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { SDK_MAJOR_VERSION, checkRemoteEntryIntegrity, parseManifest } from '../index.js'
+import { SDK_MAJOR_VERSION, checkRemoteEntryIntegrity, parseIntegrity, parseManifest } from '../index.js'
 
 /** A real SRI value for some bytes, so the shapes under test are the ones a browser accepts. */
 const sri = (algorithm: 'sha256' | 'sha384' | 'sha512', bytes: string): string =>
@@ -115,5 +115,15 @@ describe('checkRemoteEntryIntegrity', () => {
 
   it('refuses an entry that is a directory', () => {
     expect(checkRemoteEntryIntegrity('https://plugins.example.com/acme-report/', pin)).toBeDefined()
+  })
+})
+
+describe('parseIntegrity', () => {
+  it('accepts what the manifest accepts and refuses what it refuses', () => {
+    expect(parseIntegrity(pin)).toEqual({ integrity: pin })
+    expect(parseIntegrity({ '../x.js': pin['remoteEntry.js'] })).toHaveProperty('error')
+    expect(parseIntegrity({ 'a.js': 'nope' })).toHaveProperty('error')
+    expect(parseIntegrity('x')).toHaveProperty('error')
+    expect(parseIntegrity(null)).toHaveProperty('error')
   })
 })
