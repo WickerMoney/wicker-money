@@ -28,7 +28,7 @@ import { UserAdminService } from '../users/service/UserAdminService.js'
  * @returns The service registry.
  */
 export function createServices(
-  db: Db, uow: UnitOfWork, config: Config, pluginOptions: Pick<PluginServiceOptions, 'bundled'> = {},
+  db: Db, uow: UnitOfWork, config: Config, pluginOptions: Pick<PluginServiceOptions, 'bundled' | 'external'> = {},
 ): Services {
   const plugins = new PluginService(uow, { ...pluginOptions, remoteOrigins: config.PLUGIN_REMOTE_ORIGINS })
   const auth = new AuthService(uow, config)

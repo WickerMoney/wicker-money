@@ -267,6 +267,23 @@ describe('production refuses development credentials', () => {
   })
 })
 
+describe('PLUGIN_MANIFEST_DIR', () => {
+  it('is unset by default, which means no third-party plugin can be loaded', () => {
+    expect(loadConfig(env()).PLUGIN_MANIFEST_DIR).toBeUndefined()
+    expect(loadConfig(env({ PLUGIN_MANIFEST_DIR: '' })).PLUGIN_MANIFEST_DIR).toBeUndefined()
+    expect(loadConfig(env({ PLUGIN_MANIFEST_DIR: '   ' })).PLUGIN_MANIFEST_DIR).toBeUndefined()
+  })
+
+  it('keeps the directory it is given, trimmed', () => {
+    expect(loadConfig(env({ PLUGIN_MANIFEST_DIR: ' /data/plugin-manifests ' })).PLUGIN_MANIFEST_DIR).toBe('/data/plugin-manifests')
+  })
+
+  it('is independent of PLUGIN_REMOTE_ORIGINS, which stays empty on its own', () => {
+    const config = loadConfig(env({ PLUGIN_MANIFEST_DIR: '/data/plugin-manifests' }))
+    expect(config.PLUGIN_REMOTE_ORIGINS).toEqual([])
+  })
+})
+
 describe('PLUGIN_REMOTE_ORIGINS', () => {
   it('is empty by default, which means same-origin only', () => {
     expect(loadConfig(env()).PLUGIN_REMOTE_ORIGINS).toEqual([])

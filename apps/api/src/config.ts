@@ -120,11 +120,18 @@ const schema = z.object({
    * that may serve plugin front-end code. Empty by default, which means plugin
    * code is loaded from this host only.
    *
-   * Keep it empty unless you fully trust every listed origin. Plugin front-end
-   * code runs in this app's origin with the signed-in user's full access to the
-   * API (plugin grants are not enforced against UI code), so an allowlisted
-   * origin can read and change all of that user's data. Third-party plugin
-   * install is not supported yet.
+   * A plugin from a listed origin runs only in a sandboxed frame, never in the
+   * app's own page, and only against an `integrity` pin in its manifest: a file
+   * whose bytes differ from the pin is not loaded. The sandbox keeps it from the
+   * session, the cookies and the rest of the API, but not from everything: it
+   * can still read what its manifest's table grants allow, and two channels the
+   * frame's policy does not govern (`<link rel=prerender>` and WebRTC, in
+   * Chromium) can carry that data to an address the plugin chooses. Keep the
+   * list empty unless you have reviewed the plugin and trust its origin to
+   * serve the reviewed files. See `SECURITY.md`.
+   *
+   * It does nothing without `PLUGIN_MANIFEST_DIR`: nothing else can register a
+   * manifest that points at an origin.
    */
   PLUGIN_REMOTE_ORIGINS: z
     .string()
@@ -147,6 +154,29 @@ const schema = z.object({
       }
       return origins
     }),
+
+  /**
+   * Directory holding third-party plugin manifests: one `*.json` file per
+   * plugin, read once when the API starts. Unset by default, which means no
+   * third-party plugin can be loaded.
+   *
+   * This is the only way a plugin the image did not ship gets onto an instance,
+   * and it is not an install flow: there is no upload, no catalog and nothing is
+   * fetched. You copy a manifest here and restart. Each manifest must carry an
+   * `integrity` pin for the plugin's files (see `DEVELOPMENT.md`, "Plugin
+   * trust model"); a plugin from here runs only in a sandboxed frame, has no
+   * server code, no storage and no scheduled work, and can read only the core
+   * aggregates its manifest asks for. It is registered switched off: an owner
+   * turns it on from the plugin list.
+   *
+   * To load a plugin from another origin you also need `PLUGIN_REMOTE_ORIGINS`;
+   * a plugin whose `remoteEntry` is a `/plugins/...` path is served from this
+   * image's own build output and needs only this.
+   */
+  PLUGIN_MANIFEST_DIR: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined || value.trim() === '' ? undefined : value.trim())),
 
   /**
    * Directory holding the built web app (`apps/web/dist`). When set, the API

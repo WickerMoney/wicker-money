@@ -42,9 +42,10 @@ export interface AppDeps {
   readonly logStream?: NodeJS.WritableStream
   /**
    * Overrides for the plugin service. Tests and the browser check use `bundled`
-   * to add a fixture manifest to the app; the server never sets it.
+   * to add a fixture manifest to the app; the server never sets it. The server
+   * sets `external`: the third-party manifests read from `PLUGIN_MANIFEST_DIR`.
    */
-  readonly pluginOptions?: Pick<PluginServiceOptions, 'bundled'>
+  readonly pluginOptions?: Pick<PluginServiceOptions, 'bundled' | 'external'>
 }
 
 /**
