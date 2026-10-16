@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { exportAs } from '../testing/exportTicket.js'
 import { auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
 
 /**
@@ -225,7 +226,7 @@ describe('a holiday window, October 1 through December 25', () => {
   })
 
   it('is in the data export with its real end date', async () => {
-    const res = await h.app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: auth(user) })
+    const res = await exportAs(h.app, user)
     expect(res.statusCode).toBe(200)
     expect(res.body).toContain(windowId)
   })

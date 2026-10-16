@@ -3,6 +3,7 @@ import {
   Button, Dialog, Field, FormError, NO_FORM_ERRORS, formErrorsFrom, type FormErrors,
 } from '@wickermoney/ui-kit'
 import { matchesPhrase } from '../helpers/matchesPhrase.js'
+import { PasswordConfirmField } from './PasswordConfirmField.js'
 
 /** Props for {@link EraseDialog}. */
 export interface EraseDialogProps {
@@ -78,14 +79,10 @@ export function EraseDialog({ title, phrase, confirmLabel, onClose, submit, onEr
           onChange={(e) => { setTyped(e.target.value); setErrors(NO_FORM_ERRORS) }}
           disabled={busy}
         />
-        <Field
-          label="Your password"
-          name="password"
-          type="password"
+        <PasswordConfirmField
           value={password}
-          autoComplete="current-password"
           error={errors.fields['password']}
-          onChange={(e) => { setPassword(e.target.value); setErrors(NO_FORM_ERRORS) }}
+          onChange={(next) => { setPassword(next); setErrors(NO_FORM_ERRORS) }}
           disabled={busy}
         />
         <FormError message={errors.form} />

@@ -553,6 +553,52 @@ commits between the check and the deletion could leave a row behind for a user
 who has just been signed out. Access tokens are checked against their session on
 every request, so ending the sessions rejects them at once.
 
+### Exporting data
+
+Settings → Export all data (and the "Download my data first" button in each
+erase dialog) downloads everything the signed-in user owns as one JSON file.
+It asks for the password again first, for the same reason the erase actions
+do: a valid access token proves a session, not that the person at the keyboard
+knows the password, and the export is the largest read the API offers.
+
+It takes two requests:
+
+1. `POST /api/v1/settings/export-ticket` with `{ "password": "..." }` checks the
+   password with `AuthService.confirmPassword` and answers
+   `{ "ticket": "...", "expiresAt": "..." }`. A wrong password is
+   `403 password_incorrect` with the issue on `password` (not 401: the web
+   client reads that as an expired session). Attempts go through the same
+   per-user limiter as the erase actions (`AUTH_EMAIL_RATE_LIMIT_MAX` per
+   `AUTH_RATE_LIMIT_WINDOW_SECONDS`, `429 rate_limited`), so guessing across
+   the three routes shares one allowance.
+2. `GET /api/v1/settings/export` with the usual `Authorization: Bearer` header
+   and the ticket in `x-wickermoney-export-ticket`. Without a ticket it is
+   `403 export_confirmation_required`; with one that is unknown, expired, used
+   or someone else's, `403 export_ticket_invalid`.
+
+A ticket is 256 random bits, valid for **two minutes**, for **one** download,
+for the user and the session (the token's session family) it was issued to. A
+different user, or the same user signed in on another device, is refused and
+the ticket stays usable by its owner. Redeeming is atomic, so of several
+simultaneous requests with one ticket exactly one is served. A user holds at
+most five live tickets; a sixth drops the oldest.
+
+`curl` and scripts that used to call `GET /api/v1/settings/export` with an
+access token alone now make the `POST` first (see the CHANGELOG, Breaking).
+
+Plugin tokens can do neither: both routes are classified as denied in
+`pluginRouteAccess.ts`, so a plugin token is refused with
+`403 plugin_route_denied` before the ticket is looked at (and a ticket sent
+with one is left unspent).
+
+**Where tickets live.** In the API process's memory (`ExportTicketService`),
+as a SHA-256 digest of the ticket, like the rate limiter's counters. A restart
+drops outstanding tickets, which means confirming the password again. An
+installation that runs several API processes behind one address would need
+requests for the export to reach the process that issued the ticket, or a shared
+store; neither exists today. Nothing is written to the database, so there is no
+migration.
+
 ### Debt payoff
 
 **Debt payoff** (bundled plugin `plugins/debt-payoff`, id `wickermoney.debt-payoff`)
