@@ -716,8 +716,10 @@ What a bundled plugin still does not get:
 
 ### Plugin trust model
 
-UI plugins (widgets and pages loaded over Module Federation) run **fully
-trusted, in the host's origin**. Read this before writing or reviewing anything
+Two of the seven bundled UI plugins (Insights, Spending Trends) and every
+third-party plugin run in a sandboxed frame. The other five bundled plugins
+(widgets and pages loaded over Module Federation) still run **fully trusted, in
+the host's origin**. Read this before writing or reviewing anything
 that talks about plugin "permissions", "scoping" or "sandboxing".
 
 | Layer | What it does | Boundary against plugin code? |
@@ -754,10 +756,11 @@ Consequences for contributors:
   (`@wickermoney/plugin-sdk/isolated`, experimental) and the web app hosts it.
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
-  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights` has
-  been ported and is no longer listed; the other bundled plugins still are, so
-  the first row of the table above still describes them. The list shrinks as
-  plugins are ported.
+  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights` and
+  `spending-trends` have been ported and run in frames. The other five bundled
+  plugins (`budgets`, `import-csv`, `upcoming`, `forecast`, `debt-payoff`) are
+  still listed and run in the page, fully trusted. The list shrinks as plugins
+  are ported.
 
 ### Isolated plugin frames
 
