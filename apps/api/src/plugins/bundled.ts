@@ -30,10 +30,10 @@ import { SDK_MAJOR_VERSION } from '@wickermoney/plugin-sdk'
  * whose manifest says `isolated: true`, because that flag can only move a
  * plugin towards isolation.
  *
- * In 0.6.0 `spending-trends` is listed only because it is not ported yet. Its
- * port deletes the id from this set (or sets `isolated: true` on the
- * manifest). `insights` has been ported and is not listed; `budgets`,
- * `import-csv`, `upcoming`, `forecast` and `debt-payoff` stay.
+ * `insights` and `spending-trends` have been ported and are not listed, so they
+ * run in the sandboxed frame. `budgets`, `import-csv`, `upcoming`, `forecast`
+ * and `debt-payoff` stay in-realm until they are ported; porting one deletes its
+ * id from this set (or sets `isolated: true` on its manifest).
  */
 export const IN_REALM_PLUGIN_IDS: ReadonlySet<string> = new Set([
   'wickermoney.budgets',
