@@ -279,6 +279,7 @@ previous image without restoring that backup depends on the release:
 
 | Release | Migrations | Going back to the previous image |
 |---|---|---|
+| `v0.6.0` | 029, 030, 031, 032 (all have a `down`) | Run `node dist/db/cli.js down` four times with the new image, then start the old one (this deletes everything in the debt payoff plugin, and the owner-role and erase functions) |
 | `v0.5.0` | 027, 028 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one (this deletes account allowances) |
 | `v0.4.2` | none | Run the old image as it is |
 | `v0.4.1` | none | Run the old image as it is |
@@ -298,6 +299,10 @@ steps are under [Placeholder credentials](https://wickermoney.dev/docs/self-host
 and in the changelog. After upgrading to `v0.5.0`, nothing changes for
 existing accounts; to name the owner of a new instance, set
 `BOOTSTRAP_OWNER_EMAIL` (see [Owners and members](#owners-and-members)).
+After upgrading to `v0.6.0`, a script that downloads the data export must now
+ask for a ticket first (see the changelog), and behind a reverse proxy that
+compresses responses you should stop the proxy compressing this upstream, as the
+API now does it itself.
 Per-release
 notes are also on the docs site under [Upgrading](https://wickermoney.dev/docs/self-hosting/upgrading).
 
@@ -404,14 +409,17 @@ Argon2id digest with the application's own parameters by hand.
 
 ## Status
 
-**`v0.5.0`** is the current release. It hardens the plugin platform (the
-server-side plugin contract in one place, documented SDK stability tiers, one
-shared read for dashboard widgets, a plain account of the plugin trust
-boundary), lets you name the owner of a new instance with
-`BOOTSTRAP_OWNER_EMAIL`, and adds account allowances to Budgets, on top of
-`v0.4.2`'s phone layouts and `v0.4.0`'s plugin manager, owner and member roles
-and matching from the Transactions page. Wicker Money is pre-1.0 with a single
-maintainer, so the plugin API can still change between minor versions.
+**`v0.6.0`** is the current release. Plugin front-end code can now run in a
+sandboxed frame, behind plugin-scoped tokens that the server holds to a plugin's
+own grants; Insights and Spending Trends run that way, and an operator can add a
+third-party UI plugin by hand, as an experimental feature with no install flow.
+It also adds a password-confirmed data export, a danger zone for erasing data,
+owners changing roles from Settings, a debt payoff plugin, a configurable import
+cap and database limits, and an accessibility and performance sweep, on top of
+`v0.5.0`'s plugin platform hardening and account allowances, `v0.4.2`'s phone
+layouts and `v0.4.0`'s plugin manager, owner and member roles and matching from
+the Transactions page. Wicker Money is pre-1.0 with a single maintainer, so the
+plugin API can still change between minor versions.
 [CHANGELOG.md](CHANGELOG.md) has every release and [ROADMAP.md](ROADMAP.md)
 what is next.
 
