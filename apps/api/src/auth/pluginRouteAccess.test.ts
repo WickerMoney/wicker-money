@@ -107,6 +107,7 @@ describe('plugin route classification', () => {
     'GET /api/v1/auth/me',
     'PATCH /api/v1/auth/me',
     'GET /api/v1/settings/export',
+    'POST /api/v1/settings/export-ticket',
     'GET /api/v1/settings/config',
     'GET /api/v1/plugins',
     'GET /api/v1/plugins/registry',

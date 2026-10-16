@@ -5,6 +5,7 @@ import { asUser } from '../db/client.js'
 import { pluginRoleName } from '../db/plugin-roles.js'
 import { PluginSqlRejectedError } from '../plugins/PluginSqlRejectedError.js'
 import { PluginService } from '../plugins/service/PluginService.js'
+import { exportAs } from '../testing/exportTicket.js'
 import { auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
 import type { PluginExporter } from './service/PluginExporter.js'
 import { SettingsService } from './service/SettingsService.js'
@@ -93,7 +94,7 @@ interface ExportDoc {
 }
 
 async function exportFor(u: TestUser): Promise<{ body: string; doc: ExportDoc; headers: Record<string, unknown> }> {
-  const res = await h.app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: auth(u) })
+  const res = await exportAs(h.app, u)
   expect(res.statusCode).toBe(200)
   return { body: res.body, doc: JSON.parse(res.body) as ExportDoc, headers: res.headers }
 }

@@ -75,7 +75,7 @@ describe('refusalFor', () => {
   })
 
   it.each([
-    '/auth/refresh', '/auth/me', '/settings/export', '/plugins/wickermoney.budgets/token', '/plugins',
+    '/auth/refresh', '/auth/me', '/settings/export', '/settings/export-ticket', '/plugins/wickermoney.budgets/token', '/plugins',
     '/users', '/transactions', '/p/wickermoney.import-csv/import', `/p/${'wickermoney.budgetsx'}/month`, '/p/wickermoney.budgets',
   ])('refuses %s', (path) => {
     expect(refusalFor(id, granted, 'GET', path)).toBe('outside_grants')

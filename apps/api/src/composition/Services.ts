@@ -8,6 +8,7 @@ import type { RecurringItemService } from '../recurring/service/RecurringItemSer
 import type { RecurringOccurrenceService } from '../recurring/service/RecurringOccurrenceService.js'
 import type { ReportService } from '../core/service/ReportService.js'
 import type { EraseService } from '../settings/service/EraseService.js'
+import type { ExportTicketService } from '../settings/service/ExportTicketService.js'
 import type { SettingsService } from '../settings/service/SettingsService.js'
 import type { TransactionService } from '../transactions/service/TransactionService.js'
 import type { UserAdminService } from '../users/service/UserAdminService.js'
@@ -32,6 +33,8 @@ export interface Services {
   readonly settings: SettingsService
   /** The Settings danger zone: erasing one user's data, and erasing the whole instance. */
   readonly erase: EraseService
+  /** The password step-up for the data export: issues and spends single-use download tickets. */
+  readonly exportTickets: ExportTicketService
   /** Plugin registry queries. */
   readonly plugins: PluginService
   /** Read-side aggregations for dashboards and plugins. */

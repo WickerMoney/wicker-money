@@ -8,6 +8,8 @@ import { KyselyUnitOfWork } from '../data/KyselyUnitOfWork.js'
 import { createDb, type Db } from '../db/client.js'
 import { HOSTILE_PLUGIN_ID, hostileManifest } from '../testing/hostilePlugin.js'
 import { seedHousehold } from '../testing/eraseFixtures.js'
+import { exportHeaders, mintExportTicket } from '../testing/exportTicket.js'
+import { EXPORT_TICKET_HEADER } from '../settings/service/ExportTicketService.js'
 import {
   TEST_ADMIN_DATABASE_URL, auth, createHarness, createUser, type Harness, type TestUser,
 } from '../testing/harness.js'
@@ -115,6 +117,7 @@ const DENIED_CLASSES: Readonly<Record<string, readonly string[]>> = {
   'instance settings, the full data export and the erase actions': [
     'GET /api/v1/settings/config',
     'GET /api/v1/settings/export',
+    'POST /api/v1/settings/export-ticket',
     'POST /api/v1/settings/erase-my-data',
     'GET /api/v1/settings/erase-instance',
     'POST /api/v1/settings/erase-instance',
@@ -217,6 +220,8 @@ function attackBody(route: string): Record<string, unknown> | undefined {
       return { password: PASSWORD, confirmation: 'erase my data' }
     case 'POST /api/v1/settings/erase-instance':
       return { password: PASSWORD, confirmation: 'erase this instance', acknowledgeActiveSessions: true }
+    case 'POST /api/v1/settings/export-ticket':
+      return { password: PASSWORD }
     case 'PATCH /api/v1/plugins/:pluginId':
       return { enabled: false }
     case 'PATCH /api/v1/users/:id/role':
@@ -253,12 +258,17 @@ describe('controls: the same requests are not refused for the host', () => {
   it.each([
     ['GET', '/api/v1/users'],
     ['GET', '/api/v1/plugins/registry'],
-    ['GET', '/api/v1/settings/export'],
     ['GET', '/api/v1/settings/erase-instance'],
     ['GET', '/api/v1/auth/me'],
     ['GET', '/api/v1/accounts'],
   ])('%s %s works with the owner\'s own access token', async (method, url) => {
     const res = await app.inject({ method: method as 'GET', url, headers: auth(owner) })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('GET /api/v1/settings/export works with the owner\'s own access token and a ticket from POST /api/v1/settings/export-ticket', async () => {
+    const ticket = await mintExportTicket(app, owner)
+    const res = await app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: exportHeaders(owner, ticket) })
     expect(res.statusCode).toBe(200)
   })
 })
@@ -268,7 +278,12 @@ describe('a plugin token is refused on every denied route class', () => {
   let usersBefore: number
   let enabledBefore: string
 
+  let ticket: string
+
   beforeAll(async () => {
+    // A real, unspent export ticket for the owner, sent with every attack below:
+    // were it not for the plugin-token rule, the export would have gone through.
+    ticket = await mintExportTicket(app, owner)
     before = await rowsOwnedBy(h.db, owner.id)
     usersBefore = Number((await sql<{ n: string }>`SELECT count(*)::text AS n FROM core.users`.execute(admin)).rows[0]?.n)
     enabledBefore = JSON.stringify((await sql`SELECT plugin_id, enabled FROM core.plugins ORDER BY plugin_id`.execute(admin)).rows)
@@ -289,6 +304,7 @@ describe('a plugin token is refused on every denied route class', () => {
             // the refresh cookie. None of it may matter to a request that carries a plugin token.
             'x-wickermoney-csrf': '1',
             cookie: `wickermoney_refresh=${owner.refreshToken}`,
+            [EXPORT_TICKET_HEADER]: ticket,
           },
           ...(body === undefined ? {} : { payload: body }),
         })
@@ -309,6 +325,9 @@ describe('a plugin token is refused on every denied route class', () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: auth(owner) })).statusCode).toBe(200)
     const login = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { email: owner.email, password: PASSWORD } })
     expect(login.statusCode).toBe(200)
+    // The export ticket was refused before anything looked at it: the host can still spend it.
+    const spent = await app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: exportHeaders(owner, ticket) })
+    expect(spent.statusCode).toBe(200)
   })
 })
 

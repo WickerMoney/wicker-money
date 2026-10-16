@@ -5,6 +5,7 @@ import { buildApp } from '../app.js'
 import { createDb, type Db } from '../db/client.js'
 import { pluginSchemaName } from '../db/plugin-roles.js'
 import { seedHousehold } from '../testing/eraseFixtures.js'
+import { exportAs } from '../testing/exportTicket.js'
 import {
   TEST_ADMIN_DATABASE_URL, auth, createHarness, createUser, type Harness, type TestUser,
 } from '../testing/harness.js'
@@ -164,7 +165,7 @@ describe('POST /api/v1/settings/erase-my-data', () => {
     expect(onboarding.json()).toMatchObject({ onboardedAt: null })
     const accounts = await h.app.inject({ method: 'GET', url: '/api/v1/accounts', headers: auth(again) })
     expect(accounts.json()).toEqual([])
-    const exported = JSON.parse((await h.app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: auth(again) })).body) as {
+    const exported = JSON.parse((await exportAs(h.app, again)).body) as {
       core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>>
     }
     for (const [key, value] of Object.entries(exported.core)) {
@@ -177,7 +178,7 @@ describe('POST /api/v1/settings/erase-my-data', () => {
     const alice = await household('iso-a')
     const bob = await household('iso-b')
     const bobBefore = await rowsOwnedBy(h.db, bob.id)
-    const bobExportBefore = (await h.app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: auth(bob) })).body
+    const bobExportBefore = (await exportAs(h.app, bob)).body
     const aliceBefore = await rowsOwnedBy(h.db, alice.id)
 
     expect((await erase(alice)).statusCode).toBe(204)
@@ -187,7 +188,7 @@ describe('POST /api/v1/settings/erase-my-data', () => {
     expect(Object.values(aliceBefore).every((n) => n > 0)).toBe(true)
     // Bob is still signed in, and his export differs only by its timestamp.
     expect((await me(bob.accessToken)).statusCode).toBe(200)
-    const bobExportAfter = (await h.app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: auth(bob) })).body
+    const bobExportAfter = (await exportAs(h.app, bob)).body
     const strip = (s: string) => s.replace(/"exportedAt":"[^"]*"/, '')
     expect(strip(bobExportAfter)).toBe(strip(bobExportBefore))
 
