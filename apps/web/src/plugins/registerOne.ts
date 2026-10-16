@@ -33,6 +33,12 @@ export function registerOne(
     return undefined
   }
   if (runtime === 'isolated') return manifest
+  // Second lock behind the server's runtime choice and the page's own policy: an entry the host
+  // does not serve never registers with this page's federation runtime, whatever `runtime` says.
+  if (!manifest.remoteEntry.startsWith('/') || manifest.remoteEntry.startsWith('//')) {
+    failures.push({ pluginId: manifest.id, reason: 'a plugin served from another origin can only run in the sandboxed frame, never in the page' })
+    return undefined
+  }
   const name = federationName(manifest.id)
   if (registered.has(name)) return manifest
   try {

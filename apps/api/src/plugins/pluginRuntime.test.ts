@@ -49,4 +49,37 @@ describe('pluginRuntimeFor', () => {
     // A ported plugin is isolated whatever its manifest says.
     expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: false }), true)).toBe('isolated')
   })
+
+  // The origin gate (ADR 0005 exit criterion 1): an entry the host does not serve has no in-realm path.
+  describe('a remote entry', () => {
+    const remote = 'https://plugins.example.com/budgets/remoteEntry.js'
+    const IN_REALM_IDS = [...IN_REALM_PLUGIN_IDS]
+
+    it.each(IN_REALM_IDS)('is isolated even for the bundled, listed in-realm plugin %s', (id) => {
+      expect(pluginRuntimeFor(manifest(id, { remoteEntry: remote }), true)).toBe('isolated')
+    })
+
+    it('is isolated with the flag set to false, which is the most a manifest can ask for', () => {
+      expect(pluginRuntimeFor(manifest('wickermoney.budgets', { remoteEntry: remote, isolated: false }), true)).toBe('isolated')
+    })
+
+    it('is isolated for a plugin the image did not ship', () => {
+      expect(pluginRuntimeFor(manifest('acme.report', { remoteEntry: remote, isolated: false }), false)).toBe('isolated')
+    })
+
+    it.each([
+      ['a protocol-relative URL', '//plugins.example.com/x.js'],
+      ['a plain http URL', 'http://plugins.example.com/x.js'],
+      ['a data: URL', 'data:text/javascript,1'],
+      ['a bare relative path', 'plugins/budgets/remoteEntry.js'],
+      ['an empty string', ''],
+    ])('treats %s as not served by the host, so it is isolated', (_what, remoteEntry) => {
+      // A crafted value the schema would refuse: this is what is left if one ever got past it.
+      expect(pluginRuntimeFor(manifest('wickermoney.budgets', { remoteEntry }), true)).toBe('isolated')
+    })
+
+    it('does not change a same-origin entry', () => {
+      expect(pluginRuntimeFor(manifest('wickermoney.budgets'), true)).toBe('in-realm')
+    })
+  })
 })

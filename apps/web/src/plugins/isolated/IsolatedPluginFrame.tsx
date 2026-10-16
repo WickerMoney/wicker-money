@@ -85,7 +85,7 @@ export function IsolatedPluginFrame({
     })
     controllerRef.current = controller
     // The listener exists before the frame can say hello: the source is set last.
-    iframe.src = frameUrl({ pluginId: manifest.id, remoteEntry: manifest.remoteEntry, module, kind })
+    iframe.src = frameUrl({ pluginId: manifest.id, remoteEntry: manifest.remoteEntry, module, kind, integrity: manifest.integrity })
     return () => {
       controller.dispose()
       controllerRef.current = null

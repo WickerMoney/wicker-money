@@ -21,6 +21,7 @@
 export {
   CORE_TABLES,
   checkRemoteEntry,
+  checkRemoteEntryIntegrity,
   PERMISSIONS,
   REMOTE_ENTRY_TYPE,
   SDK_MAJOR_VERSION,
@@ -29,6 +30,7 @@ export {
   federationName,
   isCompatible,
   pagePath,
+  parseIntegrity,
   parseManifest,
 } from './manifest/index.js'
 export type {

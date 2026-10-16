@@ -4,6 +4,7 @@ import { version as reactDomVersion } from 'react-dom'
 import { REMOTE_ENTRY_TYPE, federationName } from '@wickermoney/plugin-sdk'
 import type { ComponentType } from 'react'
 import type { FrameParams } from './fragment.js'
+import { verifyPinnedFiles } from './verifyPinnedFiles.js'
 
 /**
  * Loads the plugin's module with the frame's own federation runtime.
@@ -15,9 +16,11 @@ import type { FrameParams } from './fragment.js'
  *
  * @param params - The validated frame parameters.
  * @returns The module's default export, a React component.
- * @throws {Error} When the remote cannot be loaded or exposes no such module.
+ * @throws {Error} When a pinned file does not match, a remote entry has no pin, the remote cannot be loaded or exposes no such module.
  */
 export async function loadPluginComponent(params: FrameParams): Promise<ComponentType<Record<string, unknown>>> {
+  // Nothing of the plugin is requested by the runtime until its pinned files have matched.
+  await verifyPinnedFiles(params, location.href)
   const name = federationName(params.pluginId)
   init({
     name: 'wickermoney_frame',

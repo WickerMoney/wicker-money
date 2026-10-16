@@ -74,9 +74,12 @@ describe('the app shell', () => {
     expect(res.body).toBe('')
   })
 
-  it('lists configured plugin origins in the policy', async () => {
+  it('does not list a configured plugin origin: remote plugins run only in the frame', async () => {
     const res = await (await appWith(['https://plugins.example.com'])).inject({ method: 'GET', url: '/' })
-    expect(String(res.headers['content-security-policy'])).toContain("script-src 'self' https://plugins.example.com")
+    const csp = String(res.headers['content-security-policy'])
+    expect(csp).toContain("script-src 'self';")
+    expect(csp).toContain("connect-src 'self';")
+    expect(csp).not.toContain('plugins.example.com')
   })
 })
 
@@ -179,7 +182,9 @@ describe('the sandboxed plugin frame document', () => {
 
   it('lists the operator plugin origins, and only for the frame', async () => {
     const res = await get('/plugin-frame', { host: 'money.example.com' }, ['https://plugins.example.com'])
-    expect(String(res.headers['content-security-policy'])).toContain('https://plugins.example.com')
+    const csp = String(res.headers['content-security-policy'])
+    expect(csp).toContain("script-src 'self' http://money.example.com https://plugins.example.com;")
+    expect(csp).toContain("connect-src 'none'")
   })
 
   it('is not served under the name of the file, so it cannot get the app policy', async () => {

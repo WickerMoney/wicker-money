@@ -10,6 +10,7 @@ import { assertSchemaReady } from './db/healthcheck.js'
 import { instanceHasUsers } from './db/instanceHasUsers.js'
 import { assertLeastPrivilege } from './db/privileges.js'
 import { recordDeployment } from './db/recordDeployment.js'
+import { loadExternalPlugins } from './plugins/loadExternalPlugins.js'
 import { seedBundledPlugins } from './plugins/registry.js'
 import { APP_VERSION, GIT_SHA } from './version.js'
 
@@ -32,7 +33,11 @@ try {
 
 // Bundled plugins follow the image, so they register at boot rather than in a
 // migration. Idempotent, and it never re-enables one the user turned off.
-await seedBundledPlugins(db)
+// Third-party manifests (PLUGIN_MANIFEST_DIR, unset by default) register too,
+// but switched off, and are read once here so the seed and the running app
+// agree on what exists.
+const external = loadExternalPlugins(config.PLUGIN_MANIFEST_DIR, { info: (m) => console.log(m), warn: (m) => console.warn(m) })
+await seedBundledPlugins(db, { external })
 
 // Audit convenience only (core.app_deployments) -- never worth failing startup
 // over, e.g. on an instance that has not yet run the migration that added it.
@@ -42,7 +47,7 @@ try {
   console.error('Failed to record deployment:', error instanceof Error ? error.message : error)
 }
 
-const app = buildApp({ db, config })
+const app = buildApp({ db, config, pluginOptions: { external } })
 
 // Advice only: tells an operator who is about to expose an empty instance that
 // whoever registers first will own it. Never worth failing startup over.

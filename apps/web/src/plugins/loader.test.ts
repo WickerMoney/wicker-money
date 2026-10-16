@@ -152,3 +152,29 @@ describe('loadPluginModule', () => {
     )
   })
 })
+
+describe('a remote entry', () => {
+  const remote = 'https://plugins.example.com/acme/remoteEntry.js'
+
+  it('is never registered in the page, even when the server says in-realm', async () => {
+    apiGet.mockResolvedValue({ plugins: [manifest({ id: 'acme.report', remoteEntry: remote, runtime: 'in-realm' })] })
+    const registry = await loadPluginRegistry()
+    expect(registerRemotes).not.toHaveBeenCalled()
+    expect(registry.plugins).toHaveLength(0)
+    expect(registry.failures[0]?.reason).toContain('only run in the sandboxed frame')
+  })
+
+  it.each(['//plugins.example.com/x.js', 'http://plugins.example.com/x.js', 'plugins/x.js'])('refuses %s in the page', async (remoteEntry) => {
+    apiGet.mockResolvedValue({ plugins: [manifest({ id: 'acme.report', remoteEntry, runtime: 'in-realm' })] })
+    const registry = await loadPluginRegistry()
+    expect(registerRemotes).not.toHaveBeenCalled()
+    expect(registry.plugins).toHaveLength(0)
+  })
+
+  it('cannot be loaded as a module of the page', async () => {
+    apiGet.mockResolvedValue({ plugins: [manifest({ id: 'acme.report', remoteEntry: remote, runtime: 'in-realm' })] })
+    await loadPluginRegistry()
+    loadRemote.mockResolvedValue(null)
+    await expect(loadPluginModule('acme.report', './W')).rejects.toThrow()
+  })
+})

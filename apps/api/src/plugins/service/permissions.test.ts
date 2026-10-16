@@ -1,5 +1,6 @@
 import { PERMISSIONS, SDK_MAJOR_VERSION, type Permission, type PluginManifest } from '@wickermoney/plugin-sdk'
 import { describe, expect, it } from 'vitest'
+import { IMPLEMENTED_PERMISSIONS, REFUSED_PERMISSIONS } from './permissionPolicy.js'
 import { PluginService } from './PluginService.js'
 import { InMemoryPluginUnitOfWork } from './testing/InMemoryPluginUnitOfWork.js'
 
@@ -13,16 +14,10 @@ import { InMemoryPluginUnitOfWork } from './testing/InMemoryPluginUnitOfWork.js'
  * asks for it must fail to load, with a reason a person can read.
  *
  * To add a permission: add it to `PERMISSIONS`, then either implement it and
- * list it under `IMPLEMENTED` with the path of the test that proves the host
- * enforces it, or list it under `REFUSED`. The first test below fails until
- * you do.
+ * list it in `IMPLEMENTED_PERMISSIONS` with the path of the test that proves the
+ * host enforces it, or list it in `REFUSED_PERMISSIONS` (both in
+ * `permissionPolicy.ts`). The first test below fails until you do.
  */
-
-/** Permissions the host enforces, with the test that proves it. None yet. */
-const IMPLEMENTED: Readonly<Partial<Record<Permission, string>>> = {}
-
-/** Permissions the host refuses at load, until it can enforce them. */
-const REFUSED: readonly Permission[] = ['network:outbound', 'schedule:daily', 'notify']
 
 function manifestWith(permissions: readonly Permission[]): PluginManifest {
   return {
@@ -47,9 +42,9 @@ async function load(manifest: PluginManifest) {
 
 describe('every PERMISSIONS value is implemented or refused', () => {
   it('has a decision for each value, and no decision for a value that does not exist', () => {
-    const decided = [...Object.keys(IMPLEMENTED), ...REFUSED]
+    const decided = [...Object.keys(IMPLEMENTED_PERMISSIONS), ...REFUSED_PERMISSIONS]
     // Fails the day a value is added to PERMISSIONS (packages/plugin-sdk/src/manifest/PERMISSIONS.ts)
-    // without being listed above.
+    // without a decision in permissionPolicy.ts.
     expect([...decided].sort()).toEqual([...PERMISSIONS].sort())
     expect(new Set(decided).size).toBe(decided.length)
   })
@@ -61,20 +56,16 @@ describe('every PERMISSIONS value is implemented or refused', () => {
     expect(listed?.status).toBe('enabled')
   })
 
-  // FINDING P5-1 (owner: P6). Nothing in the host refuses these today: P2 left the refusal to the host,
-  // P3 only answers a `notify` message with `not_supported`, and the 0.6.0 plan moved question 5 to P6.
-  // The tests below state the required behaviour and are marked `.fails` so the suite stays green until
-  // P6 lands. When P6 adds the refusal they start passing, vitest reports "expected to fail", and the
-  // `.fails` has to be deleted: that is the intended hand-over. Do not delete a test to make it pass.
-  describe.each(REFUSED)('%s is refused at load', (permission) => {
-    it.fails('the plugin is left out of the registry, with a reason that names the permission', async () => {
+  // Finding P5-1, closed by P6: the host refuses a manifest that declares any of these, bundled or not.
+  describe.each(REFUSED_PERMISSIONS)('%s is refused at load', (permission) => {
+    it('the plugin is left out of the registry, with a reason that names the permission', async () => {
       const { registry } = await load(manifestWith([permission]))
       expect(registry.plugins).toEqual([])
       expect(registry.failures).toHaveLength(1)
       expect(registry.failures[0]?.reason).toContain(permission)
     })
 
-    it.fails('the registry lists it as failed, not enabled', async () => {
+    it('the registry lists it as failed, not enabled', async () => {
       const { listed } = await load(manifestWith([permission]))
       expect(listed?.status).toBe('failed')
       expect(listed?.failure).toContain(permission)
@@ -84,7 +75,7 @@ describe('every PERMISSIONS value is implemented or refused', () => {
   it('a permission listed as implemented points at a test file that exists', async () => {
     const { existsSync } = await import('node:fs')
     const { resolve } = await import('node:path')
-    for (const [permission, file] of Object.entries(IMPLEMENTED)) {
+    for (const [permission, file] of Object.entries(IMPLEMENTED_PERMISSIONS)) {
       expect(existsSync(resolve(process.cwd(), file)), `${permission}: ${file}`).toBe(true)
     }
   })

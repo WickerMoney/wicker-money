@@ -23,6 +23,21 @@ curated, human-readable version.
   because `parseManifest` uses it.
 
 ### Added
+- **Admission control for plugins the image did not ship (ADR 0005).** A
+  manifest can carry an `integrity` map of Subresource Integrity values, keyed by
+  file path relative to the plugin's directory. A plugin that is not bundled, or
+  whose entry the host does not serve itself, must have one that lists its entry
+  file; the sandboxed frame has the browser verify every listed file before the
+  plugin runs, and a changed file is refused with a reason. It covers only the
+  listed files, not stylesheets, and was tested in Chromium 141 only. SDK:
+  `parseIntegrity` and `checkRemoteEntryIntegrity`.
+- **`PLUGIN_MANIFEST_DIR`: a minimal operator-side manifest source.** A directory
+  of `*.json` manifests read once at start-up. Each is checked like any
+  manifest, registered switched off, and run only in a frame. There is still no
+  install flow, catalog or signing. A manifest that declares `endpoints` or
+  `exporters`, a permission the host does not implement, an origin that is not in
+  `PLUGIN_REMOTE_ORIGINS`, or no pin is refused, and the reason is listed with the
+  plugin. A third-party plugin has no server code, storage or scheduled work.
 - **`@wickermoney/plugin-sdk/isolated`, the contract for UI plugins that run in a
   sandboxed frame (experimental).** A `PluginContext` is an object of functions
   and cannot cross a frame boundary, so this entry point defines a message
@@ -163,6 +178,14 @@ curated, human-readable version.
   Not used to protect the data export; see `ROADMAP.md`.
 
 ### Changed
+- **A remote plugin origin has no path into the app's page.** The page's own
+  content security policy no longer lists `PLUGIN_REMOTE_ORIGINS`; only the
+  sandboxed frame's does, and the page's loader refuses to register a remote
+  entry whatever runtime the server reports. `PLUGIN_REMOTE_ORIGINS` is still
+  empty by default and start-up is unchanged when it is.
+- **A manifest that declares `network:outbound`, `schedule:daily` or `notify` is
+  refused at load**, with a reason on the plugin list. The host implements none
+  of them. (Previously they loaded and were ignored.)
 - **The Insights widgets run in sandboxed frames.** "Money in and out" and
   "Where it went" now render in `<iframe sandbox="allow-scripts">` behind the
   broker instead of in the app's own page, so Insights code can no longer reach

@@ -372,12 +372,15 @@ focus. Turning a plugin off deletes nothing. Its tables, rows and database
 role stay, and turning it back on brings everything back. Plugins in the same
 area, such as two budgeting approaches, can be on together.
 
-**Plugins are trusted code.** A plugin's front-end code runs inside the app,
-in its own origin, with the same access to your data as you have. A plugin's
-declared table grants are enforced by the database for its server-side code,
-but they do not restrict its front-end code. Third-party plugin install is not
-supported yet, and there is no sandbox for it. Keep `PLUGIN_REMOTE_ORIGINS`
-empty unless you fully trust every origin you list there. See
+**Where a plugin runs decides how far it is trusted.** Insights and Spending
+Trends run in a sandboxed frame and reach your data only through the host, with
+the grants their manifest lists. The other bundled plugins still run inside the
+app, in its own origin, with the same access to your data as you have; they ship
+in the image and are reviewed with it. There is no install flow or catalog for
+third-party plugins: an operator can add one by hand (a manifest with an
+integrity pin in `PLUGIN_MANIFEST_DIR`, its origin in `PLUGIN_REMOTE_ORIGINS`),
+and it then runs only in a frame, with no server-side code. The sandbox has known
+gaps and is not independently reviewed, so only add a plugin you have read. See
 [SECURITY.md](SECURITY.md).
 
 ### Forgotten password
