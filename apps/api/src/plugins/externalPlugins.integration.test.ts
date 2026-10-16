@@ -6,6 +6,7 @@ import { buildApp } from '../app.js'
 import { createDb, type Db } from '../db/client.js'
 import { seedHousehold } from '../testing/eraseFixtures.js'
 import { TEST_ADMIN_DATABASE_URL, auth, createHarness, createUser, type Harness, type TestUser } from '../testing/harness.js'
+import { exportAs } from '../testing/exportTicket.js'
 import { BUNDLED_PLUGINS } from './bundled.js'
 import { seedBundledPlugins } from './registry.js'
 import type { ExternalPlugin } from './service/ExternalPlugin.js'
@@ -124,7 +125,7 @@ describe('a third-party plugin from the manifest directory', () => {
   })
 
   it('is not in the full export, which only carries what an exporter contributes', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: auth(owner) })
+    const res = await exportAs(app, owner)
     expect(res.statusCode).toBe(200)
     const plugins = (res.json() as { plugins: Record<string, unknown> }).plugins
     expect(Object.keys(plugins)).not.toContain(ID)
