@@ -988,8 +988,13 @@ Needs `pnpm build`, a test database (see above) and Chromium. In CI the browser
 comes from `playwright-core install chromium`; in a sandbox that ships one,
 point `CHROMIUM_PATH` at it and do not install another. Expect about 2.5
 minutes for the browser half and under 10 seconds for the server half on a
-laptop; the CI job, including install, build and browser download, is
-estimated at 5 to 7 minutes. A channel the frame policy does not govern is
+laptop; the CI job, including install, build and browser download, took 4
+minutes 1 second on its first green run, next to 3 minutes 18 seconds for the
+main job (measured 2026-10-11, before the API integration job from #83
+existed). The suite launches Playwright's full Chromium (`channel: 'chromium'`),
+not the headless shell, because the frame handshake ("The host did not send
+init in time") never completes in the headless shell. A channel the frame policy
+does not govern is
 **pinned** in the browser half: a browser upgrade that closes or opens one fails
 the suite so that the ADR table is updated with it.
 
