@@ -302,6 +302,22 @@ describe('frame to host helpers', () => {
     expect(seen).toEqual([{ type: 'resize', height: 100 }, { type: 'resize', height: 180 }])
     expect(disconnected).toBe(true)
   })
+
+  it('observeSize keeps polling without a ResizeObserver, and stops when disposed', async () => {
+    vi.useFakeTimers()
+    try {
+      const { conn, seen } = await connect()
+      let height = 100
+      const stop = conn.observeSize({ getBoundingClientRect: () => ({ height }) })
+      height = 240
+      await vi.advanceTimersByTimeAsync(250)
+      await vi.advanceTimersByTimeAsync(250)
+      stop()
+      height = 400
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(seen).toEqual([{ type: 'resize', height: 100 }, { type: 'resize', height: 240 }])
+    } finally { vi.useRealTimers() }
+  })
 })
 
 describe('connectToHost (window handshake)', () => {

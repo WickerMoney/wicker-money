@@ -269,6 +269,82 @@ proving anything and auth breaks on every real deployment. This is not
 hypothetical — it is how a registration failure reached a running install with
 the entire auth suite green.
 
+### What CI runs
+
+`.github/workflows/ci.yml` runs on every pull request and every push to
+`main`, and `edge-image.yml` (every merge to `main`) and `release.yml` (every
+tag) call it as a reusable workflow before they build an image. A red job
+therefore stops a pull request, `:edge` and a release alike. None of its test
+jobs uses a secret, and none has a path filter or an `if:`, because a skipped
+job counts as a pass for a required check.
+
+| Status check name | What it runs | Needs |
+|---|---|---|
+| `Lint, typecheck, build, test` | `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test` (unit tests, no database) | nothing |
+| `API integration (Postgres 16)` | `pnpm test:integration`: every `*.integration.test.ts` file in the API, against PostgreSQL 16 | `postgres:16-alpine` service container |
+| `Hostile plugin suite` | `pnpm test:hostile` ([details](#hostile-plugin-suite)) | PostgreSQL 16 service container, Chromium |
+| `Image build (linux/amd64)`, `Image build (linux/arm64)` | builds the image without pushing it (skipped on tag pushes, where `release.yml` builds it) | Docker |
+
+Require the first three as status checks on `main` (repository settings,
+Rules); a check that is not required only informs.
+
+**How the integration job gets its database.** The service container's
+bootstrap superuser (`postgres`) only creates an owner role, `wickermoney`
+(`LOGIN CREATEROLE`, not a superuser), and the `wickermoney_test` database it
+owns. The suite connects as that owner to migrate and provision, and makes the
+application and plugin roles itself, exactly as in
+[Running tests against the same server](#running-tests-against-the-same-server).
+The passwords in the workflow belong to a container that lives as long as the
+job, on a runner that is thrown away with it; they are not secrets. The job builds
+nothing explicitly: the `test:integration` task depends on `^build`, so turbo
+builds the packages the API imports.
+
+**Reproducing it locally.** Use a throwaway container on port 5433, so it does
+not collide with the development database from `docker-compose.dev.yml` on 5432.
+Do not reuse that container's `wickermoney` user as the owner: it is the
+image's bootstrap superuser, and the harness refuses a superuser owner.
+
+```bash
+docker run -d --name wm-test-pg -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:5433:5432 postgres:16-alpine
+until docker exec wm-test-pg pg_isready -U postgres -q; do sleep 1; done
+docker exec wm-test-pg psql -U postgres -v ON_ERROR_STOP=1 \
+  -c "CREATE ROLE wickermoney LOGIN CREATEROLE PASSWORD 'ownerpw'" \
+  -c "CREATE DATABASE wickermoney_test OWNER wickermoney"
+
+export TEST_ADMIN_DATABASE_URL=postgresql://wickermoney:ownerpw@localhost:5433/wickermoney_test
+export TEST_DATABASE_URL=postgresql://wickermoney_app_test:testpw@localhost:5433/wickermoney_test
+pnpm test:integration
+
+docker rm -f wm-test-pg
+```
+
+```powershell
+docker run -d --name wm-test-pg -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:5433:5432 postgres:16-alpine
+do { Start-Sleep 1; docker exec wm-test-pg pg_isready -U postgres -q } until ($LASTEXITCODE -eq 0)
+docker exec wm-test-pg psql -U postgres -v ON_ERROR_STOP=1 `
+  -c "CREATE ROLE wickermoney LOGIN CREATEROLE PASSWORD 'ownerpw'" `
+  -c "CREATE DATABASE wickermoney_test OWNER wickermoney"
+
+$env:TEST_ADMIN_DATABASE_URL = 'postgresql://wickermoney:ownerpw@localhost:5433/wickermoney_test'
+$env:TEST_DATABASE_URL = 'postgresql://wickermoney_app_test:testpw@localhost:5433/wickermoney_test'
+pnpm test:integration
+
+docker rm -f wm-test-pg
+```
+
+To run one file, pass it through to Vitest:
+`pnpm --filter @wickermoney/api test:integration src/plugins/externalPlugins.integration.test.ts`.
+The roles the suite creates are cluster-wide, which is why a fresh container is
+the cleanest way to get CI's starting state.
+
+**PostgreSQL 16 only.** The suite is supported on 16, the version in every
+compose file and in CI. A newer major version can fail on a test that asserts
+plan text (`tenantContext.integration.test.ts` did on 18) without anything being
+wrong in the app. Do not read such a failure as a regression; run the suite on 16.
+
+**When it is red on `main`.** `:edge` and the tag wait for it. Fix forward or
+re-run the workflow; do not remove the job from `ci.yml` to get an image out.
+
 ## How the features work
 
 The [README](README.md#features) has a short version of each feature for
