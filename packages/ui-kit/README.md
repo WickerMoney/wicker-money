@@ -34,7 +34,9 @@ export function Summary({ net }: { net: string }) {
 
 The package entry imports its stylesheets (`tokens.css` and `components.css`)
 as a side effect, so your bundler must handle CSS imports. Vite and most modern
-bundlers do by default.
+bundlers do by default. `package.json` declares `./dist/index.js` and `./dist/*.css` as the
+only files with side effects (`sideEffects`), so a bundler can still drop the
+components you never import.
 
 **Inside a Wicker Money plugin:** the host already loads these styles, so
 components in your widgets are styled with no extra setup. For your plugin's
@@ -50,7 +52,7 @@ A federated remote's emitted stylesheet is never requested.
 | `Button` | `variant`: `default`, `primary` or `danger` |
 | `Field`, `SelectField` | Labelled form inputs; optional `hint` and `error` (wires `aria-invalid` and `aria-describedby`) |
 | `FormError` | A form-level error, shown beside the form's submit button |
-| `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align |
+| `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align. Optional `caption` names the table: it is rendered as a visually hidden `<caption>` that a screen reader announces. Header cells carry `scope="col"`, and a column whose `header` is an empty string (a column of row buttons) gets a visually hidden "Actions" label in its header cell, so no header cell is empty |
 | `Stat` | Label + value; `tone="auto"` colours by sign |
 | `CategoryOptions`, `orderByParent` | Category `<option>` list grouped under parents |
 | `Alert` | Inline error or notice (`role="alert"`) |
@@ -68,6 +70,41 @@ and `hasFormErrors` cover the empty case.
 
 Every component's props type is exported alongside it (`SurfaceProps`,
 `TableProps<T>`, ...).
+
+### Focus trap
+
+`useFocusTrap(ref, active, options?)` keeps Tab and Shift+Tab inside the element
+`ref` points at while `active` is true: Tab from the last tabbable element wraps
+to the first, Shift+Tab from the first wraps to the last, and if focus is outside
+the container the next Tab pulls it in. Disabled, `inert`, hidden and
+`tabindex="-1"` elements are skipped. It does not move focus when it turns on
+(you know what should be focused first) and it does not handle Escape. The
+container must be mounted whenever `active` is true.
+
+By default, when the trap turns off, focus goes back to whatever had it when the
+trap turned on. Pass `{ restoreFocus: false }` (the `restoreFocus` field of
+`FocusTrapOptions`, default `true`) when you return focus somewhere more specific
+yourself.
+
+```tsx
+import { useRef } from 'react'
+import { useFocusTrap } from '@wickermoney/ui-kit'
+
+export function Menu({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useFocusTrap(ref, true)
+  return (
+    <div ref={ref} role="dialog" aria-modal="true" aria-label="Menu" tabIndex={-1}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}>
+      <button type="button" onClick={onClose}>Close</button>
+    </div>
+  )
+}
+```
+
+It is for hand-rolled modals that are not a native `<dialog>`. A native `<dialog>`
+opened with `showModal()` already keeps focus inside, and the kit's own `Dialog`
+is one.
 
 ## Design tokens
 
