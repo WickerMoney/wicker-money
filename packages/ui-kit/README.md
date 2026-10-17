@@ -50,9 +50,11 @@ A federated remote's emitted stylesheet is never requested.
 |---|---|
 | `Surface` | Card/panel with an optional title and header action |
 | `Button` | `variant`: `default`, `primary` or `danger` |
+| `IconButton` | Square icon-only button for table rows. `icon` is one of `edit`, `delete`, `disable`, `enable`, `archive`, `history`, `end` or `balance`; `label` is required and is both the accessible name and the hover tooltip; `variant`: `default` or `danger`. Takes any other native `<button>` attribute |
+| `Dialog` | Modal built on the native `<dialog>` (`showModal()`): a side drawer on a desktop window, a full-screen sheet on a phone. `title` is the heading and the accessible name; `onClose` is called on Escape, the close button or a click on the backdrop. The page behind is inert, Tab stays inside, the first input in the body gets focus, and focus returns to what opened it when it unmounts. Render it only while it is wanted |
 | `Field`, `SelectField` | Labelled form inputs; optional `hint` and `error` (wires `aria-invalid` and `aria-describedby`) |
 | `FormError` | A form-level error, shown beside the form's submit button |
-| `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align. Optional `caption` names the table: it is rendered as a visually hidden `<caption>` that a screen reader announces. Header cells carry `scope="col"`, and a column whose `header` is an empty string (a column of row buttons) gets a visually hidden "Actions" label in its header cell, so no header cell is empty |
+| `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align. `empty` is rendered instead of the table when `rows` is empty; `className` adds a class to the table's scroller. Optional `caption` names the table: it is rendered as a visually hidden `<caption>` that a screen reader announces. Header cells carry `scope="col"`, and a column whose `header` is an empty string (a column of row buttons) gets a visually hidden "Actions" label in its header cell, so no header cell is empty |
 | `Stat` | Label + value; `tone="auto"` colours by sign |
 | `CategoryOptions`, `orderByParent` | Category `<option>` list grouped under parents |
 | `Alert` | Inline error or notice (`role="alert"`) |
@@ -69,7 +71,9 @@ names and returns anything left over as one form-level message;
 and `hasFormErrors` cover the empty case.
 
 Every component's props type is exported alongside it (`SurfaceProps`,
-`TableProps<T>`, ...).
+`TableProps<T>`, ...). The other exported types are `Column<T>` (a `Table` column),
+`IconName`, `FieldCommon`, `GroupableCategory`, and the form-error types
+`FormErrors`, `FormErrorState`, `FieldMatcher` and `ValidationIssue`.
 
 ### Focus trap
 
