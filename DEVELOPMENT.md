@@ -852,9 +852,11 @@ draws.
   800 px tall; past that the frame scrolls on its own, a second scroll area
   inside the card.
 - A widget frame below the fold is not laid out until it is scrolled into view
-  (Chromium throttles the rendering of off-screen cross-origin frames), so it
-  stays at the minimum height until then. Do not depend on a widget's size
-  before it has been on screen.
+  (Chromium throttles the rendering of off-screen cross-origin frames), so a
+  `ResizeObserver` alone never fires there. `observeSize` also re-reads the
+  height every 250 ms, which is how an off-screen frame gets its height. Use
+  `observeSize` rather than your own observer, and do not call `reportSize`
+  from a `ResizeObserver` only.
 - The frame's document has only the ui-kit styles and the plugin's own;
   `adoptPluginStyles` writes to the frame's document, which works because the
   frame CSP allows inline style.

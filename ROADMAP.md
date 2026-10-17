@@ -28,10 +28,6 @@ promise: items move, shrink or disappear, and there are no dates.
 After `v0.6.0`:
 
 - Close what the release candidate soak and the real-device pass turn up.
-- Decide `observeSize` in the plugin SDK: it uses `ResizeObserver` only, so a
-  widget in an off-screen frame can keep its minimum height until it is
-  scrolled into view. A small fix is known; whether it lands in `0.6.x` or
-  `0.7.0` is open.
 - A layout pass on the Transactions table, which has been crowded since the
   Recurring column was added. It fits at 1366 px wide and above. Narrower than
   that the date wraps onto two lines, and below about 1190 px the table scrolls

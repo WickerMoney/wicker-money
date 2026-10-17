@@ -323,10 +323,8 @@ SDK root also stopped exporting the Zod manifest schemas. See
   "Where it went" now render in `<iframe sandbox="allow-scripts">` behind the
   broker instead of in the app's own page, so Insights code can no longer reach
   the user's session, cookies or the rest of the page. What a person sees is
-  the same, with three differences: a widget below the fold keeps its minimum
-  height until it is scrolled into view (Chromium does not run an off-screen
-  cross-origin frame's layout observers), the first widgets take a little longer
-  to appear because each frame loads its own copy of React, and the chart's table
+  the same, with two differences: the first widgets take a little longer to
+  appear because each frame loads its own copy of React, and the chart's table
   view scrolls inside the widget (400 px) instead of making it as tall as the
   range. Budgets, CSV import, Upcoming, Forecast and Debt payoff are unchanged
   and still run in the page. Spending Trends moves in the next entry.
@@ -414,6 +412,13 @@ SDK root also stopped exporting the Zod manifest schemas. See
   untouched. This release has no setting to turn the app's own compression off.
 
 ### Fixed
+- **Sandboxed widget frames below the fold get their height without scrolling.**
+  Chromium does not run a cross-origin frame's rendering updates while it is off
+  screen, so `ResizeObserver` never fired there and the frame stayed at the
+  host's 96 px minimum until it was scrolled into view. `observeSize` in the
+  plugin SDK now also re-reads the height every 250 ms (a repeat of the same
+  height sends nothing) and works where there is no `ResizeObserver`. Plugins
+  that call `observeSize` get the fix without changes.
 - **The setup wizard and the phone navigation drawer manage focus.** The wizard
   had no focus trap, did not return focus when it closed, pulled focus back to
   the panel on every step, and its loading state had no accessible name. Tab now
