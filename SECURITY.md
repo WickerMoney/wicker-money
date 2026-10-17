@@ -66,7 +66,9 @@ Out of scope:
 - Vulnerabilities in a third-party plugin's own code. The boundary is meant to
   contain such a plugin, and a bug inside it is that author's to fix.
 - What an isolated plugin can already read with its grants, and sending that out
-  through the channels listed under "Known gaps" below.
+  through the channels listed under "Known gaps" below, in the browser version
+  named there. The same channel in another browser, or a further channel of the
+  same kind, is in scope.
 
 ## Things worth knowing
 
@@ -90,14 +92,17 @@ are reviewed with the rest of the application.
 
 An isolated plugin's UI runs in an `<iframe sandbox="allow-scripts">` whose
 document carries its own content security policy. It has no access to the app's
-cookies, storage or DOM and no network of its own. Its only way out is a message
-channel to the host, which checks each request against the plugin's grants and
-forwards it with a plugin-specific token. The server gives that token nothing but
-a few read-only aggregate routes for the tables the manifest lists, and the
-plugin's own `/p/<id>/` routes. Every other route, including sign-in, refresh,
-export, erase and plugin management, is refused for it. A hostile-plugin test
-suite attempts about 140 escapes, and a remote-origin test drives a real build
-through the integrity pin, in Chromium on every pull request.
+cookies, storage or DOM, and script in the frame cannot make network requests of
+its own (`fetch`, XHR, WebSocket and beacons are blocked by the frame's policy;
+the browser has a few other ways to send a request, listed under "Known gaps").
+Its only way to reach your data is a message channel to the host, which checks
+each request against the plugin's grants and forwards it with a plugin-specific
+token. The server gives that token nothing but a few read-only aggregate routes
+for the tables the manifest lists, and the plugin's own `/p/<id>/` routes. Every
+other route, including sign-in, refresh, export, erase and plugin management, is
+refused for it. A hostile-plugin test suite attempts about 140 escapes, and a
+remote-origin test drives a real build through the integrity pin, in Chromium on
+every pull request.
 
 ### What it does not protect
 
@@ -113,18 +118,29 @@ through the integrity pin, in Chromium on every pull request.
 - **A plugin keeps what it is granted.** A plugin can read what its grants allow
   and what the host tells it about the session (the user's email and id). The
   grant, not the sandbox, limits what it can learn.
-- **Known gaps** (checked in Chromium 141 only; Firefox and Safari have not been
-  tested). The frame's content security policy does not cover every way a
-  browser can send a request. `<link rel=prerender>` and WebRTC (STUN and TURN)
-  still reach an address the plugin chooses, and can carry what the plugin holds
-  in the URL or the TURN username. A frame can also send anonymous GET requests
-  to URLs on the app's own origin, which return nothing to it. These are known
-  limitations, not vulnerabilities, until they are closed. Reports that they work
-  in another browser, or of a further channel of the same kind, are welcome.
+- **Known gaps** (observed in Chromium 141; WebKitGTK 2.52 was checked for the
+  last one only; Firefox and Safari have not been tested). The frame's content
+  security policy does not cover every way a browser can send a request. A
+  malicious plugin can still cause some requests and read nothing back from them.
+  - `<link rel=prerender>` and WebRTC (STUN and TURN) reach an address the plugin
+    chooses, and can carry what the plugin holds in the URL or the TURN username.
+  - A sandboxed frame can navigate itself to a URL on the app's own origin that
+    the page's frame policy allows. In Chromium 141 that request carried none of
+    the user's credentials and returned nothing to the plugin. In WebKitGTK 2.52
+    the same navigation carried a `SameSite=Strict` cookie. Do not assume either
+    result for another browser.
+
+  These are known limitations, not vulnerabilities, until they are closed. A
+  report that one of them behaves differently in another browser, or of a further
+  channel of the same kind, is in scope and welcome.
 - **Newness.** The boundary is new code. The broker and the token path have not
   been through an independent security review.
 
 ### Third-party plugins
+
+**Status: experimental.** The isolated runtime and loading a third-party plugin
+are opt-in and off by default, and the broker and token path behind them have not
+been independently reviewed.
 
 There is no install flow, no catalog and no signing. The only way to add a
 third-party plugin is for the operator to do it by hand:
@@ -149,5 +165,6 @@ headers, and listing an origin means trusting it to serve what you pinned and
 nothing it chooses later.
 
 Treat a third-party plugin as code you have chosen to run inside a cage that has
-known gaps (above), not as code that is safe to run. If you would not give it the
-aggregates it asks for, do not add it.
+known gaps (above), not as code that is safe to run. A plugin that is granted
+your transactions can send them to another server through those gaps. If you
+would not give it the aggregates it asks for, do not add it.

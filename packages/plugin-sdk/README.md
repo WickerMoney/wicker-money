@@ -49,11 +49,11 @@ module documentation (`@stable` or `@experimental`).
 | Import | Tier | What it is for | Who uses it today |
 |---|---|---|---|
 | `@wickermoney/plugin-sdk` (root: manifest, dashboard range) | stable | `parseManifest` and the manifest types, `SDK_MAJOR_VERSION`, remote-entry checks, and the dashboard range helpers | The API and the web app (manifest, range); the Insights and Spending Trends plugins (`monthsInRange`); several plugins import the `PluginContext` and props types from here |
-| `@wickermoney/plugin-sdk/runtime` | stable | The props and context the host hands a plugin's React components, plus `adoptPluginStyles` | The web app and all six bundled UI plugins |
+| `@wickermoney/plugin-sdk/runtime` | stable | The props and context the host hands a plugin's React components, plus `adoptPluginStyles` | The web app and all seven bundled UI plugins |
 | `@wickermoney/plugin-sdk/money` | stable | Exact money arithmetic on decimal strings | The web app, the Budgets, Insights and Spending Trends plugins, and the API's tests |
 | `@wickermoney/plugin-sdk/server` | stable | The server-side contract between the host and a bundled plugin's `register` function | The API, Budgets and Import CSV |
 | `@wickermoney/plugin-sdk/date` | stable | The `addDays` and `addMonths` calendar helpers | The API, the web app and Budgets |
-| `@wickermoney/plugin-sdk/isolated` | experimental | The runtime contract for UI plugins that run in a sandboxed frame: protocol, validators, in-frame client. Stays experimental until the isolation work has shipped and settled | The web app's frame host and broker, and the Spending Trends plugin (it is written against `/runtime` and runs in a frame unchanged) |
+| `@wickermoney/plugin-sdk/isolated` | experimental | The runtime contract for UI plugins that run in a sandboxed frame: protocol, validators, in-frame client. Stays experimental until the isolation work has shipped and settled | The web app's frame host and broker. The Insights and Spending Trends plugins run in a frame but are written against `/runtime`, unchanged |
 | `@wickermoney/plugin-sdk/recurrence` | experimental | Recurring-item date maths and projections. It still re-exports `addDays` and `addMonths` so older imports work; import them from `/date` | The API and the web app. No plugin uses the projections yet |
 
 The root also re-exports the `/date`, `/recurrence`, `/money` and `/server` exports. It does

@@ -9,7 +9,48 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+## [0.6.0] - unreleased
+
+Plugin isolation, owner tooling and a performance and accessibility sweep. A
+plugin's interface can now run in a sandboxed frame that holds no session, cookie
+or page access and reaches data only through the host, with a short-lived token
+that carries just the plugin's grants; Insights and Spending Trends run that way,
+and an operator can add a third-party UI plugin by hand (experimental, no install
+flow). The data export now asks for the password again, a danger zone erases your
+data or the whole instance, owners change roles from Settings, and a debt payoff
+plugin joins the bundled set. **Back up your database before upgrading:** this
+release has four migrations, 029 to 032. All four have a `down`, so going back to
+0.5.0 is `node dist/db/cli.js down` four times with the 0.6.0 image, then the old
+image; that deletes everything in the debt payoff plugin and drops the owner-role
+and erase functions and the two ledger indexes. Two changes can break callers: the
+export is now two requests, and the Import CSV `analyze` response is paged. The
+SDK root also stopped exporting the Zod manifest schemas. See
+[Upgrading](README.md#upgrading).
+
 ### Breaking
+- **The data export needs a password-confirmed ticket.**
+  `GET /api/v1/settings/export` now answers `403 export_confirmation_required`
+  unless the request carries an `x-wickermoney-export-ticket` header. Get one from
+  the new `POST /api/v1/settings/export-ticket` with `{ "password": "..." }`, which
+  returns `{ ticket, expiresAt }`. A ticket is good for one download, for two
+  minutes, for that user in that session; an unknown, expired, used or someone
+  else's ticket is `403 export_ticket_invalid`. A wrong password is
+  `403 password_incorrect` (not `401`, so the web app does not read it as an
+  expired session) and counts against the attempt limit the erase actions already
+  use. Tickets are held in the API process's memory, so a restart drops them, and
+  several API processes behind one address need the two requests to reach the
+  same one. **Migration:** the Settings page asks for the password in a dialog and
+  makes both requests. A script that calls the export itself must make them in
+  order. A plugin token cannot reach either route.
+- **Import CSV's `POST /analyze` no longer returns every row.** The response is
+  still `{ summary, errors, rows, flagged }`, but `rows` is now the first 100 rows
+  of the file, and the rows that need review come back as
+  `flagged: { total, offset, rows }`, a page of up to 500. Send `flaggedOffset`
+  and `flaggedLimit` (at most 1000) for another page; each such request sends and
+  analyses the file again. For an 8 MB file the response went from about 21 MB to
+  19 KB. `commit` classifies the file itself, so rows that were not returned are
+  imported as the user decided. **Migration:** a client that read every row from
+  `rows` must page `flagged`. The Import CSV page in the app already does.
 - **The SDK root no longer exports the Zod manifest schemas.**
   `pluginManifestSchema`, `tableGrantSchema`, `widgetContributionSchema`,
   `pageContributionSchema` and `remoteEntrySchema` are no longer exported from
@@ -64,9 +105,9 @@ curated, human-readable version.
   leaves the frame. `GET /api/v1/plugins` now reports each plugin's `runtime`
   (`in-realm` or `isolated`) beside its manifest; the list of bundled plugins
   that still run in the page is a host-internal set, not a manifest field. Insights
-  is the first bundled plugin to move out of it (see Changed); the other six run
-  exactly as before. There is
-  still no install flow for third-party plugins. See `DEVELOPMENT.md` "Isolated
+  and Spending Trends are the bundled plugins that have moved out of it (see
+  Changed); the other five run in the page as before. There is still no
+  install flow for third-party plugins. See `DEVELOPMENT.md` "Isolated
   plugin frames".
 - **An optional `isolated` flag on the plugin manifest.** `isolated: true`
   declares that a plugin was built for the isolated runtime. It is not a grant:
@@ -175,9 +216,101 @@ curated, human-readable version.
     every table with a `user_id` column. See "Erasing data" in `DEVELOPMENT.md`.
     No plugin SDK entry point was added.
 - **`AuthService.confirmPassword`**, a reusable "type your password again" check.
-  Not used to protect the data export; see `ROADMAP.md`.
+  The erase actions and the data export use it.
+- **Configurable database limits and import cap.** Four new settings (see
+  `DEVELOPMENT.md`, "Pool, timeouts and import limits"), all with the old
+  behaviour as their default except the import cap and the longer limit for
+  import and export routes (they ran under the 30 s limit before):
+  - `DB_POOL_MAX` (default `10`, 2 to 200): connections the API may hold open.
+  - `DB_STATEMENT_TIMEOUT` (default `30000`, milliseconds, 1000 to 3600000): the
+    longest one statement may run. The floor is deliberate, so `30` is rejected
+    rather than read as seconds.
+  - `DB_LONG_STATEMENT_TIMEOUT` (default `300000`, never below the one above): the
+    same limit for CSV import and the data export only, set per transaction.
+  - `IMPORT_MAX_ROWS` (default `100000`, 1 to 1,000,000): data rows one import may
+    contain, counting unreadable ones. It was a fixed 50,000. The 8 MB file limit
+    still applies and is not configurable.
+- **Why 100,000 rows.** An 8 MB file holds about 109,000 bank-style rows, 67,000
+  with a memo column and 374,000 rows of minimal text, so the size limit alone
+  does not bound the work. Measured on two vCPUs with a local PostgreSQL 16 and a
+  pool of 10: 100,000 rows analysed in about 1 s and committed in about 17 s
+  (API memory up about 190 MB while analysing and 110 MB while committing, the
+  event loop stalled 0.7 to 0.8 s); 373,585 rows committed in 48 s. Commit time is
+  linear, about 150 microseconds a row, and is how long a pooled connection and
+  the account's import lock are held. These are one machine's numbers; lower the
+  cap on a small device. **Concurrent imports share the pool:** ten simultaneous
+  50,000-row commits held all ten connections for about 45 seconds, and 8 of 106
+  other requests made meanwhile failed waiting for a connection; with
+  `DB_POOL_MAX=20` none did. If several people import at once, raise the pool and
+  check PostgreSQL's `max_connections`. The full table is in `DEVELOPMENT.md`.
+- **PgBouncer in transaction mode works with one change.** Tested with
+  PgBouncer 1.22.0, `pool_mode = transaction` and the full integration suite
+  through it (1,011 of 1,014 tests passed). The API sends `statement_timeout` and
+  `idle_in_transaction_session_timeout` as startup parameters, which PgBouncer
+  refuses, so add `ignore_startup_parameters = statement_timeout,idle_in_transaction_session_timeout`
+  to `pgbouncer.ini`. Those two limits then stop applying through the pooler;
+  set them on the database role instead (steps in `DEVELOPMENT.md`).
+  `DB_LONG_STATEMENT_TIMEOUT` still applies. The three failing tests check the
+  pool's own default limit, which is that ignored parameter. Session and statement
+  modes, other versions and any production load were not tested.
+- **`longRunning` for plugin routes.** `RegisterRoute`'s options in
+  `@wickermoney/plugin-sdk/server` take `longRunning: true`, which runs the
+  route's database work under `DB_LONG_STATEMENT_TIMEOUT` instead of the ordinary
+  limit. Import CSV's analyze and commit use it. Additive.
+- **Merchant and amount sort indexes (migration 031).** The transaction list pages
+  by `(sort column, id)`; merchant had no index at all, so every merchant page
+  sorted the user's whole ledger. Measured on PostgreSQL 16 with 1,000,000
+  transactions across 50 users and row-level security as in production: merchant
+  pages for the largest user (222,000 rows) went from 52 to 78 ms to about 0.2 ms,
+  and the first page of an ascending amount sort from 2.5 to 0.2 ms warm (118 to
+  148 ms to 2 to 4 ms cold). **Deep amount-sorted pages are not faster** (about
+  65 ms at 220,000 rows), because PostgreSQL cannot use a numeric comparison as an
+  index bound under row-level security, and `ILIKE` merchant search is unchanged
+  (130 to 165 ms for the largest user). Deep category-and-date pages got 8 to
+  15 ms slower. The indexes are built with a plain
+  `CREATE INDEX`, which blocks writes to transactions while each builds: about
+  1.3 s and 1.2 s on 1,000,000 rows. The synthetic ledger is not a real one.
+- **What a frame costs.** A frame is a browser process and a copy of React, so a
+  frame per widget has a price (Chromium 141, headless, medians; one machine, not
+  a benchmark). On a test fixture each frame after the first cost about 9 MiB and
+  150 ms (one frame loaded in 757 ms, six in 1,506 ms). The first frame costs more
+  because it starts its own renderer process: Insights' two widgets added about
+  377 ms to the first widget and 152 MiB of browser memory on the real dashboard
+  (717 ms and 765 MiB in the page, 1,094 ms and 917 MiB in frames), and Spending
+  Trends alone about 100 ms and 130 MiB, each further frame about 6 MiB and
+  150 to 180 ms. A projection with both plugins in frames (three frames) loaded in
+  1,606 ms and used 927 MiB, against 1,152 ms and 782 MiB in the page. Frames do
+  not make the dashboard cheaper; they buy the boundary with time and memory.
+- **A hostile-plugin test suite runs in CI.** A plugin written to misbehave is
+  run against the real API and Chromium on every pull request, in its own job
+  (Hostile plugin suite): 121 server tests, 141 browser attacks in 25 checks, and a remote-origin
+  check that drives a real build through the integrity pin (15 checks). It covers
+  forged, expired and foreign tokens, every denied route class, a flooding or
+  malformed message, spoofed senders and frame navigation. It cannot show that a
+  browser has no other way out; see "Known gaps" in `SECURITY.md`.
 
 ### Changed
+- **What the sandbox protects, and what it does not, is stated plainly.**
+  `SECURITY.md`, `DEVELOPMENT.md` and the SDK README now say that the sandboxed
+  frame keeps a plugin away from the user's access token, the refresh cookie, the
+  page's DOM and storage, other plugins' routes and everything the server denies
+  to a plugin token, and that script in the frame cannot call `fetch`, XHR,
+  WebSocket or beacons. They also say what it does **not** stop. The frame's
+  content security policy does not govern `<link rel=prerender>` or WebRTC (STUN
+  and TURN) in Chromium, so a hostile plugin can make a browser request to an
+  address it picks and carry what it holds in the URL or the TURN username; a
+  sandboxed frame can navigate itself to a same-origin URL the page's frame policy
+  allows (in Chromium 141 that request carried no credentials and returned nothing
+  to the plugin, but WebKitGTK 2.52 sent a `SameSite=Strict` cookie on it; Firefox
+  and Safari were not tested). A malicious plugin can therefore cause some
+  credential-less requests and read nothing back, and a plugin granted your
+  transactions can send them to another server through those gaps. These are
+  documented known limitations, not vulnerabilities; a new channel of the same
+  kind, or the same one in another browser, is in scope for a report. The isolated
+  runtime and third-party plugin loading are **experimental**, off by default and
+  opt-in, and the broker and token path have not been through an independent
+  security review. Five bundled plugins still run in the app's own page and are
+  fully trusted.
 - **A remote plugin origin has no path into the app's page.** The page's own
   content security policy no longer lists `PLUGIN_REMOTE_ORIGINS`; only the
   sandboxed frame's does, and the page's loader refuses to register a remote
@@ -190,13 +323,15 @@ curated, human-readable version.
   "Where it went" now render in `<iframe sandbox="allow-scripts">` behind the
   broker instead of in the app's own page, so Insights code can no longer reach
   the user's session, cookies or the rest of the page. What a person sees is
-  the same, with three differences: a widget below the fold keeps its minimum
-  height until it is scrolled into view (Chromium does not run an off-screen
-  cross-origin frame's layout observers), the first widgets take a little longer
-  to appear because each frame loads its own copy of React, and the chart's table
+  the same, with two differences: the first widgets take a little longer to
+  appear because each frame loads its own copy of React, and the chart's table
   view scrolls inside the widget (400 px) instead of making it as tall as the
   range. Budgets, CSV import, Upcoming, Forecast and Debt payoff are unchanged
-  and still run in the page. Spending Trends moves in a separate change.
+  and still run in the page. Spending Trends moves in the next entry.
+- **The Spending Trends widget runs in a sandboxed frame.** Its code is
+  unchanged: it was written against `PluginContext` alone, and the frame rebuilds
+  the same context. It has no page, only the dashboard widget. The same
+  below-the-fold and loading-time differences as Insights apply.
 - **The Insights trend tooltip stays inside the chart.** On the first and last
   month it used to hang past the chart's edge (and was cut off by the card on a
   phone).
@@ -208,7 +343,9 @@ curated, human-readable version.
   to a plugin by its plugin token. The header is ignored on such a request, and
   on the host's own token it can only hold the request to the named plugin's
   manifest, as before. First-party plugins that run in the host page still send
-  it; it was never a security boundary and still is not.
+  it; it was never a security boundary and still is not. A request with the
+  host's own token and no header is allowed, as before; only a plugin token is
+  held to a plugin's grants.
 - **The host and Budgets import the date helpers from `/date`.** The API, the
   web app, the seed data and Budgets now import `addDays` and `addMonths` from
   `@wickermoney/plugin-sdk/date`. No behaviour change.
@@ -275,6 +412,13 @@ curated, human-readable version.
   untouched. This release has no setting to turn the app's own compression off.
 
 ### Fixed
+- **Sandboxed widget frames below the fold get their height without scrolling.**
+  Chromium does not run a cross-origin frame's rendering updates while it is off
+  screen, so `ResizeObserver` never fired there and the frame stayed at the
+  host's 96 px minimum until it was scrolled into view. `observeSize` in the
+  plugin SDK now also re-reads the height every 250 ms (a repeat of the same
+  height sends nothing) and works where there is no `ResizeObserver`. Plugins
+  that call `observeSize` get the fix without changes.
 - **The setup wizard and the phone navigation drawer manage focus.** The wizard
   had no focus trap, did not return focus when it closed, pulled focus back to
   the panel on every step, and its loading state had no accessible name. Tab now
@@ -311,8 +455,16 @@ curated, human-readable version.
   `#0c7e65` to `#0a7660`: on `--wm-surface-alt` it was 4.51:1 and is now 5.01:1,
   and on white 5.01:1 became 5.57:1. The dark theme is unchanged. A test also
   confirms that recurring bills show a minus sign as well as the red colour.
+- **Isolated frames are transparent inside their card.** A plugin frame showed
+  as a box in the page background colour inside the card, and as an opaque canvas
+  in dark mode. The frame's `html` and `body` are now transparent and the host
+  iframe inherits the page's colour scheme, which the frame is told as well.
 
 ### Migrations
+
+**Back up your database before upgrading** (`pg_dump -Fc`). Going back to 0.5.0
+without restoring is `node dist/db/cli.js down` four times with the 0.6.0 image,
+then start the 0.5.0 image. Each `down` undoes only its own migration.
 
 - **029_owner_role_management** adds `core.list_users_for_owner()` and
   `core.set_user_role(uuid, core.user_role)`, `SECURITY DEFINER` functions that
@@ -321,6 +473,19 @@ curated, human-readable version.
   owners demoting each other at once cannot leave none. No data changes.
   Registration is unchanged. Its `down` drops both functions and leaves assigned
   roles as they are.
+- **030_plugin_debt_payoff** creates the `plugin_debt_payoff` schema with `debts`
+  and `plan_settings`: row-level security forced, `numeric(19,4)` money, the APR
+  as `numeric(7,4)`, and a debt's account link as a composite
+  `(user_id, account_id)` key that is cleared (not cascaded) when the account is
+  deleted. No existing data changes. Its `down` is `DROP SCHEMA
+  plugin_debt_payoff CASCADE`, **which deletes every debt and plan setting**.
+- **031_ledger_sort_indexes** adds `ix_transactions_user_merchant_id` and
+  `ix_transactions_user_amount_id` on `core.transactions`. It runs outside a
+  transaction and is safe to re-run. Each plain `CREATE INDEX` blocks writes to
+  transactions while it builds (about 1.3 s and 1.2 s on 1,000,000 rows); a much
+  larger ledger is better served by building them `CONCURRENTLY` first. Its `down`
+  drops both indexes. It leaves `ix_transactions_user_amount` (migration 015) in
+  place.
 - **032_erase_instance** adds `core.erase_instance()` and
   `core.instance_activity(uuid)`, `SECURITY DEFINER` functions that only the
   application role may run and that refuse anyone who is not an owner right now.
@@ -330,6 +495,22 @@ curated, human-readable version.
   fail and roll back. `instance_activity` counts live sessions and accounts other
   than the caller's. No data changes when it runs. Its `down` drops both
   functions; an erased instance stays erased.
+
+**Order matters.** Kysely refuses a pending migration whose name sorts before one
+already applied, so any later migration is 033 or higher.
+
+**Development databases only.** This migration was first numbered
+`031_erase_instance` on a branch. A database that applied it under that name has a
+row Kysely no longer finds, and the migrator will refuse to run. Before migrating,
+delete that row and the two functions it created:
+
+```sql
+DELETE FROM public.kysely_migration WHERE name = '031_erase_instance';
+DROP FUNCTION IF EXISTS core.erase_instance();
+DROP FUNCTION IF EXISTS core.instance_activity(uuid);
+```
+
+An installation that went from 0.5.0 to a tagged release never had that name.
 
 ## [0.5.0] - 2026-10-10
 

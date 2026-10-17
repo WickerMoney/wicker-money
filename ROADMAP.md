@@ -4,7 +4,7 @@ Wicker Money is pre-1.0 and has a single maintainer. This is direction, not a
 promise: items move, shrink or disappear, and there are no dates.
 
 **Now** is what the next release is working toward. The current release is
-`v0.5.0`; see `CHANGELOG.md` for what each tag contains.
+`v0.6.0`; see `CHANGELOG.md` for what each tag contains.
 
 ## Shipped
 
@@ -14,6 +14,7 @@ promise: items move, shrink or disappear, and there are no dates.
 | M2 | The shell and the first plugin: Module Federation host, dashboard widgets from plugins, scoped plugin client |
 | M3 | Import and categorization: CSV import, category rules with preview, triage tools |
 | M4 (`v0.1.0`) | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
+| `v0.6.0` | UI plugin isolation and owner tooling: a sandboxed frame for plugin UI (Insights and Spending Trends now run in one), plugin-scoped tokens with default-deny routes, an integrity pin and an operator manifest directory for third-party plugins (experimental, no install flow), a hostile-plugin suite in CI, a password-confirmed data export, a Settings danger zone (erase my data, erase this instance), owners changing roles from People, the debt payoff plugin, configurable pool and statement limits with a 100,000-row import cap and paged analyze, merchant and amount sort indexes, lazy core pages and compressed responses, an accessibility sweep, and the API integration suite in CI |
 | `v0.5.0` | Plugin platform hardening and account allowances: `plugin-sdk/server` (the host-to-plugin contract in one place), SDK stability tiers and shared `addDays` / `addMonths`, one shared read for dashboard widgets, one data load for recurring matches, `BOOTSTRAP_OWNER_EMAIL`, account allowances on Budgets (a monthly amount against one checking account, with rollover), an honest account of the plugin trust boundary, add and edit forms in the shared dialog, and a lint on `sql.raw` |
 | `v0.4.2` | Phone layouts and UI cleanup: a navigation drawer, card layouts for Transactions, Accounts, Recurring and Categories, collapsible Categories and Rules, icon row actions, charts and budget tiles that fit narrow screens. Also the `:edge` image from `main` |
 | `v0.4.1` | Two starter categories: Memberships (Subscriptions, everyone's base set) and Domains / web hosting (Technology, with the tech setup question) |
@@ -24,20 +25,41 @@ promise: items move, shrink or disappear, and there are no dates.
 
 ## Now
 
-Polish after the plugin manager:
+After `v0.6.0`:
 
-- A screen for owners to change another account's role, instead of SQL.
+- Close what the release candidate soak and the real-device pass turn up.
 - A layout pass on the Transactions table, which has been crowded since the
   Recurring column was added. It fits at 1366 px wide and above. Narrower than
   that the date wraps onto two lines, and below about 1190 px the table scrolls
   sideways, so the row actions are out of view until you scroll.
-- Ask for the password again before the data export downloads. The erase
-  actions already do; `AuthService.confirmPassword` is the reusable check.
+- Spike ways to close the known gaps in the plugin frame, which the frame's
+  content security policy does not cover in Chromium: a `Permissions-Policy`
+  for WebRTC, the iframe `allow` attribute and speculation rules for
+  prerender.
+- Tell the owner what they are agreeing to when they switch a third-party
+  plugin on. Today the hand-edited manifest directory and the environment
+  variable are the only consent step, and the documentation says so.
 
 ## Next
 
-- A debt payoff plugin with snowball and avalanche strategies. It keeps its own
-  per-debt balance, rate and minimum payment.
+- Lazy frames: start a widget's frame when it scrolls into view, with a
+  handshake timeout that counts visible time, so a long dashboard pays for the
+  frames a person actually sees.
+- Move the remaining bundled plugins (Budgets, Import CSV, Upcoming, Forecast,
+  Debt payoff) into sandboxed frames. They still run in the app's own page.
+- A per-process limit on concurrent CSV imports. Ten people committing 50,000
+  rows at once held every connection of the default pool for about 45 seconds;
+  `DB_POOL_MAX` is the mitigation today (see DEVELOPMENT.md).
+- Deep amount-sorted pages in the ledger and merchant search, which the new
+  sort indexes do not speed up (about 65 ms and 130 to 165 ms on the largest
+  synthetic ledger measured).
+- A global per-user rate limit, stricter on import and export. Today only the
+  sign-in routes and the password-confirmed actions (erase and export) are
+  limited; ordinary data routes are not.
+- End-to-end tests of the app's user flows in a browser (the test-pipeline
+  plan's T2 to T4). None exist yet: CI runs unit tests, the API integration
+  suite and the hostile-plugin suite, and every soak check for a release is
+  manual.
 - A per-plugin theme contribution point (`contributes.themes` on the plugin
   manifest), so a plugin can ship an additional theme alongside the built-in
   light/dark/system switcher. Also decided, not yet built — do not confuse
@@ -59,12 +81,22 @@ Polish after the plugin manager:
 - Editing an occurrence from the calendar widget, and a month grid view.
 - Suggesting recurring items by detecting patterns in transaction history.
 - Themes as a data-only plugin type (a validated set of design tokens, no code).
-- Third-party plugin install: a flow, a catalog and signing. Today an operator
+- Third-party plugin install: a flow, a catalog and signing. This waits for an
+  independent security review of the broker and the plugin-token path, which
+  has not happened; the same review comes before any hosted tier or SDK
+  freeze. Today an operator
   can add a third-party UI plugin by hand (a manifest with an integrity pin in
   `PLUGIN_MANIFEST_DIR`), and it runs only in a sandboxed frame with the table
   reads it is granted. It has no server-side code: that needs a connection
   boundary the project does not have, so it stays first-party only. Some
   bundled plugins still run in the app's own page until they are ported.
+- Caching layers beyond the per-user response cache, and an authentication
+  lookup cache. Unmeasured, and the performance sweep reduced the need; revisit
+  with numbers.
+- Hosted-readiness: concurrent index builds, `NOT VALID` foreign keys with a
+  later validate, batched backfills, asynchronous import jobs and a per-tenant
+  plugin registry cache. Nothing here helps a self-hoster, and a hosted tier is
+  undecided.
 - Freezing the plugin API (`SDK_MAJOR_VERSION`) ahead of 1.0. The plugin SDK's
   entry points now carry stability tiers (see its README); the freeze applies
   to the stable ones.

@@ -792,8 +792,10 @@ What a bundled plugin still does not get:
 
 ### Plugin trust model
 
-UI plugins (widgets and pages loaded over Module Federation) run **fully
-trusted, in the host's origin**. Read this before writing or reviewing anything
+Two of the seven bundled UI plugins (Insights, Spending Trends) and every
+third-party plugin run in a sandboxed frame. The other five bundled plugins
+(widgets and pages loaded over Module Federation) still run **fully trusted, in
+the host's origin**. Read this before writing or reviewing anything
 that talks about plugin "permissions", "scoping" or "sandboxing".
 
 | Layer | What it does | Boundary against plugin code? |
@@ -830,10 +832,11 @@ Consequences for contributors:
   (`@wickermoney/plugin-sdk/isolated`, experimental) and the web app hosts it.
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
-  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights` has
-  been ported and is no longer listed; the other bundled plugins still are, so
-  the first row of the table above still describes them. The list shrinks as
-  plugins are ported.
+  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights` and
+  `spending-trends` have been ported and run in frames. The other five bundled
+  plugins (`budgets`, `import-csv`, `upcoming`, `forecast`, `debt-payoff`) are
+  still listed and run in the page, fully trusted. The list shrinks as plugins
+  are ported.
 
 ### Isolated plugin frames
 
@@ -925,9 +928,11 @@ draws.
   800 px tall; past that the frame scrolls on its own, a second scroll area
   inside the card.
 - A widget frame below the fold is not laid out until it is scrolled into view
-  (Chromium throttles the rendering of off-screen cross-origin frames), so it
-  stays at the minimum height until then. Do not depend on a widget's size
-  before it has been on screen.
+  (Chromium throttles the rendering of off-screen cross-origin frames), so a
+  `ResizeObserver` alone never fires there. `observeSize` also re-reads the
+  height every 250 ms, which is how an off-screen frame gets its height. Use
+  `observeSize` rather than your own observer, and do not call `reportSize`
+  from a `ResizeObserver` only.
 - The frame's document has only the ui-kit styles and the plugin's own;
   `adoptPluginStyles` writes to the frame's document, which works because the
   frame CSP allows inline style.

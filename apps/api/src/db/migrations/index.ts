@@ -41,14 +41,13 @@ import * as m032 from './032_erase_instance.js'
  * output has no TypeScript source files to scan, and an explicit list keeps
  * ordering reviewable in a diff.
  *
- * There is no `030` here yet: that number is reserved for the debt payoff
- * plugin's tables, and `031` is listed without it. Merge `030` first. Kysely
- * refuses a pending migration whose name sorts before one already applied, so
- * a database that has run `031` cannot take `030` afterwards ("corrupted
- * migrations: ... New migrations must always have a name that comes
- * alphabetically after the last executed migration"). If both branches are
- * open, the import list and this record will conflict textually; keep both
- * entries, `030` before `031`, and do not renumber either.
+ * The numeric prefix is permanent. Kysely refuses a pending migration whose
+ * name sorts before one already applied ("corrupted migrations: ... New
+ * migrations must always have a name that comes alphabetically after the last
+ * executed migration"), so a new migration takes the next free number and an
+ * applied one is never renamed or renumbered. If two branches add migrations at
+ * once, the import list and this record conflict textually; keep both entries,
+ * in number order.
  */
 export const MIGRATIONS: Record<string, Migration> = {
   '001_core_schema': m001,
