@@ -66,7 +66,7 @@ export interface HostConnection {
    *
    * @param element - The element whose height is the frame's content height, usually the app root.
    * @param observer - A `ResizeObserver` constructor; defaults to the global one.
-   * @returns A function that stops observing.
+   * @returns A function that stops observing. `dispose()` stops it too.
    */
   observeSize(element: ObservedElement, observer?: ResizeObserverCtor): () => void
   /** Tells the host that focus left the frame, past its last (`next`) or before its first (`previous`) focusable element. */
@@ -237,6 +237,8 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
   let nextId = 1
   let lastHeight = -1
   let closed = false
+  /** Stop functions of the `observeSize` calls still running, so `dispose` can end them. */
+  const sizeObservers = new Set<() => void>()
 
   const themeRoot = options.themeRoot === undefined
     ? (typeof document === 'undefined' ? null : document.documentElement)
@@ -374,11 +376,14 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     observeSize(element, observer) {
       const Ctor = observer ?? (globalThis as { ResizeObserver?: ResizeObserverCtor }).ResizeObserver
       const report = (): void => { this.reportSize(element.getBoundingClientRect().height) }
+      if (closed) return () => undefined
       const ro = Ctor === undefined ? undefined : new Ctor(report)
       ro?.observe(element)
       report()
       const timer = setInterval(report, SIZE_POLL_MS)
-      return () => { clearInterval(timer); ro?.disconnect() }
+      const stop = (): void => { clearInterval(timer); ro?.disconnect(); sizeObservers.delete(stop) }
+      sizeObservers.add(stop)
+      return stop
     },
     focusOut: (direction) => { post({ type: 'focus-out', direction }) },
     notify: (level, message) =>
@@ -386,6 +391,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     dispose() {
       if (closed) return
       closed = true
+      for (const stop of [...sizeObservers]) stop()
       port.close()
       for (const [, entry] of pending) {
         entry.cleanup()
