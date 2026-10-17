@@ -318,6 +318,31 @@ describe('frame to host helpers', () => {
       expect(seen).toEqual([{ type: 'resize', height: 100 }, { type: 'resize', height: 240 }])
     } finally { vi.useRealTimers() }
   })
+
+  it('dispose stops observeSize: the poll timer and the ResizeObserver are released', async () => {
+    vi.useFakeTimers()
+    try {
+      const { conn } = await connect()
+      let disconnected = false
+      class FakeObserver {
+        constructor(_cb: () => void) {}
+        observe(): void {}
+        disconnect(): void { disconnected = true }
+      }
+      let reads = 0
+      conn.observeSize({ getBoundingClientRect: () => { reads++; return { height: 100 } } }, FakeObserver)
+      await vi.advanceTimersByTimeAsync(250)
+      const before = reads
+      conn.dispose()
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(reads).toBe(before)
+      expect(disconnected).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+      // A late call does not start a timer on a closed connection.
+      conn.observeSize({ getBoundingClientRect: () => ({ height: 100 }) })()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
 })
 
 describe('connectToHost (window handshake)', () => {
