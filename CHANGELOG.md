@@ -9,7 +9,7 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-## [0.6.0] - unreleased
+## [0.6.0] - 2026-10-16
 
 Plugin isolation, owner tooling and a performance and accessibility sweep. A
 plugin's interface can now run in a sandboxed frame that holds no session, cookie
@@ -1178,7 +1178,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/WickerMoney/wicker-money/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/WickerMoney/wicker-money/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/WickerMoney/wicker-money/compare/v0.4.0...v0.4.1
