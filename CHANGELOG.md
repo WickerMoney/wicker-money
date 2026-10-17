@@ -9,7 +9,7 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-## [0.6.0] - unreleased
+## [0.6.0] - 2026-10-16
 
 Plugin isolation, owner tooling and a performance and accessibility sweep. A
 plugin's interface can now run in a sandboxed frame that holds no session, cookie
@@ -288,6 +288,15 @@ SDK root also stopped exporting the Zod manifest schemas. See
   forged, expired and foreign tokens, every denied route class, a flooding or
   malformed message, spoofed senders and frame navigation. It cannot show that a
   browser has no other way out; see "Known gaps" in `SECURITY.md`.
+- **The API integration suite runs in CI.** The API's `*.integration.test.ts`
+  files (row-level security, plugin roles, tenant context, migrations) need a real
+  PostgreSQL, and `pnpm test` leaves them out, so nothing in CI ran them: not a pull
+  request, not the `:edge` image, not a release. A new job, **API integration
+  (Postgres 16)**, runs them against `postgres:16-alpine` on every pull request and
+  every push to `main`, and the `:edge` and release workflows run it before they
+  build an image, so a red suite stops all three. PostgreSQL 16 is the only version
+  the suite supports. See "What CI runs" in `DEVELOPMENT.md`, which also has the
+  steps to run it locally.
 
 ### Changed
 - **What the sandbox protects, and what it does not, is stated plainly.**
@@ -1169,7 +1178,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/WickerMoney/wicker-money/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/WickerMoney/wicker-money/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/WickerMoney/wicker-money/compare/v0.4.0...v0.4.1
