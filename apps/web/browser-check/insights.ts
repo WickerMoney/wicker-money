@@ -368,8 +368,9 @@ async function dashboardChecks(pw: typeof Playwright, mode: Mode, report: Record
  * A frame below the fold: does it get its height before it is scrolled to?
  *
  * Observation, not a pass or fail. Chromium does not run a cross-origin frame's rendering updates while it is
- * off screen, so the frame's ResizeObserver does not fire and the frame keeps the host's minimum height until it
- * is scrolled into view, whatever its content is.
+ * off screen, so the frame's ResizeObserver does not fire. `observeSize` also polls every 250 ms, which is what
+ * gives the frame its height before it is scrolled to; without that poll the frame would keep the host's
+ * minimum height until it is scrolled into view, whatever its content is.
  */
 async function offscreenObservation(pw: typeof Playwright, report: Record<string, unknown>): Promise<void> {
   const server = await startServer(manifests('isolated', 'lg'))
