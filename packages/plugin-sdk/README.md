@@ -33,9 +33,9 @@ plugin as a Module Federation singleton.
 | `@wickermoney/plugin-sdk/recurrence` | Anything (browser or Node) | Recurring-item date maths and projections: `occurrences`, `nextOccurrence`, `scheduledOccurrences`, `nextScheduledOccurrence`, `nextPayday`, `monthlyEquivalent`, `dailyBalances`, `flowTotals`, the calendar helpers `addDays` and `addMonths`, with per-occurrence overrides (skip, move, change the legs) |
 | `@wickermoney/plugin-sdk/money` | Anything (browser or Node) | Exact money arithmetic on decimal strings: `addMoney`, `sumMoney`, `compareMoney`, `equalMoney`, `moneyToUnits`, `divideUnits`, ... |
 | `@wickermoney/plugin-sdk/server` | Bundled plugins' server code, and the host (Node) | The server-side contract: `RouteContext`, `RegisterRoute`, `Query`, `RunAsPlugin`, `PluginRouteError`, `isUuid`, and the category-rule types `RuleForMatching` and `RuleSubject` |
-| `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above, plus `parseManifest` and the manifest types, dashboard-range helpers and constants |
+| `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above except `/isolated`, plus `parseManifest` and the manifest types, dashboard-range helpers and constants |
 
-Import from `/runtime` (and `/money` or `/recurrence` if you need them) in plugin UI code,
+Import from `/runtime` (and `/money`, `/date` or `/recurrence` if you need them) in plugin UI code,
 and from `/server` in a bundled plugin's server code.
 The package root includes `parseManifest`, which is built on Zod, so importing the
 root adds about 85 kB to a plugin bundle that never uses it. The Zod schemas
@@ -66,7 +66,7 @@ What the tiers promise:
 - **Stable.** A breaking change (a removed or renamed export, a changed
   signature or type, a changed return value or error) is made only with a
   `BREAKING CHANGE:` footer on the commit, an entry under **Breaking** in the
-  [CHANGELOG](../../CHANGELOG.md), and a migration note saying what to write
+  [CHANGELOG](https://github.com/WickerMoney/wicker-money/blob/main/CHANGELOG.md), and a migration note saying what to write
   instead. Additions are not breaking.
 - **Experimental.** May change in any pre-1.0 minor release, including
   removals and renamed or reshaped types. Changes are still recorded in the
@@ -242,11 +242,19 @@ rebuilds the same `PluginContext` inside the frame. A component written against
 import { connectToHost } from '@wickermoney/plugin-sdk/isolated'
 
 const host = await connectToHost()             // hello, port, init; applies the host's theme
-host.observeSize(document.body)                // the host sets the frame height from this
+const stop = host.observeSize(document.body)   // the host sets the frame height from this
 render(<Widget ctx={host.ctx} size={host.getState().size!} />)
 
 host.subscribe((change) => { /* theme, locale, props, route, focus-in */ })
 ```
+
+`observeSize` reports the element's height on a `ResizeObserver` and also re-reads it
+every 250 ms, sending a `resize` only when the height changed. The polling is what
+sizes a frame that is below the fold: Chromium does not run a cross-origin frame's
+rendering updates while it is off screen, so `ResizeObserver` alone never fires there
+and the frame would stay at the host's minimum height until scrolled into view. It also
+works where there is no `ResizeObserver`. It returns a function that stops both; call it
+when the element goes away.
 
 A manifest marks a plugin as built for this runtime with `isolated: true`. That is a
 declaration of what the plugin was built for, not a grant: it can only move a plugin
@@ -394,9 +402,13 @@ $hex = (Get-FileHash -Algorithm SHA384 'assets\RunwayWidget-1a2b3c.js').Hash
   `PLUGIN_REMOTE_ORIGINS`, restarts the API and switches the plugin on.
 - The sandbox has **known gaps** in Chromium 141: `<link rel=prerender>` and
   WebRTC reach an address the plugin chooses and can carry what it holds (the
-  user's email and id, and what its grants allow it to read). Other browsers
-  were not tested. Admission control (the operator choosing what to pin) is the
-  backstop, so only add a plugin you have read.
+  user's email and id, and what its grants allow it to read), and a sandboxed
+  frame can navigate itself to a URL on the app's own origin (no credentials
+  in Chromium 141; WebKitGTK 2.52 sent a `SameSite=Strict` cookie). Firefox and
+  Safari were not tested. See
+  [SECURITY.md](https://github.com/WickerMoney/wicker-money/blob/main/SECURITY.md)
+  for the full statement. Admission control (the operator choosing what to pin)
+  is the backstop, so only add a plugin you have read.
 - The broker and token path have not had an independent security review.
 - `requiredTables` is a **declaration** for your UI code, and what the grant
   holds the broker and server to. Declare it honestly.
