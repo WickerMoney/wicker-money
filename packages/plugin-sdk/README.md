@@ -35,7 +35,7 @@ plugin as a Module Federation singleton.
 | `@wickermoney/plugin-sdk/server` | Bundled plugins' server code, and the host (Node) | The server-side contract: `RouteContext`, `RegisterRoute`, `Query`, `RunAsPlugin`, `PluginRouteError`, `isUuid`, and the category-rule types `RuleForMatching` and `RuleSubject` |
 | `@wickermoney/plugin-sdk` | Hosts, tooling, tests (Node) | Everything above except `/isolated`, plus `parseManifest` and the manifest types, dashboard-range helpers and constants |
 
-Import from `/runtime` (and `/money` or `/recurrence` if you need them) in plugin UI code,
+Import from `/runtime` (and `/money`, `/date` or `/recurrence` if you need them) in plugin UI code,
 and from `/server` in a bundled plugin's server code.
 The package root includes `parseManifest`, which is built on Zod, so importing the
 root adds about 85 kB to a plugin bundle that never uses it. The Zod schemas
