@@ -288,6 +288,15 @@ SDK root also stopped exporting the Zod manifest schemas. See
   forged, expired and foreign tokens, every denied route class, a flooding or
   malformed message, spoofed senders and frame navigation. It cannot show that a
   browser has no other way out; see "Known gaps" in `SECURITY.md`.
+- **The API integration suite runs in CI.** The API's `*.integration.test.ts`
+  files (row-level security, plugin roles, tenant context, migrations) need a real
+  PostgreSQL, and `pnpm test` leaves them out, so nothing in CI ran them: not a pull
+  request, not the `:edge` image, not a release. A new job, **API integration
+  (Postgres 16)**, runs them against `postgres:16-alpine` on every pull request and
+  every push to `main`, and the `:edge` and release workflows run it before they
+  build an image, so a red suite stops all three. PostgreSQL 16 is the only version
+  the suite supports. See "What CI runs" in `DEVELOPMENT.md`, which also has the
+  steps to run it locally.
 
 ### Changed
 - **What the sandbox protects, and what it does not, is stated plainly.**
