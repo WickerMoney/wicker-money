@@ -59,6 +59,11 @@ export interface HostConnection {
   /**
    * Reports the height of `element` now and whenever it changes.
    *
+   * Also re-reads the height every {@link SIZE_POLL_MS} ms. Chromium does not run a cross-origin frame's
+   * rendering updates while it is off screen, so a `ResizeObserver` alone never fires there and the frame
+   * would keep the host's minimum height until scrolled into view. Repeats of a height are not sent, so
+   * the poll costs one layout read per tick and no messages.
+   *
    * @param element - The element whose height is the frame's content height, usually the app root.
    * @param observer - A `ResizeObserver` constructor; defaults to the global one.
    * @returns A function that stops observing.
@@ -74,6 +79,9 @@ export interface HostConnection {
   /** Closes the port and rejects every call still waiting with code `disconnected`. */
   dispose(): void
 }
+
+/** How often `observeSize` re-reads the height, in milliseconds. */
+export const SIZE_POLL_MS = 250
 
 /** The part of an element `observeSize` reads. */
 export interface ObservedElement {
@@ -365,12 +373,12 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     },
     observeSize(element, observer) {
       const Ctor = observer ?? (globalThis as { ResizeObserver?: ResizeObserverCtor }).ResizeObserver
-      if (Ctor === undefined) throw new TypeError('No ResizeObserver available')
       const report = (): void => { this.reportSize(element.getBoundingClientRect().height) }
-      const ro = new Ctor(report)
-      ro.observe(element)
+      const ro = Ctor === undefined ? undefined : new Ctor(report)
+      ro?.observe(element)
       report()
-      return () => { ro.disconnect() }
+      const timer = setInterval(report, SIZE_POLL_MS)
+      return () => { clearInterval(timer); ro?.disconnect() }
     },
     focusOut: (direction) => { post({ type: 'focus-out', direction }) },
     notify: (level, message) =>
