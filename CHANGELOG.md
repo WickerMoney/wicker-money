@@ -9,6 +9,15 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Fixed
+- **No more `Origin-Agent-Cluster` warnings in the browser console.** Chromium
+  logged "could not be origin-keyed" once for each plugin frame on a dashboard,
+  over HTTPS as well as plain HTTP. A sandboxed frame has an opaque origin and
+  cannot be origin-keyed, and the API sent `Origin-Agent-Cluster: ?1` on every
+  response, the frame document included. The API no longer sends the header.
+  Chromium still origin-keys the app's own page by default, and nothing about the
+  frame's sandbox changes.
+
 ## [0.6.0] - 2026-10-16
 
 Plugin isolation, owner tooling and a performance and accessibility sweep. A

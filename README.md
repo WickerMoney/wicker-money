@@ -197,8 +197,11 @@ means the container itself, not your machine.
 >   `crypto.subtle` and service workers are missing too.
 > - **You have to weaken the cookie** (`COOKIE_SECURE=false`), or the browser
 >   discards the refresh cookie and signs you out on every reload.
-> - The `Cross-Origin-Opener-Policy` and `Origin-Agent-Cluster` console warnings
->   are this same cause. They are harmless and disappear over HTTPS.
+> - Chromium logs a `Cross-Origin-Opener-Policy` console warning, because it
+>   ignores that header on an insecure origin. It is harmless and disappears over
+>   HTTPS. (Releases before this one also logged an `Origin-Agent-Cluster` warning,
+>   once per plugin frame and over HTTPS as well. That had a different cause, and
+>   the API no longer sends that header.)
 >
 
 ### Behind an HTTPS reverse proxy (recommended)

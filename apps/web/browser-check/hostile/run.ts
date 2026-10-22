@@ -121,7 +121,7 @@ interface World {
   readonly ctx: Playwright.BrowserContext
   readonly user: { email: string; refresh: string; access: string }
   readonly admin: ReturnType<typeof createDb>
-  readonly frameDocs: Array<{ url: string; status: number; csp: string | undefined; cache: string | undefined; referrerPolicy: string | undefined }>
+  readonly frameDocs: Array<{ url: string; status: number; csp: string | undefined; cache: string | undefined; referrerPolicy: string | undefined; originAgentCluster: string | undefined }>
   page: Playwright.Page
   hostile: Playwright.Frame
   victim: Playwright.Frame | null
@@ -134,7 +134,7 @@ async function boot(w: World, where: 'dashboard' | 'page' = 'dashboard'): Promis
   if (w.page !== undefined && !w.page.isClosed()) await w.page.close().catch(() => undefined)
   w.page = await w.ctx.newPage()
   w.page.on('response', (r) => {
-    if (new URL(r.url()).pathname === '/plugin-frame') w.frameDocs.push({ url: r.url(), status: r.status(), csp: r.headers()['content-security-policy'], cache: r.headers()['cache-control'], referrerPolicy: r.headers()['referrer-policy'] })
+    if (new URL(r.url()).pathname === '/plugin-frame') w.frameDocs.push({ url: r.url(), status: r.status(), csp: r.headers()['content-security-policy'], cache: r.headers()['cache-control'], referrerPolicy: r.headers()['referrer-policy'], originAgentCluster: r.headers()['origin-agent-cluster'] })
   })
   if (where === 'dashboard') {
     await w.page.goto(`${w.base}/`)
@@ -197,6 +197,11 @@ async function phaseSetup(w: World): Promise<void> {
   rec.check('frame CSP never contains allow-same-origin', !/allow-same-origin/.test(csp), csp)
   for (const d of ["default-src 'none'", "connect-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'self'"]) rec.check(`frame CSP has ${d}`, csp.includes(d), csp)
   rec.check('the frame is opaque: its origin is "null"', (await w.hostile.evaluate(() => self.origin)) === 'null')
+  // A sandboxed document cannot be origin-keyed, so Chromium logs "could not be origin-keyed" for each one whose response
+  // sends `Origin-Agent-Cluster: ?1`. Helmet's default did, on every response (see the note beside the helmet registration).
+  rec.check('no frame document asks for an origin-keyed agent cluster', w.frameDocs.length > 0 && w.frameDocs.every((d) => d.originAgentCluster === undefined), w.frameDocs.map((d) => d.originAgentCluster))
+  const agentWarnings = w.log.console.filter((c) => /agent cluster|origin-keyed/i.test(c.text))
+  rec.check('the console has no agent-cluster warning after the dashboard and its frames load', agentWarnings.length === 0, agentWarnings.map((c) => c.text.slice(0, 160)))
 }
 
 async function phaseCredentials(w: World): Promise<void> {
