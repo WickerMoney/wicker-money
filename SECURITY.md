@@ -150,7 +150,11 @@ third-party plugin is for the operator to do it by hand:
 2. Copy its manifest, with an `integrity` map of Subresource Integrity values for
    every file of the build, into the directory named by `PLUGIN_MANIFEST_DIR`, and
    restart the API.
-3. Switch the plugin on as an owner. It starts off.
+3. Switch the plugin on as an owner, in Settings. It starts off, and the app asks
+   you to confirm before it turns on. The dialog names the origin it loads from and
+   the tables it is granted, and repeats what this section says about the frame,
+   the missing server-side code and the known gaps. The question is in the
+   Settings page only; a request sent straight to the API does not ask.
 
 A third-party plugin gets no server-side code, no storage and no scheduled work.
 It can read only the read-only core aggregates (eight routes) for the tables its

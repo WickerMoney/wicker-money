@@ -36,9 +36,6 @@ After `v0.6.0`:
   content security policy does not cover in Chromium: a `Permissions-Policy`
   for WebRTC, the iframe `allow` attribute and speculation rules for
   prerender.
-- Tell the owner what they are agreeing to when they switch a third-party
-  plugin on. Today the hand-edited manifest directory and the environment
-  variable are the only consent step, and the documentation says so.
 
 ## Next
 
