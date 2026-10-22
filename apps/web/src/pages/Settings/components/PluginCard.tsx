@@ -10,8 +10,8 @@ export interface PluginCardProps {
   readonly plugin: RegisteredPlugin
   /** Whether to show where the plugin came from; only the owner listing knows. */
   readonly showOrigin: boolean
-  /** The switch handler, or `undefined` for a read-only card. */
-  readonly onToggle?: (next: boolean) => void
+  /** The switch handler, or `undefined` for a read-only card. Also receives the switch, to return focus to. */
+  readonly onToggle?: (next: boolean, switchElement: HTMLButtonElement) => void
   /** True while this plugin's change is being saved. */
   readonly saving?: boolean
   /** The last failed change for this plugin, if any. */

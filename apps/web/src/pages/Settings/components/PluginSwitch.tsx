@@ -6,8 +6,8 @@ export interface PluginSwitchProps {
   readonly on: boolean
   /** True while a change is being saved; the switch cannot be used meanwhile. */
   readonly saving: boolean
-  /** Called with the requested state. */
-  readonly onChange: (next: boolean) => void
+  /** Called with the requested state and the switch itself, so a caller that asks first can return focus to it. */
+  readonly onChange: (next: boolean, switchElement: HTMLButtonElement) => void
 }
 
 /**
@@ -28,7 +28,7 @@ export function PluginSwitch({ name, on, saving, onChange }: PluginSwitchProps) 
         aria-busy={saving}
         disabled={saving}
         className={`plugin-switch${on ? ' is-on' : ''}`}
-        onClick={() => { onChange(!on) }}
+        onClick={(e) => { onChange(!on, e.currentTarget) }}
       >
         <span className="plugin-switch__thumb" aria-hidden="true" />
       </button>
