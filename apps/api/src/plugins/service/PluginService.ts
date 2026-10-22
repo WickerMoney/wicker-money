@@ -194,6 +194,8 @@ export class PluginService {
         enabled: row.enabled,
         status: !row.enabled ? 'disabled' : manifest === undefined ? 'failed' : 'enabled',
         failure: checked.reason ?? null,
+        origin: manifest === undefined ? null : originOf(manifest.remoteEntry),
+        tables: manifest === undefined ? [] : [...new Set(manifest.requiredTables.map((t) => t.table))].sort(),
         contributes: {
           pages: manifest?.contributes.pages.map((p) => p.title) ?? [],
           widgets: manifest?.contributes.widgets.map((w) => w.title) ?? [],
@@ -283,6 +285,17 @@ export class PluginService {
     if (refusal !== undefined) return { source, reason: refusal }
     return { manifest, source }
   }
+}
+
+/**
+ * The origin a remote entry loads from, for an owner deciding whether to trust it.
+ *
+ * @param remoteEntry - A validated manifest's `remoteEntry`.
+ * @returns The origin of an absolute URL, or `null` for a path on this instance's own origin.
+ */
+function originOf(remoteEntry: string): string | null {
+  if (remoteEntry.startsWith('/')) return null
+  try { return new URL(remoteEntry).origin } catch { return null }
 }
 
 /** The version to register for a manifest that has not been validated: its own if it is a short string. */
