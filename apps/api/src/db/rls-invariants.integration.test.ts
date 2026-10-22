@@ -36,6 +36,12 @@ interface TableState {
   readonly ownedByCurrentRole: boolean
 }
 
+/** A call to the tenant lookup as PostgreSQL prints it in a policy, wrapped or not. */
+const BARE_CALL = String.raw`(core\.)?current_user_id\(\)`
+
+/** The scalar-subquery form: `( SELECT core.current_user_id() AS current_user_id)`. */
+const WRAPPED_CALL = String.raw`\(\s*SELECT\s+(core\.)?current_user_id\(\)(\s+AS\s+current_user_id)?\s*\)`
+
 let db: Db
 let tables: readonly TableState[]
 
@@ -117,6 +123,30 @@ describe('row-level security invariants', () => {
     const users = tables.find((t) => t.name === 'core.users')
     expect(users).toMatchObject({ rlsEnabled: true })
     expect(users?.policies).toBeGreaterThan(0)
+  })
+
+  it('has no policy that calls core.current_user_id() outside a scalar subquery', async () => {
+    // A bare call in a policy is evaluated for every row a scan visits, and the
+    // signature check behind it is far dearer than reading a setting;
+    // `(SELECT core.current_user_id())` is evaluated once per statement. The
+    // check runs on what PostgreSQL printed, so it holds for every migration,
+    // present and future, and needs no list of policies.
+    const scope = sql`(schemaname = 'core' OR schemaname LIKE 'plugin\\_%')`
+    const text = sql`(coalesce(qual, '') || ' ' || coalesce(with_check, ''))`
+    const bare = await sql<{ policy: string }>`
+      SELECT schemaname || '.' || tablename || ' ' || policyname AS policy
+      FROM pg_policies
+      WHERE ${scope} AND regexp_replace(${text}, ${WRAPPED_CALL}, '', 'g') ~ ${BARE_CALL}
+      ORDER BY 1
+    `.execute(db)
+    expect(bare.rows.map((r) => r.policy)).toEqual([])
+
+    // Guards against the pattern silently matching nothing: the rewritten form
+    // must be found on the policies known to use it.
+    const wrapped = await sql<{ n: string }>`
+      SELECT count(*) AS n FROM pg_policies WHERE ${scope} AND ${text} ~ ${WRAPPED_CALL}
+    `.execute(db)
+    expect(Number(wrapped.rows[0]?.n)).toBeGreaterThanOrEqual(10)
   })
 
   it('does not let the application role own any of these tables', () => {

@@ -9,6 +9,15 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Migrations
+
+- **033_tenant_lookup_policies** rewrites any policy in `core` or a `plugin_*`
+  schema that still calls `core.current_user_id()` bare to
+  `(SELECT core.current_user_id())`, so the lookup runs once per statement, not
+  once per row. A database migrated in order has one: `account_lines_isolation`
+  (027 created it after 018's rewrite). It returns the same rows, does nothing
+  and locks nothing where none is left, and its `down` does nothing.
+
 ## [0.6.0] - 2026-10-16
 
 Plugin isolation, owner tooling and a performance and accessibility sweep. A
