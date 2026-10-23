@@ -80,6 +80,7 @@ describe('app serving the web app', () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'wickermoney-app-web-'))
     writeFileSync(join(dir, 'index.html'), INDEX)
+    writeFileSync(join(dir, 'plugin-frame.html'), '<!doctype html><title>Plugin</title>')
     web = await createHarness({ WEB_DIST_DIR: dir })
   })
 
@@ -94,6 +95,18 @@ describe('app serving the web app', () => {
       expect(res.statusCode).toBe(200)
       expect(res.body).toBe(INDEX)
       expect(String(res.headers['content-security-policy'])).not.toContain('upgrade-insecure-requests')
+    }
+  })
+
+  it('asks for no origin-keyed agent cluster on any response, so a sandboxed frame does not log a warning', async () => {
+    // A sandboxed document has an opaque origin and cannot be origin-keyed. If any
+    // response, the frame document above all, sent `Origin-Agent-Cluster: ?1`,
+    // Chromium would log "could not be origin-keyed" for every plugin frame.
+    for (const url of ['/', '/transactions', '/plugin-frame', '/plugin-frame.html', '/healthz', '/api/v1/nope', '/api/v1/accounts']) {
+      const res = await web.app.inject({ method: 'GET', url })
+      expect(res.headers['origin-agent-cluster'], `${url} (${res.statusCode})`).toBeUndefined()
+      // The rest of Helmet's defaults are still on.
+      expect(res.headers['x-content-type-options'], url).toBe('nosniff')
     }
   })
 

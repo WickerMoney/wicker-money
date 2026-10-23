@@ -998,6 +998,26 @@ does not govern is
 **pinned** in the browser half: a browser upgrade that closes or opens one fails
 the suite so that the ADR table is updated with it.
 
+The pinned channels (`<link rel=prerender>`, WebRTC STUN and TURN, and the frame
+navigating itself to a URL on the app's origin) were spiked for a control that
+closes them (ADR 0008, measured 2026-10-22 in Chromium 141.0.7390.37 against the
+frame document as the API serves it). None is closed by a `Permissions-Policy`
+header or the iframe `allow` attribute (set to none for each of the 77 features
+that browser lists, and an empty `allow=""`), by `Cross-Origin-Embedder-Policy`,
+`-Opener-Policy` or `-Resource-Policy`, or by the CSP directives `webrtc`,
+`prefetch-src` and `navigate-to` (Chromium does not implement them: it logs
+"Unrecognized Content-Security-Policy directive"). A script that deletes
+`RTCPeerConnection` from the frame stops direct use but not an `about:srcdoc`
+frame, which has its own copy. Only the self-navigation can be stopped, by
+limiting the page's `frame-src` to the frame document's path, which needs the
+browser's exact address and so is not shipped. `allow` stays unset, and the suite
+still asserts that. When a browser ships a control, add it to the frame document
+and change the pin in `RESIDUAL_PINNED` in the same commit.
+
+The browser half also fails if a frame document sends `Origin-Agent-Cluster` or
+the console logs an agent-cluster warning while the frames load: a sandboxed
+document cannot be origin-keyed, and Chromium warns about each one that asks.
+
 ### Third-party plugins (added by an operator)
 
 There is **no install flow, no catalog and no signing**. The only way in is the

@@ -28,10 +28,20 @@ promise: items move, shrink or disappear, and there are no dates.
 After `v0.6.0`:
 
 - Close what the release candidate soak and the real-device pass turn up.
-- Spike ways to close the known gaps in the plugin frame, which the frame's
-  content security policy does not cover in Chromium: a `Permissions-Policy`
-  for WebRTC, the iframe `allow` attribute and speculation rules for
-  prerender.
+- A layout pass on the Transactions table, which has been crowded since the
+  Recurring column was added. It fits at 1366 px wide and above. Narrower than
+  that the date wraps onto two lines, and below about 1190 px the table scrolls
+  sideways, so the row actions are out of view until you scroll.
+- Close the known gaps in the plugin frame, which the frame's content security
+  policy does not cover in Chromium. The spike found no header, `allow` value or
+  CSP directive that closes prerender or WebRTC in Chromium 141 (see
+  `SECURITY.md`), so they stay documented. What is left is to re-test when a
+  browser ships a control (the CSP `webrtc` directive is only a draft), and to
+  stop the frame navigating itself to the app's origin once the server knows the
+  address the browser used.
+- Tell the owner what they are agreeing to when they switch a third-party
+  plugin on. Today the hand-edited manifest directory and the environment
+  variable are the only consent step, and the documentation says so.
 
 ## Next
 
