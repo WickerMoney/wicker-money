@@ -21,6 +21,10 @@ export interface RegisteredPlugin {
   readonly status: 'enabled' | 'disabled' | 'failed'
   /** Why it cannot load, or `null` if it can. */
   readonly failure: string | null
+  /** Where its remote entry loads from (an origin such as `https://plugins.example.com`), or `null` for this instance itself or when its manifest is unusable. */
+  readonly origin: string | null
+  /** The core tables its manifest lists, sorted; empty when its manifest is unusable. */
+  readonly tables: readonly string[]
   /** What it adds to the app. */
   readonly contributes: {
     readonly pages: readonly string[]

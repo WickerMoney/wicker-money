@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { Alert, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
 import { useAuth } from '../../../auth/index.js'
@@ -7,6 +7,7 @@ import { setPluginEnabled } from '../../../plugins/admin/pluginAdminApi.js'
 import { useRegisteredPlugins } from '../../../plugins/admin/useRegisteredPlugins.js'
 import { usePluginRegistry } from '../../../plugins/registry/index.js'
 import { manifestToRegistered } from '../helpers/manifestToRegistered.js'
+import { EnablePluginDialog } from './EnablePluginDialog.js'
 import { PluginCard } from './PluginCard.js'
 
 /** The element id the section is reached by, as in `/settings#plugins`. */
@@ -21,8 +22,12 @@ const byName = (a: RegisteredPlugin, b: RegisteredPlugin): number => a.name.loca
  * A switch flips at once and is locked until the server has answered and the
  * shell has reloaded its registry, so the sidebar, routes and dashboard have
  * already caught up by the time it can be used again. If the server refuses,
- * the switch goes back and the card says why. There is no confirmation step:
- * switching a plugin off deletes nothing, so it is undone by switching it on.
+ * the switch goes back and the card says why. Switching a plugin off asks
+ * nothing: it deletes nothing, so it is undone by switching it on. So does
+ * switching on a bundled plugin, which ships in the image. Switching on a
+ * plugin that is not bundled first asks the owner to confirm in a dialog
+ * (see `EnablePluginDialog`); until they do, nothing is sent and the switch
+ * stays off.
  *
  * A member sees the plugins that are on, read-only, and the owner-only
  * listing is never requested. Which view to show comes from the signed-in
@@ -38,6 +43,10 @@ export function PluginsSection() {
   const [changed, setChanged] = useState<Readonly<Record<string, RegisteredPlugin>>>({})
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set())
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
+  /** The third-party plugin whose switch-on is waiting for the owner's confirmation. */
+  const [asking, setAsking] = useState<RegisteredPlugin | null>(null)
+  /** The switch to give focus back to once the dialog has closed and any save has settled. */
+  const returnFocus = useRef<{ id: string; element: HTMLButtonElement } | null>(null)
 
   // React Router does not scroll to a fragment; the "Manage plugins" link
   // from a switched-off plugin's page lands here.
@@ -45,6 +54,15 @@ export function PluginsSection() {
   useEffect(() => {
     if (ready && location.hash === `#${ANCHOR}`) document.getElementById(ANCHOR)?.scrollIntoView?.({ block: 'start' })
   }, [ready, location.hash])
+
+  // Focus goes back to the switch after Cancel at once, and after Enable once
+  // the save is done (a switch that is saving is disabled and cannot take it).
+  useEffect(() => {
+    const target = returnFocus.current
+    if (target === null || asking !== null || saving.has(target.id)) return
+    returnFocus.current = null
+    if (target.element.isConnected) target.element.focus()
+  }, [asking, saving])
 
   const toggle = async (current: RegisteredPlugin, next: boolean): Promise<void> => {
     const id = current.id
@@ -65,6 +83,23 @@ export function PluginsSection() {
     } finally {
       setSaving((s) => { const copy = new Set(s); copy.delete(id); return copy })
     }
+  }
+
+  /** Switch-on of a plugin the image did not ship waits for a yes; everything else goes straight through. */
+  const requestToggle = (current: RegisteredPlugin, next: boolean, switchElement: HTMLButtonElement): void => {
+    if (next && !current.bundled) {
+      returnFocus.current = { id: current.id, element: switchElement }
+      setAsking(current)
+    } else {
+      void toggle(current, next)
+    }
+  }
+
+  const confirm = (): void => {
+    if (asking === null) return
+    const plugin = asking
+    setAsking(null)
+    void toggle(plugin, true)
   }
 
   let body: React.ReactNode
@@ -110,7 +145,7 @@ export function PluginsSection() {
                 showOrigin
                 saving={saving.has(p.id)}
                 error={errors[p.id] ?? null}
-                onToggle={(next) => { void toggle(p, next) }}
+                onToggle={(next, element) => { requestToggle(p, next, element) }}
               />
             ))}
           </ul>
@@ -122,6 +157,9 @@ export function PluginsSection() {
   return (
     <div id={ANCHOR} className="settings-anchor">
       <Surface title="Plugins" action={summary}>{body}</Surface>
+      {asking !== null ? (
+        <EnablePluginDialog plugin={asking} onConfirm={confirm} onCancel={() => { setAsking(null) }} />
+      ) : null}
     </div>
   )
 }

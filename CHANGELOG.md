@@ -9,6 +9,13 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- Settings asks an owner to confirm before switching on a plugin that is not
+  bundled, naming the origin it loads from and the tables it is granted and
+  repeating the sandbox's known gaps; bundled plugins and switching off do not
+  ask. The owner plugin list gains `origin` and `tables`, and the UI kit
+  `Dialog` an optional `describedBy`.
 ### Changed
 
 - **The Transactions table fits the room it has.** From the phone layout (560px)
