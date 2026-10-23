@@ -17,6 +17,25 @@ curated, human-readable version.
   response, the frame document included. The API no longer sends the header.
   Chromium still origin-keys the app's own page by default, and nothing about the
   frame's sandbox changes.
+### Added
+
+- Settings asks an owner to confirm before switching on a plugin that is not
+  bundled, naming the origin it loads from and the tables it is granted and
+  repeating the sandbox's known gaps; bundled plugins and switching off do not
+  ask. The owner plugin list gains `origin` and `tables`, and the UI kit
+  `Dialog` an optional `describedBy`.
+### Changed
+
+- **The Transactions table fits the room it has.** From the phone layout (560px)
+  up, the date never wraps, the Edit and Delete buttons are always in view and
+  neither the table nor the page scrolls sideways. With about 880px of room (a
+  window roughly 1170px wide, with the sidebar) it is still the seven-column
+  table, and a long category name no longer takes the merchant's room; with
+  less, each row is three lines (merchant and amount, date and category,
+  recurring match) with the buttons in a column beside them. Every column is
+  still there, in the same order, and the header row is hidden as on a phone.
+  The page used to scroll sideways below about 1190px because the hidden
+  "Actions" header label sat outside the table's scroller; `Table` now clips it.
 
 ## [0.6.0] - 2026-10-16
 

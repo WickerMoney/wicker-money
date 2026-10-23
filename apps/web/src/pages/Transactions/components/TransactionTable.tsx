@@ -50,52 +50,58 @@ export function TransactionTable({
   return (
     <>
       <TransactionEditDialog row={row} busy={busy} />
-      {/* Phones only (see app.css): the header row, and the select-all in it, is
-          hidden when rows become cards, so the same control is offered here. */}
-      {items.length > 0 ? (
-        <label className="txn-select-all">
-          <input type="checkbox" checked={allSelected} aria-label="Select all on this page"
-                 onChange={onToggleAllSelected} />
-          <span>Select all on this page</span>
-        </label>
-      ) : null}
-      <Table
-        caption="Transactions"
-        className="txn-table"
-        columns={[
-          { key: 'sel',
-            header: (
-              <input type="checkbox" checked={allSelected} aria-label="Select all shown"
-                     onChange={onToggleAllSelected} />
-            ),
-            render: (t: Transaction) => (
-              <input type="checkbox" checked={selected.has(t.id)}
-                     aria-label={`Select ${t.merchant}`}
-                     onChange={() => onToggleSelected(t.id)} />
-            ) },
-          { key: 'date', header: 'Date',
-            render: (t: Transaction) => t.transaction_date },
-          { key: 'merchant', header: 'Merchant',
-            render: (t: Transaction) => t.merchant },
-          { key: 'cat', header: 'Category',
-            render: (t: Transaction) => (
-              <TransactionCategoryCell transaction={t} onAssign={row.assign} categoryOptionsFor={categoryOptionsFor} />
-            ) },
-          { key: 'amt', header: 'Amount', numeric: true,
-            render: (t: Transaction) => <TransactionAmountCell transaction={t} /> },
-          ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
-            render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
-          { key: 'actions', header: '',
-            render: (t: Transaction) => <TransactionActionsCell transaction={t} onEdit={row.start} onDelete={row.remove} busy={busy} /> },
-        ]}
-        rows={items}
-        rowKey={(t) => t.id}
-        empty={
-          onlyUncategorized
-            ? <EmptyState title="Nothing uncategorized" hint="Every transaction has a category." />
-            : <EmptyState title="Nothing matches" hint="Widen the dates, clear the filters, or record a transaction." />
-        }
-      />
+      {/* One wrapper around the select-all and the table: app.css measures the
+          room this wrapper has (a container query), not the window, because the
+          sidebar takes a different share of it at different widths. Below about
+          880px of room, and on phones, rows stop being table rows and the header
+          row, with the select-all in it, is hidden, so the same control is offered
+          here. Wider, the label stays hidden and the header checkbox does it. */}
+      <div className="txn-list">
+        {items.length > 0 ? (
+          <label className="txn-select-all">
+            <input type="checkbox" checked={allSelected} aria-label="Select all on this page"
+                   onChange={onToggleAllSelected} />
+            <span>Select all on this page</span>
+          </label>
+        ) : null}
+        <Table
+          caption="Transactions"
+          className="txn-table"
+          columns={[
+            { key: 'sel',
+              header: (
+                <input type="checkbox" checked={allSelected} aria-label="Select all shown"
+                       onChange={onToggleAllSelected} />
+              ),
+              render: (t: Transaction) => (
+                <input type="checkbox" checked={selected.has(t.id)}
+                       aria-label={`Select ${t.merchant}`}
+                       onChange={() => onToggleSelected(t.id)} />
+              ) },
+            { key: 'date', header: 'Date',
+              render: (t: Transaction) => t.transaction_date },
+            { key: 'merchant', header: 'Merchant',
+              render: (t: Transaction) => t.merchant },
+            { key: 'cat', header: 'Category',
+              render: (t: Transaction) => (
+                <TransactionCategoryCell transaction={t} onAssign={row.assign} categoryOptionsFor={categoryOptionsFor} />
+              ) },
+            { key: 'amt', header: 'Amount', numeric: true,
+              render: (t: Transaction) => <TransactionAmountCell transaction={t} /> },
+            ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
+              render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
+            { key: 'actions', header: '',
+              render: (t: Transaction) => <TransactionActionsCell transaction={t} onEdit={row.start} onDelete={row.remove} busy={busy} /> },
+          ]}
+          rows={items}
+          rowKey={(t) => t.id}
+          empty={
+            onlyUncategorized
+              ? <EmptyState title="Nothing uncategorized" hint="Every transaction has a category." />
+              : <EmptyState title="Nothing matches" hint="Widen the dates, clear the filters, or record a transaction." />
+          }
+        />
+      </div>
     </>
   )
 }

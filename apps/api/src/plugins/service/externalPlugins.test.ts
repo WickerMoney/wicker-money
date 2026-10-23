@@ -118,6 +118,27 @@ describe('what a third-party plugin that passes looks like', () => {
   })
 })
 
+describe('what an owner is shown before switching a third-party plugin on', () => {
+  it('lists the origin it loads from and the tables it lists, once each and sorted', async () => {
+    const tables = [{ table: 'transactions', access: 'read' }, { table: 'accounts', access: 'read' }, { table: 'transactions', access: 'write' }]
+    const s = service([external(raw({ requiredTables: tables }))])
+    await s.seedExternal()
+    expect((await s.listRegistered())[0]).toMatchObject({ origin: 'https://plugins.example.com', tables: ['accounts', 'transactions'] })
+  })
+
+  it('has no origin for an entry served by this host', async () => {
+    const s = service([external(raw({ remoteEntry: '/plugins/acme-report/remoteEntry.js' }))], { remoteOrigins: [] })
+    await s.seedExternal()
+    expect((await s.listRegistered())[0]).toMatchObject({ origin: null, tables: ['transactions'] })
+  })
+
+  it('has neither when the manifest is refused, since nothing is trusted from it', async () => {
+    const s = service([external(raw({ remoteEntry: 'https://elsewhere.example.net/remoteEntry.js' }))])
+    await s.seedExternal()
+    expect((await s.listRegistered())[0]).toMatchObject({ status: 'disabled', origin: null, tables: [] })
+  })
+})
+
 describe('the rule: a non-bundled manifest gets no server half', () => {
   it.each([
     ['endpoints', { endpoints: true, exporters: false }],

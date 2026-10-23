@@ -1041,6 +1041,10 @@ flowchart LR
    once; there is no reload.
 3. Switch the plugin on as an owner (`PATCH /api/v1/plugins/:id`, or the plugin
    list). It is registered off, and a restart does not turn it back on or off.
+   The plugin list asks the owner to confirm first (`EnablePluginDialog`); a
+   bare `PATCH` does not. The dialog's text follows `SECURITY.md`, so change
+   them together. It needs the `origin` and `tables` that
+   `GET /api/v1/plugins/registry` reports for each plugin.
 
 Make the pin from the files you reviewed, not by fetching them from the origin:
 
