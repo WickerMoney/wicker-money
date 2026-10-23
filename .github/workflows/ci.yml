@@ -147,7 +147,7 @@ jobs:
       # means the same thing on every run. Cached by that version.
       - id: playwright
         run: echo "version=$(pnpm --filter @wickermoney/web exec playwright-core --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
