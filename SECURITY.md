@@ -124,11 +124,24 @@ every pull request.
   malicious plugin can still cause some requests and read nothing back from them.
   - `<link rel=prerender>` and WebRTC (STUN and TURN) reach an address the plugin
     chooses, and can carry what the plugin holds in the URL or the TURN username.
+    Still open, because Chromium 141 has no control that closes them. Tried and
+    measured: a `Permissions-Policy` header and the iframe `allow` attribute (set
+    to none for every one of the 77 features that browser lists, and an empty
+    `allow`), `Cross-Origin-Embedder-Policy`, `Cross-Origin-Opener-Policy` and
+    `Cross-Origin-Resource-Policy`, and the CSP directives `webrtc`,
+    `prefetch-src` and `navigate-to`, which Chromium does not implement. Speculation
+    rules are not a route: the frame's `script-src` refuses an inline rules script,
+    and Chromium ignores speculation rules in a frame. Removing
+    `RTCPeerConnection` from the frame's script does not hold either, because a
+    plugin can create a fresh `about:srcdoc` frame that has its own copy.
   - A sandboxed frame can navigate itself to a URL on the app's own origin that
     the page's frame policy allows. In Chromium 141 that request carried none of
     the user's credentials and returned nothing to the plugin. In WebKitGTK 2.52
     the same navigation carried a `SameSite=Strict` cookie. Do not assume either
-    result for another browser.
+    result for another browser. Limiting the page's `frame-src` to the frame
+    document's path stops the request in Chromium 141, but it is not shipped: it
+    needs the server to know the exact address the browser used, and a wrong guess
+    would stop every plugin frame.
 
   These are known limitations, not vulnerabilities, until they are closed. A
   report that one of them behaves differently in another browser, or of a further
@@ -150,7 +163,11 @@ third-party plugin is for the operator to do it by hand:
 2. Copy its manifest, with an `integrity` map of Subresource Integrity values for
    every file of the build, into the directory named by `PLUGIN_MANIFEST_DIR`, and
    restart the API.
-3. Switch the plugin on as an owner. It starts off.
+3. Switch the plugin on as an owner, in Settings. It starts off, and the app asks
+   you to confirm before it turns on. The dialog names the origin it loads from and
+   the tables it is granted, and repeats what this section says about the frame,
+   the missing server-side code and the known gaps. The question is in the
+   Settings page only; a request sent straight to the API does not ask.
 
 A third-party plugin gets no server-side code, no storage and no scheduled work.
 It can read only the read-only core aggregates (eight routes) for the tables its

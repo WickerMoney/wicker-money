@@ -27,6 +27,18 @@ export interface RegisteredPlugin {
    * plugin too, so an owner knows before switching it on that it will fail.
    */
   readonly failure: string | null
+  /**
+   * The origin its remote entry loads from, such as `https://plugins.example.com`.
+   * `null` when it loads from this instance's own origin, or when no usable
+   * manifest exists to say.
+   */
+  readonly origin: string | null
+  /**
+   * The core tables its manifest lists, sorted, once. The token a plugin in a
+   * sandboxed frame receives reaches only read-only aggregates for these.
+   * Empty when no usable manifest exists.
+   */
+  readonly tables: readonly string[]
   /** What the plugin adds to the app, by title, so an owner can tell what switching it off removes. */
   readonly contributes: {
     /** Titles of the pages it adds. */

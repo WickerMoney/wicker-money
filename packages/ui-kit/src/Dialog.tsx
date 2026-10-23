@@ -4,6 +4,12 @@ import { useEffect, useId, useRef, type ReactNode } from 'react'
 export interface DialogProps {
   /** Heading shown at the top; also the dialog's accessible name. */
   readonly title: string
+  /**
+   * The id of an element inside the dialog that describes it, announced after
+   * the title (`aria-describedby`). Optional; use it when a short summary
+   * carries what a person must know before choosing.
+   */
+  readonly describedBy?: string
   /** Called when the user dismisses the dialog: Escape, the close button or a click outside it. */
   readonly onClose: () => void
   /** The dialog content, usually a form. */
@@ -19,7 +25,7 @@ export interface DialogProps {
  * what a hand-rolled modal gets wrong: the page behind it is inert, Tab stays
  * inside, and Escape closes it. Focus goes back to whatever opened it.
  */
-export function Dialog({ title, onClose, children }: DialogProps) {
+export function Dialog({ title, describedBy, onClose, children }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   // A drag that starts inside the dialog (selecting text in an input) and ends
@@ -44,6 +50,7 @@ export function Dialog({ title, onClose, children }: DialogProps) {
       ref={ref}
       className="wm-dialog"
       aria-labelledby={titleId}
+      aria-describedby={describedBy}
       onClose={onClose}
       onMouseDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget }}
       onClick={(e) => { if (pressedBackdrop.current && e.target === e.currentTarget) onClose() }}

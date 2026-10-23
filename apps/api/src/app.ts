@@ -81,7 +81,17 @@ export function buildApp({ db, config, logStream, pluginOptions }: AppDeps): Fas
     bodyLimit: 1024 * 1024,
     trustProxy: config.TRUST_PROXY,
   })
-  void app.register(helmet, { global: true })
+  // `originAgentCluster: false` because no response should ask for an
+  // origin-keyed agent cluster. A document that runs in a sandbox without
+  // `allow-same-origin` (every plugin frame, see `/plugin-frame`) has an opaque
+  // origin and cannot be origin-keyed, and Chromium logs "could not be
+  // origin-keyed" in its console for each such document that sends
+  // `Origin-Agent-Cluster: ?1`. Helmet's default sent it on every response, so
+  // every dashboard with a plugin frame logged the warning, over HTTP and over
+  // HTTPS alike. Chromium origin-keys the app's own page by default
+  // (`window.originAgentCluster` is `true` without the header), and the header
+  // is a performance and `document.domain` hint, not part of the sandbox.
+  void app.register(helmet, { global: true, originAgentCluster: false })
   // The image serves the web bundle and the API from this one process, with no
   // proxy guaranteed in front, so it compresses its own responses. Only types
   // that compress (the plugin skips images, fonts and anything else already

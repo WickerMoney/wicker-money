@@ -10,6 +10,15 @@ describe('Dialog', () => {
     expect(screen.getByText('body')).toBeDefined()
   })
 
+  it('is described by the element it points at, and by nothing when it points at none', () => {
+    const { unmount } = render(<Dialog title="T" describedBy="why" onClose={() => {}}><p id="why">Because.</p></Dialog>)
+    expect(screen.getByRole('dialog', { name: 'T', description: 'Because.' })).toBeDefined()
+    unmount()
+
+    render(<Dialog title="T" onClose={() => {}}><p>Because.</p></Dialog>)
+    expect(screen.getByRole('dialog').hasAttribute('aria-describedby')).toBe(false)
+  })
+
   it('puts the cursor in the first field rather than on the close button', () => {
     render(<Dialog title="T" onClose={() => {}}><input aria-label="First" /><input aria-label="Second" /></Dialog>)
 

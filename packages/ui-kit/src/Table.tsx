@@ -48,7 +48,8 @@ export interface TableProps<T> {
  * `scope="col"`, and a column with an empty string header (a column of row
  * buttons) gets a visually hidden "Actions" label so no header cell is empty.
  * That label is in the `<th>` only; `data-label` stays unset for it, so the
- * phone card layouts do not print it.
+ * phone card layouts do not print it. The scroller is `position: relative` so
+ * that the label is clipped with the table instead of widening the page.
  */
 export function Table<T>({ columns, rows, rowKey, empty, className, caption }: TableProps<T>) {
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>

@@ -55,7 +55,7 @@ const INSIGHTS = {
 function registered(m: PluginManifest, enabled: boolean): RegisteredPlugin {
   return {
     id: m.id, name: m.name, description: m.description, author: m.author, version: m.version,
-    bundled: true, enabled, status: enabled ? 'enabled' : 'disabled', failure: null,
+    bundled: true, enabled, status: enabled ? 'enabled' : 'disabled', failure: null, origin: null, tables: [],
     contributes: { pages: m.contributes.pages.map((p) => p.title), widgets: m.contributes.widgets.map((w) => w.title), endpoints: m.contributes.endpoints },
   }
 }
