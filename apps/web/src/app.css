@@ -138,7 +138,8 @@
 }
 .form-hint { font-size: 12px; color: var(--wm-text-muted); margin: -4px 0 8px; }
 
-/* The transactions select-all for phones; the phone block below turns it on. */
+/* The transactions select-all for phones and for rows laid out as cards at
+   tablet widths; the blocks below turn it on. */
 .txn-select-all { display: none; }
 
 /* The phone top bar and drawer scrim exist only below the breakpoint. */
@@ -639,6 +640,56 @@
 .txn-recur__find { align-self: flex-start; color: var(--wm-text-muted); }
 .txn-recur__picker { margin-top: 2px; padding: 6px; font-size: 12px; }
 .txn-recur__picker .recur-candidate { grid-template-columns: minmax(0, 1fr) auto; }
+
+/* Transactions at tablet and laptop widths (561px and up; phones have their own
+   card layout in the 560px block above).
+
+   What fits depends on the room the list has, not on the window: the sidebar
+   takes 208px above 860px and nothing below it, so the same table gets about
+   570px of room in an 861px window and about 800px in an 860px one. So the wrapper
+   (.txn-list) is a size container and the layout follows its width.
+
+   - 880px of room or more: the seven-column table. The date does not wrap, the
+     merchant wraps (even inside an unbroken bank reference), and the category
+     select can shrink and stops growing at 14rem, so a long category name cannot
+     take the merchant's room. Those columns add up to about 700px, so even the
+     busiest row fits without the table scrolling.
+   - Less than 880px: each row is three lines, as on a phone but with the action
+     buttons beside them, not under them. Line 1: checkbox, merchant, amount.
+     Line 2: date, category. Line 3: recurring match. The buttons sit in a column
+     on the right, last in the tab order as they are in the table. Cells are
+     placed by data-col, so the markup, the header row (hidden, as on phones),
+     the caption and the order of the cells are the same in every layout. */
+@media (min-width: 561px) {
+  .txn-list { container: txn-list / inline-size; }
+  .txn-table td[data-col="date"] { white-space: nowrap; }
+  .txn-table td[data-col="merchant"] { overflow-wrap: anywhere; }
+  .txn-table td[data-col="cat"] { min-width: 10rem; }
+  .txn-table .cat-cell__select { flex: 1 1 0; width: 100%; min-width: 0; max-width: 14rem; }
+
+  @container txn-list (max-width: 879px) {
+    .txn-select-all { display: flex; align-items: center; gap: 8px; padding: 4px 4px 10px; font-size: 13px; color: var(--wm-text-muted); }
+    .txn-table .wm-table, .txn-table .wm-table tbody { display: block; }
+    .txn-table .wm-table thead {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    .txn-table .wm-table tr {
+      display: grid; grid-template-columns: auto 5.75rem minmax(0, 1fr) auto auto; column-gap: 10px; row-gap: 6px;
+      align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--wm-border);
+    }
+    .txn-table .wm-table td { display: block; min-width: 0; padding: 0; border: 0; }
+    .txn-table td[data-col="sel"] { grid-column: 1; grid-row: 1; }
+    .txn-table td[data-col="merchant"] { grid-column: 2 / 4; grid-row: 1; }
+    .txn-table td[data-col="amt"] { grid-column: 4; grid-row: 1; text-align: right; }
+    .txn-table td[data-col="date"] { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--wm-text-muted); }
+    .txn-table td[data-col="cat"] { grid-column: 3 / 5; grid-row: 2; }
+    .txn-table td[data-col="recur"] { grid-column: 2 / 5; grid-row: 3; }
+    .txn-table td[data-col="actions"] { grid-column: 5; grid-row: 1 / 4; justify-self: end; }
+    .txn-table .cat-cell { width: 100%; }
+    .txn-table .cat-cell__select { max-width: none; }
+    .txn-table .txn-recur { min-width: 0; max-width: none; }
+  }
+}
 /* Settings: plugins. A list of cards, each with an on/off switch for an
    owner. Status is always a word; the dot's colour only reinforces it. */
 .settings-anchor { scroll-margin-top: 16px; }

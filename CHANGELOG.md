@@ -9,6 +9,19 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Changed
+
+- **The Transactions table fits the room it has.** From the phone layout (560px)
+  up, the date never wraps, the Edit and Delete buttons are always in view and
+  neither the table nor the page scrolls sideways. With about 880px of room (a
+  window roughly 1170px wide, with the sidebar) it is still the seven-column
+  table, and a long category name no longer takes the merchant's room; with
+  less, each row is three lines (merchant and amount, date and category,
+  recurring match) with the buttons in a column beside them. Every column is
+  still there, in the same order, and the header row is hidden as on a phone.
+  The page used to scroll sideways below about 1190px because the hidden
+  "Actions" header label sat outside the table's scroller; `Table` now clips it.
+
 ## [0.6.0] - 2026-10-16
 
 Plugin isolation, owner tooling and a performance and accessibility sweep. A
