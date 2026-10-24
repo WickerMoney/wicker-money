@@ -776,4 +776,5 @@
 /* No `color-scheme` here: an iframe whose scheme differs from its document's is painted on an opaque canvas, so it must inherit the host's (the frame is told the same scheme). */
 .plugin-frame__frame { display: block; width: 100%; border: 0; background: transparent; }
 .plugin-frame__status { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: var(--wm-space-3, 0.75rem); }
+.plugin-frame__status--waiting { color: var(--wm-text-muted, inherit); font-size: 13px; text-align: center; }
 .plugin-frame[data-status="loading"] > .plugin-frame__status { position: absolute; inset: 0; }
