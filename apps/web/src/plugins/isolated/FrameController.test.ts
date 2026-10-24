@@ -136,6 +136,54 @@ describe('FrameController handshake', () => {
     s.controller.dispose()
   })
 
+  describe('handshake clock and page visibility', () => {
+    const setHidden = (hidden: boolean): void => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (hidden ? 'hidden' : 'visible') })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+    afterEach(() => { setHidden(false); vi.useRealTimers() })
+
+    it('does not run while the document is hidden and resumes with the time it had left', () => {
+      vi.useFakeTimers()
+      const s = setup('widget', { loadTimeoutMs: 1000 })
+      vi.advanceTimersByTime(600)
+      setHidden(true)
+      vi.advanceTimersByTime(60_000)
+      expect(s.states.at(-1)).toEqual({ status: 'loading' })
+      setHidden(false)
+      vi.advanceTimersByTime(399)
+      expect(s.states.at(-1)).toEqual({ status: 'loading' })
+      vi.advanceTimersByTime(2)
+      expect(s.states.at(-1)).toMatchObject({ status: 'failed' })
+      s.controller.dispose()
+    })
+
+    it('starts counting only when a frame created in a hidden tab becomes visible', () => {
+      vi.useFakeTimers()
+      setHidden(true)
+      const s = setup('widget', { loadTimeoutMs: 1000 })
+      vi.advanceTimersByTime(120_000)
+      expect(s.states.at(-1)).toEqual({ status: 'loading' })
+      setHidden(false)
+      vi.advanceTimersByTime(1001)
+      expect(s.states.at(-1)).toMatchObject({ status: 'failed' })
+      s.controller.dispose()
+    })
+
+    it('stays quiet after the frame is ready, however the tab moves', async () => {
+      vi.useFakeTimers()
+      const s = setup('widget', { loadTimeoutMs: 1000 })
+      const port = connect(s)
+      port.postMessage({ type: 'ready', protocol: 1 })
+      await vi.advanceTimersByTimeAsync(10)
+      setHidden(true)
+      setHidden(false)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(s.states.at(-1)).toEqual({ status: 'ready' })
+      s.controller.dispose()
+    })
+  })
+
   it('logs a development hint that names the cause when the frame never connects', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)

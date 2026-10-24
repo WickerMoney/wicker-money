@@ -9,6 +9,18 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Changed
+
+- **Plugin frames start when they scroll into view.** A dashboard widget that
+  runs in a sandboxed frame no longer gets its iframe until its card is within
+  600 px of the viewport; until then the card holds a placeholder of the frame's
+  minimum height. Frames in the first screen start at load, as before, and a
+  browser without `IntersectionObserver` starts every frame at load. A started
+  frame is kept when scrolled away. The "plugin did not start in time" clock now
+  starts when the frame is created and stops while the tab is hidden, so a tab in
+  the background no longer fails a widget. Find-in-page and printing only see
+  frames that have started.
+  
 ### Added
 
 - **A limit on concurrent CSV imports.** Each commit holds a database connection

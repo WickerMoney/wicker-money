@@ -120,7 +120,9 @@ async function main(): Promise<void> {
   const refusals: string[] = []
   const scripts: string[] = []
   try {
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    // Tall enough for the whole dashboard: a widget frame is only created when its card is near the
+    // viewport, and this check needs every bundled widget's frame to exist at load.
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 4000 } })
     await ctx.addCookies([{ name: 'wickermoney_refresh', value: await register(server.base), url: server.base }])
     await ctx.addInitScript(RECORD_VIOLATIONS)
     const page = await ctx.newPage()

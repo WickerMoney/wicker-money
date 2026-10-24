@@ -17,7 +17,22 @@ export const HEIGHT_LIMITS: Readonly<Record<FrameKind, { readonly min: number; r
   page: { min: 240, max: 20_000 },
 }
 
-/** How long a frame has to complete the handshake before it counts as failed, in milliseconds. */
+/**
+ * The height a widget card holds before its frame has reported one, by the widget's size, in CSS
+ * pixels. A placeholder that is 96 px tall while its widget will be 450 would pull everything
+ * below it up into the margin and start frames that are really far away. These are estimates from the
+ * bundled chart widgets (frames of 400 to 450 px at `lg`; `sm` is a small card), not limits: the
+ * frame reports its real height and the host clamps that, as before.
+ */
+export const PLACEHOLDER_HEIGHT: Readonly<Record<WidgetSize, number>> = { sm: 160, md: 360, lg: 400, full: 400 }
+
+/**
+ * How long a frame has to complete the handshake before it counts as failed, in milliseconds.
+ *
+ * Only time the page is visible counts: the clock starts when the frame is created, stops while the
+ * document is hidden and carries on from where it stopped. A background tab throttles the frame's
+ * timers and rendering, so a frame that is slow there has not shown it is broken.
+ */
 export const DEFAULT_LOAD_TIMEOUT_MS = 15_000
 
 /** Where a frame is in its life, as the component shows it. */
@@ -88,7 +103,11 @@ export class FrameController {
   private readonly win: Window
   private readonly readTheme: () => HostTheme
   private readonly readLocale: () => HostLocale
-  private readonly timer: ReturnType<typeof setTimeout>
+  /** The handshake timer; `undefined` while it is paused (document hidden) or finished. */
+  private timer: ReturnType<typeof setTimeout> | undefined
+  /** Visible milliseconds the handshake has left. */
+  private remainingMs: number
+  private timerStartedAt = 0
   private readonly cleanups: Array<() => void> = []
   private ready = false
   private failed = false
@@ -120,16 +139,40 @@ export class FrameController {
     this.win.addEventListener('message', onMessage)
     this.cleanups.push(() => { this.win.removeEventListener('message', onMessage) })
 
-    this.timer = setTimeout(() => {
-      // Dead code in a production build (Vite replaces `import.meta.env.DEV` with `false`).
-      if (import.meta.env.DEV && !this.failed && !this.disposed) {
-        void diagnoseFrameTimeout().then((hint) => { console.warn(`[wicker-money] ${hint}`) })
-      }
-      this.fail('The plugin did not start in time.')
-    }, options.loadTimeoutMs ?? DEFAULT_LOAD_TIMEOUT_MS)
+    this.remainingMs = options.loadTimeoutMs ?? DEFAULT_LOAD_TIMEOUT_MS
+    this.watchVisibility()
     options.events.onState({ status: 'loading' })
     this.watchTheme()
     this.watchLocale()
+  }
+
+  /** Runs the handshake clock while the document is visible and holds it while it is hidden. */
+  private watchVisibility(): void {
+    const doc = this.win.document
+    const sync = (): void => {
+      if (this.disposed || this.failed || this.ready) return
+      if (doc.visibilityState === 'hidden') {
+        if (this.timer === undefined) return
+        clearTimeout(this.timer)
+        this.timer = undefined
+        this.remainingMs = Math.max(0, this.remainingMs - (Date.now() - this.timerStartedAt))
+      } else if (this.timer === undefined) {
+        this.timerStartedAt = Date.now()
+        this.timer = setTimeout(() => { this.onTimeout() }, this.remainingMs)
+      }
+    }
+    doc.addEventListener('visibilitychange', sync)
+    this.cleanups.push(() => { doc.removeEventListener('visibilitychange', sync) })
+    sync()
+  }
+
+  private onTimeout(): void {
+    this.timer = undefined
+    // Dead code in a production build (Vite replaces `import.meta.env.DEV` with `false`).
+    if (import.meta.env.DEV && !this.failed && !this.disposed) {
+      void diagnoseFrameTimeout().then((hint) => { console.warn(`[wicker-money] ${hint}`) })
+    }
+    this.fail('The plugin did not start in time.')
   }
 
   /** The height limits for this frame's kind. */
@@ -184,7 +227,7 @@ export class FrameController {
 
   private markReady(): void {
     if (this.failed || this.disposed) return
-    clearTimeout(this.timer)
+    this.stopTimer()
     this.ready = true
     this.options.events.onState({ status: 'ready' })
   }
@@ -193,9 +236,14 @@ export class FrameController {
     if (this.failed || this.disposed) return
     this.failed = true
     this.ready = false
-    clearTimeout(this.timer)
+    this.stopTimer()
     this.broker.dispose()
     this.options.events.onState({ status: 'failed', reason })
+  }
+
+  private stopTimer(): void {
+    if (this.timer !== undefined) clearTimeout(this.timer)
+    this.timer = undefined
   }
 
   /** Re-sends the theme when `data-theme`, the root's style or the OS preference changes. */
@@ -256,7 +304,7 @@ export class FrameController {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    clearTimeout(this.timer)
+    this.stopTimer()
     for (const cleanup of this.cleanups) cleanup()
     this.broker.dispose()
   }

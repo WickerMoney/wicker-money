@@ -964,6 +964,94 @@ sequenceDiagram
   in different cards and slots, so a frame per plugin could not place them. The
   measured cost is in the 0.6.0 plan; on Chromium 141 it was about 9 MiB and
   150 ms for each frame after the first.
+- **Lazy start.** A widget's iframe is not created until its card is close to
+  the viewport (`useNearViewport`, used by `IsolatedPluginFrame`; pages are never
+  lazy). Until then the card holds a plain-text placeholder whose height is an
+  estimate for the widget's size (`PLACEHOLDER_HEIGHT`: `sm` 160, `md` 360,
+  `lg` and `full` 400 px, from the bundled chart widgets), and the frame starts
+  at the same height, so the card does not jump when the frame arrives. The
+  rules, with the reason for each:
+  - **Margin: 600 px above and below the viewport** (`FRAME_ROOT_MARGIN_PX`). A
+    frame needs the frame document, the plugin's chunk and a first read; on the
+    seeded dashboard that was 150 ms to over a second. 600 px is a bit under a
+    phone screen, so the frame has usually drawn by the time a normal scroll
+    reaches it, while the cards further down stay unstarted. The margin only
+    reaches a scroll root that is the viewport (the app scrolls the window; a
+    widget inside an inner scroll container would need that container as the
+    observer's root).
+  - **A card is measured again before it starts.** Starting a frame cannot be
+    undone and the layout is not final at first render: the in-page cards are
+    spinners and a frame reports a small height while it loads, so cards below
+    sit too high. A card in view starts after 250 ms (`SETTLE_MS`) if it is still
+    in view; a card that is only inside the margin is held until 2.5 s after the
+    page loaded (`LAYOUT_SETTLED_AT_MS`), then starts if it is still inside. Both
+    waits are visible only for cards that are off screen or have just arrived. On
+    the seeded dashboard, without this every frame started at load. Coming back
+    to the dashboard later, or scrolling, uses the short wait.
+  - **No `IntersectionObserver`: every frame starts at load**, as before.
+  - **A started frame is kept** when it is scrolled far away. Destroying it would
+    throw away its state (open table, scroll position, a tooltip), pay the start
+    again (about 150 ms and a token and a read) and flash a spinner on every
+    scroll back, to win back a few MiB for a dashboard that has a handful of
+    widgets. Revisit if a dashboard ever has dozens of frames.
+  - **The handshake clock** ("The plugin did not start in time", 15 s) starts when
+    the frame is created and stops while the document is hidden, resuming with the
+    time it had left. A background tab throttles the frame's timers, so a slow
+    frame there has not shown it is broken, and a frame created in a hidden tab
+    does not count until the tab is shown. The clock for a frame that is not
+    created yet does not exist.
+  - **Keyboard and screen reader.** The placeholder is plain text: not focusable,
+    not a live region, so Tab passes over it and nothing is announced for a card
+    the user has not reached. A frame that has not started (or has but is not
+    ready) is not a Tab stop, so Tab from the control above a card that is still
+    waiting goes to the next control after it; the browser scrolls that control
+    into view, which starts the card, and Shift+Tab then reaches it. Nothing moves
+    focus into a frame because it started (`focus-in` is only sent on request).
+    A screen reader's virtual cursor reaches the placeholder text and the browser
+    scrolls to it, which starts the frame; the frame's title then announces as
+    before.
+  - **Find in page and print only see frames that have started.** Text in a card
+    that is still a placeholder is not found, and a print preview of a dashboard
+    that was not scrolled shows placeholders for those cards. Scroll to the
+    bottom first (or open the page in a tall window) when you need either.
+  - **Test hooks.** `apps/web/browser-check/lazyFrames.ts` checks the behaviour on
+    the seeded dashboard and measures it against an earlier build (see
+    `apps/web/browser-check/README.md`).
+
+  Measured on the seeded `hero` dashboard (6 widgets: 3 in frames, Insights twice
+  and Spending Trends; the others in the page), Chromium 153, headless, the API
+  and browser on one shared 2-CPU container, so the absolute numbers are noisy
+  and only the before and after on the same run mean anything. Median of 7 runs,
+  before and after alternated run by run, one discarded warm-up each. "First
+  widget" is the first card with its content, "first screen" is all cards that
+  start inside the window; memory is the proportional set size of the browser's
+  process tree, 3 s after the last widget settled.
+
+  | 1280x900 | before | after |
+  | --- | --- | --- |
+  | Time to first widget | 894 ms | 803 ms |
+  | Time to all widgets in the first screen | 1252 ms | 1027 ms |
+  | Iframes at load / after scrolling to the bottom | 3 / 3 | 2 / 3 |
+  | Browser memory at load | 409 MiB | 406 MiB |
+  | Browser memory after scrolling to the bottom | 412 MiB | 420 MiB |
+
+  | 390x844 (phone) | before | after |
+  | --- | --- | --- |
+  | Time to first widget | 791 ms | 746 ms |
+  | Time to all widgets in the first screen | 1081 ms | 762 ms |
+  | Iframes at load / after scrolling to the bottom | 3 / 3 | 1 / 3 |
+  | Browser memory at load | 393 MiB | 375 MiB |
+  | Browser memory after scrolling to the bottom | 395 MiB | 401 MiB |
+
+  The gain is small on this dashboard, and it is honest to say so: at desktop size
+  one of three frames is deferred and saves about 3 MiB; on a phone two are
+  deferred and save about 18 MiB (about 9 MiB each, as in the 0.6.0 measurement),
+  and the first screen was about 300 ms quicker, probably because it no longer
+  shares the network and CPU with frames that are not on it (not isolated further). A user who scrolls to the
+  bottom ends up 6 to 8 MiB above the eager page: a frame started later carries
+  the same cost plus the second pass at layout. The feature pays most on
+  dashboards with more frame widgets than fit a screen.
+
 - **Development.** In `pnpm dev` the page comes from Vite but the frame is
   still the API's document, so it needs the built web app. Vite's dev server
   proxies `/plugin-frame` and `/assets` to the API on `:8080`, and `/plugins` for

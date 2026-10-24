@@ -158,6 +158,9 @@ async function waitForCharts(page: Playwright.Page): Promise<Record<string, numb
     const m = await readMarks(page)
     if (m['trend'] !== undefined && (m['donut'] !== undefined || process.env['INSIGHTS_WIDGETS'] === '1')) return m
     if (Date.now() - t0 > 30_000) throw new Error(`charts did not draw: ${JSON.stringify(m)}`)
+    // A widget frame below the fold is only created when its card nears the viewport: once the first chart
+    // has drawn, scroll to the bottom so the other one starts too (the time to the last chart includes that).
+    if (m['trend'] !== undefined) await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)).catch(() => undefined)
     await sleep(40)
   }
 }
