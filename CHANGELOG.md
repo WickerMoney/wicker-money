@@ -9,15 +9,47 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-### Migrations
+## [0.6.1] - unreleased
 
-- **033_tenant_lookup_policies** rewrites any policy in `core` or a `plugin_*`
-  schema that still calls `core.current_user_id()` bare to
-  `(SELECT core.current_user_id())`, so the lookup runs once per statement, not
-  once per row. A database migrated in order has one: `account_lines_isolation`
-  (027 created it after 018's rewrite). It returns the same rows, does nothing
-  and locks nothing where none is left, and its `down` does nothing.
+A small patch: an owner is asked before a third-party plugin is switched on, the
+Transactions table fits narrower windows, the browser console stops warning
+about the plugin frame, and one more policy gets the per-statement user lookup.
+It has one new migration, 033, which changes no access and has nothing to undo.
+The owner plugin list also gains two read-only fields; see Added. **Back up your
+database before upgrading** (`pg_dump -Fc`), as for any release. See
+[Upgrading](README.md#upgrading).
+
+### Added
+
+- Settings asks an owner to confirm before switching on a plugin that is not
+  bundled, naming the origin it loads from and the tables it is granted and
+  repeating the sandbox's known gaps; bundled plugins and switching off do not
+  ask. The question is in the Settings page only: a request sent straight to the
+  API does not ask. The owner plugin list gains `origin` and `tables`, and the UI
+  kit `Dialog` an optional `describedBy`.
+- **An additive API change in a patch release.** `GET /api/v1/plugins/registry`
+  (the owner plugin list) now returns two more fields on each plugin: `origin`
+  (the origin its remote entry loads from, or `null` for this instance's own
+  origin or when there is no usable manifest) and `tables` (the core tables its
+  manifest lists, sorted; empty when there is no usable manifest). No existing
+  field changed or moved, so a client that ignores fields it does not know is
+  unaffected. The `Dialog` prop is optional, so existing callers are unaffected.
+
+### Changed
+
+- **The Transactions table fits the room it has.** From the phone layout (560px)
+  up, the date never wraps, the Edit and Delete buttons are always in view and
+  neither the table nor the page scrolls sideways. With about 880px of room (a
+  window roughly 1170px wide, with the sidebar) it is still the seven-column
+  table, and a long category name no longer takes the merchant's room; with
+  less, each row is three lines (merchant and amount, date and category,
+  recurring match) with the buttons in a column beside them. Every column is
+  still there, in the same order, and the header row is hidden as on a phone.
+  The page used to scroll sideways below about 1190px because the hidden
+  "Actions" header label sat outside the table's scroller; `Table` now clips it.
+
 ### Fixed
+
 - **No more `Origin-Agent-Cluster` warnings in the browser console.** Chromium
   logged "could not be origin-keyed" once for each plugin frame on a dashboard,
   over HTTPS as well as plain HTTP. A sandboxed frame has an opaque origin and
@@ -35,25 +67,18 @@ curated, human-readable version.
   sandbox are unchanged, and the hostile suite still checks that `eval` and
   `new Function` are refused. A browser check now loads the bundled widgets and
   fails on any eval violation.
-### Added
 
-- Settings asks an owner to confirm before switching on a plugin that is not
-  bundled, naming the origin it loads from and the tables it is granted and
-  repeating the sandbox's known gaps; bundled plugins and switching off do not
-  ask. The owner plugin list gains `origin` and `tables`, and the UI kit
-  `Dialog` an optional `describedBy`.
-### Changed
+### Migrations
 
-- **The Transactions table fits the room it has.** From the phone layout (560px)
-  up, the date never wraps, the Edit and Delete buttons are always in view and
-  neither the table nor the page scrolls sideways. With about 880px of room (a
-  window roughly 1170px wide, with the sidebar) it is still the seven-column
-  table, and a long category name no longer takes the merchant's room; with
-  less, each row is three lines (merchant and amount, date and category,
-  recurring match) with the buttons in a column beside them. Every column is
-  still there, in the same order, and the header row is hidden as on a phone.
-  The page used to scroll sideways below about 1190px because the hidden
-  "Actions" header label sat outside the table's scroller; `Table` now clips it.
+One new migration, so an upgrade runs one more step. It changes no access and
+locks nothing on a database where it has nothing to rewrite.
+
+- **033_tenant_lookup_policies** rewrites any policy in `core` or a `plugin_*`
+  schema that still calls `core.current_user_id()` bare to
+  `(SELECT core.current_user_id())`, so the lookup runs once per statement, not
+  once per row. A database migrated in order has one: `account_lines_isolation`
+  (027 created it after 018's rewrite). It returns the same rows, does nothing
+  and locks nothing where none is left, and its `down` does nothing.
 
 ## [0.6.0] - 2026-10-16
 
@@ -1224,7 +1249,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/WickerMoney/wicker-money/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/WickerMoney/wicker-money/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/WickerMoney/wicker-money/compare/v0.4.1...v0.4.2
