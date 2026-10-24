@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import helmet from '@fastify/helmet'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { buildFrameContentSecurityPolicy } from './buildFrameContentSecurityPolicy.js'
 import { registerWebApp } from './registerWebApp.js'
 
 const INDEX = '<!doctype html><title>Wicker Money</title><div id="root"></div>'
@@ -80,6 +81,28 @@ describe('the app shell', () => {
     expect(csp).toContain("script-src 'self';")
     expect(csp).toContain("connect-src 'self';")
     expect(csp).not.toContain('plugins.example.com')
+  })
+})
+
+describe('X-Frame-Options outside the plugin frame', () => {
+  // Only `/plugin-frame` opts out. Everything else keeps Helmet's header, so a
+  // browser that ignores CSP still refuses to frame the app or the API.
+  it.each([
+    ['the app document', '/'],
+    ['a client-side route', '/transactions/3f1c?tab=splits'],
+    ['an API response', '/api/v1/ping'],
+    ['a health check', '/healthz'],
+    ['a missing API route', '/api/v1/nope'],
+    ['a hashed asset', '/assets/index-abc123.js'],
+  ])('is still sent with %s', async (_what, url) => {
+    const res = await (await appWith()).inject({ method: 'GET', url })
+    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN')
+  })
+
+  it('is still sent with the app document when the frame route has been requested before it', async () => {
+    const app = await appWith()
+    expect((await app.inject({ method: 'GET', url: '/plugin-frame' })).headers['x-frame-options']).toBeUndefined()
+    expect((await app.inject({ method: 'GET', url: '/' })).headers['x-frame-options']).toBe('SAMEORIGIN')
   })
 })
 
@@ -175,9 +198,50 @@ describe('the sandboxed plugin frame document', () => {
     expect(res.headers['vary']).toContain('Host')
   })
 
-  it('may be framed by our own pages, which Helmet permits with its default', async () => {
+  // This replaces "may be framed by our own pages, which Helmet permits with its
+  // default", which asserted `X-Frame-Options: SAMEORIGIN` on the frame. Framing
+  // is governed by `frame-ancestors 'self'` in the frame's policy, and a browser
+  // that understands it ignores `X-Frame-Options` (Firefox logs a console message
+  // for each framed widget when both are sent). So the contract is now: no
+  // `X-Frame-Options` here, `frame-ancestors 'self'` still there, and nothing
+  // else of the policy changed.
+  it('is framed by our own pages through frame-ancestors, and sends no X-Frame-Options', async () => {
+    const res = await get('/plugin-frame', { host: 'money.example.com' })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['x-frame-options']).toBeUndefined()
+    expect(String(res.headers['content-security-policy'])).toContain("frame-ancestors 'self'")
+  })
+
+  it('keeps the whole sandbox policy exactly as the builder produces it', async () => {
+    const res = await get('/plugin-frame', { host: 'money.example.com' }, ['https://plugins.example.com'])
+    expect(res.headers['content-security-policy']).toBe(
+      buildFrameContentSecurityPolicy('http://money.example.com', ['https://plugins.example.com']),
+    )
+    expect(res.headers['content-security-policy']).toBe(
+      [
+        'sandbox allow-scripts',
+        "default-src 'none'",
+        "script-src 'self' http://money.example.com https://plugins.example.com",
+        "style-src 'unsafe-inline' 'self' http://money.example.com https://plugins.example.com",
+        "connect-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'self'",
+      ].join('; '),
+    )
+  })
+
+  it('drops only X-Frame-Options: the other Helmet headers are still sent with the frame', async () => {
     const res = await get('/plugin-frame')
-    expect(res.headers['x-frame-options']).toBe('SAMEORIGIN')
+    const other = await (await appWith()).inject({ method: 'GET', url: '/api/v1/ping' })
+    const withoutFrameguard = (headers: Record<string, unknown>): string[] =>
+      Object.keys(headers).filter((h) => h !== 'x-frame-options' && h.startsWith('x-')).sort()
+    expect(res.headers['x-content-type-options']).toBe('nosniff')
+    expect(res.headers['referrer-policy']).toBe(other.headers['referrer-policy'])
+    expect(res.headers['cross-origin-opener-policy']).toBe(other.headers['cross-origin-opener-policy'])
+    expect(res.headers['cross-origin-resource-policy']).toBe(other.headers['cross-origin-resource-policy'])
+    expect(res.headers['strict-transport-security']).toBe(other.headers['strict-transport-security'])
+    expect(withoutFrameguard(res.headers)).toEqual(withoutFrameguard(other.headers))
   })
 
   it('lists the operator plugin origins, and only for the frame', async () => {

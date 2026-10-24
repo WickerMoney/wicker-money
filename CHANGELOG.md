@@ -11,6 +11,9 @@ curated, human-readable version.
 
 ### Fixed
 
+- The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as
+  ignored in favour of `frame-ancestors` once per framed widget; every other
+  response keeps it.
 - **Plugin widgets in `pnpm dev`.** Insights and Spending Trends showed "The
   plugin did not start in time" in development, with CORS errors in the console
   for `/@vite/client` and the frame's other modules. Vite was answering

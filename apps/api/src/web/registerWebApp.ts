@@ -82,7 +82,19 @@ export function registerWebApp(app: FastifyInstance, { root, pluginOrigins }: We
   // The document a sandboxed plugin runs in. One static file for every plugin:
   // which plugin and module it loads is in the URL fragment, which the browser
   // never sends, so there is nothing to validate or cache per plugin here.
-  app.get(PLUGIN_FRAME_PATH, (request, reply) => {
+  //
+  // `helmet: { frameguard: false }` drops `X-Frame-Options` from this route
+  // only; the route's options are merged over the global Helmet options, so
+  // every other Helmet header is unchanged and every other response keeps it.
+  // The frame's `frame-ancestors 'self'` already says who may embed it, and a
+  // browser that supports that directive ignores `X-Frame-Options` when both
+  // are sent. Firefox says so in the console for each framed widget ("Ignoring
+  // 'x-frame-options' because of 'frame-ancestors' directive"). A browser that
+  // predates `frame-ancestors` would also have enforced `SAMEORIGIN` here, and
+  // no longer does: it would let any site frame the document. That is harmless:
+  // the document is one static file with no data in it, and its sandbox comes
+  // from its own policy (and the embedder's `sandbox` attribute).
+  app.get(PLUGIN_FRAME_PATH, { helmet: { frameguard: false } }, (request, reply) => {
     if (!existsSync(frameFile)) {
       return reply.code(404).send({
         message: 'This build has no sandboxed plugin frame.', error: 'Not Found', statusCode: 404,
