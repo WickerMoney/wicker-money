@@ -9,6 +9,18 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **A notification toast in `@wickermoney/ui-kit`** (experimental, for the core
+  app only for now): `ToastProvider`, `ToastViewport` and `useToast()`, plus the
+  `--wm-shadow-raised` token. Nothing dismisses itself: a toast stays until it is
+  closed (its button or Escape) or replaced by the same key. A polite screen
+  reader announcement is separate from the visible banner, which sits at the top
+  of the page content and stays in view under the phone bar. The app shell now
+  draws it; no page raises one yet.
+- `pnpm --filter @wickermoney/web test:toast`, a browser check with axe for the
+  toast (light and dark, desktop and phone widths, drawer, dialog, reduced motion).
+
 ### Fixed
 
 - The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as
