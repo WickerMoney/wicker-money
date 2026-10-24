@@ -199,7 +199,7 @@ means the container itself, not your machine.
 >   discards the refresh cookie and signs you out on every reload.
 > - Chromium logs a `Cross-Origin-Opener-Policy` console warning, because it
 >   ignores that header on an insecure origin. It is harmless and disappears over
->   HTTPS. (Releases before this one also logged an `Origin-Agent-Cluster` warning,
+>   HTTPS. (`v0.6.0` and earlier also logged an `Origin-Agent-Cluster` warning,
 >   once per plugin frame and over HTTPS as well. That had a different cause, and
 >   the API no longer sends that header.)
 >
@@ -282,6 +282,7 @@ previous image without restoring that backup depends on the release:
 
 | Release | Migrations | Going back to the previous image |
 |---|---|---|
+| `v0.6.1` | 033 (has a `down` that changes nothing) | Run `node dist/db/cli.js down` once with the new image, then start the old one (the policy rewrite stays; it returns the same rows) |
 | `v0.6.0` | 029, 030, 031, 032 (all have a `down`) | Run `node dist/db/cli.js down` four times with the new image, then start the old one (this deletes everything in the debt payoff plugin, and the owner-role and erase functions) |
 | `v0.5.0` | 027, 028 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one (this deletes account allowances) |
 | `v0.4.2` | none | Run the old image as it is |
@@ -305,7 +306,10 @@ existing accounts; to name the owner of a new instance, set
 After upgrading to `v0.6.0`, a script that downloads the data export must now
 ask for a ticket first (see the changelog), and behind a reverse proxy that
 compresses responses you should stop the proxy compressing this upstream, as the
-API now does it itself.
+API now does it itself. After upgrading to `v0.6.1`, nothing changes for existing
+accounts; an owner is now asked to confirm in Settings before switching on a
+third-party plugin, and the upgrade runs one more migration (033), which
+changes no access.
 Per-release
 notes are also on the docs site under [Upgrading](https://wickermoney.dev/docs/self-hosting/upgrading).
 
@@ -412,8 +416,11 @@ Argon2id digest with the application's own parameters by hand.
 
 ## Status
 
-**`v0.6.0`** is the current release. Plugin front-end code can now run in a
-sandboxed frame, behind plugin-scoped tokens that the server holds to a plugin's
+**`v0.6.1`** is the current release, a small patch on `v0.6.0`: Settings asks an
+owner to confirm before switching on a third-party plugin, the Transactions table
+fits narrower windows, the browser console and DevTools no longer warn about
+the plugin frame, and one policy gets the per-statement user lookup. `v0.6.0`
+brought the isolation work: plugin front-end code can now run in a sandboxed frame, behind plugin-scoped tokens that the server holds to a plugin's
 own grants; Insights and Spending Trends run that way, and an operator can add a
 third-party UI plugin by hand, as an experimental feature with no install flow.
 It also adds a password-confirmed data export, a danger zone for erasing data,

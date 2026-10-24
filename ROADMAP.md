@@ -4,7 +4,7 @@ Wicker Money is pre-1.0 and has a single maintainer. This is direction, not a
 promise: items move, shrink or disappear, and there are no dates.
 
 **Now** is what the next release is working toward. The current release is
-`v0.6.0`; see `CHANGELOG.md` for what each tag contains.
+`v0.6.1`; see `CHANGELOG.md` for what each tag contains.
 
 ## Shipped
 
@@ -14,6 +14,7 @@ promise: items move, shrink or disappear, and there are no dates.
 | M2 | The shell and the first plugin: Module Federation host, dashboard widgets from plugins, scoped plugin client |
 | M3 | Import and categorization: CSV import, category rules with preview, triage tools |
 | M4 (`v0.1.0`) | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
+| `v0.6.1` | A patch on `v0.6.0`: an owner confirms in Settings before switching on a third-party plugin (the dialog names its origin and granted tables and repeats the known gaps), the Transactions table and its row actions fit narrower windows, the `Origin-Agent-Cluster` console warning and the DevTools "blocks the use of `eval`" issue for the plugin frame are gone, migration 033 gives the account lines policy the per-statement user lookup, and the frame egress spike is recorded (no control closes the gaps in Chromium 141) |
 | `v0.6.0` | UI plugin isolation and owner tooling: a sandboxed frame for plugin UI (Insights and Spending Trends now run in one), plugin-scoped tokens with default-deny routes, an integrity pin and an operator manifest directory for third-party plugins (experimental, no install flow), a hostile-plugin suite in CI, a password-confirmed data export, a Settings danger zone (erase my data, erase this instance), owners changing roles from People, the debt payoff plugin, configurable pool and statement limits with a 100,000-row import cap and paged analyze, merchant and amount sort indexes, lazy core pages and compressed responses, an accessibility sweep, and the API integration suite in CI |
 | `v0.5.0` | Plugin platform hardening and account allowances: `plugin-sdk/server` (the host-to-plugin contract in one place), SDK stability tiers and shared `addDays` / `addMonths`, one shared read for dashboard widgets, one data load for recurring matches, `BOOTSTRAP_OWNER_EMAIL`, account allowances on Budgets (a monthly amount against one checking account, with rollover), an honest account of the plugin trust boundary, add and edit forms in the shared dialog, and a lint on `sql.raw` |
 | `v0.4.2` | Phone layouts and UI cleanup: a navigation drawer, card layouts for Transactions, Accounts, Recurring and Categories, collapsible Categories and Rules, icon row actions, charts and budget tiles that fit narrow screens. Also the `:edge` image from `main` |
@@ -25,13 +26,9 @@ promise: items move, shrink or disappear, and there are no dates.
 
 ## Now
 
-After `v0.6.0`:
+After `v0.6.1`:
 
-- Close what the release candidate soak and the real-device pass turn up.
-- A layout pass on the Transactions table, which has been crowded since the
-  Recurring column was added. It fits at 1366 px wide and above. Narrower than
-  that the date wraps onto two lines, and below about 1190 px the table scrolls
-  sideways, so the row actions are out of view until you scroll.
+- Close what the `:edge` soak and the real-device pass turn up.
 - Close the known gaps in the plugin frame, which the frame's content security
   policy does not cover in Chromium. The spike found no header, `allow` value or
   CSP directive that closes prerender or WebRTC in Chromium 141 (see
@@ -39,9 +36,6 @@ After `v0.6.0`:
   browser ships a control (the CSP `webrtc` directive is only a draft), and to
   stop the frame navigating itself to the app's origin once the server knows the
   address the browser used.
-- Tell the owner what they are agreeing to when they switch a third-party
-  plugin on. Today the hand-edited manifest directory and the environment
-  variable are the only consent step, and the documentation says so.
 
 ## Next
 
