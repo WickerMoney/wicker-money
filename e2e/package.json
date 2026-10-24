@@ -1,0 +1,25 @@
+{
+  "name": "@wickermoney/e2e",
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WickerMoney/wicker-money.git",
+    "directory": "e2e"
+  },
+  "homepage": "https://github.com/WickerMoney/wicker-money#readme",
+  "bugs": {
+    "url": "https://github.com/WickerMoney/wicker-money/issues"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node scripts/checkPlaywrightVersions.mjs && tsc -p tsconfig.json --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^6.0.3"
+  }
+}
