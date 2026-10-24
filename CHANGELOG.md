@@ -9,6 +9,17 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **End-to-end tests (`e2e/`).** A private Playwright package that drives the
+  built image through a throwaway compose stack with the seeded demo data:
+  `e2e/run.ps1` on Windows, `e2e/run.sh` elsewhere, `pnpm test:e2e` against a
+  stack you already run. Seven smoke specs cover start-up, sign-in, the
+  dashboard widgets and plugin pages, tenant isolation and adding a
+  transaction. It is not part of `pnpm test`, adds no browser download to
+  `pnpm install`, and the shipped image is unchanged. See `DEVELOPMENT.md`,
+  "End-to-end tests".
+
 ### Fixed
 
 - The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as

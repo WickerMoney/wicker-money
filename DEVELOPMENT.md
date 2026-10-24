@@ -30,6 +30,7 @@ some of this under
 | `packages/plugin-sdk` | The single contract both sides implement |
 | `packages/ui-kit` | Shared components plugins import |
 | `plugins/*` | Bundled and optional plugins |
+| `e2e` | Browser tests against the built image (Playwright) |
 
 ## Getting started
 
@@ -1260,6 +1261,92 @@ Roles are namespaced under `APP_DB_ROLE` for the same reason the app role is:
 PostgreSQL roles are cluster-wide, so two Wicker Money databases on one server would
 otherwise fight over them. Set `APP_DB_ROLE` the same way for `pnpm migrate` and
 for the API.
+
+### End-to-end tests
+
+`e2e/` holds browser tests that run against the **built image**, the way someone
+who pulls it runs it, rather than against the source tree. Seven smoke specs
+(`e2e/tests/smoke.spec.ts`, about 25 seconds once the stack is up) cover: the
+stack is healthy, migrated and seeded (all four seed personas sign in, the
+bundled plugins registered with no load failures); `hero` signs in and reaches the
+dashboard; `household` reaches the forecast page; every in-realm bundled plugin
+page loads with no console error or failed request; every dashboard widget
+loads, and the isolated ones (Insights, Spending Trends today) run in frames with
+no console error and no Content Security Policy violation; `hero` cannot read
+`household` data through the API or the UI; and a transaction added in the
+Transactions dialog appears in the ledger and lowers the dashboard's "Safe to
+spend". The plugin lists come from `GET /api/v1/plugins` at run time, not from a
+copy in the specs, so a plugin that moves between runtimes changes what is
+checked and not whether the specs pass. The seed anchors its dates to the day it
+runs, so the specs assert relatively (a difference of 123.45, a row they just
+created) and never against a fixed date.
+
+**Running it.** The stack is `docker/docker-compose.e2e.yml`: the image you name
+in `E2E_IMAGE`, PostgreSQL 16 on tmpfs, one-shot `migrate` and `seed` services
+(the seed is the compiled CLI already in the image, `dist/db/seed/seedCli.js`, so
+nothing was added to the image for this), no published port, and a `playwright`
+service (profile `test`) on the official Playwright image. Everything is thrown
+away afterwards. The passwords in it are public test values that pass the API's
+placeholder-credential check under `NODE_ENV=production`; the sign-in rate limits
+are raised for this stack only.
+
+```powershell
+# Windows, Docker Desktop: builds wickermoney:e2e from this checkout, runs, tears down
+.\e2e\run.ps1
+# a published image instead of a build
+.\e2e\run.ps1 -Image ghcr.io/wickermoney/wicker-money:edge
+```
+
+```bash
+e2e/run.sh                                        # build, run, tear down
+E2E_IMAGE=ghcr.io/wickermoney/wicker-money:edge e2e/run.sh   # test the :edge tag
+e2e/run.sh -- tests/smoke.spec.ts                 # arguments after -- go to playwright test
+```
+
+To work on a spec with a browser on the host, publish a port and point the
+package at it. On the host you need a Chromium once:
+`pnpm --filter @wickermoney/e2e exec playwright install chromium` (a deliberate,
+local step; the install itself never does it), or `PW_CHROMIUM_PATH` for one you
+already have:
+
+```bash
+export E2E_IMAGE=wickermoney:e2e
+docker compose -f docker/docker-compose.e2e.yml -f docker/docker-compose.e2e.ports.yml up --wait --detach
+BASE_URL=http://127.0.0.1:8190 pnpm test:e2e
+docker compose -f docker/docker-compose.e2e.yml down --volumes
+```
+
+**Debugging a failure.** A failed spec keeps a trace and a screenshot in
+`e2e/reports/` (git-ignored; `html/index.html` is the report, `junit.xml` the
+machine-readable result; CI retries once). Open the trace with
+`pnpm --filter @wickermoney/e2e exec playwright show-trace <path>/trace.zip` and
+step through the page, network and console. The runner scripts print the app's
+log tail on a failure.
+
+**Why a package of its own, and how it relates to the hostile suite.** Playwright
+is not a dependency of anything that `pnpm test`, `pnpm build` or the image
+needs: `@playwright/test` lives only in `e2e/`, which has no `test` or `build`
+script, so turbo never runs it, and Playwright does not download a browser when
+it is installed. The browser comes from the Playwright container image in the
+compose stack, or from one you point at on a machine that has one
+(`PW_CHROMIUM_PATH`, or `CHROMIUM_PATH` as the hostile suite spells it); never
+run `playwright install` in a cloud clone that ships a Chromium.
+
+The hostile plugin suite ([above](#hostile-plugin-suite)) has its own driver
+(`apps/web/browser-check/hostile/`, `playwright-core` with its own server and
+fixture plugin) and stays as it is. The two share a Playwright version and a
+Chromium choice: both pin the exact same version (1.64.1; `pnpm typecheck` in
+`e2e/` fails if `e2e/package.json`, `apps/web/package.json` or the compose image
+tag disagree, so bump them together) and both use Playwright's **full**
+Chromium (`channel: 'chromium'`), never the headless shell, because the frame
+handshake never completes in the shell and the dashboard's isolated widgets would
+not load. They could share a stack later: the hostile suite would have to move
+from `playwright-core` scripts, a server it starts itself and a fixture build to
+`@playwright/test` specs against a running stack, and it needs things the e2e
+stack deliberately lacks (a second origin, a fixture plugin, direct database
+access for its server half). Until that is worth doing, one is a
+smoke test of the shipped image and the other is an attack harness, and neither
+needs the other's setup.
 
 ## Releasing
 
