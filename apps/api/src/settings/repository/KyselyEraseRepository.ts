@@ -15,6 +15,11 @@ export class KyselyEraseRepository implements EraseRepository {
   constructor(private readonly trx: Trx) {}
 
   /** @inheritdoc */
+  async lockUser(userId: string): Promise<void> {
+    await sql`SELECT 1 FROM core.users WHERE id = ${userId}::uuid FOR UPDATE`.execute(this.trx)
+  }
+
+  /** @inheritdoc */
   async userTables(): Promise<readonly string[]> {
     const { rows } = await sql<{ name: string }>`
       SELECT n.nspname || '.' || c.relname AS name

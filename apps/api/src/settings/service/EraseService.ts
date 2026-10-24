@@ -91,6 +91,8 @@ export class EraseService {
     await this.deps.auth.confirmPassword(userId, input.password)
 
     return this.uow.forUser(userId, async ({ erase, onboarding }) => {
+      // First, so a write that is open now finishes (and is deleted below) rather than committing after the erase.
+      await erase.lockUser(userId)
       const planned = plannedTables()
       const unplanned = (await erase.userTables()).filter((table) => !planned.has(table))
       if (unplanned.length > 0) {

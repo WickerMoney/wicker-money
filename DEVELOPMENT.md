@@ -624,10 +624,29 @@ the catalog in the same transaction and, if a `user_id` table is missing, answer
 nothing from you: it reads the catalog. `testing/eraseFixtures.ts` must also
 reach the new table through the API so the tests prove it was emptied.
 
-**Limits.** An erase does not stop requests already in flight: a write that
-commits between the check and the deletion could leave a row behind for a user
-who has just been signed out. Access tokens are checked against their session on
-every request, so ending the sessions rejects them at once.
+**Limits.** `settings/eraseInFlight.integration.test.ts` holds a write open at
+a chosen point, runs the erase and lets the write go, so these are measured, not
+assumed.
+
+- *A write that is open when "Erase my data" starts* is waited for. The erase
+  first takes `SELECT ... FOR UPDATE` on the user's `core.users` row, and
+  inserting any row that belongs to the user holds a shared lock on that row
+  until the writer commits. The erase queues behind the writer and then deletes
+  what it committed. Before this lock the insert was invisible to the erase and
+  committed after it, leaving a row (or, for a row that points at an account,
+  making the erase fail with `500` on the `RESTRICT` key and delete nothing).
+- *A request that passed its session check before the erase and writes after it*
+  is not stopped. Access tokens are checked against their session at the start
+  of each request, so ending the sessions rejects every later request at once,
+  but a request already past that check still commits. It can leave one row
+  for a user who has just been signed out, in a table with no parent row to
+  refuse it (an account, a category, a plugin's own table). A row that points at
+  something the erase deleted is refused by its foreign key. The next erase
+  removes the stray row. Closing this would need every write to re-check its
+  session inside its own transaction; that is not done.
+- *Erase this instance* has neither problem. `TRUNCATE` waits for any open
+  write, and a write that runs after it fails on the foreign key to
+  `core.users`.
 
 ### Exporting data
 
