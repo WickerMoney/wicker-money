@@ -976,6 +976,12 @@ three parts, and CI runs them as the required check **Hostile plugin suite**.
   any of their code runs; an origin that is not allowlisted is blocked and gets no
   request; crafted manifests are refused or stay isolated. `pnpm test:hostile`
   runs it after the hostile browser half.
+- **Eval-violation half** (`apps/web/browser-check/hostile/evalViolations.ts`,
+  Chromium). The hostile plugin evals on purpose; this loads the bundled Insights
+  and Spending Trends widgets in their frames, with no fixture, and fails on any
+  eval-blocked Content Security Policy violation from the page or a frame (zod's
+  `new Function("")` probe was one). A canary eval must be seen, so a broken
+  recorder cannot pass. `pnpm test:hostile` runs it last.
 
 Two unit tests belong to the same gate and run in `pnpm test`:
 `sandboxAttributes.test.tsx` (the sandbox attribute is exactly `allow-scripts`,

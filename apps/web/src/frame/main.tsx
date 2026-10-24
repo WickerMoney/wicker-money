@@ -1,3 +1,4 @@
+import '../configureZod.js'
 import '@wickermoney/ui-kit'
 import './frame.css'
 import { mountPlugin } from './mountPlugin.js'

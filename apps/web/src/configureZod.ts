@@ -9,7 +9,14 @@ import { z } from 'zod'
  * nothing breaks, but every page load would log a CSP violation. A console
  * error that is always there is one nobody reads when a real one arrives.
  *
- * Imported for its side effect, and first in `main.tsx`, so it runs before any
- * module in the app has a chance to parse anything.
+ * Imported for its side effect, and first in each entry, so it runs before any
+ * module has a chance to build a schema: zod makes the `new Function` probe
+ * when it builds the first object schema, not when it first parses. The entries
+ * are `main.tsx` (the app's page) and `frame/main.tsx` (the sandboxed plugin
+ * frame, which serves the same policy minus anything a page may do).
+ *
+ * zod 4.4 and later keep this setting on `globalThis`, so a plugin built with
+ * its own copy of one of those, and loaded into the frame after this has run,
+ * follows it. An older copy keeps its own setting and still probes.
  */
 z.config({ jitless: true })
