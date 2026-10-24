@@ -946,7 +946,7 @@ axe, and timing and memory). See `apps/web/browser-check/README.md`.
 
 ADR 0005's trust boundary is only worth what it survives, so a plugin written to
 misbehave runs against it on every pull request. `pnpm test:hostile` runs
-three parts, and CI runs them as the required check **Hostile plugin suite**.
+four parts, and CI runs them as the required check **Hostile plugin suite**.
 
 - **Server half** (`apps/api/src/plugins/hostilePluginToken.integration.test.ts`,
   PostgreSQL). The route classes a plugin token must be refused on are written

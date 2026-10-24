@@ -418,10 +418,9 @@ Argon2id digest with the application's own parameters by hand.
 
 **`v0.6.1`** is the current release, a small patch on `v0.6.0`: Settings asks an
 owner to confirm before switching on a third-party plugin, the Transactions table
-fits narrower windows, the browser console no longer warns about the plugin
-frame, and one policy gets the per-statement user lookup. `v0.6.0` brought the
-isolation work: plugin front-end code can now run in a
-sandboxed frame, behind plugin-scoped tokens that the server holds to a plugin's
+fits narrower windows, the browser console and DevTools no longer warn about
+the plugin frame, and one policy gets the per-statement user lookup. `v0.6.0`
+brought the isolation work: plugin front-end code can now run in a sandboxed frame, behind plugin-scoped tokens that the server holds to a plugin's
 own grants; Insights and Spending Trends run that way, and an operator can add a
 third-party UI plugin by hand, as an experimental feature with no install flow.
 It also adds a password-confirmed data export, a danger zone for erasing data,

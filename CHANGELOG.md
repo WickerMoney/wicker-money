@@ -12,12 +12,12 @@ curated, human-readable version.
 ## [0.6.1] - unreleased
 
 A small patch: an owner is asked before a third-party plugin is switched on, the
-Transactions table fits narrower windows, the browser console stops warning
-about the plugin frame, and one more policy gets the per-statement user lookup.
-It has one new migration, 033, which changes no access and has nothing to undo.
-The owner plugin list also gains two read-only fields; see Added. **Back up your
-database before upgrading** (`pg_dump -Fc`), as for any release. See
-[Upgrading](README.md#upgrading).
+Transactions table fits narrower windows, the browser console and DevTools
+Issues stop warning about the plugin frame, and one more policy gets the
+per-statement user lookup. It has one new migration, 033, which changes no
+access and has nothing to undo. The owner plugin list also gains two read-only
+fields; see Added. **Back up your database before upgrading** (`pg_dump -Fc`),
+as for any release. See [Upgrading](README.md#upgrading).
 
 ### Added
 
