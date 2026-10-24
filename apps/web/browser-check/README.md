@@ -58,6 +58,16 @@ API received (auth kind, status and a marker the fixture puts on every URL it bu
 - A call made over the DevTools protocol may `eval` where a page may not, so attempts that depend on the policy run from a
   timer inside the page.
 
+## Eval-violation check (`hostile/evalViolations.ts`)
+
+The hostile fixture evals on purpose; this is the check that the code Wicker Money ships does not. `test:hostile` runs it
+last. It starts the API with the bundled plugins only (no fixture), loads the dashboard with Insights and Spending Trends in
+their frames, and fails on any `securitypolicyviolation` event with `blockedURI` `eval`, or any other CSP violation, from the
+page or any frame. It also fails when a widget's frame or chunk never loaded, and a canary (an `eval` from a timer in each
+frame) must be seen, so a broken recorder cannot read as a clean page. `EVAL_VIOLATIONS_OUT=file.json` keeps the evidence,
+with the script, line and column of each violation. The cause it was written for is zod 4's `new Function("")` probe; see
+`src/configureZod.ts`.
+
 ## Remote-origin check (`hostile/remote.ts`)
 
 `test:hostile` runs it after the hostile suite. It serves a real federated build over https from a second origin (a throwaway

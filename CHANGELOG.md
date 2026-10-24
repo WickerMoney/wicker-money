@@ -25,6 +25,16 @@ curated, human-readable version.
   response, the frame document included. The API no longer sends the header.
   Chromium still origin-keys the app's own page by default, and nothing about the
   frame's sandbox changes.
+- **No more "blocks the use of `eval`" issues for the plugin frame.** Chrome
+  DevTools listed a Content Security Policy violation for the frame's script and
+  the Spending Trends widget on every dashboard. zod makes a `new Function("")`
+  check when it builds its first object schema, the policy refuses it, and zod
+  falls back to its ordinary parser, so nothing broke. The app's page already
+  turned that check off; the frame now does too, before any plugin loads, and a
+  plugin built with its own zod 4.4 or later follows it. The policy and the
+  sandbox are unchanged, and the hostile suite still checks that `eval` and
+  `new Function` are refused. A browser check now loads the bundled widgets and
+  fails on any eval violation.
 ### Added
 
 - Settings asks an owner to confirm before switching on a plugin that is not
