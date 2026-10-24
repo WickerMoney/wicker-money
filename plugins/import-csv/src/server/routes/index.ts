@@ -1,4 +1,5 @@
 import { QueryImportUnitOfWork } from '../repository/QueryImportUnitOfWork.js'
+import { ImportGate } from '../service/ImportGate.js'
 import { ImportService } from '../service/ImportService.js'
 import { registerAnalyzeImport } from './handlers/analyzeImport.js'
 import { registerCommitImport } from './handlers/commitImport.js'
@@ -10,17 +11,21 @@ import type { ImportRouteDeps } from './helpers/ImportRouteDeps.js'
 
 export { IMPORT_API_BASE } from '../constants.js'
 export { ImportError } from '../service/ImportError.js'
+export { ImportBusyError } from '../service/ImportBusyError.js'
 export type { ImportRouteDeps } from './helpers/ImportRouteDeps.js'
 
 /**
  * Registers every CSV import endpoint through the host-supplied route registrar.
  *
- * @param deps - The host's `route` registrar, `runAsPlugin` runner, and the
- *   category rule loader and resolver used when committing an import.
+ * @param deps - The host's `route` registrar, `runAsPlugin` runner, the
+ *   category rule loader and resolver used when committing an import, and its
+ *   row and concurrency limits.
  */
 export function registerImportRoutes(deps: ImportRouteDeps): void {
   const uow = new QueryImportUnitOfWork(deps.runAsPlugin, deps.getRulesForMatching)
-  const service = new ImportService(uow, deps.resolveCategory, deps.maxRows)
+  const service = new ImportService(uow, deps.resolveCategory, deps.maxRows, {
+    commit: new ImportGate(deps.maxConcurrent, deps.queueWaitMs),
+  })
   registerListMappings(deps, service)
   registerSaveMapping(deps, service)
   registerAnalyzeImport(deps, service)
