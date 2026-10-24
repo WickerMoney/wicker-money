@@ -1,0 +1,13 @@
+# Optional override for debugging: publishes the e2e app on the loopback
+# interface so a browser on the host can open it (and so `BASE_URL=... pnpm
+# test:e2e` can run the specs from the host).
+#
+#   docker compose -f docker/docker-compose.e2e.yml -f docker/docker-compose.e2e.ports.yml up --wait --detach
+#
+# Then open http://127.0.0.1:8190 (change it with E2E_PORT). Sign in as
+# hero@seed.wickermoney.test / SeedHero!2026.
+
+services:
+  wickermoney:
+    ports:
+      - "127.0.0.1:${E2E_PORT:-8190}:8080"

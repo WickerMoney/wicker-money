@@ -1,0 +1,139 @@
+# A throwaway stack for the end-to-end tests in e2e/ (DEVELOPMENT.md, "End-to-end
+# tests"). Derived from docker-compose.preview.yml, but built to be thrown away
+# after every run:
+#
+#   - the image is whichever you name in E2E_IMAGE (a local build or a published
+#     tag); nothing here builds or pulls "latest" for you,
+#   - Postgres keeps its data on tmpfs, so `down` leaves nothing behind and the
+#     next `up` starts from an empty database,
+#   - `migrate` and `seed` are one-shot services: the seed is the compiled seed
+#     CLI that already ships in the image (dist/db/seed/seedCli.js), so the image
+#     is not changed for the tests,
+#   - no host port is published (the override file docker-compose.e2e.ports.yml
+#     adds one for debugging), so it cannot collide with a real install,
+#   - every password and the signing secret below are public test values. They
+#     are not secrets and must never be reused anywhere real. They pass the API's
+#     placeholder-credential check (NODE_ENV=production refuses `change-me`,
+#     `_dev_password`, `testpw` and the like), which the preview stack's known
+#     defaults pass in the same way.
+#
+# Run it with e2e/run.sh or e2e/run.ps1, or by hand:
+#
+#   export E2E_IMAGE=wickermoney:e2e
+#   docker compose -f docker/docker-compose.e2e.yml up --wait --detach
+#   docker compose -f docker/docker-compose.e2e.yml --profile test run --rm playwright
+#   docker compose -f docker/docker-compose.e2e.yml --profile test down --volumes
+
+name: wickermoney-e2e
+
+x-env: &db
+  DATABASE_URL: postgresql://wickermoney_app:e2e_app_pw@postgres:5432/wickermoney
+  APP_DB_PASSWORD: e2e_app_pw
+  AUTH_SECRET: e2e-only-secret-not-for-real-use-0123456789abcdef
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: wickermoney
+      POSTGRES_USER: wickermoney
+      POSTGRES_PASSWORD: e2e_owner_pw
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wickermoney -d wickermoney"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    image: ${E2E_IMAGE:?set E2E_IMAGE to the image to test, for example wickermoney:e2e}
+    pull_policy: missing
+    command: ["node", "dist/db/cli.js", "up"]
+    environment:
+      <<: *db
+      DATABASE_OWNER_URL: postgresql://wickermoney:e2e_owner_pw@postgres:5432/wickermoney
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # The seed CLI compiled into the image: the four documented personas
+  # (hero, second, household, fresh; apps/api/src/db/seed/seedPersonas.ts).
+  # Dates are anchored to the day it runs, so the specs assert relatively.
+  seed:
+    image: ${E2E_IMAGE:?set E2E_IMAGE to the image to test, for example wickermoney:e2e}
+    pull_policy: missing
+    command: ["node", "dist/db/seed/seedCli.js"]
+    environment:
+      <<: *db
+      DATABASE_OWNER_URL: postgresql://wickermoney:e2e_owner_pw@postgres:5432/wickermoney
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  wickermoney:
+    image: ${E2E_IMAGE:?set E2E_IMAGE to the image to test, for example wickermoney:e2e}
+    pull_policy: missing
+    environment:
+      <<: *db
+      NODE_ENV: production
+      # Plain HTTP between the browser container and the app.
+      COOKIE_SECURE: "false"
+      LOG_LEVEL: warn
+      # The defaults (10 sign-in or refresh requests a minute per address, 5 per
+      # email) are for the internet; one browser container signing in for every
+      # spec from one address would trip them. Raised for this throwaway stack
+      # only. The limits themselves are not under test here.
+      AUTH_RATE_LIMIT_MAX: "1000"
+      AUTH_EMAIL_RATE_LIMIT_MAX: "1000"
+    healthcheck:
+      # /healthz does not touch the database; the image's own check, run often
+      # enough for `up --wait` to return quickly.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 2s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+
+  # The browser. Only started by `--profile test`, so a plain `up` is just the
+  # app. The tag must match the @playwright/test version pinned in
+  # e2e/package.json (run.sh and run.ps1 read it from there); the image brings
+  # the matching Chromium, the package is installed from npm at start.
+  playwright:
+    profiles: ["test"]
+    image: mcr.microsoft.com/playwright:v${E2E_PLAYWRIGHT_VERSION:-1.64.1}-noble
+    working_dir: /work
+    init: true
+    ipc: host
+    environment:
+      BASE_URL: http://wickermoney:8080
+      CI: "1"
+      PW_NO_SANDBOX: "1"
+      PW_OUTPUT_DIR: /reports
+      # Extra arguments for `playwright test`, for example a spec file.
+      E2E_ARGS: ${E2E_ARGS:-}
+    volumes:
+      - ../e2e:/e2e-src:ro
+      - ../e2e/reports:/reports
+    command:
+      - bash
+      - -ec
+      - |
+        mkdir -p /work
+        # Only the sources: the host's node_modules (pnpm links, possibly from
+        # Windows) must not come along.
+        cd /e2e-src
+        cp -r package.json tsconfig.json playwright.config.ts tests fixtures /work/
+        cd /work
+        npm install --no-audit --no-fund --no-package-lock --loglevel=error
+        npx playwright test $$E2E_ARGS
+    depends_on:
+      wickermoney:
+        condition: service_healthy
