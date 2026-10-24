@@ -9,6 +9,19 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Plugin widgets in `pnpm dev`.** Insights and Spending Trends showed "The
+  plugin did not start in time" in development, with CORS errors in the console
+  for `/@vite/client` and the frame's other modules. Vite was answering
+  `/plugin-frame` with its own HTML and no policy, and a sandboxed frame's
+  opaque origin cannot load Vite's modules. The dev server now proxies the frame
+  (`/plugin-frame`, `/assets` and a frame's `/plugins` requests) to the API, so
+  the frame has the same policy, sandbox and CORS headers as in production. This
+  needs a built web app and `WEB_DIST_DIR` set for the API in development; the
+  console names the cause when a frame still fails to start. Nothing changes in
+  production, and the frame's policy and sandbox are untouched.
+
 ## [0.6.1] - 2026-10-23
 
 A small patch: an owner is asked before a third-party plugin is switched on, the
