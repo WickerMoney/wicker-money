@@ -9,6 +9,12 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Fixed
+
+- The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as
+  ignored in favour of `frame-ancestors` once per framed widget; every other
+  response keeps it.
+
 ## [0.6.1] - 2026-10-23
 
 A small patch: an owner is asked before a third-party plugin is switched on, the
