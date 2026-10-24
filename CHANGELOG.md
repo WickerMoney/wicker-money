@@ -14,6 +14,23 @@ curated, human-readable version.
 - The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as
   ignored in favour of `frame-ancestors` once per framed widget; every other
   response keeps it.
+- **Plugin widgets in `pnpm dev`.** Insights and Spending Trends showed "The
+  plugin did not start in time" in development, with CORS errors in the console
+  for `/@vite/client` and the frame's other modules. Vite was answering
+  `/plugin-frame` with its own HTML and no policy, and a sandboxed frame's
+  opaque origin cannot load Vite's modules. The dev server now proxies the frame
+  (`/plugin-frame`, `/assets` and a frame's `/plugins` requests) to the API, so
+  the frame has the same policy, sandbox and CORS headers as in production. This
+  needs a built web app and `WEB_DIST_DIR` set for the API in development; the
+  console names the cause when a frame still fails to start. Nothing changes in
+  production, and the frame's policy and sandbox are untouched.
+- **`pnpm dev` failing on Windows with `EPERM` in a plugin's `dev` script.** Each
+  bundled plugin's `build` and `dev` tasks ran at the same time and both wrote
+  `apps/web/public/plugins/<id>`, and the `dev` script starts by deleting that
+  folder. Windows refuses to delete a folder another process is writing into, so
+  Insights, Spending Trends and others failed on some runs and not others. A
+  plugin's `dev` now waits for its own `build` (a `turbo.json` in each plugin),
+  and the delete retries a few times.
 
 ## [0.6.1] - 2026-10-23
 

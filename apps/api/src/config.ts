@@ -181,8 +181,11 @@ const schema = z.object({
   /**
    * Directory holding the built web app (`apps/web/dist`). When set, the API
    * serves the UI and the plugin remotes itself, on the same origin as `/api`.
-   * Unset in development, where Vite serves the UI and proxies `/api` here; the
-   * container image sets it. A blank value counts as unset.
+   * In development Vite serves the UI and proxies `/api` here, so it is unset
+   * unless a sandboxed plugin frame is needed: Vite also proxies `/plugin-frame`,
+   * `/assets` and a frame's `/plugins` requests here, and the API can only answer
+   * them from a built `apps/web/dist` (DEVELOPMENT.md, "Isolated plugin frames").
+   * The container image sets it. A blank value counts as unset.
    */
   WEB_DIST_DIR: z
     .string()

@@ -136,6 +136,34 @@ describe('FrameController handshake', () => {
     s.controller.dispose()
   })
 
+  it('logs a development hint that names the cause when the frame never connects', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 404 })))
+    const s = setup('widget', { loadTimeoutMs: 1000 })
+    await vi.advanceTimersByTimeAsync(1001)
+    expect(s.states.at(-1)).toMatchObject({ status: 'failed' })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('WEB_DIST_DIR'))
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    warn.mockRestore()
+    s.controller.dispose()
+  })
+
+  it('logs no hint when the frame connects in time', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const s = setup('widget', { loadTimeoutMs: 40 })
+    const port = connect(s)
+    port.postMessage({ type: 'ready', protocol: 1 })
+    await tick()
+    await new Promise((resolve) => { setTimeout(resolve, 80) })
+    expect(s.states.at(-1)).toEqual({ status: 'ready' })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+    s.controller.dispose()
+  })
+
   it('stops listening after dispose', () => {
     const s = setup()
     s.controller.dispose()
