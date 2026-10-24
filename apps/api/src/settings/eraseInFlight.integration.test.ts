@@ -170,44 +170,44 @@ async function userWithAccount(): Promise<{ user: TestUser; accountId: string }>
 }
 
 describe('erase my data with a write open at the moment of the erase', () => {
-  it('does not wait for an open insert of a row with no parent: the row is committed after the erase and survives', async () => {
+  it('waits for an open insert of a row with no parent, then removes it too', async () => {
     const user = await createUser(h)
     const write = await holdWrite('core.accounts', 'AFTER', 'name', 'open-account', createAccount(user, 'open-account'))
     try {
-      await write.paused
-      // Not committed yet: the erase cannot see the row, and nothing it does conflicts with the open insert.
+      const writer = await write.paused
+      // Not committed yet, so a plain delete cannot see the row. The erase has to queue behind the writer instead.
       expect(await ledgerRows(user)).toEqual({ accounts: 0, transactions: 0 })
-      expect((await eraseMyData(user)).statusCode).toBe(204)
-      expect((await me(user)).statusCode).toBe(401)
+      const erasing = eraseMyData(user)
+      erasing.catch(() => undefined)
+      await waitUntilBlockedBy(writer)
 
       await write.release()
       expect((await write.response).statusCode).toBe(201)
+      expect((await erasing).statusCode).toBe(204)
     } finally {
       await write.drop()
     }
-    // A row for a user who was signed out before it was committed.
-    expect(await ledgerRows(user)).toEqual({ accounts: 1, transactions: 0 })
+    expect(await ledgerRows(user)).toEqual({ accounts: 0, transactions: 0 })
+    expect((await me(user)).statusCode).toBe(401)
   })
 
-  it('fails, and deletes nothing, when the open insert points at an account the erase wants to delete', async () => {
+  it('waits for an open insert of a row that points at an account, then removes both', async () => {
     const { user, accountId } = await userWithAccount()
     const write = await holdWrite('core.transactions', 'AFTER', 'merchant', 'open-payment', createTransaction(user, accountId, 'open-payment'))
     try {
       const writer = await write.paused
       const erasing = eraseMyData(user)
       erasing.catch(() => undefined)
-      // The erase gets as far as deleting the account, which the open insert holds a lock on.
       await waitUntilBlockedBy(writer)
 
       await write.release()
       expect((await write.response).statusCode).toBe(201)
-      // The account cannot go while the new transaction points at it (ON DELETE RESTRICT), so the erase rolls back.
-      expect((await erasing).statusCode).toBe(500)
+      // Without the lock this was a 500: the account could not go while the new transaction pointed at it.
+      expect((await erasing).statusCode).toBe(204)
     } finally {
       await write.drop()
     }
-    expect(await ledgerRows(user)).toEqual({ accounts: 1, transactions: 1 })
-    expect((await me(user)).statusCode).toBe(200)
+    expect(await ledgerRows(user)).toEqual({ accounts: 0, transactions: 0 })
   })
 })
 
