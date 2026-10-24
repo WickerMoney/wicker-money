@@ -6,6 +6,7 @@ import {
 import type { ResponseCache } from '../../api/responseCache.js'
 import { PluginBroker, type BrokerOptions } from './broker.js'
 import type { BrokerApi } from './brokerApi.js'
+import { diagnoseFrameTimeout } from './devFrameHint.js'
 import { readHostLocale, readHostTheme } from './hostTheme.js'
 
 /** The heights a frame may take, in CSS pixels, by kind. The frame asks; the host clamps. */
@@ -119,7 +120,13 @@ export class FrameController {
     this.win.addEventListener('message', onMessage)
     this.cleanups.push(() => { this.win.removeEventListener('message', onMessage) })
 
-    this.timer = setTimeout(() => { this.fail('The plugin did not start in time.') }, options.loadTimeoutMs ?? DEFAULT_LOAD_TIMEOUT_MS)
+    this.timer = setTimeout(() => {
+      // Dead code in a production build (Vite replaces `import.meta.env.DEV` with `false`).
+      if (import.meta.env.DEV && !this.failed && !this.disposed) {
+        void diagnoseFrameTimeout().then((hint) => { console.warn(`[wicker-money] ${hint}`) })
+      }
+      this.fail('The plugin did not start in time.')
+    }, options.loadTimeoutMs ?? DEFAULT_LOAD_TIMEOUT_MS)
     options.events.onState({ status: 'loading' })
     this.watchTheme()
     this.watchLocale()
