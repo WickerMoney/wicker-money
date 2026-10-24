@@ -16,6 +16,7 @@ import { DEFAULT_FLAGGED_LIMIT } from './DEFAULT_FLAGGED_LIMIT.js'
 import type { CommitInput } from './CommitInput.js'
 import type { CommitResult } from './CommitResult.js'
 import { ImportError } from './ImportError.js'
+import type { ImportGates } from './ImportGates.js'
 import { mapFile } from './mapFile.js'
 import { pageOfFlagged } from './pageOfFlagged.js'
 import { MAX_ROW_ERRORS_SHOWN } from './MAX_ROW_ERRORS_SHOWN.js'
@@ -38,11 +39,15 @@ export class ImportService {
    * @param uow - Opens the per-request transaction and hands out repositories.
    * @param resolveCategory - The host's category rule engine.
    * @param maxRows - The most data rows one import may contain (the host's `IMPORT_MAX_ROWS`).
+   * @param gates - Caps on how many analyses and commits run at once. A request
+   *   takes its turn before it parses the file or opens a transaction, so one
+   *   that waits holds no pooled connection. Unlimited when omitted.
    */
   constructor(
     private readonly uow: ImportUnitOfWork,
     private readonly resolveCategory: CategoryResolver,
     private readonly maxRows: number,
+    private readonly gates: ImportGates = {},
   ) {}
 
   /**
@@ -87,6 +92,12 @@ export class ImportService {
     input: AnalyzeInput,
     page: AnalyzePage = { offset: 0, limit: DEFAULT_FLAGGED_LIMIT },
   ): Promise<AnalyzeResult> {
+    const gate = this.gates.analyze
+    return gate === undefined ? this.analyzeNow(userId, input, page) : gate.run(() => this.analyzeNow(userId, input, page))
+  }
+
+  /** {@link analyze}, once it has its turn. */
+  private analyzeNow(userId: string, input: AnalyzeInput, page: AnalyzePage): Promise<AnalyzeResult> {
     const { rows, errors } = mapFile(input.csv, input.mapping, this.maxRows)
     return this.uow.run(userId, async (repos) => {
       await requireVisibleAccount(repos.accounts, input.accountId)
@@ -129,8 +140,16 @@ export class ImportService {
    * @returns The batch id and the counters.
    * @throws {ImportError} `400` when the file has too many rows; `404` when the
    *   account is not visible; `500` when the batch row cannot be created.
+   * @throws {ImportBusyError} `503` when the process is already running its
+   *   limit of imports and this one waited too long for a turn. Nothing was written.
    */
-  async commit(userId: string, input: CommitInput): Promise<CommitResult> {
+  commit(userId: string, input: CommitInput): Promise<CommitResult> {
+    const gate = this.gates.commit
+    return gate === undefined ? this.commitNow(userId, input) : gate.run(() => this.commitNow(userId, input))
+  }
+
+  /** {@link commit}, once it has its turn. */
+  private async commitNow(userId: string, input: CommitInput): Promise<CommitResult> {
     const { rows, errors } = mapFile(input.csv, input.mapping, this.maxRows)
     const key = input.idempotencyKey
 

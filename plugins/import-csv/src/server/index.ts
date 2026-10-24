@@ -16,7 +16,7 @@
  * transaction, so PostgreSQL itself refuses a query against a table the plugin
  * never requested.
  */
-export { registerImportRoutes, ImportError } from './routes/index.js'
+export { registerImportRoutes, ImportError, ImportBusyError } from './routes/index.js'
 export type { ImportRouteDeps } from './routes/index.js'
 export { IMPORT_PLUGIN_ID } from './constants.js'
 export { exportImportData } from './export.js'

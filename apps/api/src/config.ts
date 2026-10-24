@@ -109,6 +109,36 @@ const schema = z.object({
    */
   IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(1_000_000).default(100_000),
 
+  // ── Concurrent imports (one self-contained block) ──────────────────────────
+  /**
+   * CSV imports this API process commits at once. A commit holds one pooled
+   * database connection for its whole length (about 150 microseconds a row), so
+   * a few large files at once would take every connection and leave the rest of
+   * the app waiting for one. An import over the limit waits for its turn without
+   * holding a connection, and is refused with `503 import_busy` if it waits
+   * longer than `IMPORT_QUEUE_WAIT_SECONDS`.
+   *
+   * Unset, it is half the pool (`DB_POOL_MAX` / 2, at least 1), which leaves
+   * the other half for everything else. A value at or above `DB_POOL_MAX`
+   * switches the protection off, since the pool then limits imports first. The
+   * limit is per process: each API instance you run has its own.
+   */
+  IMPORT_MAX_CONCURRENT: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(1).max(1_000).optional(),
+  ),
+  /**
+   * The longest an import waits for its turn (see `IMPORT_MAX_CONCURRENT`), in
+   * seconds, before it is refused with `503 import_busy` and a `Retry-After`
+   * header. `0` refuses at once when every slot is busy. The default leaves a
+   * wait plus a 100,000-row commit (about 17 seconds) under a 60 second proxy
+   * timeout.
+   */
+  IMPORT_QUEUE_WAIT_SECONDS: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().min(0).max(600).default(30),
+  ),
+
   /**
    * Whether the refresh cookie carries the `Secure` attribute. Defaults to
    * `true` in production. Set to `false` only for plain-HTTP local use.
@@ -206,7 +236,11 @@ const schema = z.object({
 }).refine((c) => c.DB_LONG_STATEMENT_TIMEOUT >= c.DB_STATEMENT_TIMEOUT, {
   path: ['DB_LONG_STATEMENT_TIMEOUT'],
   message: 'DB_LONG_STATEMENT_TIMEOUT must not be lower than DB_STATEMENT_TIMEOUT',
-})
+}).transform((c) => ({
+  ...c,
+  // Derived from the pool, so it is known only once both values are.
+  IMPORT_MAX_CONCURRENT: c.IMPORT_MAX_CONCURRENT ?? Math.max(1, Math.floor(c.DB_POOL_MAX / 2)),
+}))
 
 /** Validated application configuration, with defaults applied. */
 export type Config = z.infer<typeof schema>

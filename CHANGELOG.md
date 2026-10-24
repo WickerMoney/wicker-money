@@ -9,6 +9,21 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **A limit on concurrent CSV imports.** Each commit holds a database connection
+  for its whole length, so a few large files at once could take every
+  connection and make the rest of the app fail waiting for one (ten people
+  committing 50,000 rows each, on a pool of 10: most other requests failed for
+  about 40 seconds; with the limit, none did). The API now commits at most
+  `IMPORT_MAX_CONCURRENT` imports at once per process (default: half of
+  `DB_POOL_MAX`); another waits its turn without holding a connection, for up to
+  `IMPORT_QUEUE_WAIT_SECONDS` (default 30), and is then refused with `503`
+  `import_busy` and a `Retry-After` header; nothing is imported and the page
+  shows the message, and sending the same file again imports it once. One person
+  importing alone is not slowed. See `DEVELOPMENT.md`, "Pool, timeouts and import
+  limits".
+
 ### Fixed
 
 - The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as
