@@ -26,6 +26,13 @@ curated, human-readable version.
 
 ### Fixed
 
+- **Erase my data and a write in flight.** A write that was open when the erase
+  started was invisible to it and committed afterwards, leaving a row for the
+  signed-out user (or, for a row pointing at an account, failing the erase with
+  a 500). The erase now locks the account row first and waits for open writes.
+  A request that had already passed its session check and writes after the erase
+  can still leave one row; the next erase removes it, and the limit is
+  documented in `DEVELOPMENT.md`.
 - The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as
   ignored in favour of `frame-ancestors` once per framed widget; every other
   response keeps it.
