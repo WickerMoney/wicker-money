@@ -9,7 +9,7 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-## [0.6.1] - unreleased
+## [0.6.1] - 2026-10-23
 
 A small patch: an owner is asked before a third-party plugin is switched on, the
 Transactions table fits narrower windows, the browser console and DevTools
