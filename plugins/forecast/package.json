@@ -17,7 +17,7 @@
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "dev": "node -e \"require('node:fs').rmSync('../../apps/web/public/plugins/forecast',{recursive:true,force:true})\" && vite build --watch"
+    "dev": "node -e \"require('node:fs').rmSync('../../apps/web/public/plugins/forecast',{recursive:true,force:true,maxRetries:5,retryDelay:200})\" && vite build --watch"
   },
   "dependencies": {
     "@wickermoney/plugin-sdk": "workspace:*",

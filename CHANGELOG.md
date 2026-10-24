@@ -21,6 +21,13 @@ curated, human-readable version.
   needs a built web app and `WEB_DIST_DIR` set for the API in development; the
   console names the cause when a frame still fails to start. Nothing changes in
   production, and the frame's policy and sandbox are untouched.
+- **`pnpm dev` failing on Windows with `EPERM` in a plugin's `dev` script.** Each
+  bundled plugin's `build` and `dev` tasks ran at the same time and both wrote
+  `apps/web/public/plugins/<id>`, and the `dev` script starts by deleting that
+  folder. Windows refuses to delete a folder another process is writing into, so
+  Insights, Spending Trends and others failed on some runs and not others. A
+  plugin's `dev` now waits for its own `build` (a `turbo.json` in each plugin),
+  and the delete retries a few times.
 
 ## [0.6.1] - 2026-10-23
 
