@@ -40,8 +40,12 @@ function toAppError(error: unknown): unknown {
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string'
   ) {
-    const e = error as Error & { statusCode: number; code: string; issues?: unknown }
-    return new AppError(e.message, e.statusCode, e.code, readIssues(e.issues))
+    const e = error as Error & { statusCode: number; code: string; issues?: unknown; retryAfterSeconds?: unknown }
+    const retry = e.retryAfterSeconds
+    return new AppError(
+      e.message, e.statusCode, e.code, readIssues(e.issues),
+      typeof retry === 'number' && Number.isInteger(retry) && retry > 0 ? retry : undefined,
+    )
   }
   return error
 }
@@ -112,13 +116,20 @@ function readIssues(value: unknown): readonly ValidationIssue[] | undefined {
  * @param plugins - The plugin registry, consulted on every request.
  * @param limits - Host limits for plugin routes. `longStatementTimeoutMillis`
  *   is the statement limit for a route registered with `longRunning`; other
- *   routes keep the pool's default. `importMaxRows` is the CSV import's row cap.
+ *   routes keep the pool's default. `importMaxRows` is the CSV import's row cap;
+ *   `importMaxConcurrent` and `importQueueWaitMillis` bound how many commits run
+ *   at once and how long another waits for its turn.
  */
 export function registerBundledPluginServers(
   app: FastifyInstance,
   db: Db,
   plugins: PluginService,
-  limits: { readonly longStatementTimeoutMillis: number; readonly importMaxRows: number },
+  limits: {
+    readonly longStatementTimeoutMillis: number
+    readonly importMaxRows: number
+    readonly importMaxConcurrent: number
+    readonly importQueueWaitMillis: number
+  },
 ): void {
   // The statement limit of the route now running. A plugin's `runAsPlugin` is
   // handed over once, at registration, and cannot know which route calls it, so
@@ -201,7 +212,14 @@ export function registerBundledPluginServers(
     })
   }
 
-  mount(IMPORT_PLUGIN_ID, (deps) => registerImportRoutes({ ...deps, maxRows: limits.importMaxRows }))
+  mount(IMPORT_PLUGIN_ID, (deps) =>
+    registerImportRoutes({
+      ...deps,
+      maxRows: limits.importMaxRows,
+      maxConcurrent: limits.importMaxConcurrent,
+      queueWaitMs: limits.importQueueWaitMillis,
+    }),
+  )
   // Budgets needs no injected core behaviour — it reads the ledger and derives
   // its own figures — so it destructures only the two deps it uses. A plugin
   // taking less than it is offered is the shape to encourage.

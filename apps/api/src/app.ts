@@ -112,6 +112,7 @@ export function buildApp({ db, config, logStream, pluginOptions }: AppDeps): Fas
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
+      if (error.retryAfterSeconds !== undefined) void reply.header('retry-after', String(error.retryAfterSeconds))
       return reply.code(error.statusCode).send({
         code: error.code,
         message: error.message,
@@ -179,6 +180,8 @@ export function buildApp({ db, config, logStream, pluginOptions }: AppDeps): Fas
     registerBundledPluginServers(app, db, services.plugins, {
       longStatementTimeoutMillis: config.DB_LONG_STATEMENT_TIMEOUT,
       importMaxRows: config.IMPORT_MAX_ROWS,
+      importMaxConcurrent: config.IMPORT_MAX_CONCURRENT,
+      importQueueWaitMillis: config.IMPORT_QUEUE_WAIT_SECONDS * 1000,
     })
     registerCoreDataRoutes(app, services)
     registerSettingsRoutes(app, services)

@@ -20,9 +20,31 @@ curated, human-readable version.
   starts when the frame is created and stops while the tab is hidden, so a tab in
   the background no longer fails a widget. Find-in-page and printing only see
   frames that have started.
+  
+### Added
+
+- **A limit on concurrent CSV imports.** Each commit holds a database connection
+  for its whole length, so a few large files at once could take every
+  connection and make the rest of the app fail waiting for one (ten people
+  committing 50,000 rows each, on a pool of 10: most other requests failed for
+  about 40 seconds; with the limit, none did). The API now commits at most
+  `IMPORT_MAX_CONCURRENT` imports at once per process (default: half of
+  `DB_POOL_MAX`); another waits its turn without holding a connection, for up to
+  `IMPORT_QUEUE_WAIT_SECONDS` (default 30), and is then refused with `503`
+  `import_busy` and a `Retry-After` header; nothing is imported and the page
+  shows the message, and sending the same file again imports it once. One person
+  importing alone is not slowed. See `DEVELOPMENT.md`, "Pool, timeouts and import
+  limits".
 
 ### Fixed
 
+- **Erase my data and a write in flight.** A write that was open when the erase
+  started was invisible to it and committed afterwards, leaving a row for the
+  signed-out user (or, for a row pointing at an account, failing the erase with
+  a 500). The erase now locks the account row first and waits for open writes.
+  A request that had already passed its session check and writes after the erase
+  can still leave one row; the next erase removes it, and the limit is
+  documented in `DEVELOPMENT.md`.
 - The plugin frame no longer sends `X-Frame-Options`, which Firefox logged as
   ignored in favour of `frame-ancestors` once per framed widget; every other
   response keeps it.
