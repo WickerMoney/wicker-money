@@ -37,6 +37,8 @@ describe('defaults', () => {
       DB_STATEMENT_TIMEOUT: 30_000,
       DB_LONG_STATEMENT_TIMEOUT: 300_000,
       IMPORT_MAX_ROWS: 100_000,
+      IMPORT_MAX_CONCURRENT: 5,
+      IMPORT_QUEUE_WAIT_SECONDS: 30,
     })
     expect(config.COOKIE_SECURE).toBeUndefined()
     expect(config.BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
@@ -332,5 +334,40 @@ describe('WEB_DIST_DIR', () => {
 
   it('trims surrounding whitespace', () => {
     expect(loadConfig(env({ WEB_DIST_DIR: '  /app/web  ' })).WEB_DIST_DIR).toBe('/app/web')
+  })
+})
+
+describe('IMPORT_MAX_CONCURRENT', () => {
+  it('defaults to half the pool, and at least one', () => {
+    expect(loadConfig(env()).IMPORT_MAX_CONCURRENT).toBe(5)
+    expect(loadConfig(env({ DB_POOL_MAX: '20' })).IMPORT_MAX_CONCURRENT).toBe(10)
+    expect(loadConfig(env({ DB_POOL_MAX: '7' })).IMPORT_MAX_CONCURRENT).toBe(3)
+    expect(loadConfig(env({ DB_POOL_MAX: '2' })).IMPORT_MAX_CONCURRENT).toBe(1)
+  })
+
+  it('takes a blank value as unset, as a compose file passes it', () => {
+    expect(loadConfig(env({ IMPORT_MAX_CONCURRENT: '' })).IMPORT_MAX_CONCURRENT).toBe(5)
+    expect(loadConfig(env({ IMPORT_MAX_CONCURRENT: '  ' })).IMPORT_MAX_CONCURRENT).toBe(5)
+  })
+
+  it('accepts a whole number from 1 to 1000, including one above the pool', () => {
+    expect(loadConfig(env({ IMPORT_MAX_CONCURRENT: '1' })).IMPORT_MAX_CONCURRENT).toBe(1)
+    expect(loadConfig(env({ IMPORT_MAX_CONCURRENT: '40' })).IMPORT_MAX_CONCURRENT).toBe(40)
+  })
+
+  it.each(['0', '-1', '1001', '1.5', 'many'])('rejects %j', (value) => {
+    expect(failure({ IMPORT_MAX_CONCURRENT: value })).toContain('IMPORT_MAX_CONCURRENT')
+  })
+})
+
+describe('IMPORT_QUEUE_WAIT_SECONDS', () => {
+  it('accepts 0 (refuse at once) up to 600', () => {
+    expect(loadConfig(env({ IMPORT_QUEUE_WAIT_SECONDS: '0' })).IMPORT_QUEUE_WAIT_SECONDS).toBe(0)
+    expect(loadConfig(env({ IMPORT_QUEUE_WAIT_SECONDS: '600' })).IMPORT_QUEUE_WAIT_SECONDS).toBe(600)
+    expect(loadConfig(env({ IMPORT_QUEUE_WAIT_SECONDS: '' })).IMPORT_QUEUE_WAIT_SECONDS).toBe(30)
+  })
+
+  it.each(['-1', '601', '2.5', 'long'])('rejects %j', (value) => {
+    expect(failure({ IMPORT_QUEUE_WAIT_SECONDS: value })).toContain('IMPORT_QUEUE_WAIT_SECONDS')
   })
 })

@@ -73,7 +73,7 @@ type Body = Record<string, unknown>
 const ACCOUNTS = [{ id: '00000000-0000-4000-8000-000000000001', name: 'Checking' }]
 
 /** A context whose `post` records commit bodies and fails them as told. */
-function commitContext(failures: number) {
+function commitContext(failures: number, failure = 'network down') {
   let remaining = failures
   const commits: Body[] = []
   const post = vi.fn(async (path: string, body: Body) => {
@@ -82,7 +82,7 @@ function commitContext(failures: number) {
       commits.push(body)
       if (remaining > 0) {
         remaining -= 1
-        throw new Error('network down')
+        throw new Error(failure)
       }
       return { imported: 2, skipped: 0, flagged: 0, failed: 0 }
     }
@@ -204,6 +204,22 @@ describe('useImportFlow errors', () => {
     await act(async () => { await result.current.analyze() })
 
     expect(result.current.errors).toEqual({ fields: { 'columns.merchant': 'Choose the description column.' }, form: null })
+  })
+
+  it('shows the server\'s "other imports are running" sentence by the button, keeps the review, and retries with the same key', async () => {
+    const busy = 'Other imports are still running and yours has not started after 30 seconds. Nothing was imported. Try again in about 30 seconds.'
+    const { ctx, commits } = commitContext(1, busy)
+    const { result } = await reviewedFlow(ctx)
+
+    await act(async () => { await result.current.commit() })
+
+    expect(result.current.errors).toEqual({ fields: {}, form: busy })
+    expect(result.current.stage).toBe('review')
+    expect(result.current.busy).toBe(false)
+
+    await act(async () => { await result.current.commit() })
+    expect(commits[1]?.['idempotencyKey']).toBe(commits[0]?.['idempotencyKey'])
+    expect(result.current.stage).toBe('done')
   })
 
   it('names a file with no header row under the file input', async () => {

@@ -85,6 +85,11 @@ services:
       - DB_LONG_STATEMENT_TIMEOUT=${DB_LONG_STATEMENT_TIMEOUT:-300000}
       # Most data rows one CSV import may contain; see .env.example.
       - IMPORT_MAX_ROWS=${IMPORT_MAX_ROWS:-100000}
+      # CSV imports committed at once per API process (blank: half of
+      # DB_POOL_MAX) and how long another waits for its turn, in seconds,
+      # before it is refused with "try again"; see .env.example.
+      - IMPORT_MAX_CONCURRENT=${IMPORT_MAX_CONCURRENT:-}
+      - IMPORT_QUEUE_WAIT_SECONDS=${IMPORT_QUEUE_WAIT_SECONDS:-30}
     networks:
       - wickermoney_default
     volumes:

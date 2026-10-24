@@ -8,6 +8,19 @@ import type { InstanceActivity } from './InstanceActivity.js'
  */
 export interface EraseRepository {
   /**
+   * Locks the user's account row (`SELECT ... FOR UPDATE`) until the transaction ends.
+   *
+   * Every row a user owns points at that account row, and inserting one takes
+   * a shared lock on it for the length of the writer's transaction. Taking the
+   * stronger lock first therefore waits for any write that is open now, and
+   * the deletes that follow see what it committed. Without it an open insert
+   * is invisible to the erase and is committed after it.
+   *
+   * @param userId - The current user.
+   */
+  lockUser(userId: string): Promise<void>
+
+  /**
    * @returns Every `schema.table` in `core` or a `plugin_` schema that has a
    *   `user_id` column, read from the catalog, sorted.
    */

@@ -26,12 +26,15 @@ export class AppError extends Error {
    * @param statusCode - HTTP status to respond with.
    * @param code - Stable machine-readable error code.
    * @param issues - Field-level detail, sent as `issues` when present.
+   * @param retryAfterSeconds - Sent as the `Retry-After` header when present, for
+   *   a refusal that is worth repeating later (`429`, `503`).
    */
   constructor(
     override readonly message: string,
     readonly statusCode: number,
     readonly code: string,
     readonly issues?: readonly ValidationIssue[],
+    readonly retryAfterSeconds?: number,
   ) {
     super(message)
     this.name = new.target.name
