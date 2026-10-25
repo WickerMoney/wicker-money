@@ -123,3 +123,35 @@ body:has(.wm-dialog[open]) { overflow: hidden; }
 @media (max-width: 560px) {
   .wm-dialog { width: 100vw; border-left: 0; }
 }
+
+/* Toast: an in-flow banner that sticks under whatever is fixed to the top.
+   The shell sets --wm-toast-offset-top to the bottom edge of the phone bar. */
+.wm-toast-viewport {
+  position: sticky; top: var(--wm-toast-offset-top, 0px); z-index: 15;
+  display: flex; flex-direction: column; gap: var(--wm-gap-sm); margin-bottom: 12px;
+}
+.wm-toast {
+  --wm-toast-kind: var(--wm-accent);
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 6px 10px 12px; font-size: 13px;
+  background: var(--wm-surface); color: var(--wm-text);
+  border: 1px solid var(--wm-border); border-left: 4px solid var(--wm-toast-kind);
+  border-radius: var(--wm-radius-sm); box-shadow: var(--wm-shadow-raised);
+  animation: wm-toast-in 150ms ease-out;
+}
+.wm-toast--success { --wm-toast-kind: var(--wm-positive); }
+.wm-toast--warning { --wm-toast-kind: var(--wm-warning); }
+.wm-toast--error { --wm-toast-kind: var(--wm-negative); }
+.wm-toast__icon {
+  flex: none; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 1px;
+  font-size: 12px; font-weight: 700; line-height: 1; color: var(--wm-toast-kind);
+  border: 1.5px solid var(--wm-toast-kind); border-radius: 50%;
+}
+.wm-toast__text { flex: 1 1 auto; min-width: 0; margin: 0; padding-top: 2px; overflow-wrap: anywhere; }
+.wm-toast__close { flex: none; min-width: 32px; height: 32px; padding: 0; border-color: transparent; background: transparent; color: var(--wm-accent); font-size: 18px; line-height: 1; }
+.wm-toast__close:hover:not(:disabled) { background: var(--wm-surface-alt); }
+.wm-toast-viewport__all { display: flex; justify-content: flex-end; }
+.wm-toast-viewport__all .wm-btn { background: var(--wm-surface); color: var(--wm-accent); box-shadow: var(--wm-shadow-raised); }
+@keyframes wm-toast-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wm-toast { animation: none; } }
+@media (max-width: 560px) { .wm-toast__close { min-width: 40px; height: 40px; } }

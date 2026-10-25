@@ -14,6 +14,12 @@ tests use), a Chromium (`CHROMIUM_PATH`, default `/opt/pw-browsers/chromium`) an
 It does not download a browser. Set `BROWSER_CHECK_OUT=file.json` to keep the
 report, including the frame-per-widget measurements.
 
+Widget frames start when their card nears the viewport (`DEVELOPMENT.md`, "Isolated plugin frames"), so a check
+that needs every frame at load must put every card in view. Here the fixture's widgets are the first cards on the
+page and `evalViolations.ts` uses a 4000 px tall window; a check that fails to find a frame is a layout change, not
+a flake. The `per-widget n=6` timing waits for all six frames, so it now includes the 2.5 s the host holds frames that
+are only near the viewport at load. `lazyFrames.ts` checks the lazy start itself and measures it.
+
 It is not part of `pnpm test`: CI has no browser, and the timing numbers vary
 by machine. The fixture is not a plugin to copy.
 
@@ -41,6 +47,36 @@ runtime, `SAMPLES=n` sets the number of timing samples, `INSIGHTS_WIDGETS=1` kee
 only the first widget (to price the second frame), `SHOTS_DIR` keeps screenshots.
 `AXE_PATH` is not a dependency of the repo; install `axe-core` anywhere and point
 at its `axe.min.js`.
+
+## Toast check
+
+`toast.ts` checks the notification toast (ADR 0009) with no API or database: it
+builds `toast-harness/` (the real `AppShell`, `app.css` and ui-kit, a stand-in
+account menu and a long Transactions-like page) and drives Chromium over it at
+desktop, 414 px and 360 px, light and dark.
+
+```
+AXE_PATH=/path/to/axe.min.js pnpm --filter @wickermoney/web test:toast
+```
+
+It runs axe with toasts of every kind showing, with the phone drawer open and
+with a dialog open, and checks that the banner is the first child of `<main>`, is
+in the flow, sticks under the phone bar and covers nothing at the top, that a
+toast raised during a dialog is held until it closes, that `show()` leaves focus
+alone and Escape gives it back, and that reduced motion removes the animation.
+`SHOTS_DIR` keeps screenshots and `BROWSER_CHECK_OUT` the report. `AXE_PATH` is
+not a dependency of the repo (see the Insights check).
+
+## Lazy frames (`lazyFrames.ts`)
+
+`MODE=check` (default) drives the seeded dashboard (as for the Insights check) and verifies that a frame below the
+fold has no iframe at load and a placeholder in its place, that the placeholder is not a live region and Tab never
+rests on it, that scrolling to the bottom starts every frame and scrolling back keeps them, and that a tall window or
+a browser without `IntersectionObserver` starts every frame at load. `MODE=measure` alternates two builds
+(`WEB_DIST_DIR_BEFORE`, `WEB_DIST_DIR_AFTER`) and prints the median of `SAMPLES` runs: time to the first widget, time
+to the widgets in the first screen, iframes and browser memory (proportional set size of the browser's process tree)
+at load and after scrolling to the bottom. `VIEWPORT=390x844` runs it at phone size. Run it from `apps/api` with
+`DATABASE_URL` pointing at the seeded database.
 
 ## Hostile plugin suite (`hostile/`)
 

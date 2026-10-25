@@ -140,7 +140,7 @@ re-runs every migration's idempotent `up` to repair a database that has drifted.
 
 ### Pool, timeouts and import limits
 
-Four settings bound how much database work one API process does. Defaults match
+Six settings bound how much database work one API process does. Defaults match
 the behaviour before they existed, except the import row cap (below).
 
 | Setting | Default | What it does |
@@ -149,6 +149,8 @@ the behaviour before they existed, except the import row cap (below).
 | `DB_STATEMENT_TIMEOUT` | `30000` | Longest one SQL statement may run, in **milliseconds** (1000 to 3600000, so `30` is rejected, not read as seconds). |
 | `DB_LONG_STATEMENT_TIMEOUT` | `300000` | The same limit for CSV import and the data export only, milliseconds, not lower than the one above. Set per transaction by the host, so it ends with the transaction. A plugin route opts in with `longRunning: true` in `RegisterRoute`'s options. |
 | `IMPORT_MAX_ROWS` | `100000` | Data rows one CSV import may contain, counting unreadable ones. The 8 MB file limit applies as well and is not configurable. |
+| `IMPORT_MAX_CONCURRENT` | half of `DB_POOL_MAX` (at least 1) | CSV imports this process commits at once; others wait for a turn without holding a connection (1 to 1000, blank means the default). At or above `DB_POOL_MAX` it has no effect. Per process: each API instance has its own. |
+| `IMPORT_QUEUE_WAIT_SECONDS` | `30` | Longest an import waits for its turn, in **seconds** (0 to 600), before it is refused with `503 import_busy` and a `Retry-After` header. `0` refuses at once when every slot is busy. |
 
 **Why 100,000 rows.** An 8 MB file holds about 109k bank-style rows, 67k with a
 memo column, and 374k rows of minimal text, so the size limit alone does not
@@ -170,12 +172,48 @@ reverse proxy that cuts requests off at 60 seconds. On a small device, lower it.
 These are one machine's numbers, not a benchmark: the shape (linear in rows) is
 the useful part.
 
-**Concurrent imports share the pool.** Ten simultaneous 50,000-row commits held
-all ten connections for about 45 seconds, and 8 of 106 other requests made in
-that time (readiness checks and an authenticated list) failed waiting for a
-connection. With `DB_POOL_MAX=20` none did, at the cost of slower individual
-imports on two vCPUs. If several people import at once, raise the pool and check
-PostgreSQL's `max_connections`.
+**Concurrent imports.** A commit holds one pooled connection for its whole
+length, so before 0.7.0 ten simultaneous 50,000-row commits held all ten
+connections of the default pool for about 40 seconds and nearly every other
+request in that time failed waiting for one. Now at most `IMPORT_MAX_CONCURRENT`
+commits run at once per process. A commit over the limit waits **before** it
+parses the file or opens its transaction, so it holds no connection, and the
+rest of the app keeps the other half of the pool. If a commit has not had its
+turn after `IMPORT_QUEUE_WAIT_SECONDS` it is refused with `503`, code
+`import_busy`, `Retry-After` and a message saying nothing was imported; the page
+shows that sentence beside the button, keeps the review, and sending it again
+reuses the commit's idempotency key, so it imports once.
+
+The limiter lives in the Import CSV plugin's server half (`ImportGate`), not in
+the host: the host only reads the two settings, hands them over with
+`IMPORT_MAX_ROWS`, and turns a plugin error's `retryAfterSeconds` into the
+header. `analyze` is not limited: it holds a connection only for its one
+read, and 10 simultaneous 50,000-row analyses took 4.6 seconds with no failed
+request (they do stall the event loop while parsing, which a limit on
+connections does not help).
+
+Why wait instead of refuse at once: with 10 people committing 50,000 rows on a
+pool of 10 (2 vCPUs, local PostgreSQL 16), refusing at once (`0`) turned 5 of
+the 10 away and finished the other 5 in 21 seconds; waiting finished all 10, the
+last after about 45 seconds. A wait is only useful if it is shorter than the
+proxy's cut-off, hence 30 seconds (a wait plus a commit stays under nginx's
+60 seconds); set `0` if you would rather see the refusal. Measured the same way,
+back to back:
+
+| Setting | Failed other requests | Wall time, all 10 commits | Each import |
+|---|---|---|---|
+| Before (no limit, `IMPORT_MAX_CONCURRENT=10`) | 319 of 402 (500, 5 s connection timeout) | 51 s | 49-51 s |
+| Default (limit 5, wait 30 s) | 0 of 358 | 45 s | 21-45 s, last waits about 21 s |
+| Limit 5, `IMPORT_QUEUE_WAIT_SECONDS=0` | 0 of 168 | 21 s | 5 done in 20-21 s, 5 refused in about 1.6 s |
+
+(Probes were a readiness check and an authenticated list every 250 ms, so the
+count is higher than the 8 of 106 the 0.6.0 run saw; the direction is the same.
+Measured in a shared 2-CPU container, so absolute numbers are indicative; compare
+the rows, which ran one after another.) One person importing alone sees no
+difference: a 100,000-row commit took 15.2 s with the limit and 14.5 s without.
+The limit is per process and the pool is not shared between processes, so two
+API instances allow twice the imports; with several, set it from the pool and
+`max_connections` per instance.
 
 `analyze` answers with the counts for the whole file, its first 100 rows and a
 page of up to 500 possible duplicates (`flaggedOffset` and `flaggedLimit` ask
@@ -625,10 +663,29 @@ the catalog in the same transaction and, if a `user_id` table is missing, answer
 nothing from you: it reads the catalog. `testing/eraseFixtures.ts` must also
 reach the new table through the API so the tests prove it was emptied.
 
-**Limits.** An erase does not stop requests already in flight: a write that
-commits between the check and the deletion could leave a row behind for a user
-who has just been signed out. Access tokens are checked against their session on
-every request, so ending the sessions rejects them at once.
+**Limits.** `settings/eraseInFlight.integration.test.ts` holds a write open at
+a chosen point, runs the erase and lets the write go, so these are measured, not
+assumed.
+
+- *A write that is open when "Erase my data" starts* is waited for. The erase
+  first takes `SELECT ... FOR UPDATE` on the user's `core.users` row, and
+  inserting any row that belongs to the user holds a shared lock on that row
+  until the writer commits. The erase queues behind the writer and then deletes
+  what it committed. Before this lock the insert was invisible to the erase and
+  committed after it, leaving a row (or, for a row that points at an account,
+  making the erase fail with `500` on the `RESTRICT` key and delete nothing).
+- *A request that passed its session check before the erase and writes after it*
+  is not stopped. Access tokens are checked against their session at the start
+  of each request, so ending the sessions rejects every later request at once,
+  but a request already past that check still commits. It can leave one row
+  for a user who has just been signed out, in a table with no parent row to
+  refuse it (an account, a category, a plugin's own table). A row that points at
+  something the erase deleted is refused by its foreign key. The next erase
+  removes the stray row. Closing this would need every write to re-check its
+  session inside its own transaction; that is not done.
+- *Erase this instance* has neither problem. `TRUNCATE` waits for any open
+  write, and a write that runs after it fails on the foreign key to
+  `core.users`.
 
 ### Exporting data
 
@@ -908,6 +965,94 @@ sequenceDiagram
   in different cards and slots, so a frame per plugin could not place them. The
   measured cost is in the 0.6.0 plan; on Chromium 141 it was about 9 MiB and
   150 ms for each frame after the first.
+- **Lazy start.** A widget's iframe is not created until its card is close to
+  the viewport (`useNearViewport`, used by `IsolatedPluginFrame`; pages are never
+  lazy). Until then the card holds a plain-text placeholder whose height is an
+  estimate for the widget's size (`PLACEHOLDER_HEIGHT`: `sm` 160, `md` 360,
+  `lg` and `full` 400 px, from the bundled chart widgets), and the frame starts
+  at the same height, so the card does not jump when the frame arrives. The
+  rules, with the reason for each:
+  - **Margin: 600 px above and below the viewport** (`FRAME_ROOT_MARGIN_PX`). A
+    frame needs the frame document, the plugin's chunk and a first read; on the
+    seeded dashboard that was 150 ms to over a second. 600 px is a bit under a
+    phone screen, so the frame has usually drawn by the time a normal scroll
+    reaches it, while the cards further down stay unstarted. The margin only
+    reaches a scroll root that is the viewport (the app scrolls the window; a
+    widget inside an inner scroll container would need that container as the
+    observer's root).
+  - **A card is measured again before it starts.** Starting a frame cannot be
+    undone and the layout is not final at first render: the in-page cards are
+    spinners and a frame reports a small height while it loads, so cards below
+    sit too high. A card in view starts after 250 ms (`SETTLE_MS`) if it is still
+    in view; a card that is only inside the margin is held until 2.5 s after the
+    page loaded (`LAYOUT_SETTLED_AT_MS`), then starts if it is still inside. Both
+    waits are visible only for cards that are off screen or have just arrived. On
+    the seeded dashboard, without this every frame started at load. Coming back
+    to the dashboard later, or scrolling, uses the short wait.
+  - **No `IntersectionObserver`: every frame starts at load**, as before.
+  - **A started frame is kept** when it is scrolled far away. Destroying it would
+    throw away its state (open table, scroll position, a tooltip), pay the start
+    again (about 150 ms and a token and a read) and flash a spinner on every
+    scroll back, to win back a few MiB for a dashboard that has a handful of
+    widgets. Revisit if a dashboard ever has dozens of frames.
+  - **The handshake clock** ("The plugin did not start in time", 15 s) starts when
+    the frame is created and stops while the document is hidden, resuming with the
+    time it had left. A background tab throttles the frame's timers, so a slow
+    frame there has not shown it is broken, and a frame created in a hidden tab
+    does not count until the tab is shown. The clock for a frame that is not
+    created yet does not exist.
+  - **Keyboard and screen reader.** The placeholder is plain text: not focusable,
+    not a live region, so Tab passes over it and nothing is announced for a card
+    the user has not reached. A frame that has not started (or has but is not
+    ready) is not a Tab stop, so Tab from the control above a card that is still
+    waiting goes to the next control after it; the browser scrolls that control
+    into view, which starts the card, and Shift+Tab then reaches it. Nothing moves
+    focus into a frame because it started (`focus-in` is only sent on request).
+    A screen reader's virtual cursor reaches the placeholder text and the browser
+    scrolls to it, which starts the frame; the frame's title then announces as
+    before.
+  - **Find in page and print only see frames that have started.** Text in a card
+    that is still a placeholder is not found, and a print preview of a dashboard
+    that was not scrolled shows placeholders for those cards. Scroll to the
+    bottom first (or open the page in a tall window) when you need either.
+  - **Test hooks.** `apps/web/browser-check/lazyFrames.ts` checks the behaviour on
+    the seeded dashboard and measures it against an earlier build (see
+    `apps/web/browser-check/README.md`).
+
+  Measured on the seeded `hero` dashboard (6 widgets: 3 in frames, Insights twice
+  and Spending Trends; the others in the page), Chromium 153, headless, the API
+  and browser on one shared 2-CPU container, so the absolute numbers are noisy
+  and only the before and after on the same run mean anything. Median of 7 runs,
+  before and after alternated run by run, one discarded warm-up each. "First
+  widget" is the first card with its content, "first screen" is all cards that
+  start inside the window; memory is the proportional set size of the browser's
+  process tree, 3 s after the last widget settled.
+
+  | 1280x900 | before | after |
+  | --- | --- | --- |
+  | Time to first widget | 894 ms | 803 ms |
+  | Time to all widgets in the first screen | 1252 ms | 1027 ms |
+  | Iframes at load / after scrolling to the bottom | 3 / 3 | 2 / 3 |
+  | Browser memory at load | 409 MiB | 406 MiB |
+  | Browser memory after scrolling to the bottom | 412 MiB | 420 MiB |
+
+  | 390x844 (phone) | before | after |
+  | --- | --- | --- |
+  | Time to first widget | 791 ms | 746 ms |
+  | Time to all widgets in the first screen | 1081 ms | 762 ms |
+  | Iframes at load / after scrolling to the bottom | 3 / 3 | 1 / 3 |
+  | Browser memory at load | 393 MiB | 375 MiB |
+  | Browser memory after scrolling to the bottom | 395 MiB | 401 MiB |
+
+  The gain is small on this dashboard, and it is honest to say so: at desktop size
+  one of three frames is deferred and saves about 3 MiB; on a phone two are
+  deferred and save about 18 MiB (about 9 MiB each, as in the 0.6.0 measurement),
+  and the first screen was about 300 ms quicker, probably because it no longer
+  shares the network and CPU with frames that are not on it (not isolated further). A user who scrolls to the
+  bottom ends up 6 to 8 MiB above the eager page: a frame started later carries
+  the same cost plus the second pass at layout. The feature pays most on
+  dashboards with more frame widgets than fit a screen.
+
 - **Development.** In `pnpm dev` the page comes from Vite but the frame is
   still the API's document, so it needs the built web app. Vite's dev server
   proxies `/plugin-frame` and `/assets` to the API on `:8080`, and `/plugins` for

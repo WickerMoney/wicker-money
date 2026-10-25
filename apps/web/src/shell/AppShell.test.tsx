@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
+import { ToastProvider, useToast } from '@wickermoney/ui-kit'
 import { describe, expect, it, vi } from 'vitest'
 import { AppShell } from './AppShell.js'
 
@@ -112,5 +113,55 @@ describe('AppShell accessibility', () => {
     await userEvent.click(menuButton())
     await userEvent.keyboard('{Escape}')
     expect(document.activeElement).toBe(menuButton())
+  })
+})
+
+describe('AppShell toast banner', () => {
+  function Raise() {
+    const toast = useToast()
+    return <button type="button" onClick={() => { toast.show('Deleted.', { kind: 'success' }) }}>Raise</button>
+  }
+  function renderWithToasts() {
+    return render(
+      <MemoryRouter initialEntries={['/']}>
+        <ToastProvider>
+          <Routes>
+            <Route element={<AppShell plugins={[]} />}>
+              <Route index element={<Raise />} />
+            </Route>
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it('draws the stack as the first child of <main>, above the page', async () => {
+    renderWithToasts()
+    await userEvent.click(screen.getByRole('button', { name: 'Raise' }))
+    const group = await screen.findByRole('group', { name: 'Notifications' })
+    expect(main().firstElementChild).toBe(group)
+    expect(main().children[1]?.contains(screen.getByRole('button', { name: 'Raise' }))).toBe(true)
+  })
+
+  it('renders no banner when nothing was raised, and works without a provider', () => {
+    renderShell()
+    expect(screen.queryByRole('group', { name: 'Notifications' })).toBeNull()
+  })
+
+  it('sets --wm-toast-offset-top from the measured phone bar', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(57)
+    try {
+      const { container } = renderShell()
+      expect((container.firstElementChild as HTMLElement).style.getPropertyValue('--wm-toast-offset-top')).toBe('57px')
+    } finally { spy.mockRestore() }
+  })
+
+  it('keeps the announcer outside <main> and the header, which the drawer makes inert', async () => {
+    renderWithToasts()
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }))
+    const announcer = document.querySelector('[role="status"][aria-live="polite"]')!
+    expect(announcer.closest('main')).toBeNull()
+    expect(announcer.closest('header')).toBeNull()
+    expect(announcer.closest('[inert]')).toBeNull()
   })
 })

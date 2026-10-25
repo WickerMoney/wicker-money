@@ -60,6 +60,7 @@ A federated remote's emitted stylesheet is never requested.
 | `Alert` | Inline error or notice (`role="alert"`) |
 | `EmptyState` | Title, hint and an optional action for empty views |
 | `Spinner` | Loading indicator |
+| `ToastProvider`, `ToastViewport`, `useToast` | Notification toasts (experimental, see [Toasts](#toasts)) |
 
 ### Form errors
 
@@ -74,6 +75,74 @@ Every component's props type is exported alongside it (`SurfaceProps`,
 `TableProps<T>`, ...). The other exported types are `Column<T>` (a `Table` column),
 `IconName`, `FieldCommon`, `GroupableCategory`, and the form-error types
 `FormErrors`, `FormErrorState`, `FieldMatcher` and `ValidationIssue`.
+
+### Toasts
+
+> **Stability: experimental.** `ToastProvider`, `ToastViewport`, `useToast` and
+> their types may change in any 0.x minor release, and they are **for the core
+> app only until the plugin path ships**. A plugin's copy of this package has no
+> provider, so `useToast()` throws there with a message saying so; plugins will
+> get `ctx.notify` in a later release. Every other export keeps the "Pre-1.0"
+> rule above.
+
+A toast reports the result of a discrete action ("Deleted 'Coffee'."). State
+stays inline, and anything inside a modal stays inline too: a toast cannot be
+reached while a modal is open.
+
+```tsx
+import { ToastProvider, ToastViewport, useToast } from '@wickermoney/ui-kit'
+
+// Once, above your routes. `routeKey` is optional: when it changes (pass the
+// pathname) every toast but errors is cleared.
+<ToastProvider routeKey={pathname}>
+  <main>
+    <ToastViewport />   {/* first child of the page container */}
+    <Routes>...</Routes>
+  </main>
+</ToastProvider>
+
+function DeleteButton() {
+  const toast = useToast()
+  return (
+    <button type="button" onClick={() => {
+      closeDialog()                                   // close any dialog first
+      toast.show('Deleted Coffee (-$4.50).', { kind: 'success', key: 'txn:delete' })
+    }}>Delete</button>
+  )
+}
+```
+
+| Member | Description |
+|---|---|
+| `useToast()` | Returns `{ show, dismiss }`, stable for the life of the provider. Throws outside a `ToastProvider` |
+| `show(message, { kind?, key? })` | Returns an id. `message` is a plain string (keep it under 200 characters). `kind` is `success`, `info` (default), `warning` or `error`. A toast with the same `key` replaces the earlier one in place and is announced again; the id is the same |
+| `dismiss(id)` | Removes a visible, waiting or not yet delivered toast |
+| `ToastProvider` | Props: `children`, `routeKey?`. Owns the queue and the screen-reader announcer |
+| `ToastViewport` | No props. Draws the stack; renders nothing when empty or outside a provider |
+
+How it behaves:
+
+- **Nothing dismisses itself.** There is no duration, no timer and no pause on
+  hover: a toast stays until its Close button or Escape (with the toast focused)
+  closes it, or the same `key` replaces it. Focus returns to where it was.
+- **Announcements.** One always-mounted, visually hidden `role="status"`
+  (`aria-live="polite"`, `aria-atomic="true"`) region speaks each toast once;
+  warnings and errors are prefixed "Warning: " and "Error: ". Calls in one
+  animation frame are announced together. The visible stack is not a live
+  region. `show()` never moves focus.
+- **Limits.** Three toasts show (two at 560px and below); the rest wait and
+  appear as slots free, and an error goes ahead of the queue. "Dismiss all"
+  appears from two toasts and closes the ones showing.
+- **While a modal is open** (`<dialog>` shown modally, or `aria-modal="true"`)
+  delivery is held for up to two seconds. Close the dialog first, then call
+  `show()`.
+- **Placement.** The viewport is an in-flow banner that sticks at
+  `top: var(--wm-toast-offset-top, 0px)`; set that custom property to the bottom
+  edge of anything fixed to the top of the window (the app shell does this for
+  its phone bar). It pushes the page down rather than covering it. The fade is
+  150 ms of opacity and is off under `prefers-reduced-motion`.
+- **Tokens.** `--wm-shadow-raised` (light and dark) is new; the rest are existing
+  surface, border, text, accent and status colours.
 
 ### Focus trap
 

@@ -18,6 +18,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p browser-check/hostile/tsconfig.json",
     "test": "vitest run",
     "test:browser": "cd ../api && tsx ../web/browser-check/run.ts",
+    "test:toast": "pnpm --filter @wickermoney/api exec tsx ../web/browser-check/toast.ts",
     "test:hostile": "pnpm --filter @wickermoney/api exec tsx ../web/browser-check/hostile/run.ts && pnpm --filter @wickermoney/api exec tsx ../web/browser-check/hostile/remote.ts && pnpm --filter @wickermoney/api exec tsx ../web/browser-check/hostile/evalViolations.ts",
     "dev": "vite",
     "preview": "vite preview"

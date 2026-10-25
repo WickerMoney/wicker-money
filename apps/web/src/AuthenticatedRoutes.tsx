@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { Route, Routes, useNavigate } from 'react-router'
+import { Route, Routes, useLocation, useNavigate } from 'react-router'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
-import { Alert } from '@wickermoney/ui-kit'
+import { Alert, ToastProvider } from '@wickermoney/ui-kit'
 import { useAuth } from './auth/index.js'
 import { SetupWizard, OnboardingProvider } from './onboarding/index.js'
 import { LazyAccountsPage } from './pages/LazyAccountsPage.js'
@@ -39,6 +39,7 @@ export function AuthenticatedRoutes() {
   const { user } = useAuth()
   const { plugins, failures } = usePluginRegistry()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   // `navigate` changes identity with the location; reading it through a ref
   // keeps every plugin context stable across in-app navigation.
@@ -53,31 +54,37 @@ export function AuthenticatedRoutes() {
 
   return (
     <OnboardingProvider>
-      {/* Above the routes, so it covers whatever page the user first landed on
-          rather than only the one that happens to own categories. */}
-      <SetupWizard />
-      {failures.length > 0 ? (
-        <div className="shell__failures">
-          <Alert>
-            {failures.length} plugin{failures.length === 1 ? '' : 's'} failed to load:{' '}
-            {failures.map((f) => `${f.pluginId} (${f.reason})`).join('; ')}
-          </Alert>
-        </div>
-      ) : null}
-      <Routes>
-        <Route element={<AppShell plugins={plugins} />}>
-          <Route index element={<Dashboard plugins={plugins} contextFor={contextFor} />} />
-          <Route path="accounts" element={<PageBoundary label="Accounts"><LazyAccountsPage /></PageBoundary>} />
-          <Route path="transactions" element={<PageBoundary label="Transactions"><LazyTransactionsPage /></PageBoundary>} />
-          <Route path="recurring" element={<PageBoundary label="Recurring"><LazyRecurringPage /></PageBoundary>} />
-          <Route path="categories" element={<PageBoundary label="Categories"><LazyCategoriesPage /></PageBoundary>} />
-          <Route path="settings" element={<PageBoundary label="Settings"><LazySettingsPage /></PageBoundary>} />
-          {pluginRoutes(plugins, contextFor)}
-          {/* Ranked below every plugin's own, more specific page route. */}
-          <Route path="p/:pluginId/*" element={<PluginUnavailable />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
+      {/* Owns the toast queue and its screen-reader announcer; AppShell draws the
+          stack. Above the routes so a page change does not lose the queue, and
+          outside <main>, which the phone drawer makes inert. A route change
+          clears every toast but errors. */}
+      <ToastProvider routeKey={pathname}>
+        {/* Above the routes, so it covers whatever page the user first landed on
+            rather than only the one that happens to own categories. */}
+        <SetupWizard />
+        {failures.length > 0 ? (
+          <div className="shell__failures">
+            <Alert>
+              {failures.length} plugin{failures.length === 1 ? '' : 's'} failed to load:{' '}
+              {failures.map((f) => `${f.pluginId} (${f.reason})`).join('; ')}
+            </Alert>
+          </div>
+        ) : null}
+        <Routes>
+          <Route element={<AppShell plugins={plugins} />}>
+            <Route index element={<Dashboard plugins={plugins} contextFor={contextFor} />} />
+            <Route path="accounts" element={<PageBoundary label="Accounts"><LazyAccountsPage /></PageBoundary>} />
+            <Route path="transactions" element={<PageBoundary label="Transactions"><LazyTransactionsPage /></PageBoundary>} />
+            <Route path="recurring" element={<PageBoundary label="Recurring"><LazyRecurringPage /></PageBoundary>} />
+            <Route path="categories" element={<PageBoundary label="Categories"><LazyCategoriesPage /></PageBoundary>} />
+            <Route path="settings" element={<PageBoundary label="Settings"><LazySettingsPage /></PageBoundary>} />
+            {pluginRoutes(plugins, contextFor)}
+            {/* Ranked below every plugin's own, more specific page route. */}
+            <Route path="p/:pluginId/*" element={<PluginUnavailable />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </ToastProvider>
     </OnboardingProvider>
   )
 }

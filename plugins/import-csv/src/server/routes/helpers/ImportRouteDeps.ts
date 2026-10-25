@@ -40,4 +40,15 @@ export interface ImportRouteDeps {
    * the size of its database pool, not to the plugin.
    */
   readonly maxRows: number
+  /**
+   * Imports one process commits at once (`IMPORT_MAX_CONCURRENT`). Likewise the
+   * host's call: it knows the size of its database pool, and a commit holds one
+   * pooled connection for its whole length.
+   */
+  readonly maxConcurrent: number
+  /**
+   * Longest a commit waits for its turn before it is refused with `503`, in
+   * milliseconds (`IMPORT_QUEUE_WAIT_SECONDS`). `0` refuses at once.
+   */
+  readonly queueWaitMs: number
 }
