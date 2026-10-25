@@ -114,9 +114,12 @@ export class FrameController {
   private disposed = false
   private lastTheme = ''
   private lastLocale = ''
+  /** Pages only: the path under the page's route the frame was last told about. */
+  private path: string | undefined
 
   constructor(private readonly options: FrameControllerOptions) {
     this.win = options.win ?? window
+    this.path = options.path
     this.readTheme = options.readTheme ?? (() => readHostTheme())
     this.readLocale = options.readLocale ?? (() => readHostLocale(options.timezone))
     this.broker = new PluginBroker({
@@ -221,7 +224,7 @@ export class FrameController {
       theme,
       ...(options.size !== undefined ? { size: options.size } : {}),
       ...(options.range !== undefined ? { range: options.range } : {}),
-      ...(options.path !== undefined ? { path: options.path } : {}),
+      ...(this.path !== undefined ? { path: this.path } : {}),
     }
   }
 
@@ -288,8 +291,15 @@ export class FrameController {
     })
   }
 
-  /** Tells a page frame the path under its route changed. */
+  /**
+   * Tells a page frame the path under its route changed.
+   *
+   * The latest path is kept even while the frame is still starting, so the `init` it gets is current;
+   * a path the frame already has is not sent again (the host's own `navigate` comes back as a route change).
+   */
   setRoute(path: string): void {
+    if (path === this.path) return
+    this.path = path
     if (this.ready) this.broker.send({ type: 'route', path })
   }
 

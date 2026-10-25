@@ -492,6 +492,75 @@ async function phaseNavigation(w: World): Promise<void> {
   add({ id: 'navigate-burst', group: 'navigation', title: '40 ctx.navigate calls in one tick', expected: 'broker-refusal', reason: `${grew} took effect (the limiter allows a burst of 3)`, pass: grew <= 4, detail: { before, grew } })
 }
 
+/**
+ * A plugin PAGE in a frame: the frame fills the content area and the host lets it be as tall as it asks (up to a limit), so
+ * the new things to try are the page's own: how tall it can make itself, what it covers, and the messages that belong to
+ * the host. (A page also gets every attack above: the navigation phase already runs against the page route.)
+ */
+async function phasePageFrame(w: World): Promise<void> {
+  await boot(w, 'page')
+  await call(w, 'takePort')
+  const geometry = (): Promise<{ frameH: number; frameTop: number; frameLeft: number; frameBottom: number; mainBottom: number; navRight: number; docH: number; position: string; zIndex: string; atNavLink: string | null }> => w.page.evaluate(() => {
+    const f = document.querySelector('iframe[title^="Hostile"]')!
+    const r = f.getBoundingClientRect()
+    const main = document.getElementById('main')!.getBoundingClientRect()
+    const nav = document.querySelector('.shell__nav')!.getBoundingClientRect()
+    const link = document.querySelector('.shell__nav a')!.getBoundingClientRect()
+    const hit = document.elementFromPoint(link.left + link.width / 2, link.top + link.height / 2)
+    const cs = getComputedStyle(f)
+    return {
+      frameH: Math.round(r.height), frameTop: Math.round(r.top + scrollY), frameLeft: Math.round(r.left), frameBottom: Math.round(r.bottom + scrollY), mainBottom: Math.round(main.bottom + scrollY), navRight: Math.round(nav.right),
+      docH: document.documentElement.scrollHeight, position: cs.position, zIndex: cs.zIndex, atNavLink: hit === null ? null : (hit.closest('a')?.getAttribute('href') ?? hit.tagName),
+    }
+  })
+  const before = await geometry()
+  // Ask for the tallest height the protocol accepts, then one it refuses, then a frame that asks for nothing.
+  const sent = await call<Array<{ sent: unknown; reply: unknown }>>(w, 'rawMessages', [
+    { type: 'resize', height: 100_000 }, { type: 'resize', height: 1e12 }, { type: 'resize', height: -1 },
+  ])
+  await sleep(500)
+  const tall = await geometry()
+  const responsiveMs = await (async () => { const t = Date.now(); await w.page.evaluate(() => 1); return Date.now() - t })()
+  add({
+    id: 'page-height-max', group: 'page frame', title: 'a page frame asks for 100 000 px (the most the protocol accepts), then 1e12 and -1', expected: 'broker-refusal',
+    reason: `the host set ${tall.frameH} px (limit 20 000); the frame is ${tall.frameBottom <= tall.mainBottom + 1 ? 'inside' : 'outside'} <main>; page still answers in ${responsiveMs} ms`,
+    pass: tall.frameH === 20_000 && tall.frameBottom <= tall.mainBottom + 1 && responsiveMs < 1500, detail: { before, tall, sent },
+  })
+  add({
+    id: 'page-covers-nothing', group: 'page frame', title: 'that 20 000 px frame, over the host\'s navigation', expected: 'contained',
+    reason: `the frame starts ${tall.frameLeft} px from the left (navigation ends at ${tall.navRight}); position ${tall.position}; the first nav link is still the element at its own centre (${String(tall.atNavLink)})`,
+    pass: tall.frameLeft >= tall.navRight && tall.position === 'static' && tall.atNavLink !== null && !String(tall.atNavLink).startsWith('IFRAME'), detail: tall,
+  })
+  // The frame covers its own document with a fixed, topmost element: that is inside the frame, not the host.
+  await w.hostile.evaluate(() => { const d = document.createElement('div'); d.id = 'cover'; d.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:red'; document.body.append(d) })
+  await sleep(200)
+  const covered = await w.page.evaluate(() => {
+    const link = document.querySelector('.shell__nav a')!.getBoundingClientRect()
+    const hit = document.elementFromPoint(link.left + link.width / 2, link.top + link.height / 2)
+    const bar = document.querySelector('.shell__nav')!.getBoundingClientRect()
+    return { hit: hit?.closest('a')?.getAttribute('href') ?? hit?.tagName, navLeft: Math.round(bar.left) }
+  })
+  add({ id: 'page-fixed-overlay', group: 'page frame', title: 'a fixed, full-size element with the highest z-index inside the page frame', expected: 'contained', reason: `the host's navigation still receives its own clicks (${String(covered.hit)})`, pass: covered.hit !== 'IFRAME' && covered.hit !== undefined && !String(covered.hit).startsWith('IFRAME'), detail: covered })
+  // Messages that belong to the host: the page tells the host its path changed, or hands it a theme.
+  await boot(w, 'page')
+  await call(w, 'takePort')
+  const url0 = w.page.url()
+  const themeBefore = await w.page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+  const odd = await call<Array<{ sent: unknown; reply: unknown }>>(w, 'rawMessages', [
+    { type: 'route', path: '/accounts?hx=page-route' }, { type: 'init', protocol: 1, pluginId: 'wickermoney.budgets', kind: 'page', path: '/accounts' },
+    { type: 'theme', theme: { scheme: 'dark', tokens: { '--wm-bg': 'red' } } }, { type: 'focus-in', direction: 'first' }, { type: 'props', size: 'full' },
+  ])
+  await sleep(500)
+  const url1 = w.page.url()
+  const themeAfter = await w.page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+  const bgAfter = await w.page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--wm-bg').trim())
+  add({
+    id: 'page-host-messages', group: 'page frame', title: 'a page frame sends route, init, theme, focus-in and props (host-to-frame messages) to the host', expected: 'broker-refusal',
+    reason: `the address stayed ${new URL(url1).pathname}; the host's theme stayed ${String(themeAfter)} and --wm-bg ${bgAfter}`,
+    pass: url0 === url1 && themeBefore === themeAfter && bgAfter !== 'red' && w.apiLog.withMarker('page-route').length === 0, detail: { odd, url0, url1, themeBefore, themeAfter },
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Channels the content security policy does not govern (ADR 0005, "P3 spike results")
 // ---------------------------------------------------------------------------
@@ -665,7 +734,7 @@ async function main(): Promise<void> {
     const w = { base: server.base, attacker, apiLog, log, ctx, user, admin, frameDocs: [], page: undefined as unknown as Playwright.Page, hostile: undefined as unknown as Playwright.Frame, victim: null } as World
     const phases: Array<[string, (w: World) => Promise<void>]> = [
       ['setup', phaseSetup], ['credentials', phaseCredentials], ['blocked', phaseBlocked], ['broker', phaseBroker], ['malformed', phaseMalformed],
-      ['flood', phaseFlood], ['spoof', phaseSpoof], ['navigation', phaseNavigation], ['residual', phaseResidual], ['tokens', phaseTokens], ['lifecycle', phaseLifecycle],
+      ['flood', phaseFlood], ['spoof', phaseSpoof], ['navigation', phaseNavigation], ['pageframe', phasePageFrame], ['residual', phaseResidual], ['tokens', phaseTokens], ['lifecycle', phaseLifecycle],
     ]
     await boot(w)
     for (const [name, fn] of phases) {

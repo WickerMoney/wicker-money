@@ -38,7 +38,7 @@ interface Setup {
   currentTheme: { value: HostTheme }
 }
 
-function setup(kind: 'widget' | 'page' = 'widget', extra: { loadTimeoutMs?: number } = {}): Setup {
+function setup(kind: 'widget' | 'page' = 'widget', extra: { loadTimeoutMs?: number; path?: string } = {}): Setup {
   const frame = fakeFrame()
   const states: FrameState[] = []
   const heights: number[] = []
@@ -240,6 +240,45 @@ describe('sizing', () => {
     expect(s.heights).toEqual([240, 1500, 20_000])
     expect(HEIGHT_LIMITS.page.max).toBe(20_000)
     s.controller.dispose()
+  })
+
+  describe('the path under a page', () => {
+    const initOf = (s: Setup): { path?: string } => s.received.find((m) => m.type === 'init') as { path?: string }
+
+    it('goes into init, and a change after the frame is ready is sent once as a route', async () => {
+      const s = setup('page', { path: '/' })
+      const port = connect(s)
+      port.postMessage({ type: 'ready', protocol: 1 })
+      await tick()
+      expect(initOf(s).path).toBe('/')
+      s.controller.setRoute('/2026/10')
+      s.controller.setRoute('/2026/10')
+      await tick()
+      expect(s.received.filter((m) => m.type === 'route')).toEqual([{ type: 'route', path: '/2026/10' }])
+      s.controller.dispose()
+    })
+
+    it('does not repeat the path the frame started with', async () => {
+      const s = setup('page', { path: '/a' })
+      const port = connect(s)
+      port.postMessage({ type: 'ready', protocol: 1 })
+      await tick()
+      s.controller.setRoute('/a')
+      await tick()
+      expect(s.received.filter((m) => m.type === 'route')).toEqual([])
+      s.controller.dispose()
+    })
+
+    it('puts the latest path in init when the address changed while the frame was starting', async () => {
+      const s = setup('page', { path: '/a' })
+      s.controller.setRoute('/b') // before the hello: nothing to send to yet
+      const port = connect(s)
+      port.postMessage({ type: 'ready', protocol: 1 })
+      await tick()
+      expect(initOf(s).path).toBe('/b')
+      expect(s.received.filter((m) => m.type === 'route')).toEqual([])
+      s.controller.dispose()
+    })
   })
 
   it('refuses a nonsense height outright', async () => {

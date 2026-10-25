@@ -96,6 +96,28 @@ describe('IsolatedPluginFrame', () => {
     expect(navigate).toHaveBeenCalledWith('/transactions')
   })
 
+  it('lets a page frame grow with its content, past the widget limit', async () => {
+    const { container } = mount({ kind: 'page', module: './Page' })
+    const f = frameOf(container)
+    const port = await f.connect()
+    expect(f.iframe.style.height).toBe('240px') // the page minimum until the frame reports
+    await act(async () => { port.postMessage({ type: 'resize', height: 3200 }); await new Promise((r) => setTimeout(r, 5)) })
+    expect(f.iframe.style.height).toBe('3200px')
+  })
+
+  it('tells a page frame when the path under its route changes', async () => {
+    const view = mount({ kind: 'page', module: './Page', path: '/' })
+    const f = frameOf(view.container)
+    const port = await f.connect()
+    const got: unknown[] = []
+    port.onmessage = (e) => { got.push(e.data) }
+    view.rerender(
+      <IsolatedPluginFrame manifest={manifest} module="./Page" title="Spending" kind="page" ctx={ctx} api={api} path="/2026" />,
+    )
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)) })
+    expect(got).toContainEqual({ type: 'route', path: '/2026' })
+  })
+
   it('moves focus past the iframe when focus leaves the frame', async () => {
     const { container } = render(
       <>

@@ -994,8 +994,8 @@ Consequences for contributors:
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
   (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights`,
-  `spending-trends` and `upcoming` have been ported and run in frames. The other
-  four bundled plugins (`budgets`, `import-csv`, `forecast`, `debt-payoff`) are
+  `spending-trends`, `upcoming` and `forecast` have been ported and run in frames.
+  The other three bundled plugins (`budgets`, `import-csv`, `debt-payoff`) are
   still listed and run in the page, fully trusted. The list shrinks as plugins
   are ported.
 
@@ -1057,13 +1057,35 @@ sequenceDiagram
   the host page; a new `theme` message follows any change of `data-theme`, the
   root's style or the operating system preference. The frame applies them with
   `applyHostTheme`.
-- **Focus.** A frame cannot hand focus to the page around it, so the in-frame app
-  reports Tab at its first or last control (`focus-out`) and the host moves focus
-  to the next or previous control on the page. `focus-in` goes the other way.
+- **Focus.** At its first or last control the frame does not cancel Tab: the
+  browser carries focus out to the next or previous control on the page, or at the
+  end of the page to its own interface, as it does for content in the page. If
+  focus is still in the frame 60 ms later, the frame reports `focus-out` and the
+  host moves focus past the iframe (`focusAround`). (Cancelling the key and always
+  asking the host, as this did first, traps a keyboard user when the frame is the
+  last thing on the page, as a page frame is.) `focus-in` goes the other way.
 - **Dialogs and overlays.** Protocol 1 has no host-rendered dialog (the decision
   recorded with the protocol). A dialog inside a widget frame is clipped by the
-  frame, so a widget that needs one navigates to a page (`navigate`), whose frame
-  is full height. The broker ignores a `dialog` message like any unknown type.
+  frame, so a widget that needs one navigates to a page (`navigate`). A page
+  frame is as tall as the page, so a `position: fixed` dialog in it is centred on
+  the frame, which may be well below the window: a page that needs a dialog
+  needs a host-rendered one (decision record 0014). The broker ignores a `dialog`
+  message like any unknown type.
+- **Page frames.** A plugin page runs in a frame the same way (`MountedPage`, a
+  `kind=page` frame, never lazy). The frame is as tall as its content (240 to
+  20 000 px) and the host page scrolls; the frame never scrolls on its own
+  (`overflow-y: hidden` on its root), and the document and tab title, the single
+  `<main>` landmark and the skip link stay the host's. The frame document has no
+  `main`; axe's page-level rules (`landmark-one-main`, `region`) do not apply to
+  it, and the host document's `page-has-heading-one` is satisfied by the
+  frame's `h1`. The frame paints `--wm-bg` (a widget frame is transparent over
+  its card). A page's route matches its address and everything under it
+  (`<page route>/*`); a frame is told the rest (`init.path`, then `route`), a page
+  component receives it as the untyped prop `path`, and `ctx.navigate` to an
+  address under the page is the way to move it. An in-realm page answers "not
+  found" to anything under its route. Styles written for plugin content in
+  `app.css` do not reach a frame; the one that matters for pages (cards scroll
+  wide tables sideways on a phone) is repeated in `src/frame/frame.css`.
 - **One frame per widget.** A frame is one rectangle, and a plugin's widgets sit
   in different cards and slots, so a frame per plugin could not place them. The
   measured cost is in the 0.6.0 plan; on Chromium 141 it was about 9 MiB and
