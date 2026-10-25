@@ -73,4 +73,25 @@ describe('DebtFreeWidget', () => {
     await waitFor(() => expect(screen.getByText('Debt payoff unavailable')).toBeTruthy())
     expect(screen.getByText('Nope.')).toBeTruthy()
   })
+
+  it('names the debts it leaves out, so the date is not read as covering them', async () => {
+    show(makeBackend([...debts(), makeDebt({ id: 'mortgage', name: 'Mortgage', included: false })]), 'sm')
+    expect(await screen.findByText('Debt-free date')).toBeTruthy()
+    expect(screen.getByText('Not counting Mortgage.')).toBeTruthy()
+    expect(screen.queryByText('Next in line')?.nextSibling?.textContent).not.toBe('Mortgage')
+  })
+
+  it('says nothing is in the plan when every debt is switched out, and offers the page', async () => {
+    const ctx = show(makeBackend([makeDebt({ name: 'Mortgage', included: false }), makeDebt({ name: 'Visa', included: false })]), 'md')
+    expect(await screen.findByText('Nothing is in the plan')).toBeTruthy()
+    expect(screen.queryByText('Debt-free date')).toBeNull()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open debt payoff' }))
+    expect(ctx.navigate).toHaveBeenCalledWith(DEBT_PAYOFF_PAGE_PATH)
+  })
+
+  it('does not name anything when nothing is left out', async () => {
+    show(makeBackend(debts()), 'sm')
+    expect(await screen.findByText('Debt-free date')).toBeTruthy()
+    expect(screen.queryByText(/Not counting/)).toBeNull()
+  })
 })

@@ -14,6 +14,7 @@ import { StrategyToggle } from './components/StrategyToggle.js'
 import { EMPTY_DRAFT } from './helpers/EMPTY_DRAFT.js'
 import { draftFromDebt } from './helpers/draftFromDebt.js'
 import { durationText } from './helpers/durationText.js'
+import { excludingText } from './helpers/excludingText.js'
 import { useDebtPayoff } from './hooks/useDebtPayoff.js'
 import type { AccountSuggestion, Debt, DebtDraft } from './models/index.js'
 
@@ -57,6 +58,9 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
     () => new Map((plan?.debts ?? []).map((d) => [d.id, d.payoffDate] as const)),
     [plan],
   )
+  const { setIncluded } = payoff
+  // Stable, so the memoised debt list is not redrawn when something else on the page changes.
+  const toggleIncluded = useCallback((debt: Debt, included: boolean) => { void setIncluded(debt, included) }, [setIncluded])
   const edit = useCallback((debt: Debt) => setDialog({ editing: debt, initial: draftFromDebt(debt) }), [])
   const add = (from?: AccountSuggestion) => setDialog({
     editing: null,
@@ -64,7 +68,10 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
   })
 
   const active = (debts ?? []).filter((d) => !d.archived)
-  const nothingOwed = plan !== null && plan.schedule.length === 0
+  const nothingInPlan = plan !== null && plan.debts.length === 0
+  const nothingOwed = plan !== null && plan.debts.length > 0 && plan.schedule.length === 0
+  const leftOut = plan === null ? '' : excludingText(plan.excludedDebts.map((d) => d.name))
+  const excluding = leftOut === '' ? '' : ` (excluding ${leftOut})`
   const untracked = suggestions.filter((a) => a.debtId === null)
 
   return (
@@ -117,7 +124,9 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
             accountNames={accountNames}
             formatMoney={formatMoney}
             formatDate={formatDate}
+            busy={payoff.busy}
             onEdit={edit}
+            onToggleIncluded={toggleIncluded}
           />
         )}
       </Surface>
@@ -132,15 +141,25 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
             <ExtraPaymentForm saved={settings.extraPayment} busy={payoff.busy} onApply={payoff.applyExtra} />
           </div>
 
-          {plan === null ? <Spinner label="Working out the plan" /> : nothingOwed ? (
+          {plan === null ? <Spinner label="Working out the plan" /> : nothingInPlan ? (
+            <p className="dp-muted" role="status">
+              Nothing is in the plan. Tick "In plan" on a debt above to see when you will be free of it.
+            </p>
+          ) : nothingOwed ? (
             <p className="dp-muted" role="status">Every debt on the list is already at zero, so there is nothing to pay off.</p>
           ) : (
             <>
               <p className="dp-headline" role="status">
                 {plan.debtFreeDate === null
-                  ? `Not debt free within ${durationText(plan.monthLimit)} at these payments.`
-                  : `Debt free on ${formatDate(plan.debtFreeDate)}, ${durationText(plan.months)} from now.`}
+                  ? `Not debt free${excluding} within ${durationText(plan.monthLimit)} at these payments.`
+                  : `Debt free${excluding} on ${formatDate(plan.debtFreeDate)}, ${durationText(plan.months)} from now.`}
               </p>
+              {Number(plan.earmarked) > 0 ? (
+                <p className="dp-muted">
+                  Each month: {formatMoney(plan.monthlyBudget)} pooled + {formatMoney(plan.earmarked)} earmarked for
+                  single debts, until each is paid off.
+                </p>
+              ) : null}
               <PlanNotices plan={plan} formatMoney={formatMoney} />
               <PlanTotals plan={plan} formatMoney={formatMoney} formatDate={formatDate} />
               <h3 className="dp-h3">What you owe, month by month</h3>

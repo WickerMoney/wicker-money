@@ -29,6 +29,7 @@ export function parseDebts(debts: readonly DebtInput[]): ParsedDebt[] {
       balance: amount(debt.balance, 'balance'),
       apr: rate(debt.apr),
       minimum: amount(debt.minimumPayment, 'minimum payment'),
+      extra: amount(debt.extraPayment ?? '0', 'extra payment for this debt'),
       position,
     }
   })

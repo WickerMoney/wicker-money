@@ -14,7 +14,9 @@ import { planQuery } from '../schemas/planQuery.js'
  *
  * Responds `200` with the plan: the month-by-month schedule, each debt's
  * payoff date, total interest, the debt-free date, and the comparison with
- * paying only the minimums. See `PayoffPlan` for every field. Responds `400
+ * paying only the minimums. Debts switched out of the plan (`included:
+ * false`) are left out of all of it and listed in `excludedDebts`. See
+ * `PlanResponse` for every field. Responds `400
  * validation_failed` for an invalid parameter.
  *
  * @param deps - The host's route registrar.

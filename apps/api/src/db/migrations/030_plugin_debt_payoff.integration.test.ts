@@ -58,7 +58,8 @@ describe('up', () => {
     `.execute(owner)
     expect(rows).toEqual([
       { col: 'balance', type: 'numeric(19,4)' },
-      { col: 'extra_payment', type: 'numeric(19,4)' },
+      { col: 'extra_payment', type: 'numeric(19,4)' }, // plan_settings
+      { col: 'extra_payment', type: 'numeric(19,4)' }, // debts, from 034
       { col: 'minimum_payment', type: 'numeric(19,4)' },
     ])
   })

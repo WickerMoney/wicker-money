@@ -8,6 +8,8 @@ export interface ExportedDebt {
   account_id: string | null
   sort_order: number
   archived: boolean
+  included: boolean
+  extra_payment: string
   created_at: Date
   updated_at: Date
 }

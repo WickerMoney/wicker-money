@@ -183,13 +183,15 @@ describe('GET /api/v1/settings/export', () => {
   it('exports the debt payoff plugin\'s debts and settings, and only the caller\'s', async () => {
     const mine = await createUser(h)
     await send(mine, 'POST', '/api/v1/p/wickermoney.debt-payoff/debts',
-      { name: 'Exported card', balance: '500', apr: '19.99', minimumPayment: '25' }, DEBT_PAYOFF)
+      { name: 'Exported card', balance: '500', apr: '19.99', minimumPayment: '25', included: false, extraPayment: '15' }, DEBT_PAYOFF)
     await send(mine, 'PUT', '/api/v1/p/wickermoney.debt-payoff/settings',
       { strategy: 'snowball', extraPayment: '40' }, DEBT_PAYOFF)
 
     const { doc } = await exportFor(mine)
     const exported = doc.plugins[DEBT_PAYOFF] as unknown as { debts: Array<Record<string, unknown>>; settings: Record<string, unknown> | null }
-    expect(exported.debts).toEqual([expect.objectContaining({ name: 'Exported card' })])
+    expect(exported.debts).toEqual([
+      expect.objectContaining({ name: 'Exported card', included: false, extra_payment: '15.0000' }),
+    ])
     expect(exported.settings).toEqual(expect.objectContaining({ strategy: 'snowball' }))
 
     const { doc: theirs } = await exportFor(alice.user)

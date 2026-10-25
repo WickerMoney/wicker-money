@@ -1,5 +1,5 @@
 import { unitsToMoney } from '@wickermoney/plugin-sdk/money'
-import { buildPayoffPlan, STRATEGIES, type PayoffPlan, type Strategy } from '../../shared/index.js'
+import { buildPayoffPlan, STRATEGIES, type PlanResponse, type Strategy } from '../../shared/index.js'
 import { MAX_ACTIVE_DEBTS } from '../constants.js'
 import type { DebtRepositories } from '../repository/DebtRepositories.js'
 import type { DebtRow } from '../repository/DebtRow.js'
@@ -93,6 +93,8 @@ export class DebtPayoffService {
           accountId,
           sortOrder: input.sortOrder,
           archived,
+          included: input.included ?? true,
+          extraPayment: input.extraPayment ?? NO_EXTRA,
         }),
       )
       if (row === undefined) throw new DebtPayoffError('The debt could not be saved.', 500, 'not_saved')
@@ -130,6 +132,8 @@ export class DebtPayoffService {
           accountId,
           sortOrder: changes.sortOrder ?? current.sort_order,
           archived,
+          included: changes.included ?? current.included,
+          extraPayment: changes.extraPayment ?? current.extra_payment,
         }),
       )
       if (row === undefined) throw DebtPayoffError.debtNotFound()
@@ -181,7 +185,12 @@ export class DebtPayoffService {
   }
 
   /**
-   * Builds the payoff plan for the user's active debts.
+   * Builds the payoff plan for the user's active debts that are in the plan.
+   *
+   * A debt the person switched out of the plan is not in the simulation, the
+   * totals, the minimums-only comparison, the pool or the debt-free date; it
+   * is listed in `excludedDebts` so the page can say what the date leaves out.
+   * Archived debts are neither in the plan nor listed.
    *
    * Two reads at most, in one transaction, however many debts there are: the
    * debts, and the saved settings only when the request leaves out the
@@ -191,19 +200,23 @@ export class DebtPayoffService {
    * @param request - What the plan is asked for; anything left out comes from the saved settings.
    * @returns The plan, dated from today in the request's time zone.
    */
-  getPlan(userId: string, request: PlanRequest): Promise<PayoffPlan> {
+  getPlan(userId: string, request: PlanRequest): Promise<PlanResponse> {
     return this.uow.run(userId, async ({ debts, settings }) => {
       const rows = await debts.list(false)
       const needsSettings = request.strategy === undefined || request.extraPayment === undefined
       const saved = needsSettings ? await this.currentSettings(settings) : undefined
-      return buildPayoffPlan(
-        rows.map(toDebtInput),
+      const plan = buildPayoffPlan(
+        rows.filter((row) => row.included).map(toDebtInput),
         {
           strategy: request.strategy ?? saved?.strategy ?? DEFAULT_STRATEGY,
           extraPayment: request.extraPayment ?? saved?.extraPayment ?? NO_EXTRA,
           startDate: todayIn(request.timezone, this.now()),
         },
       )
+      return {
+        ...plan,
+        excludedDebts: rows.filter((row) => !row.included).map((row) => ({ id: row.id, name: row.name })),
+      }
     })
   }
 
@@ -279,5 +292,12 @@ function asStrategy(value: string): Strategy {
 
 /** A debt row as the strategy engine's input. */
 function toDebtInput(row: DebtRow) {
-  return { id: row.id, name: row.name, balance: row.balance, apr: row.apr, minimumPayment: row.minimum_payment }
+  return {
+    id: row.id,
+    name: row.name,
+    balance: row.balance,
+    apr: row.apr,
+    minimumPayment: row.minimum_payment,
+    extraPayment: row.extra_payment,
+  }
 }

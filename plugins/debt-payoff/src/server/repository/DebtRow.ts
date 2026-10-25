@@ -8,4 +8,6 @@ export interface DebtRow {
   account_id: string | null
   sort_order: number
   archived: boolean
+  included: boolean
+  extra_payment: string
 }

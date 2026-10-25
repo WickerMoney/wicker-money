@@ -10,6 +10,14 @@ export interface PlanDebt {
   readonly apr: string
   /** Its minimum payment, normalised to four decimal places. */
   readonly minimumPayment: string
+  /** Its earmark: the extra paid to this debt every month above its minimum, normalised to four decimal places. `0.0000` if none. */
+  readonly extraPayment: string
+  /**
+   * Whether the earmark alone is at least what was owed at the start, so the
+   * debt would be cleared in month 1 and part of the earmark goes unused.
+   * Usually a typo; the page says so. `false` when there is no earmark.
+   */
+  readonly earmarkCoversBalance: boolean
   /**
    * Whether the minimum is at least the first month's interest. `false` means
    * paying only the minimum would never reduce this debt; it is paid off only

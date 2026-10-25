@@ -105,6 +105,15 @@ export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemo
           error={err('minimumPayment')}
           onChange={(e) => change({ minimumPayment: e.target.value }, 'minimumPayment')}
         />
+        <Field
+          label="Extra each month toward this debt (optional)"
+          hint="Paid to this debt on top of its minimum, apart from the extra for all debts. It stops when this debt is paid off and does not move to another debt. Leave blank for none."
+          inputMode="decimal"
+          autoComplete="off"
+          value={draft.extraPayment}
+          error={err('extraPayment')}
+          onChange={(e) => change({ extraPayment: e.target.value }, 'extraPayment')}
+        />
         <SelectField
           label="Linked account (optional)"
           hint="Ties this debt to one of your loan or credit card accounts. Its balance is still the one you enter here."
@@ -124,6 +133,21 @@ export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemo
             <option key={a.id} value={a.id}>{a.name} ({ACCOUNT_KINDS[a.accountType] ?? a.accountType})</option>
           ))}
         </SelectField>
+
+        <label className="check dp-archive">
+          <input
+            type="checkbox"
+            checked={draft.included && !draft.archived}
+            disabled={draft.archived}
+            onChange={(e) => change({ included: e.target.checked })}
+          />
+          <span>
+            Include in the payoff plan.{' '}
+            {draft.archived
+              ? 'An archived debt is never in the plan.'
+              : 'Switch it off to keep the debt in your list but leave it out of the dates and totals, such as a mortgage that would dwarf the rest.'}
+          </span>
+        </label>
 
         {editing !== null ? (
           <label className="check dp-archive">

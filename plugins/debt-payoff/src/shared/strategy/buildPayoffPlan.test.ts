@@ -443,3 +443,111 @@ describe('validation', () => {
     expect(() => plan([debt('x', '999999999999999.9999', '999.9999', '999999999999999.9999')], 'avalanche')).not.toThrow()
   })
 })
+
+describe('earmarks: extra paid toward one debt', () => {
+  const earmarked = (d: DebtInput, extraPayment: string): DebtInput => ({ ...d, extraPayment })
+  const lineOf = (p: PayoffPlan, month: number, id: string) =>
+    p.schedule[month - 1]?.debts.find((d) => d.debtId === id)
+
+  it('is identical to today when every earmark is zero or left out', () => {
+    for (const strategy of ['snowball', 'avalanche'] as const) {
+      for (const extra of ['0', '75.50']) {
+        const explicit = three.map((d) => earmarked(d, '0'))
+        expect(plan(explicit, strategy, extra)).toEqual(plan(three, strategy, extra))
+      }
+    }
+  })
+
+  it('reports no earmark on a plan that has none', () => {
+    const p = plan(three, 'snowball', '50')
+    expect(p.earmarked).toBe('0.0000')
+    expect(p.debts.every((d) => d.extraPayment === '0.0000' && !d.earmarkCoversBalance)).toBe(true)
+  })
+
+  it('pays the earmark on top of the minimum and outside the pool', () => {
+    // Pool: 100 + 100 + 50 shared extra = 250. A also has a 100 earmark.
+    const a = earmarked(debt('a', '1000', '0', '100'), '100')
+    const b = debt('b', '5000', '0', '100')
+    const p = plan([a, b], 'snowball', '50')
+
+    expect(p.monthlyBudget).toBe('250.0000')
+    expect(p.earmarked).toBe('100.0000')
+    expect(p.debts.find((d) => d.id === 'a')).toMatchObject({ extraPayment: '100.0000' })
+    // A: minimum 100, earmark 100, and the pooled 50 (it is first in line) = 250. B: its minimum only.
+    expect(lineOf(p, 1, 'a')).toMatchObject({ payment: '250.0000', balance: '750.0000' })
+    expect(lineOf(p, 1, 'b')).toMatchObject({ payment: '100.0000', balance: '4900.0000' })
+    expect(p.schedule[0]).toMatchObject({ payment: '350.0000' })
+  })
+
+  it('does not move to another debt when its debt is paid off', () => {
+    // A is cleared in month 2 by its 400 earmark. Had the earmark rolled, B would
+    // then get 500 a month; it gets its own 100 plus A's freed 100 minimum, as ever.
+    const a = earmarked(debt('a', '1000', '0', '100'), '400')
+    const b = debt('b', '1000', '0', '100')
+    const p = plan([a, b], 'snowball')
+
+    expect(p.schedule[0]).toMatchObject({ payment: '600.0000', balance: '1400.0000' })
+    expect(p.debts.find((d) => d.id === 'a')).toMatchObject({ payoffMonth: 2 })
+    expect(p.schedule[1]).toMatchObject({ payment: '600.0000', balance: '800.0000' })
+    expect(p.schedule[2]).toMatchObject({ payment: '200.0000', balance: '600.0000' })
+    expect(p.months).toBe(6)
+    expect(p.debtFreeDate).toBe('2027-04-10')
+  })
+
+  it('is later than the same money rolled into the pool, which is the point', () => {
+    const rolled = plan([debt('a', '1000', '0', '100'), debt('b', '1000', '0', '100')], 'snowball', '400')
+    const earmark = plan([earmarked(debt('a', '1000', '0', '100'), '400'), debt('b', '1000', '0', '100')], 'snowball')
+    expect(rolled.months).toBeLessThan(earmark.months)
+  })
+
+  it('never pays more than the debt owes, and says when the earmark alone would clear it', () => {
+    const p = plan([earmarked(debt('a', '50', '0', '10'), '200')], 'avalanche')
+    expect(p.months).toBe(1)
+    expect(p.schedule[0]).toMatchObject({ payment: '50.0000', balance: '0.0000' })
+    expect(p.debts[0]).toMatchObject({ extraPayment: '200.0000', earmarkCoversBalance: true, totalPaid: '50.0000' })
+  })
+
+  it('does not flag an earmark that is smaller than the balance', () => {
+    const p = plan([earmarked(debt('a', '500', '0', '10'), '200')], 'avalanche')
+    expect(p.debts[0]).toMatchObject({ earmarkCoversBalance: false })
+  })
+
+  it('pays down a debt with no minimum from its earmark alone', () => {
+    const p = plan([earmarked(debt('a', '300', '0', '0'), '100')], 'avalanche')
+    expect(p.months).toBe(3)
+    expect(p.capped).toBe(false)
+    // Minimums only pays nothing, so it never ends: there is nothing to compare.
+    expect(p.minimumsOnly.capped).toBe(true)
+    expect(p.monthsSaved).toBeNull()
+  })
+
+  it('ignores earmarks in the minimums-only comparison', () => {
+    const withEarmarks = plan([earmarked(three[0] as DebtInput, '300'), three[1] as DebtInput, three[2] as DebtInput], 'avalanche', '40')
+    expect(withEarmarks.minimumsOnly).toEqual(plan(three, 'avalanche').minimumsOnly)
+  })
+
+  it('does not change the order extra money is aimed in', () => {
+    const twins = [debt('a', '1000', '10', '50'), debt('b', '1000', '10', '50')]
+    expect(plan(twins, 'snowball', '25').order).toEqual(['a', 'b'])
+    expect(plan([twins[0] as DebtInput, earmarked(twins[1] as DebtInput, '500')], 'snowball', '25').order).toEqual(['a', 'b'])
+  })
+
+  it('ignores the earmark on a debt that starts at zero', () => {
+    const p = plan([earmarked(debt('z', '0', '10', '25'), '80'), card], 'avalanche')
+    expect(p.earmarked).toBe('0.0000')
+    expect(p.debts.find((d) => d.id === 'z')).toMatchObject({ payoffMonth: 0, extraPayment: '80.0000', earmarkCoversBalance: false })
+  })
+
+  it('still stops at the limit when an earmark cannot beat the interest', () => {
+    // 2,000.00 of interest a month against 10.00 + 10.00 paid.
+    const p = plan([earmarked(debt('x', '100000', '24', '10'), '10')], 'avalanche')
+    expect(p.capped).toBe(true)
+    expect(p.debtFreeDate).toBeNull()
+  })
+
+  it('refuses a negative or malformed earmark', () => {
+    expect(() => plan([earmarked(card, '-1')], 'avalanche')).toThrow(RangeError)
+    expect(() => plan([earmarked(card, 'abc')], 'avalanche')).toThrow(RangeError)
+    expect(() => plan([earmarked(card, '1.00001')], 'avalanche')).toThrow(RangeError)
+  })
+})
