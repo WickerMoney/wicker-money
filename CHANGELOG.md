@@ -23,6 +23,22 @@ curated, human-readable version.
   
 ### Added
 
+- **Debt payoff: leave a debt out of the plan.** Each debt has an "In plan"
+  switch, saved as soon as you change it, like "safe to spend" on Accounts. A
+  debt that is switched off stays in your list, muted and marked "Not in plan",
+  but is left out of the chart, the schedule, the totals, the pooled payment and
+  the debt-free date, so one very large debt, a mortgage say, no longer flattens
+  the rest. The headline and the dashboard widget say what they leave out
+  ("Debt free (excluding Mortgage) on ..."). It still counts toward the limit of
+  50 debts. Archiving is unchanged and still removes a debt from everything.
+- **Debt payoff: an extra amount for one debt.** Each debt can have its own
+  monthly extra, paid after the minimums and before the shared extra is spread by
+  your strategy. It comes on top of the shared extra and does not join the pool,
+  so when that debt is paid off its extra stops instead of moving to another
+  debt, and the debt-free date moves later. Freed minimums still roll over as
+  before. The shared extra is relabelled "Extra for all debts (follows the
+  strategy)". A debt with no extra and every debt in the plan give exactly the
+  plan they gave before.
 - **End-to-end tests (`e2e/`).** A private Playwright package that drives the
   built image through a throwaway compose stack with the seeded demo data:
   `e2e/run.ps1` on Windows, `e2e/run.sh` elsewhere, `pnpm test:e2e` against a
@@ -82,6 +98,18 @@ curated, human-readable version.
   Insights, Spending Trends and others failed on some runs and not others. A
   plugin's `dev` now waits for its own `build` (a `turbo.json` in each plugin),
   and the delete retries a few times.
+
+### Migrations
+
+One new migration, so an upgrade runs one more step. **Back up your database
+before upgrading** (`pg_dump -Fc`); going back is `node dist/db/cli.js down` once
+with the newer image, then start the older image.
+
+- **034_debt_payoff_plan_controls** adds `included boolean not null default true`
+  and `extra_payment numeric(19,4) not null default 0` (never negative) to
+  `plugin_debt_payoff.debts`. Existing debts are all in the plan with no extra, so
+  nothing changes until you use them. Its `down` drops both columns, which
+  discards any switch and extra amounts you set.
 
 ## [0.6.1] - 2026-10-23
 
