@@ -167,7 +167,10 @@ test.describe('golden path', () => {
     // Unique per run (and per retry), so the row is found whatever else is in the ledger.
     const merchant = `E2E coffee ${Date.now()}`
     const account = 'Everyday Checking'
-    const safeToSpend = page.locator('.upc-head').filter({ hasText: 'Safe to spend' }).locator('.upc-head__value')
+    // Upcoming runs in a sandboxed frame, so its figure is in the frame's document, not the page's. The widget is
+    // the first card on the dashboard, so its frame starts at once; the locator waits for it.
+    const safeToSpend = page.frameLocator('iframe[title="Upcoming · Until payday"]')
+      .locator('.upc-head').filter({ hasText: 'Safe to spend' }).locator('.upc-head__value')
 
     await signIn('hero')
     await expect(safeToSpend).toBeVisible()
