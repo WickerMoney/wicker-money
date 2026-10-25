@@ -322,8 +322,8 @@ Where a plugin's UI runs decides what it can do.
 
 | Plugin | UI runs in | What contains it |
 | --- | --- | --- |
-| Bundled, ported (Insights, Spending Trends) | A sandboxed frame | The sandbox and the host's broker (below) |
-| Bundled, not ported yet (Budgets, Import CSV, Upcoming, Forecast, Debt payoff) | **The app's own page** | Nothing: fully trusted, in the host's origin, with the signed-in user's session. `requiredTables`, the `x-wickermoney-plugin` header and the checks in `ctx.api` are developer feedback there, not a boundary |
+| Bundled, ported (Insights, Spending Trends, Upcoming) | A sandboxed frame | The sandbox and the host's broker (below) |
+| Bundled, not ported yet (Budgets, Import CSV, Forecast, Debt payoff) | **The app's own page** | Nothing: fully trusted, in the host's origin, with the signed-in user's session. `requiredTables`, the `x-wickermoney-plugin` header and the checks in `ctx.api` are developer feedback there, not a boundary |
 | Third-party (a manifest the operator added) | A sandboxed frame, **always** | The sandbox and the broker |
 
 Which row a plugin is in is decided by the host, never by the manifest. In-page
