@@ -54,6 +54,7 @@ describe('plugin registry endpoint', () => {
     // A bundled plugin runs in the page's own realm only while the host lists it.
     for (const p of body.plugins) expect(p.runtime, p.id).toBe(IN_REALM_PLUGIN_IDS.has(p.id) ? 'in-realm' : 'isolated')
     expect(body.plugins.find((p) => p.id === 'wickermoney.spending-trends')?.runtime).toBe('isolated')
+    expect(body.plugins.find((p) => p.id === 'wickermoney.upcoming')?.runtime).toBe('isolated')
     expect(body.plugins.find((p) => p.id === 'wickermoney.budgets')?.runtime).toBe('in-realm')
   })
 })

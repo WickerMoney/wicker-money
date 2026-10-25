@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -170,6 +172,13 @@ describe('UpcomingWidget', () => {
     expect(ctx.navigate).toHaveBeenCalledWith('/recurring')
   })
 
+  it('keeps the list in a labelled region the keyboard can reach, so a long list scrolls inside the widget', async () => {
+    render(<UpcomingWidget ctx={ctxWith(base)} size="lg" />)
+    const region = await screen.findByRole('region', { name: 'Coming up' })
+    expect(region.tabIndex).toBe(0)
+    expect(region.querySelectorAll('li')).toHaveLength(2)
+  })
+
   it('shows the error when the outlook cannot be loaded', async () => {
     render(<UpcomingWidget ctx={ctxWith(new Error('grant_denied'))} size="lg" />)
     await waitFor(() => expect(screen.getByText('grant_denied')).toBeDefined())
@@ -203,5 +212,21 @@ describe('amount text helpers', () => {
     render(<UpcomingWidget ctx={ctxWith(base)} size="lg" />)
     await screen.findByText('Mortgage')
     expect(screen.queryByText('Arrived')).toBeNull()
+  })
+})
+
+describe('frame readiness', () => {
+  // A frame loads the plugin's chunks on their own: the SDK root would bring Zod (about 85 kB) into every frame,
+  // and the host page is out of reach, so nothing may import the root, a portal or the host's document.
+  const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]))
+    .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f))
+
+  it('imports the SDK only from its /runtime entry, and uses no portal', () => {
+    for (const file of files(join(__dirname))) {
+      const text = readFileSync(file, 'utf8')
+      expect(text, file).not.toMatch(/from\s+['"]@wickermoney\/plugin-sdk['"]/)
+      expect(text, file).not.toMatch(/createPortal|window\.parent|window\.top/)
+    }
   })
 })

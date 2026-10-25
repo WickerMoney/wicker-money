@@ -948,8 +948,8 @@ What a bundled plugin still does not get:
 
 ### Plugin trust model
 
-Two of the seven bundled UI plugins (Insights, Spending Trends) and every
-third-party plugin run in a sandboxed frame. The other five bundled plugins
+Three of the seven bundled UI plugins (Insights, Spending Trends, Upcoming) and
+every third-party plugin run in a sandboxed frame. The other four bundled plugins
 (widgets and pages loaded over Module Federation) still run **fully trusted, in
 the host's origin**. Read this before writing or reviewing anything
 that talks about plugin "permissions", "scoping" or "sandboxing".
@@ -988,9 +988,9 @@ Consequences for contributors:
   (`@wickermoney/plugin-sdk/isolated`, experimental) and the web app hosts it.
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
-  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights` and
-  `spending-trends` have been ported and run in frames. The other five bundled
-  plugins (`budgets`, `import-csv`, `upcoming`, `forecast`, `debt-payoff`) are
+  (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights`,
+  `spending-trends` and `upcoming` have been ported and run in frames. The other
+  four bundled plugins (`budgets`, `import-csv`, `forecast`, `debt-payoff`) are
   still listed and run in the page, fully trusted. The list shrinks as plugins
   are ported.
 
@@ -1514,7 +1514,7 @@ stack is healthy, migrated and seeded (all four seed personas sign in, the
 bundled plugins registered with no load failures); `hero` signs in and reaches the
 dashboard; `household` reaches the forecast page; every in-realm bundled plugin
 page loads with no console error or failed request; every dashboard widget
-loads, and the isolated ones (Insights, Spending Trends today) run in frames with
+loads, and the isolated ones (Insights, Spending Trends and Upcoming today) run in frames with
 no console error and no Content Security Policy violation; `hero` cannot read
 `household` data through the API or the UI; and a transaction added in the
 Transactions dialog appears in the ledger and lowers the dashboard's "Safe to

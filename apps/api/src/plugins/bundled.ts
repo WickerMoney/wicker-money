@@ -38,7 +38,6 @@ import { SDK_MAJOR_VERSION } from '@wickermoney/plugin-sdk'
 export const IN_REALM_PLUGIN_IDS: ReadonlySet<string> = new Set([
   'wickermoney.budgets',
   'wickermoney.import-csv',
-  'wickermoney.upcoming',
   'wickermoney.forecast',
   'wickermoney.debt-payoff',
 ])

@@ -385,8 +385,8 @@ focus. Turning a plugin off deletes nothing. Its tables, rows and database
 role stay, and turning it back on brings everything back. Plugins in the same
 area, such as two budgeting approaches, can be on together.
 
-**Where a plugin runs decides how far it is trusted.** Insights and Spending
-Trends run in a sandboxed frame and reach your data only through the host, with
+**Where a plugin runs decides how far it is trusted.** Insights, Spending
+Trends and Upcoming run in a sandboxed frame and reach your data only through the host, with
 the grants their manifest lists. The other bundled plugins still run inside the
 app, in its own origin, with the same access to your data as you have; they ship
 in the image and are reviewed with it. There is no install flow or catalog for

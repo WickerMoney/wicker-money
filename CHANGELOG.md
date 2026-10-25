@@ -33,6 +33,7 @@ curated, human-readable version.
   starts when the frame is created and stops while the tab is hidden, so a tab in
   the background no longer fails a widget. Find-in-page and printing only see
   frames that have started.
+- **Upcoming runs in a sandboxed frame.** The "Until payday" widget no longer runs in the app's own page; it reads through the host's broker with only its two read grants, and its upcoming list scrolls inside the widget.
   
 ### Added
 
