@@ -68,7 +68,11 @@ export interface SimulationInput {
  * 1. **Interest accrues** on the opening balance (see {@link monthlyInterest}).
  * 2. **The minimum is paid**, but never more than the debt now owes, so a
  *    minimum larger than the balance clears it and leaves nothing negative.
- * 3. **With `rollover`**, whatever is left of the month's pooled amount is
+ * 3. **With `rollover`, each debt's earmark is paid**, never more than the
+ *    debt still owes. An earmark is outside the pool: it is not part of the
+ *    pooled amount and nothing replaces it once its debt is paid off, so the
+ *    money stops rather than moving to another debt.
+ * 4. **With `rollover`**, whatever is left of the month's pooled amount is
  *    aimed down the priority list: the first debt takes up to what it owes,
  *    the next takes what remains, and so on. That one rule covers an extra
  *    payment, a freed minimum, and the leftover when a final payment is
@@ -123,6 +127,14 @@ export function simulate(input: SimulationInput): Simulation {
     }
 
     if (input.rollover) {
+      // Earmarks come first and are not drawn from the pool: `spent` stays the
+      // minimums, so the pool's leftover below is unaffected by them.
+      for (const line of lines) {
+        const earmark = line.run.debt.extra < line.run.balance ? line.run.debt.extra : line.run.balance
+        line.payment += earmark
+        line.run.balance -= earmark
+      }
+
       let left = pool - spent
       for (const line of lines) {
         if (left <= 0n) break

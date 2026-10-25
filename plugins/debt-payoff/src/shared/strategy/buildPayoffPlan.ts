@@ -39,6 +39,12 @@ import { STRATEGIES } from './STRATEGIES.js'
  *   start, plus the extra. When a debt is paid off its minimum stays in that
  *   amount and moves to the next debt in line (the "rolling" in snowball and
  *   avalanche). A debt that starts at zero contributes no minimum.
+ * - **Earmarks.** A debt may carry its own extra amount, paid every month
+ *   after its minimum and before the pooled money is aimed anywhere. It is
+ *   outside the pool and never added to it, so when the debt is paid off the
+ *   earmark stops: it does not move to another debt (the debt-free date moves
+ *   later instead). Freed minimums still roll. An earmark is capped at what
+ *   the debt still owes, and the minimums-only scenario ignores it.
  * - **Limit.** A schedule is at most {@link MAX_PLAN_MONTHS} months. Past that,
  *   or once a balance outgrows what the database can store, the plan stops,
  *   is flagged `capped` and has no debt-free date.
@@ -91,6 +97,8 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
       startingBalance: unitsToMoney(run.debt.balance),
       apr: unitsToMoney(run.debt.apr),
       minimumPayment: unitsToMoney(run.debt.minimum),
+      extraPayment: unitsToMoney(run.debt.extra),
+      earmarkCoversBalance: run.debt.extra > 0n && run.debt.extra >= run.debt.balance,
       minimumCoversInterest: run.debt.minimum >= monthlyInterest(run.debt.balance, run.debt.apr),
       payoffMonth: run.payoffMonth,
       payoffDate: run.payoffMonth === null ? null : dateOf(run.payoffMonth),
@@ -103,6 +111,8 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
       startingBalance: unitsToMoney(0n),
       apr: unitsToMoney(debt.apr),
       minimumPayment: unitsToMoney(debt.minimum),
+      extraPayment: unitsToMoney(debt.extra),
+      earmarkCoversBalance: false,
       minimumCoversInterest: true,
       payoffMonth: 0,
       payoffDate: options.startDate,
@@ -134,6 +144,7 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
     extraPayment: unitsToMoney(extra),
     startDate: options.startDate,
     monthlyBudget: unitsToMoney(owing.reduce((sum, debt) => sum + debt.minimum, 0n) + extra),
+    earmarked: unitsToMoney(owing.reduce((sum, debt) => sum + debt.extra, 0n)),
     order: ordered.map((debt) => debt.id),
     debts: planDebts,
     startingBalance: unitsToMoney(owing.reduce((sum, debt) => sum + debt.balance, 0n)),

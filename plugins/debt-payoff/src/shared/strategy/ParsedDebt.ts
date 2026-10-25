@@ -8,6 +8,8 @@ export interface ParsedDebt {
   readonly apr: bigint
   /** The minimum payment in units of 0.0001. */
   readonly minimum: bigint
+  /** The earmark, in units of 0.0001: paid to this debt each month above its minimum. */
+  readonly extra: bigint
   /** Position in the caller's list, which breaks ties between debts that are otherwise equal. */
   readonly position: number
 }
