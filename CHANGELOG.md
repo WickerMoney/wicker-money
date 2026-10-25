@@ -55,6 +55,11 @@ curated, human-readable version.
 
 ### Fixed
 
+- **Phone layout: text buttons overlapped their neighbours.** On a phone,
+  "Match…" in the Transactions recurring column sat on top of the line below it,
+  and "Unmatch" touched the date before it; the Recurring page's "Undo" had no
+  tap area. The 560 px rule for the bigger tap area was cancelled by a later
+  rule, leaving only its negative margin.
 - **Erase my data and a write in flight.** A write that was open when the erase
   started was invisible to it and committed afterwards, leaving a row for the
   signed-out user (or, for a row pointing at an account, failing the erase with

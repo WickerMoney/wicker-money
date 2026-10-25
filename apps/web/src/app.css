@@ -280,8 +280,6 @@
   .cat-table.tbl-cards .wm-table td[data-col="actions"] { justify-self: start; }
   .disclosure--icon { width: 40px; height: 40px; }
   .disclosure--header { min-height: 44px; }
-  /* Text-style buttons in table rows: a taller hit area without a taller look. */
-  .recur-link { padding: 10px 4px; margin: -10px -4px; }
   .cat-cell__select { min-height: 40px; }
   .recur-status--button { min-height: 32px; }
 }
@@ -576,6 +574,11 @@
   padding: 0; border: 0; background: none; font: inherit; font-size: 12px; cursor: pointer;
   color: var(--wm-accent); text-decoration: underline; text-underline-offset: 2px;
 }
+/* Text-style buttons in table rows: a taller hit area without a taller look. This
+   sits after the base rule on purpose: inside the 560px block further up it was
+   cancelled by the base `padding: 0` (same specificity, later wins) while its
+   negative margin still applied, which pulled the button over its neighbours. */
+@media (max-width: 560px) { .recur-link { padding: 10px 4px; margin: -10px -4px; } }
 .recur-suggestions, .recur-occurrences, .recur-occurrence__legs, .recur-candidates ul {
   list-style: none; margin: 0; padding: 0;
 }
