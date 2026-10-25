@@ -216,7 +216,10 @@ async function behaviour(pw: typeof Playwright): Promise<void> {
       check('a waiting widget has no iframe', (await page.locator('.plugin-frame[data-status="waiting"] iframe').count()) === 0)
       check('iframes at load equal frame widgets minus waiting ones', (await page.locator('iframe').count()) === frameWidgets - waiting.length, { frameWidgets, waiting: waiting.length })
       check('a placeholder reserves at least the minimum height', waiting.every((x) => x.height >= 96), waiting.map((x) => x.height))
-      check('every waiting widget is more than the margin below the viewport', waiting.every((x) => x.top > VIEWPORT.height + 600), waiting.map((x) => x.top))
+      // A card inside the 600 px margin but below the viewport is held until 2.5 s after load (LAYOUT_SETTLED_AT_MS), so it
+      // may still be waiting here; only a card that is in the viewport must have started. (With Upcoming in a frame its card
+      // is shorter, the cards below move up, and one of them sits inside the margin.)
+      check('every waiting widget is below the viewport', waiting.every((x) => x.top >= VIEWPORT.height), waiting.map((x) => x.top))
       check('a placeholder is not a live region, not focusable and holds no control',
         (await page.locator('.plugin-frame[data-status="waiting"]').evaluateAll((els) => els.every((e) => e.querySelector('[role="status"],[role="alert"],[tabindex],button,a,input,iframe') === null))))
 

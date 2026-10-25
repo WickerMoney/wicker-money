@@ -21,28 +21,32 @@ export interface UpcomingListProps {
  */
 export function UpcomingList({ occurrences, accountName, formatMoney, formatDate }: UpcomingListProps) {
   return (
-    <ul className="upc-list">
-      {occurrences.map((o) => {
-        const tone = o.kind === 'income' ? 'upc-pos' : o.kind === 'transfer' ? 'upc-neutral' : 'upc-neg'
-        // A debt payment's headline is what it moves; from the household's
-        // point of view it is an outgoing.
-        const shown = o.kind === 'debt_payment' && !o.amount.startsWith('-') ? `-${o.amount}` : o.amount
-        const tag = statusTag(o, formatDate)
-        const arrived = o.status === 'cleared'
-        return (
-          <li key={`${o.itemId}:${o.nominalDate ?? o.date}`} className={`upc-list__item${arrived ? ' is-arrived' : ''}`}>
-            <span className="upc-list__date">{formatDate(o.date)}</span>
-            <span className="upc-list__what">
-              <span className="upc-list__name">
-                {o.name}
-                {tag !== null ? <span className={`upc-tag${tag.tone === 'warn' ? ' upc-tag--warn' : ''}`}>{tag.label}</span> : null}
+    // A frame holds a widget to 800 px, so a long list scrolls inside its own region, which is a
+    // labelled Tab stop (a scrolling area a keyboard cannot reach is an axe violation).
+    <div className="upc-scroll" role="region" aria-label="Coming up" tabIndex={0}>
+      <ul className="upc-list">
+        {occurrences.map((o) => {
+          const tone = o.kind === 'income' ? 'upc-pos' : o.kind === 'transfer' ? 'upc-neutral' : 'upc-neg'
+          // A debt payment's headline is what it moves; from the household's
+          // point of view it is an outgoing.
+          const shown = o.kind === 'debt_payment' && !o.amount.startsWith('-') ? `-${o.amount}` : o.amount
+          const tag = statusTag(o, formatDate)
+          const arrived = o.status === 'cleared'
+          return (
+            <li key={`${o.itemId}:${o.nominalDate ?? o.date}`} className={`upc-list__item${arrived ? ' is-arrived' : ''}`}>
+              <span className="upc-list__date">{formatDate(o.date)}</span>
+              <span className="upc-list__what">
+                <span className="upc-list__name">
+                  {o.name}
+                  {tag !== null ? <span className={`upc-tag${tag.tone === 'warn' ? ' upc-tag--warn' : ''}`}>{tag.label}</span> : null}
+                </span>
+                <span className="upc-muted">{whereTo(o, accountName)}</span>
               </span>
-              <span className="upc-muted">{whereTo(o, accountName)}</span>
-            </span>
-            <span className={`upc-num ${arrived ? 'upc-muted' : tone}`}>{formatMoney(shown)}</span>
-          </li>
-        )
-      })}
-    </ul>
+              <span className={`upc-num ${arrived ? 'upc-muted' : tone}`}>{formatMoney(shown)}</span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
