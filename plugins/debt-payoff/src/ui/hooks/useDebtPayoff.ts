@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk/runtime'
 import { NO_FORM_ERRORS, formErrorsFrom, type FormErrors } from '@wickermoney/ui-kit'
 import { DEBT_PAYOFF_API_BASE } from '../../server/constants.js'
-import type { PayoffPlan, Strategy } from '../../shared/index.js'
+import type { PlanResponse, Strategy } from '../../shared/index.js'
 import { checkDraft } from '../helpers/checkDraft.js'
 import { colorFor } from '../helpers/colorFor.js'
 import { draftBody } from '../helpers/draftBody.js'
@@ -11,7 +11,7 @@ import type {
   AccountSuggestion, AccountSuggestionsResponse, Debt, DebtDraft, DebtsResponse, PlanSettings,
 } from '../models/index.js'
 
-const DEBT_FIELDS = ['name', 'balance', 'apr', 'minimumPayment', 'accountId', 'archived'] as const
+const DEBT_FIELDS = ['name', 'balance', 'apr', 'minimumPayment', 'accountId', 'archived', 'included'] as const
 const SETTINGS_FIELDS = ['extraPayment', 'strategy'] as const
 
 /** What {@link useDebtPayoff} returns. */
@@ -23,7 +23,7 @@ export interface DebtPayoff {
   /** The saved strategy and extra; `null` while loading. */
   readonly settings: PlanSettings | null
   /** The plan for the saved strategy and extra; kept on screen while the next one loads. */
-  readonly plan: PayoffPlan | null
+  readonly plan: PlanResponse | null
   /** Whether a plan is being fetched. */
   readonly planLoading: boolean
   /** Loan and credit card accounts a debt could track. */
@@ -53,6 +53,8 @@ export interface DebtPayoff {
   readonly saveDebt: (id: string | null, draft: DebtDraft) => Promise<FormErrors>
   /** Removes a debt for good. Resolves to whether it went. */
   readonly removeDebt: (debt: Debt) => Promise<boolean>
+  /** Switches a debt into or out of the plan, saved at once. */
+  readonly setIncluded: (debt: Debt, included: boolean) => Promise<void>
 }
 
 /**
@@ -71,7 +73,7 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
   const { timezone } = ctx.session
   const [debts, setDebts] = useState<readonly Debt[] | null>(null)
   const [settings, setSettings] = useState<PlanSettings | null>(null)
-  const [plan, setPlan] = useState<PayoffPlan | null>(null)
+  const [plan, setPlan] = useState<PlanResponse | null>(null)
   const [planLoading, setPlanLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<readonly AccountSuggestion[]>([])
   const [showArchived, setShowArchived] = useState(false)
@@ -120,7 +122,7 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
     const { signal } = controller
     setPlanLoading(true)
     const query = `?strategy=${strategy}&extra=${encodeURIComponent(extra)}&tz=${encodeURIComponent(timezone)}`
-    api.get<PayoffPlan>(`${DEBT_PAYOFF_API_BASE}/plan${query}`, { signal })
+    api.get<PlanResponse>(`${DEBT_PAYOFF_API_BASE}/plan${query}`, { signal })
       .then((p) => { if (!signal.aborted) { setPlan(p); setPlanLoading(false) } })
       .catch((e: unknown) => {
         if (signal.aborted) return
@@ -191,6 +193,20 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
     }
   }, [api])
 
+  const setIncluded = useCallback(async (debt: Debt, included: boolean): Promise<void> => {
+    setBusy(true)
+    try {
+      await api.put<Debt>(`${DEBT_PAYOFF_API_BASE}/debts/${debt.id}`, { included })
+      setVersion((v) => v + 1)
+      setMessage(null)
+      setStatus(`${debt.name} ${included ? 'is now in' : 'left out of'} the plan. Updating the plan.`)
+    } catch (e: unknown) {
+      setMessage(messageOf(e, `Could not change whether ${debt.name} is in the plan.`))
+    } finally {
+      setBusy(false)
+    }
+  }, [api])
+
   const removeDebt = useCallback(async (debt: Debt): Promise<boolean> => {
     setBusy(true)
     try {
@@ -209,7 +225,7 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
 
   return {
     debts, colors, settings, plan, planLoading, suggestions, showArchived, setShowArchived,
-    message, status, busy, chooseStrategy, applyExtra, saveDebt, removeDebt,
+    message, status, busy, chooseStrategy, applyExtra, saveDebt, removeDebt, setIncluded,
   }
 }
 

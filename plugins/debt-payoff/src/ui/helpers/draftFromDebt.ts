@@ -16,5 +16,6 @@ export function draftFromDebt(debt: Debt): DebtDraft {
     minimumPayment: editableMoney(debt.minimumPayment),
     accountId: debt.accountId ?? '',
     archived: debt.archived,
+    included: debt.included,
   }
 }

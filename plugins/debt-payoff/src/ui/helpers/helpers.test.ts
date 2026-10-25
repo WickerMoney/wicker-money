@@ -72,9 +72,15 @@ describe('draft conversion', () => {
     // Sub-cent precision is never rounded away by editing.
     expect(draftFromDebt(makeDebt({ balance: '10.1250' })).balance).toBe('10.1250')
   })
+  it('carries the in-plan switch both ways, and fills it from the saved debt', () => {
+    expect(draftBody({ ...EMPTY_DRAFT, included: false }, false)).toMatchObject({ included: false })
+    expect(draftFromDebt(makeDebt({ included: false })).included).toBe(false)
+    expect(draftFromDebt(makeDebt({ included: true })).included).toBe(true)
+    expect(EMPTY_DRAFT.included).toBe(true)
+  })
   it('sends text, trimmed, and only an edit may archive', () => {
     const draft = { ...EMPTY_DRAFT, name: ' Visa ', balance: ' 10.5 ', apr: '1', minimumPayment: '2', accountId: '', archived: true }
-    expect(draftBody(draft, false)).toEqual({ name: 'Visa', balance: '10.5', apr: '1', minimumPayment: '2', accountId: null })
+    expect(draftBody(draft, false)).toEqual({ name: 'Visa', balance: '10.5', apr: '1', minimumPayment: '2', accountId: null, included: true })
     expect(draftBody(draft, true)).toMatchObject({ archived: true })
   })
 })

@@ -15,7 +15,7 @@ const store = (): Debt => makeDebt({ id: 'store', name: 'Store card', balance: '
 async function open(backend: Backend, ctx = makeCtx(backend.api)) {
   const user = userEvent.setup()
   render(<DebtPayoffPage ctx={ctx} />)
-  await screen.findByText(/Debt free on|Not debt free/)
+  await screen.findByText(/Debt free|Not debt free/)
   return { user, ctx }
 }
 
@@ -102,6 +102,127 @@ describe('the plan', () => {
   })
 })
 
+describe('leaving a debt out of the plan', () => {
+  const mortgage = (): Debt =>
+    makeDebt({ id: 'mortgage', name: 'Mortgage', balance: '300000.0000', apr: '6.0000', minimumPayment: '1800.0000' })
+  const inPlan = (name: string) => screen.getByRole('checkbox', { name: `Include ${name} in the payoff plan` }) as HTMLInputElement
+
+  it('has a box for every debt, ticked unless the debt is left out', async () => {
+    await open(makeBackend([visa(), makeDebt({ id: 'out', name: 'Out', included: false })]))
+    expect(inPlan('Visa').checked).toBe(true)
+    expect(inPlan('Out').checked).toBe(false)
+  })
+
+  it('saves at once, takes the debt out of the plan, and says what the date leaves out', async () => {
+    const backend = makeBackend([mortgage(), visa(), store()])
+    const { user } = await open(backend)
+    expect(screen.getByText(/^Debt free on /)).not.toBeNull()
+    expect(orderRows().join()).toContain('Mortgage')
+
+    await user.click(inPlan('Mortgage'))
+    await waitFor(() => expect(screen.getByText(/^Debt free \(excluding Mortgage\) on \d{4}-\d{2}-\d{2}, .* from now\.$/)).not.toBeNull())
+    expect(backend.api.put).toHaveBeenCalledWith(expect.stringContaining('/debts/mortgage'), { included: false })
+    expect(document.querySelector('[aria-live="polite"].wm-visually-hidden')?.textContent)
+      .toBe('Mortgage left out of the plan. Updating the plan.')
+
+    // Gone from the order and the schedule; still in the list, marked, with no payoff date.
+    expect(orderRows().join()).not.toContain('Mortgage')
+    const row = within(screen.getByRole('table', { name: 'Your debts' })).getAllByRole('row')
+      .find((r) => within(r).queryByText('Mortgage') !== null)!
+    expect(within(row).getByText('Not in plan', { selector: '.dp-tag' })).not.toBeNull()
+    expect(within(row).getAllByText('Not in plan')).toHaveLength(2)
+    expect(screen.getByText(/Not in this plan: Mortgage\./)).not.toBeNull()
+  })
+
+  it('brings it back with the same box', async () => {
+    const backend = makeBackend([mortgage(), visa()])
+    const { user } = await open(backend)
+    await user.click(inPlan('Mortgage'))
+    await waitFor(() => expect(screen.getByText(/excluding Mortgage/)).not.toBeNull())
+    await user.click(inPlan('Mortgage'))
+    await waitFor(() => expect(screen.queryByText(/excluding Mortgage/)).toBeNull())
+    expect(backend.api.put).toHaveBeenLastCalledWith(expect.stringContaining('/debts/mortgage'), { included: true })
+    expect(orderRows().join()).toContain('Mortgage')
+  })
+
+  it('names several, and says nothing is in the plan when all are out', async () => {
+    const backend = makeBackend([mortgage(), visa(), store()])
+    const { user } = await open(backend)
+    await user.click(inPlan('Visa'))
+    await waitFor(() => expect(inPlan('Visa').checked).toBe(false))
+    await user.click(inPlan('Store card'))
+    await waitFor(() => expect(screen.getByText(/^Debt free \(excluding Visa and Store card\) on /)).not.toBeNull())
+
+    await user.click(inPlan('Mortgage'))
+    expect((await screen.findByText(/Nothing is in the plan/)).getAttribute('role')).toBe('status')
+    expect(screen.queryByText(/Debt free/)).toBeNull()
+    // The list is still there, and so is the way back.
+    expect(screen.getAllByRole('checkbox', { name: /in the payoff plan$/ })).toHaveLength(3)
+  })
+
+  it('disables the box on an archived debt', async () => {
+    const backend = makeBackend([visa(), makeDebt({ id: 'old', name: 'Old', archived: true })])
+    const { user } = await open(backend)
+    await user.click(screen.getByRole('checkbox', { name: 'Show archived' }))
+    await screen.findByText('Old')
+    expect(inPlan('Old').disabled).toBe(true)
+    expect(inPlan('Old').checked).toBe(false)
+  })
+
+  it('shows a failure to save as an alert and leaves the box as it was', async () => {
+    const backend = makeBackend([visa(), car()])
+    const { user } = await open(backend)
+    backend.api.put.mockRejectedValueOnce(new Error('Could not reach the server.'))
+    await user.click(inPlan('Visa'))
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not reach the server.')
+    expect(inPlan('Visa').checked).toBe(true)
+  })
+
+  it('is offered in the dialog, on by default, and sent with the debt', async () => {
+    const backend = makeBackend([visa()])
+    const { user } = await open(backend)
+    await user.click(screen.getByRole('button', { name: 'Add a debt' }))
+    const dialog = screen.getByRole('dialog', { name: 'Add a debt' })
+    const box = within(dialog).getByRole('checkbox', { name: /Include in the payoff plan/ }) as HTMLInputElement
+    expect(box.checked).toBe(true)
+    await user.type(within(dialog).getByLabelText('Name'), 'Mortgage')
+    await user.type(within(dialog).getByLabelText('Balance'), '300000')
+    await user.type(within(dialog).getByLabelText('Interest rate (% a year)'), '6')
+    await user.type(within(dialog).getByLabelText('Minimum payment (a month)'), '1800')
+    await user.click(box)
+    await user.click(within(dialog).getByRole('button', { name: 'Add debt' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(backend.api.post).toHaveBeenCalledWith(expect.stringContaining('/debts'), expect.objectContaining({ included: false }))
+    expect(await screen.findByText(/Not in this plan: Mortgage\./)).not.toBeNull()
+  })
+
+  it('is read from the saved debt when editing, and an archived debt cannot be switched on', async () => {
+    const backend = makeBackend([makeDebt({ id: 'out', name: 'Out', included: false }), visa()])
+    const { user } = await open(backend)
+    await user.click(screen.getByRole('button', { name: 'Edit Out' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit Out' })
+    const box = within(dialog).getByRole('checkbox', { name: /Include in the payoff plan/ }) as HTMLInputElement
+    expect(box.checked).toBe(false)
+    await user.click(within(dialog).getByRole('checkbox', { name: /Archive this debt/ }))
+    expect(box.disabled).toBe(true)
+    expect(within(dialog).getByText(/An archived debt is never in the plan/)).not.toBeNull()
+  })
+
+  it('keeps keyboard focus on the In plan box while the change saves', async () => {
+    const { user } = await open(makeBackend([makeDebt({ id: 'm', name: 'Mortgage' }), visa()]))
+    const box = screen.getByRole('checkbox', { name: 'Include Mortgage in the payoff plan' }) as HTMLInputElement
+    box.focus()
+    await user.keyboard(' ')
+    await screen.findByText(/Not in this plan: Mortgage\./)
+    expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Include Mortgage in the payoff plan' }))
+  })
+
+  it('states the rule on the page', async () => {
+    await open(makeBackend([visa()]))
+    expect(screen.getByText(/a debt with "In plan" switched off stays in your list but is not counted anywhere/i)).not.toBeNull()
+  })
+})
+
 describe('the chart', () => {
   it('can be read by keyboard and as a table', async () => {
     const { user } = await open(makeBackend([visa(), car()]))
@@ -171,7 +292,7 @@ describe('adding and editing a debt', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(backend.api.post).toHaveBeenCalledWith(expect.stringContaining('/debts'), {
-      name: 'Dentist', balance: '640', apr: '9.9', minimumPayment: '40', accountId: null,
+      name: 'Dentist', balance: '640', apr: '9.9', minimumPayment: '40', accountId: null, included: true,
     })
     expect(await within(screen.getByRole('table', { name: 'Your debts' })).findByText('Dentist')).not.toBeNull()
     expect(document.querySelector('[aria-live="polite"].wm-visually-hidden')?.textContent).toBe('Dentist added. Updating the plan.')

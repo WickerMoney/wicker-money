@@ -17,6 +17,7 @@
 }
 .dp-name { display: inline-flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .dp-name .dp-swatch { margin-top: 4px; }
+.dp-name--out { color: var(--wm-text-muted); }
 .dp-sub { display: block; font-size: 12px; color: var(--wm-text-muted); }
 .dp-tag {
   margin-left: 8px; padding: 1px 6px; border: 1px solid var(--wm-border); border-radius: 999px;

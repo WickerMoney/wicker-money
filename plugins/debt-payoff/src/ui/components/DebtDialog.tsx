@@ -125,6 +125,21 @@ export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemo
           ))}
         </SelectField>
 
+        <label className="check dp-archive">
+          <input
+            type="checkbox"
+            checked={draft.included && !draft.archived}
+            disabled={draft.archived}
+            onChange={(e) => change({ included: e.target.checked })}
+          />
+          <span>
+            Include in the payoff plan.{' '}
+            {draft.archived
+              ? 'An archived debt is never in the plan.'
+              : 'Switch it off to keep the debt in your list but leave it out of the dates and totals, such as a mortgage that would dwarf the rest.'}
+          </span>
+        </label>
+
         {editing !== null ? (
           <label className="check dp-archive">
             <input

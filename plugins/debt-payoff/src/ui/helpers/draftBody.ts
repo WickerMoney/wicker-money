@@ -14,6 +14,7 @@ export function draftBody(draft: DebtDraft, editing: boolean): Record<string, un
     apr: draft.apr.trim(),
     minimumPayment: draft.minimumPayment.trim(),
     accountId: draft.accountId === '' ? null : draft.accountId,
+    included: draft.included,
     ...(editing ? { archived: draft.archived } : {}),
   }
 }

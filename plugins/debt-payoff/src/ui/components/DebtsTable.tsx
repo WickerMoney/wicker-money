@@ -13,7 +13,11 @@ export interface DebtsTableProps {
   readonly accountNames: ReadonlyMap<string, string>
   readonly formatMoney: (value: string) => string
   readonly formatDate: (value: string) => string
+  /** Whether a change is already being saved; the "In plan" boxes wait for it. */
+  readonly busy: boolean
   readonly onEdit: (debt: Debt) => void
+  /** Switches a debt into or out of the plan. */
+  readonly onToggleIncluded: (debt: Debt, included: boolean) => void
 }
 
 /** A percentage with its trailing zeros trimmed: `24.9900` is `24.99%`. */
@@ -30,22 +34,23 @@ function rate(apr: string): string {
  * name, never the only one.
  */
 export const DebtsTable = memo(function DebtsTable({
-  debts, colors, payoffDates, accountNames, formatMoney, formatDate, onEdit,
+  debts, colors, payoffDates, accountNames, formatMoney, formatDate, busy, onEdit, onToggleIncluded,
 }: DebtsTableProps) {
   const columns = useMemo<readonly Column<Debt>[]>(() => [
     {
       key: 'name',
       header: 'Debt',
       render: (d) => (
-        <span className="dp-name">
+        <span className={d.included || d.archived ? 'dp-name' : 'dp-name dp-name--out'}>
           <span
             className="dp-swatch"
             aria-hidden="true"
-            style={{ background: d.archived ? 'transparent' : (colors.get(d.id) ?? 'var(--wm-chart-other)') }}
+            style={{ background: d.archived || !d.included ? 'transparent' : (colors.get(d.id) ?? 'var(--wm-chart-other)') }}
           />
           <span>
             {d.name}
             {d.archived ? <span className="dp-tag">Archived</span> : null}
+            {!d.archived && !d.included ? <span className="dp-tag">Not in plan</span> : null}
             {d.accountId !== null ? (
               <span className="dp-sub">Linked to {accountNames.get(d.accountId) ?? 'an account'}</span>
             ) : null}
@@ -61,18 +66,31 @@ export const DebtsTable = memo(function DebtsTable({
       header: 'Paid off',
       numeric: true,
       render: (d) => {
-        if (d.archived) return 'Not in plan'
+        if (d.archived || !d.included) return 'Not in plan'
         const date = payoffDates.get(d.id)
         if (date === undefined) return '…'
         return date === null ? 'Not within the plan' : formatDate(date)
       },
     },
     {
+      key: 'included',
+      header: 'In plan',
+      render: (d) => (
+        <input
+          type="checkbox"
+          aria-label={`Include ${d.name} in the payoff plan`}
+          checked={d.included && !d.archived}
+          disabled={d.archived}
+          onChange={(e) => { if (!busy) onToggleIncluded(d, e.target.checked) }}
+        />
+      ),
+    },
+    {
       key: 'actions',
       header: '',
       render: (d) => <IconButton icon="edit" label={`Edit ${d.name}`} onClick={() => onEdit(d)} />,
     },
-  ], [colors, payoffDates, accountNames, formatMoney, formatDate, onEdit])
+  ], [colors, payoffDates, accountNames, formatMoney, formatDate, busy, onEdit, onToggleIncluded])
 
   return <Table columns={columns} rows={debts} rowKey={(d) => d.id} className="dp-debts" caption="Your debts" />
 })

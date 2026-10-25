@@ -1,22 +1,25 @@
-import type { PayoffPlan } from '../../shared/index.js'
+import type { PlanResponse } from '../../shared/index.js'
 import { durationText } from '../helpers/durationText.js'
+import { excludingText } from '../helpers/excludingText.js'
 
 /** Props for {@link PlanNotices}. */
 export interface PlanNoticesProps {
-  readonly plan: PayoffPlan
+  readonly plan: PlanResponse
   readonly formatMoney: (value: string) => string
 }
 
 /**
  * Things about this plan the person should not have to discover: it never ends,
- * or a minimum is not keeping up with its interest.
+ * a minimum is not keeping up with its interest, or debts they switched off are
+ * not in it.
  *
  * Each is a sentence, so none depends on colour.
  */
 export function PlanNotices({ plan, formatMoney }: PlanNoticesProps) {
   const stuck = plan.debts.filter((d) => Number(d.startingBalance) > 0 && !d.minimumCoversInterest)
   const limit = durationText(plan.monthLimit)
-  if (!plan.capped && stuck.length === 0) return null
+  const left = plan.excludedDebts.map((d) => d.name)
+  if (!plan.capped && stuck.length === 0 && left.length === 0) return null
   return (
     <div className="dp-notice">
       {plan.capped ? (
@@ -25,6 +28,12 @@ export function PlanNotices({ plan, formatMoney }: PlanNoticesProps) {
             ? 'At these payments the debts grow faster than they are paid, so the plan stops before it reaches zero.'
             : `At these payments the debts are not paid off within ${limit}, where the plan stops.`}{' '}
           Raise the extra payment or a minimum to see an end date.
+        </p>
+      ) : null}
+      {left.length > 0 ? (
+        <p>
+          Not in this plan: {excludingText(left)}. They stay in your list, but the dates and totals here do not
+          include them. Tick "In plan" on a debt to bring it back.
         </p>
       ) : null}
       {stuck.map((d) => (
