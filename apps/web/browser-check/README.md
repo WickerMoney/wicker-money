@@ -48,6 +48,25 @@ only the first widget (to price the second frame), `SHOTS_DIR` keeps screenshots
 `AXE_PATH` is not a dependency of the repo; install `axe-core` anywhere and point
 at its `axe.min.js`.
 
+## Toast check
+
+`toast.ts` checks the notification toast (ADR 0009) with no API or database: it
+builds `toast-harness/` (the real `AppShell`, `app.css` and ui-kit, a stand-in
+account menu and a long Transactions-like page) and drives Chromium over it at
+desktop, 414 px and 360 px, light and dark.
+
+```
+AXE_PATH=/path/to/axe.min.js pnpm --filter @wickermoney/web test:toast
+```
+
+It runs axe with toasts of every kind showing, with the phone drawer open and
+with a dialog open, and checks that the banner is the first child of `<main>`, is
+in the flow, sticks under the phone bar and covers nothing at the top, that a
+toast raised during a dialog is held until it closes, that `show()` leaves focus
+alone and Escape gives it back, and that reduced motion removes the animation.
+`SHOTS_DIR` keeps screenshots and `BROWSER_CHECK_OUT` the report. `AXE_PATH` is
+not a dependency of the repo (see the Insights check).
+
 ## Lazy frames (`lazyFrames.ts`)
 
 `MODE=check` (default) drives the seeded dashboard (as for the Insights check) and verifies that a frame below the

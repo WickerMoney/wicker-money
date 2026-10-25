@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
-import { useFocusTrap } from '@wickermoney/ui-kit'
+import { ToastViewport, useFocusTrap } from '@wickermoney/ui-kit'
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js'
 import { useEscapeKey } from '../hooks/useEscapeKey.js'
 import { AccountMenu } from './AccountMenu.js'
@@ -52,10 +52,26 @@ export function AppShell({ plugins }: AppShellProps) {
   const { pathname } = useLocation()
   const [navOpen, setNavOpen] = useState(false)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const barRef = useRef<HTMLElement>(null)
   const navRef = useRef<HTMLElement>(null)
   const mainRef = useRef<HTMLElement>(null)
   const focusMainPending = useRef(false)
   const firstRoute = useRef(true)
+
+  // The sticky toast banner stops just under the phone bar. The bar's height
+  // includes the top safe-area inset, so it is measured, not assumed. On a
+  // desktop window the bar is `display: none`, which measures 0.
+  const [toastOffset, setToastOffset] = useState(0)
+  useLayoutEffect(() => {
+    const bar = barRef.current
+    if (bar === null) return
+    const measure = (): void => { setToastOffset(bar.offsetHeight) }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(bar)
+    return () => { observer.disconnect() }
+  }, [])
 
   useDocumentTitle(pageTitleFor(pathname, plugins))
 
@@ -102,9 +118,10 @@ export function AppShell({ plugins }: AppShellProps) {
   }, [])
 
   return (
-    <div className={`shell${navOpen ? ' is-nav-open' : ''}`}>
+    <div className={`shell${navOpen ? ' is-nav-open' : ''}`}
+         style={{ '--wm-toast-offset-top': `${toastOffset}px` } as CSSProperties}>
       <a className="shell__skip" href="#main" onClick={skipToContent}>Skip to content</a>
-      <header className="shell__bar" inert={navOpen}>
+      <header ref={barRef} className="shell__bar" inert={navOpen}>
         <button ref={menuButtonRef} type="button" className="shell__menu-btn"
                 aria-label="Menu" aria-expanded={navOpen} aria-controls="shell-nav"
                 onClick={() => { setNavOpen((o) => !o) }}>
@@ -159,6 +176,8 @@ export function AppShell({ plugins }: AppShellProps) {
       </aside>
 
       <main id="main" ref={mainRef} tabIndex={-1} className="shell__main" inert={navOpen}>
+        {/* Draws the toasts raised through the ToastProvider mounted above the routes. */}
+        <ToastViewport />
         <Outlet />
       </main>
     </div>

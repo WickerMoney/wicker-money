@@ -23,6 +23,15 @@ curated, human-readable version.
   
 ### Added
 
+- **A notification toast in `@wickermoney/ui-kit`** (experimental, for the core
+  app only for now): `ToastProvider`, `ToastViewport` and `useToast()`, plus the
+  `--wm-shadow-raised` token. Nothing dismisses itself: a toast stays until it is
+  closed (its button or Escape) or replaced by the same key. A polite screen
+  reader announcement is separate from the visible banner, which sits at the top
+  of the page content and stays in view under the phone bar. The app shell now
+  draws it; no page raises one yet.
+- `pnpm --filter @wickermoney/web test:toast`, a browser check with axe for the
+  toast (light and dark, desktop and phone widths, drawer, dialog, reduced motion).
 - **A limit on concurrent CSV imports.** Each commit holds a database connection
   for its whole length, so a few large files at once could take every
   connection and make the rest of the app fail waiting for one (ten people
