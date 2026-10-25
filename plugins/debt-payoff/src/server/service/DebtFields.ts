@@ -8,6 +8,10 @@ export interface NewDebtInput {
   /** Defaults to after the last debt. */
   readonly sortOrder?: number
   readonly archived?: boolean
+  /** Defaults to `true`. */
+  readonly included?: boolean
+  /** Defaults to `'0'`. Already validated, normalised. */
+  readonly extraPayment?: string
 }
 
 /** The fields of a debt that can be changed; any not sent keep their value. */
@@ -19,4 +23,6 @@ export interface DebtChanges {
   readonly accountId?: string | null
   readonly sortOrder?: number
   readonly archived?: boolean
+  readonly included?: boolean
+  readonly extraPayment?: string
 }

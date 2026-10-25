@@ -9,7 +9,9 @@ import { createDebtBody } from '../schemas/createDebtBody.js'
  * Body: `name` (1 to 100 characters), `balance`, `apr` (a percentage, such as
  * `"24.99"`) and `minimumPayment` as decimal strings, and optionally
  * `accountId` (one of the user's loan or credit card accounts, or `null`),
- * `sortOrder` and `archived`. Amounts are strings with at most four decimal
+ * `sortOrder`, `archived`, `included` (whether the debt is part of the
+ * payoff plan; default `true`) and `extraPayment` (an amount paid toward this
+ * debt every month above its minimum; default `"0"`). Amounts are strings with at most four decimal
  * places; a JSON number is refused.
  *
  * Responds `200` with the created debt (plugin routes answer 200 for every success). Responds `400` (`validation_failed`,

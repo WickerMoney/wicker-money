@@ -17,4 +17,6 @@ export const createDebtBody = z.strictObject({
   accountId: accountIdField.optional(),
   sortOrder: sortOrderField.optional(),
   archived: z.boolean({ error: 'Send true or false.' }).optional(),
+  included: z.boolean({ error: 'Send true or false.' }).optional(),
+  extraPayment: moneyField.optional(),
 })

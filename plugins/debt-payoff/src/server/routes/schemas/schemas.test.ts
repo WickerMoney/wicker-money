@@ -92,6 +92,27 @@ describe('createDebtBody', () => {
   })
 })
 
+describe('the in-plan switch and the earmark', () => {
+  it('are optional on create, and an earmark is normalised like any amount', () => {
+    expect(createDebtBody.parse(base)).not.toHaveProperty('included')
+    expect(createDebtBody.parse({ ...base, included: false, extraPayment: '25.5' })).toMatchObject({
+      included: false, extraPayment: '25.5000',
+    })
+  })
+
+  it('can each be the only field of an update', () => {
+    expect(updateDebtBody.parse({ included: false })).toEqual({ included: false })
+    expect(updateDebtBody.parse({ extraPayment: '10' })).toEqual({ extraPayment: '10.0000' })
+  })
+
+  it('refuse a number, a negative, too many places, and a non-boolean switch', () => {
+    for (const body of [{ extraPayment: 10 }, { extraPayment: '-1' }, { extraPayment: '1.23456' }, { included: 'yes' }, { included: 1 }]) {
+      expect(createDebtBody.safeParse({ ...base, ...body }).success, JSON.stringify(body)).toBe(false)
+      expect(updateDebtBody.safeParse(body).success, JSON.stringify(body)).toBe(false)
+    }
+  })
+})
+
 describe('updateDebtBody', () => {
   it('takes any one field', () => {
     expect(updateDebtBody.parse({ balance: '12' })).toEqual({ balance: '12.0000' })

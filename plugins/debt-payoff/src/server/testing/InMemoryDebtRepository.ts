@@ -13,6 +13,7 @@ class AccountTakenError extends Error {
 const row = (d: StoredDebt): DebtRow => ({
   id: d.id, name: d.name, balance: d.balance, apr: d.apr, minimum_payment: d.minimum_payment,
   account_id: d.account_id, sort_order: d.sort_order, archived: d.archived,
+  included: d.included, extra_payment: d.extra_payment,
 })
 
 /** {@link DebtRepository} over an {@link InMemoryDebtStore}, scoped to one user the way row-level security is. */
@@ -50,6 +51,7 @@ export class InMemoryDebtRepository implements DebtRepository {
       id: this.store.newId(), userId: this.userId, createdAt: this.store.tick(),
       name: debt.name, balance: debt.balance, apr: debt.apr, minimum_payment: debt.minimumPayment,
       account_id: debt.accountId, sort_order: debt.sortOrder ?? last + 1, archived: debt.archived,
+      included: debt.included, extra_payment: debt.extraPayment,
     }
     this.store.debts.push(stored)
     return row(stored)
@@ -65,6 +67,7 @@ export class InMemoryDebtRepository implements DebtRepository {
     Object.assign(found, {
       name: debt.name, balance: debt.balance, apr: debt.apr, minimum_payment: debt.minimumPayment,
       account_id: debt.accountId, sort_order: debt.sortOrder, archived: debt.archived,
+      included: debt.included, extra_payment: debt.extraPayment,
     })
     return row(found)
   }
