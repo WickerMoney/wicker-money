@@ -105,6 +105,15 @@ export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemo
           error={err('minimumPayment')}
           onChange={(e) => change({ minimumPayment: e.target.value }, 'minimumPayment')}
         />
+        <Field
+          label="Extra each month toward this debt (optional)"
+          hint="Paid to this debt on top of its minimum, apart from the extra for all debts. It stops when this debt is paid off and does not move to another debt. Leave blank for none."
+          inputMode="decimal"
+          autoComplete="off"
+          value={draft.extraPayment}
+          error={err('extraPayment')}
+          onChange={(e) => change({ extraPayment: e.target.value }, 'extraPayment')}
+        />
         <SelectField
           label="Linked account (optional)"
           hint="Ties this debt to one of your loan or credit card accounts. Its balance is still the one you enter here."

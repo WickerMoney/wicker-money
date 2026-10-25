@@ -30,7 +30,12 @@ export function PlanTotals({ plan, formatMoney, formatDate }: PlanTotalsProps) {
         <div><Stat label="Debt-free date" value={plan.debtFreeDate === null ? `Not within ${limit}` : formatDate(plan.debtFreeDate)} /></div>
         <div><Stat label="Time to go" value={plan.capped ? `More than ${limit}` : durationText(plan.months)} /></div>
         <div><Stat label="Interest you pay" value={formatMoney(plan.totalInterest)} /></div>
-        <div><Stat label="Paid each month" value={formatMoney(plan.monthlyBudget)} /></div>
+        <div>
+          <Stat
+            label={Number(plan.earmarked) > 0 ? 'Pooled each month' : 'Paid each month'}
+            value={formatMoney(plan.monthlyBudget)}
+          />
+        </div>
         <div>
           <Stat
             label="Time saved vs minimums only"

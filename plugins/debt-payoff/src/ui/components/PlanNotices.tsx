@@ -19,7 +19,8 @@ export function PlanNotices({ plan, formatMoney }: PlanNoticesProps) {
   const stuck = plan.debts.filter((d) => Number(d.startingBalance) > 0 && !d.minimumCoversInterest)
   const limit = durationText(plan.monthLimit)
   const left = plan.excludedDebts.map((d) => d.name)
-  if (!plan.capped && stuck.length === 0 && left.length === 0) return null
+  const oversized = plan.debts.filter((d) => d.earmarkCoversBalance)
+  if (!plan.capped && stuck.length === 0 && left.length === 0 && oversized.length === 0) return null
   return (
     <div className="dp-notice">
       {plan.capped ? (
@@ -36,6 +37,12 @@ export function PlanNotices({ plan, formatMoney }: PlanNoticesProps) {
           include them. Tick "In plan" on a debt to bring it back.
         </p>
       ) : null}
+      {oversized.map((d) => (
+        <p key={d.id}>
+          The {formatMoney(d.extraPayment)} a month set on {d.name} is more than it needs: it owes{' '}
+          {formatMoney(d.startingBalance)}, so it is paid off in the first month and the rest of that amount is not used.
+        </p>
+      ))}
       {stuck.map((d) => (
         <p key={d.id}>
           The {formatMoney(d.minimumPayment)} minimum on {d.name} does not cover its first month of interest, so it

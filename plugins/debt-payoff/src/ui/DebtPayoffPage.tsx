@@ -154,6 +154,12 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
                   ? `Not debt free${excluding} within ${durationText(plan.monthLimit)} at these payments.`
                   : `Debt free${excluding} on ${formatDate(plan.debtFreeDate)}, ${durationText(plan.months)} from now.`}
               </p>
+              {Number(plan.earmarked) > 0 ? (
+                <p className="dp-muted">
+                  Each month: {formatMoney(plan.monthlyBudget)} pooled + {formatMoney(plan.earmarked)} earmarked for
+                  single debts, until each is paid off.
+                </p>
+              ) : null}
               <PlanNotices plan={plan} formatMoney={formatMoney} />
               <PlanTotals plan={plan} formatMoney={formatMoney} formatDate={formatDate} />
               <h3 className="dp-h3">What you owe, month by month</h3>

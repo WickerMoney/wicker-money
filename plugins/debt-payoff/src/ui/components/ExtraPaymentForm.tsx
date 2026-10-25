@@ -12,7 +12,9 @@ export interface ExtraPaymentFormProps {
 }
 
 /**
- * The extra paid each month on top of the minimums.
+ * The extra paid each month on top of the minimums, shared by every debt in the
+ * plan: the strategy decides which debt it goes to first. (An amount for one
+ * particular debt is set on that debt.)
  *
  * The typed text lives here and not in the page, so typing re-renders this
  * form and nothing else: the debt list and the chart are not redrawn per
@@ -34,8 +36,8 @@ export function ExtraPaymentForm({ saved, busy, onApply }: ExtraPaymentFormProps
   return (
     <form className="dp-extra" onSubmit={(e) => void submit(e)} ref={ref} noValidate>
       <Field
-        label="Extra each month"
-        hint="On top of your minimums. Enter 0 to pay only the minimums."
+        label="Extra for all debts (follows the strategy)"
+        hint="On top of your minimums, aimed at one debt at a time by the strategy. Enter 0 for none. To pay extra toward one particular debt, set it on that debt."
         inputMode="decimal"
         autoComplete="off"
         value={text}

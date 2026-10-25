@@ -9,4 +9,6 @@ export interface DebtDraft {
   readonly archived: boolean
   /** Whether the debt is part of the payoff plan. */
   readonly included: boolean
+  /** The earmark as typed; blank means none. */
+  readonly extraPayment: string
 }

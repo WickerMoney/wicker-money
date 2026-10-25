@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { isZeroMoney } from '@wickermoney/plugin-sdk/money'
 import { IconButton, Table, type Column } from '@wickermoney/ui-kit'
 import type { Debt } from '../models/index.js'
 
@@ -61,6 +62,20 @@ export const DebtsTable = memo(function DebtsTable({
     { key: 'balance', header: 'Balance', numeric: true, render: (d) => formatMoney(d.balance) },
     { key: 'apr', header: 'Rate', numeric: true, render: (d) => rate(d.apr) },
     { key: 'minimum', header: 'Minimum', numeric: true, render: (d) => formatMoney(d.minimumPayment) },
+    {
+      key: 'extra',
+      header: 'Extra a month',
+      numeric: true,
+      render: (d) => {
+        if (isZeroMoney(d.extraPayment)) return '—'
+        return (
+          <>
+            {formatMoney(d.extraPayment)}
+            {d.archived || !d.included ? <span className="dp-sub">Not used: not in the plan</span> : null}
+          </>
+        )
+      },
+    },
     {
       key: 'payoff',
       header: 'Paid off',

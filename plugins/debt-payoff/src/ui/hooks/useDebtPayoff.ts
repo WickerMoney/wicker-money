@@ -11,7 +11,7 @@ import type {
   AccountSuggestion, AccountSuggestionsResponse, Debt, DebtDraft, DebtsResponse, PlanSettings,
 } from '../models/index.js'
 
-const DEBT_FIELDS = ['name', 'balance', 'apr', 'minimumPayment', 'accountId', 'archived', 'included'] as const
+const DEBT_FIELDS = ['name', 'balance', 'apr', 'minimumPayment', 'accountId', 'archived', 'included', 'extraPayment'] as const
 const SETTINGS_FIELDS = ['extraPayment', 'strategy'] as const
 
 /** What {@link useDebtPayoff} returns. */
