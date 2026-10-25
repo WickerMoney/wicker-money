@@ -12,8 +12,19 @@ export interface PayoffPlan {
   readonly extraPayment: string
   /** The day the balances are as of. */
   readonly startDate: string
-  /** Sum of the minimums of the debts with a balance, plus the extra: what is paid every month while any debt remains. */
+  /**
+   * Sum of the minimums of the debts with a balance, plus the shared extra:
+   * the pool that is paid every month while any debt remains. It does **not**
+   * include earmarks, which are paid outside the pool and stop when their debt
+   * is paid off (see `earmarked`).
+   */
   readonly monthlyBudget: string
+  /**
+   * Sum of the earmarks of the debts with a balance at the start: the most
+   * that is paid toward individual debts each month above their minimums.
+   * `0.0000` when there are none.
+   */
+  readonly earmarked: string
   /** The order extra money is aimed in: debt ids, highest priority first. Debts that started at zero are not listed. */
   readonly order: readonly string[]
   /** Every debt: those with a balance in priority order, then those that started at zero in the order given. */

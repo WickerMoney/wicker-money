@@ -42,8 +42,13 @@ describe('creating a debt', () => {
     const first = await service.createDebt(ALICE, card)
     const second = await service.createDebt(ALICE, { ...card, name: 'Loan' })
 
-    expect(first).toMatchObject({ name: 'Visa', balance: '1000.0000', apr: '24.9900', minimumPayment: '35.0000', accountId: null, sortOrder: 0, archived: false })
+    expect(first).toMatchObject({ name: 'Visa', balance: '1000.0000', apr: '24.9900', minimumPayment: '35.0000', accountId: null, sortOrder: 0, archived: false, included: true, extraPayment: '0.0000' })
     expect(second.sortOrder).toBe(1)
+  })
+
+  it('takes the switch and the earmark it is given', async () => {
+    const debt = await service.createDebt(ALICE, { ...card, included: false, extraPayment: '40.0000' })
+    expect(debt).toMatchObject({ included: false, extraPayment: '40.0000' })
   })
 
   it('keeps a sort order the person gives', async () => {
@@ -104,6 +109,14 @@ describe('changing a debt', () => {
     const debt = await service.createDebt(ALICE, card)
     const changed = await service.updateDebt(ALICE, debt.id, { balance: '900.5000' })
     expect(changed).toEqual({ ...debt, balance: '900.5000' })
+  })
+
+  it('switches a debt in and out of the plan and sets or clears its earmark, leaving the rest alone', async () => {
+    const debt = await service.createDebt(ALICE, card)
+    const out = await service.updateDebt(ALICE, debt.id, { included: false, extraPayment: '25.5000' })
+    expect(out).toEqual({ ...debt, included: false, extraPayment: '25.5000' })
+    expect(await service.updateDebt(ALICE, debt.id, { name: 'Renamed' })).toMatchObject({ included: false, extraPayment: '25.5000' })
+    expect(await service.updateDebt(ALICE, debt.id, { included: true, extraPayment: '0.0000' })).toMatchObject({ included: true, extraPayment: '0.0000' })
   })
 
   it('links, relinks and unlinks an account', async () => {
@@ -229,6 +242,56 @@ describe('the plan', () => {
     await service.createDebt(ALICE, { name: 'Old', balance: '10.0000', apr: '0.0000', minimumPayment: '5.0000', archived: true })
     await service.createDebt(BOB, card)
     expect((await service.getPlan(ALICE, { timezone: 'UTC' })).debts.map((d) => d.name).sort()).toEqual(['Big', 'Small'])
+  })
+
+  describe('with debts switched out of it', () => {
+    const mortgage: NewDebtInput = { name: 'Mortgage', balance: '300000.0000', apr: '6.0000', minimumPayment: '1800.0000', included: false }
+
+    it('leaves them out of the plan, the totals and the date, and names them', async () => {
+      const without = await service.getPlan(ALICE, { timezone: 'UTC' })
+      const out = await service.createDebt(ALICE, mortgage)
+      const plan = await service.getPlan(ALICE, { timezone: 'UTC' })
+
+      const { excludedDebts, ...rest } = plan
+      const { excludedDebts: noneBefore, ...restBefore } = without
+      expect(noneBefore).toEqual([])
+      expect(excludedDebts).toEqual([{ id: out.id, name: 'Mortgage' }])
+      // Byte for byte the plan it was before the mortgage was added.
+      expect(rest).toEqual(restBefore)
+      expect(plan.debts.map((d) => d.name).sort()).toEqual(['Big', 'Small'])
+      expect(plan.startingBalance).toBe('6200.0000')
+    })
+
+    it('keeps their minimum out of the monthly budget', async () => {
+      await service.createDebt(ALICE, mortgage)
+      expect((await service.getPlan(ALICE, { timezone: 'UTC', extraPayment: '10.0000' })).monthlyBudget).toBe('210.0000')
+    })
+
+    it('gives an empty plan, not an error, when every debt is out', async () => {
+      for (const debt of await service.listDebts(ALICE, false)) await service.updateDebt(ALICE, debt.id, { included: false })
+      const plan = await service.getPlan(ALICE, { timezone: 'UTC' })
+      expect(plan).toMatchObject({ months: 0, schedule: [], debtFreeDate: '2026-10-11' })
+      expect(plan.excludedDebts.map((d) => d.name).sort()).toEqual(['Big', 'Small'])
+    })
+
+    it('does not list archived debts as left out', async () => {
+      await service.createDebt(ALICE, { ...mortgage, archived: true })
+      expect((await service.getPlan(ALICE, { timezone: 'UTC' })).excludedDebts).toEqual([])
+    })
+
+    it('still counts toward the limit on debts that are not archived', async () => {
+      for (let i = 0; i < MAX_ACTIVE_DEBTS - 2; i += 1) await service.createDebt(ALICE, { ...card, included: false })
+      expect(await codeOf(service.createDebt(ALICE, card))).toEqual({ status: 409, code: 'too_many_debts' })
+    })
+  })
+
+  it('pays a debt\'s earmark on top of its minimum', async () => {
+    const small = (await service.listDebts(ALICE, false)).find((d) => d.name === 'Small')
+    await service.updateDebt(ALICE, small?.id ?? '', { extraPayment: '100.0000' })
+    const plan = await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'avalanche', extraPayment: '0' })
+    expect(plan.earmarked).toBe('100.0000')
+    expect(plan.debts.find((d) => d.name === 'Small')).toMatchObject({ extraPayment: '100.0000' })
+    expect(plan.schedule[0]?.debts.find((d) => d.debtId === small?.id)?.payment).toBe('150.0000')
   })
 
   it('is debt free today when there are no debts', async () => {

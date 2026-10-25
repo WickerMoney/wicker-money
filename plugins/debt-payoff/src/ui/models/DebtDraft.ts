@@ -7,4 +7,8 @@ export interface DebtDraft {
   /** The linked account's id, or `''` for none. */
   readonly accountId: string
   readonly archived: boolean
+  /** Whether the debt is part of the payoff plan. */
+  readonly included: boolean
+  /** The earmark as typed; blank means none. */
+  readonly extraPayment: string
 }

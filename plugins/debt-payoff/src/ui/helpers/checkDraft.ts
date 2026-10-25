@@ -13,7 +13,7 @@ const NAME_LIMIT = 100
  * comes back on its field too.
  *
  * @param draft - The form as typed.
- * @returns The problems by field name (`name`, `balance`, `apr`, `minimumPayment`), or no errors.
+ * @returns The problems by field name (`name`, `balance`, `apr`, `minimumPayment`, `extraPayment`), or no errors.
  */
 export function checkDraft(draft: DebtDraft): FormErrors {
   const fields: Record<string, string> = {}
@@ -26,6 +26,11 @@ export function checkDraft(draft: DebtDraft): FormErrors {
   if (apr !== null) fields['apr'] = apr
   const minimum = moneyProblem(draft.minimumPayment)
   if (minimum !== null) fields['minimumPayment'] = minimum
+  // An earmark is optional; blank means none.
+  if (draft.extraPayment.trim() !== '') {
+    const earmark = moneyProblem(draft.extraPayment)
+    if (earmark !== null) fields['extraPayment'] = earmark
+  }
   const errors: FormErrors = { fields, form: null }
   return hasFormErrors(errors) ? errors : NO_FORM_ERRORS
 }

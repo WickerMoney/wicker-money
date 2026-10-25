@@ -210,7 +210,8 @@ Terminate TLS in a reverse proxy (Caddy, Nginx Proxy Manager or Traefik) and
 forward to the container's single port, 8080. There is no separate UI port.
 
 - Set `TRUST_PROXY=true`, or every user shares the proxy's address for the
-  per-address auth limits (`AUTH_RATE_LIMIT_MAX`).
+  per-address auth limits (`AUTH_RATE_LIMIT_MAX`) and the API rate limit for
+  requests that carry no valid token.
 - Leave `COOKIE_SECURE` unset. It defaults to `true` in production.
 - **Do not also publish 8080 to the LAN.** With `TRUST_PROXY=true` the API believes
   `X-Forwarded-For`, so a client that reaches the container directly can spoof its
@@ -384,8 +385,8 @@ focus. Turning a plugin off deletes nothing. Its tables, rows and database
 role stay, and turning it back on brings everything back. Plugins in the same
 area, such as two budgeting approaches, can be on together.
 
-**Where a plugin runs decides how far it is trusted.** Insights and Spending
-Trends run in a sandboxed frame and reach your data only through the host, with
+**Where a plugin runs decides how far it is trusted.** Insights, Spending
+Trends and Upcoming run in a sandboxed frame and reach your data only through the host, with
 the grants their manifest lists. The other bundled plugins still run inside the
 app, in its own origin, with the same access to your data as you have; they ship
 in the image and are reviewed with it. There is no install flow or catalog for

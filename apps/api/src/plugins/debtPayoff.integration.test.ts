@@ -52,6 +52,7 @@ async function account(u: TestUser, accountType: string, name = 'Acct'): Promise
 interface DebtBody {
   id: string; name: string; balance: string; apr: string; minimumPayment: string
   accountId: string | null; sortOrder: number; archived: boolean
+  included: boolean; extraPayment: string
 }
 
 async function debt(u: TestUser, over: Record<string, unknown> = {}): Promise<DebtBody> {
@@ -67,7 +68,7 @@ describe('debts CRUD', () => {
     const created = await debt(user, { name: 'Card', balance: '1234.5', apr: '19.99', minimumPayment: '35' })
     expect(created).toMatchObject({
       name: 'Card', balance: '1234.5000', apr: '19.9900', minimumPayment: '35.0000',
-      accountId: null, archived: false,
+      accountId: null, archived: false, included: true, extraPayment: '0.0000',
     })
 
     const read = await req('GET', `/debts/${created.id}`, user)
@@ -82,6 +83,23 @@ describe('debts CRUD', () => {
     expect(del.statusCode).toBe(200)
     expect(del.json()).toEqual({ removed: 1 })
     expect((await req('GET', `/debts/${created.id}`, user)).statusCode).toBe(404)
+  })
+
+  it('stores the in-plan switch and the earmark, normalised, and refuses bad ones', async () => {
+    const created = await debt(user, { name: 'Earmarked', included: false, extraPayment: '25.5' })
+    expect(created).toMatchObject({ included: false, extraPayment: '25.5000' })
+
+    const put = await req('PUT', `/debts/${created.id}`, user, { included: true })
+    expect(put.json()).toMatchObject({ included: true, extraPayment: '25.5000' })
+
+    for (const payload of [{ extraPayment: '-1' }, { extraPayment: 25 }, { extraPayment: '1.23456' }, { included: 'yes' }]) {
+      const res = await req('PUT', `/debts/${created.id}`, user, payload)
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+    }
+    // The database says the same thing the API does: an earmark cannot be negative.
+    await expect(
+      asRole(user.id, 'UPDATE plugin_debt_payoff.debts SET extra_payment = -1 WHERE id = ?::uuid', created.id),
+    ).rejects.toThrow(/ck_debts_extra_payment/)
   })
 
   it('lists in the person’s own order and hides archived debts unless asked', async () => {
@@ -125,6 +143,20 @@ describe('row-level security between two people', () => {
 
     const still = (await req('GET', `/debts/${mine.id}`, user)).json() as DebtBody
     expect(still.name).toBe('Mine')
+  })
+
+  it('keeps the in-plan switch and the earmark per person', async () => {
+    const mine = await debt(user, { name: 'Mine, switched', included: false, extraPayment: '40' })
+
+    expect((await req('PUT', `/debts/${mine.id}`, other, { included: true, extraPayment: '0' })).statusCode).toBe(404)
+    const rows = await asRole(other.id, 'SELECT id FROM plugin_debt_payoff.debts WHERE id = ?::uuid', mine.id)
+    expect(rows).toEqual([])
+
+    const still = (await req('GET', `/debts/${mine.id}`, user)).json() as DebtBody
+    expect(still).toMatchObject({ included: false, extraPayment: '40.0000' })
+    // Nor does their plan see it, as a debt or as an excluded one.
+    const theirPlan = (await req('GET', '/plan?tz=UTC', other)).json() as { debts: Array<{ id: string }>; excludedDebts: Array<{ id: string }> }
+    expect([...theirPlan.debts, ...theirPlan.excludedDebts].map((d) => d.id)).not.toContain(mine.id)
   })
 
   it('refuses to link a debt to another person’s account', async () => {
@@ -229,6 +261,36 @@ describe('settings and plan', () => {
     await req('PUT', '/settings', who, { strategy: 'avalanche', extraPayment: '100' })
     const saved = (await req('GET', '/plan?tz=UTC', who)).json() as typeof body
     expect(saved.strategy).toBe('avalanche')
+  })
+
+  it('leaves a debt that is switched out of the plan out of it, and names it', async () => {
+    const who = await createUser(h)
+    await debt(who, { name: 'Card', balance: '1000', apr: '12', minimumPayment: '100' })
+    const mortgage = await debt(who, { name: 'Mortgage', balance: '300000', apr: '6', minimumPayment: '1800', included: false })
+
+    const body = (await req('GET', '/plan?tz=UTC', who)).json() as {
+      debts: Array<{ name: string }>; startingBalance: string; excludedDebts: Array<{ id: string; name: string }>
+    }
+    expect(body.debts.map((d) => d.name)).toEqual(['Card'])
+    expect(body.startingBalance).toBe('1000.0000')
+    expect(body.excludedDebts).toEqual([{ id: mortgage.id, name: 'Mortgage' }])
+  })
+
+  it('pays an earmark outside the pool', async () => {
+    const who = await createUser(h)
+    const a = await debt(who, { name: 'A', balance: '1000', apr: '0', minimumPayment: '100', extraPayment: '400' })
+    await debt(who, { name: 'B', balance: '1000', apr: '0', minimumPayment: '100' })
+
+    const body = (await req('GET', '/plan?strategy=snowball&extra=0&tz=UTC', who)).json() as {
+      earmarked: string; months: number
+      schedule: Array<{ payment: string }>; debts: Array<{ id: string; payoffMonth: number | null }>
+    }
+    expect(body.earmarked).toBe('400.0000')
+    expect(body.schedule[0]?.payment).toBe('600.0000')
+    expect(body.debts.find((d) => d.id === a.id)?.payoffMonth).toBe(2)
+    // Its 400 stops with it: month 3 is only B, at 200.
+    expect(body.schedule[2]?.payment).toBe('200.0000')
+    expect(body.months).toBe(6)
   })
 
   it('refuses a bad time zone or strategy', async () => {

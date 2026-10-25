@@ -65,6 +65,37 @@ const schema = z.object({
    * against one account even when the guesses come from many addresses.
    */
   AUTH_EMAIL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+
+  // ── Global API rate limit (one self-contained block) ────────────────────────
+  /**
+   * Whether the per-user API rate limit is on. It is on by default. Set `false`
+   * to turn it off for an instance that scripted clients call in a loop; the
+   * sign-in limits above are separate and stay on. The counters are in this
+   * process's memory, so with several API instances each counts on its own.
+   */
+  API_RATE_LIMIT_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /**
+   * Requests one user (or one client address, for requests with no valid
+   * token) may make to `/api/v1` per window, outside the import and export
+   * routes. The default is about seven times the busiest minute of a measured
+   * heavy browser session (87 requests) and about three times its fastest
+   * scripted stretch (217 a minute); raise it for a script that polls.
+   */
+  API_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(10_000_000).default(600),
+  /**
+   * CSV import requests (`analyze`, including each page of flagged rows, and
+   * `commit`) one user may make per window. Counts requests; the number of
+   * commits running at once is `IMPORT_MAX_CONCURRENT`.
+   */
+  API_RATE_LIMIT_IMPORT_MAX: z.coerce.number().int().min(1).max(10_000_000).default(30),
+  /** Data export downloads one user may make per window; each also needs a password ticket. */
+  API_RATE_LIMIT_EXPORT_MAX: z.coerce.number().int().min(1).max(10_000_000).default(5),
+  /** Length of the API rate-limit window, in seconds. */
+  API_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).max(86_400).default(60),
+
   /**
    * Password hashes computed at once. Each Argon2id hash holds tens of MiB, so
    * an unbounded burst of logins could exhaust memory; excess work queues.

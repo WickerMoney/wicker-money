@@ -13,4 +13,8 @@ export interface Debt {
   readonly sortOrder: number
   /** Hidden from plans, but kept. */
   readonly archived: boolean
+  /** Whether the debt is part of the payoff plan. `false` keeps it in the list but out of the plan and its date. */
+  readonly included: boolean
+  /** Extra paid toward this debt every month on top of its minimum, apart from the extra for all debts. `'0.0000'` for none. */
+  readonly extraPayment: string
 }

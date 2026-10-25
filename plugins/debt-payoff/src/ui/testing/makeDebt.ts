@@ -14,6 +14,8 @@ export function makeDebt(over: Partial<Debt> = {}): Debt {
     accountId: null,
     sortOrder: counter,
     archived: false,
+    included: true,
+    extraPayment: '0.0000',
     ...over,
   }
 }

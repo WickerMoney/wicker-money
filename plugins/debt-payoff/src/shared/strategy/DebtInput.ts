@@ -13,4 +13,10 @@ export interface DebtInput {
   readonly apr: string
   /** The least the lender requires each month. Zero is allowed. */
   readonly minimumPayment: string
+  /**
+   * Extra the person pays toward this debt every month, on top of its minimum
+   * and outside the shared extra (an "earmark"). Optional; left out means
+   * `'0'`. Zero is allowed.
+   */
+  readonly extraPayment?: string
 }

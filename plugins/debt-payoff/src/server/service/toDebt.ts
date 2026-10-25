@@ -17,5 +17,7 @@ export function toDebt(row: DebtRow): Debt {
     accountId: row.account_id,
     sortOrder: row.sort_order,
     archived: row.archived,
+    included: row.included,
+    extraPayment: row.extra_payment,
   }
 }

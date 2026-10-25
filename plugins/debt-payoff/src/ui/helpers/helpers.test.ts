@@ -52,6 +52,14 @@ describe('checkDraft', () => {
     expect(Object.keys(errors.fields).sort()).toEqual(['apr', 'balance', 'name'])
     expect(errors.form).toBeNull()
   })
+  it('checks an earmark only when one is typed', () => {
+    const good = { ...EMPTY_DRAFT, name: 'Visa', balance: '1', apr: '1', minimumPayment: '1' }
+    expect(checkDraft({ ...good, extraPayment: '' }).fields).toEqual({})
+    expect(checkDraft({ ...good, extraPayment: '  ' }).fields).toEqual({})
+    expect(checkDraft({ ...good, extraPayment: '25.50' }).fields).toEqual({})
+    expect(checkDraft({ ...good, extraPayment: '1,5' }).fields['extraPayment']).toContain('at most four decimal places')
+    expect(checkDraft({ ...good, extraPayment: '-5' }).fields['extraPayment']).toContain('at most four decimal places')
+  })
   it('refuses a name over 100 characters', () => {
     const errors = checkDraft({ ...EMPTY_DRAFT, name: 'x'.repeat(101), balance: '1', apr: '1', minimumPayment: '1' })
     expect(errors.fields['name']).toContain('100')
@@ -72,9 +80,23 @@ describe('draft conversion', () => {
     // Sub-cent precision is never rounded away by editing.
     expect(draftFromDebt(makeDebt({ balance: '10.1250' })).balance).toBe('10.1250')
   })
+  it('sends a blank earmark as 0 and a typed one trimmed, and fills it blank when it is zero', () => {
+    expect(draftBody({ ...EMPTY_DRAFT, extraPayment: '' }, false)).toMatchObject({ extraPayment: '0' })
+    expect(draftBody({ ...EMPTY_DRAFT, extraPayment: ' 25.5 ' }, true)).toMatchObject({ extraPayment: '25.5' })
+    expect(draftFromDebt(makeDebt({ extraPayment: '0.0000' })).extraPayment).toBe('')
+    expect(draftFromDebt(makeDebt({ extraPayment: '25.5000' })).extraPayment).toBe('25.50')
+    // Sub-cent precision is kept, as for every other amount.
+    expect(draftFromDebt(makeDebt({ extraPayment: '10.1250' })).extraPayment).toBe('10.1250')
+  })
+  it('carries the in-plan switch both ways, and fills it from the saved debt', () => {
+    expect(draftBody({ ...EMPTY_DRAFT, included: false }, false)).toMatchObject({ included: false })
+    expect(draftFromDebt(makeDebt({ included: false })).included).toBe(false)
+    expect(draftFromDebt(makeDebt({ included: true })).included).toBe(true)
+    expect(EMPTY_DRAFT.included).toBe(true)
+  })
   it('sends text, trimmed, and only an edit may archive', () => {
     const draft = { ...EMPTY_DRAFT, name: ' Visa ', balance: ' 10.5 ', apr: '1', minimumPayment: '2', accountId: '', archived: true }
-    expect(draftBody(draft, false)).toEqual({ name: 'Visa', balance: '10.5', apr: '1', minimumPayment: '2', accountId: null })
+    expect(draftBody(draft, false)).toEqual({ name: 'Visa', balance: '10.5', apr: '1', minimumPayment: '2', accountId: null, included: true, extraPayment: '0' })
     expect(draftBody(draft, true)).toMatchObject({ archived: true })
   })
 })

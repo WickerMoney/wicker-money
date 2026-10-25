@@ -1,4 +1,4 @@
-import { buildPayoffPlan, type Strategy } from '../../shared/index.js'
+import { buildPayoffPlan, type PlanResponse, type Strategy } from '../../shared/index.js'
 import { DEBT_PAYOFF_API_BASE } from '../../server/constants.js'
 import type { AccountSuggestion, Debt, PlanSettings } from '../models/index.js'
 import { makeApi } from './makeApi.js'
@@ -42,9 +42,11 @@ export function makeBackend(debts: readonly Debt[] = [], suggestions: readonly A
     if (route === '/settings') return state.settings
     if (route === '/account-suggestions') return { accounts: state.suggestions }
     if (route === '/plan') {
-      return buildPayoffPlan(
-        state.debts.filter((d) => !d.archived).map((d) => ({
+      const active = state.debts.filter((d) => !d.archived)
+      const plan = buildPayoffPlan(
+        active.filter((d) => d.included).map((d) => ({
           id: d.id, name: d.name, balance: d.balance, apr: d.apr, minimumPayment: d.minimumPayment,
+          extraPayment: d.extraPayment,
         })),
         {
           strategy: (params.get('strategy') ?? state.settings.strategy) as Strategy,
@@ -52,12 +54,17 @@ export function makeBackend(debts: readonly Debt[] = [], suggestions: readonly A
           startDate: TODAY,
         },
       )
+      const response: PlanResponse = {
+        ...plan,
+        excludedDebts: active.filter((d) => !d.included).map((d) => ({ id: d.id, name: d.name })),
+      }
+      return response
     }
     throw new Error(`unexpected GET ${path}`)
   })
   api.post.mockImplementation(async (path: string, body: unknown) => {
     log.push(`POST ${strip(path)}`)
-    const b = body as Record<string, string | null>
+    const b = body as Record<string, string | boolean | null>
     const debt: Debt = {
       id: `new-${state.debts.length + 1}`,
       name: String(b['name']),
@@ -67,6 +74,8 @@ export function makeBackend(debts: readonly Debt[] = [], suggestions: readonly A
       accountId: (b['accountId'] ?? null) as string | null,
       sortOrder: state.debts.length,
       archived: false,
+      included: b['included'] !== false,
+      extraPayment: b['extraPayment'] === undefined ? '0.0000' : `${Number(b['extraPayment']).toFixed(4)}`,
     }
     state.debts.push(debt)
     return debt
