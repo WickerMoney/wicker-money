@@ -31,6 +31,13 @@ curated, human-readable version.
   the limit off.** The counters are per API process, so several instances each
   count on their own. The sign-in limits are unchanged. See `DEVELOPMENT.md`,
   "API rate limit".
+- **The Forecast page runs in a sandboxed plugin frame**, the first page to do
+  so, like Insights and Spending Trends do for their widgets. The page looks and
+  behaves as before: the frame grows to its content and the window scrolls, Tab
+  order and the skip link are unchanged, and the tab title is the app's. Tab at
+  the last control of a frame now leaves it instead of staying put. Plugin page
+  routes also match addresses under the page (`/p/<id>/<page>/...`), which a
+  page in a frame is told about.
 - **Plugin frames start when they scroll into view.** A dashboard widget that
   runs in a sandboxed frame no longer gets its iframe until its card is within
   600 px of the viewport; until then the card holds a placeholder of the frame's
