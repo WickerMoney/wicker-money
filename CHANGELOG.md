@@ -23,6 +23,9 @@ curated, human-readable version.
   
 ### Added
 
+- **`Table` can show a detail row under a row** (`@wickermoney/ui-kit`,
+  experimental): the optional `rowDetail(row)` prop renders a full-width row
+  directly under the row it belongs to. `IconButton` also draws a `link` icon.
 - **End-to-end tests (`e2e/`).** A private Playwright package that drives the
   built image through a throwaway compose stack with the seeded demo data:
   `e2e/run.ps1` on Windows, `e2e/run.sh` elsewhere, `pnpm test:e2e` against a

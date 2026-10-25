@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 /** The icons an {@link IconButton} can draw. */
-export type IconName = 'edit' | 'delete' | 'disable' | 'enable' | 'archive' | 'history' | 'end' | 'balance'
+export type IconName = 'edit' | 'delete' | 'disable' | 'enable' | 'archive' | 'history' | 'end' | 'balance' | 'link'
 
 // Paths are 24x24, stroke-only, in the style of the Lucide set (ISC licence).
 const ICONS: Record<IconName, ReactNode> = {
@@ -57,6 +57,12 @@ const ICONS: Record<IconName, ReactNode> = {
       <path d="M7 21h10" />
       <path d="M12 3v18" />
       <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </>
   ),
   disable: (

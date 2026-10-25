@@ -30,6 +30,11 @@ describe('Button', () => {
 })
 
 describe('IconButton', () => {
+  it('draws the link icon', () => {
+    const { container } = render(<IconButton icon="link" label="Link" aria-expanded={false} />)
+    expect(screen.getByRole('button', { name: 'Link' }).getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelectorAll('svg path')).toHaveLength(2)
+  })
   it('is named by its label, which is also its tooltip, and hides the drawing from readers', () => {
     render(<IconButton icon="edit" label="Edit" />)
     const button = screen.getByRole('button', { name: 'Edit' })
@@ -111,5 +116,40 @@ describe('Table', () => {
     const cells = Array.from(container.querySelectorAll('tbody td'))
     expect(cells.map((c) => c.getAttribute('data-col'))).toEqual(['name', 'sel', 'act'])
     expect(cells.map((c) => c.getAttribute('data-label'))).toEqual(['Name', null, null])
+  })
+
+  describe('rowDetail', () => {
+    const rows = [{ name: 'A' }, { name: 'B' }]
+    it('renders nothing extra when the prop is absent or returns an empty value', () => {
+      const { container, rerender } = render(<Table columns={columns} rows={rows} rowKey={(r) => r.name} />)
+      expect(container.querySelectorAll('tbody tr')).toHaveLength(2)
+      for (const none of [null, undefined, false] as const) {
+        rerender(<Table columns={columns} rows={rows} rowKey={(r) => r.name} rowDetail={() => none} />)
+        expect(container.querySelectorAll('tbody tr')).toHaveLength(2)
+        expect(container.querySelector('.wm-table__row--open')).toBeNull()
+      }
+    })
+    it('renders a full-width row under the row it belongs to and marks that row', () => {
+      const { container } = render(
+        <Table columns={columns} rows={rows} rowKey={(r) => r.name}
+          rowDetail={(r) => (r.name === 'A' ? <p>Detail of {r.name}</p> : null)} />,
+      )
+      const trs = Array.from(container.querySelectorAll('tbody tr'))
+      expect(trs).toHaveLength(3)
+      expect(trs[0]?.className).toBe('wm-table__row--open')
+      expect(trs[1]?.className).toBe('wm-table__detail')
+      expect(trs[2]?.className).toBe('')
+      const cell = trs[1]?.querySelector('td')
+      expect(cell?.getAttribute('colspan')).toBe('2')
+      expect(cell?.hasAttribute('data-col')).toBe(false)
+      expect(screen.getByText('Detail of A')).toBeDefined()
+    })
+    it('keeps the detail content mounted when the rows are re-rendered', () => {
+      const detail = (r: { name: string }) => (r.name === 'A' ? <input aria-label="note" /> : null)
+      const { rerender } = render(<Table columns={columns} rows={rows} rowKey={(r) => r.name} rowDetail={detail} />)
+      const input = screen.getByLabelText('note')
+      rerender(<Table columns={columns} rows={[...rows]} rowKey={(r) => r.name} rowDetail={detail} />)
+      expect(screen.getByLabelText('note')).toBe(input)
+    })
   })
 })
