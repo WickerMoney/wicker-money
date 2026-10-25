@@ -210,7 +210,8 @@ Terminate TLS in a reverse proxy (Caddy, Nginx Proxy Manager or Traefik) and
 forward to the container's single port, 8080. There is no separate UI port.
 
 - Set `TRUST_PROXY=true`, or every user shares the proxy's address for the
-  per-address auth limits (`AUTH_RATE_LIMIT_MAX`).
+  per-address auth limits (`AUTH_RATE_LIMIT_MAX`) and the API rate limit for
+  requests that carry no valid token.
 - Leave `COOKIE_SECURE` unset. It defaults to `true` in production.
 - **Do not also publish 8080 to the LAN.** With `TRUST_PROXY=true` the API believes
   `X-Forwarded-For`, so a client that reaches the container directly can spoof its

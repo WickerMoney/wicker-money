@@ -88,6 +88,11 @@ services:
       # only. The limits themselves are not under test here.
       AUTH_RATE_LIMIT_MAX: "1000"
       AUTH_EMAIL_RATE_LIMIT_MAX: "1000"
+      # The API-wide per-user limit (API_RATE_LIMIT_*) is off for the same reason:
+      # the specs drive the app from one address as fast as the page loads and
+      # are not testing the limit. Its defaults sit well above a normal session;
+      # the limit is covered by the API integration tests.
+      API_RATE_LIMIT_ENABLED: "false"
     healthcheck:
       # /healthz does not touch the database; the image's own check, run often
       # enough for `up --wait` to return quickly.
