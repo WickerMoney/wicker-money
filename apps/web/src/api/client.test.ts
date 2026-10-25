@@ -443,3 +443,39 @@ describe('the response cache', () => {
     expect(responseCache.size('u1')).toBe(1)
   })
 })
+
+describe('a 429 (too many requests)', () => {
+  it('becomes an ApiError with the server\'s message and code, and does not end or refresh the session', async () => {
+    setAccessToken(tokenExpiringIn(600))
+    route(() => json({ code: 'rate_limited', message: 'Too many requests. Wait 7 seconds and try again.' }, 429))
+
+    const error = await api.get('/accounts').catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).toMatchObject({ status: 429, code: 'rate_limited', message: 'Too many requests. Wait 7 seconds and try again.' })
+    expect(callsTo('/auth/refresh')).toBe(0)
+    expect(unauthorized).not.toHaveBeenCalled()
+  })
+
+  it('names the wait from Retry-After when the body has no message, and still reads clearly without it', async () => {
+    setAccessToken(tokenExpiringIn(600))
+    route(() => new Response('', { status: 429, headers: { 'retry-after': '1' } }))
+    await expect(api.get('/accounts')).rejects.toMatchObject({ status: 429, message: 'Too many requests. Wait 1 second and try again.' })
+
+    route(() => new Response('<html>busy</html>', { status: 429 }))
+    await expect(api.get('/accounts')).rejects.toMatchObject({ status: 429, message: 'Too many requests. Wait a moment and try again.' })
+
+    // A date-form Retry-After is not read as a number of seconds.
+    route(() => new Response('', { status: 429, headers: { 'retry-after': 'Wed, 21 Oct 2026 07:28:00 GMT' } }))
+    await expect(api.get('/accounts')).rejects.toMatchObject({ message: 'Too many requests. Wait a moment and try again.' })
+  })
+
+  it('keeps the session when a refresh is refused with 429', async () => {
+    setAccessToken(tokenExpiringIn(5))
+    route((url) => (url.endsWith('/auth/refresh') ? json({ code: 'rate_limited', message: 'Too many requests. Try again later.' }, 429) : json([])))
+
+    await api.get('/accounts')
+
+    expect(unauthorized).not.toHaveBeenCalled()
+  })
+})

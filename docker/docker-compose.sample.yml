@@ -90,6 +90,14 @@ services:
       # before it is refused with "try again"; see .env.example.
       - IMPORT_MAX_CONCURRENT=${IMPORT_MAX_CONCURRENT:-}
       - IMPORT_QUEUE_WAIT_SECONDS=${IMPORT_QUEUE_WAIT_SECONDS:-30}
+      # Per-user API rate limit, on by default; see .env.example. Raise
+      # API_RATE_LIMIT_MAX for a script that polls, or set
+      # API_RATE_LIMIT_ENABLED=false to turn it off. Counted per API process.
+      - API_RATE_LIMIT_ENABLED=${API_RATE_LIMIT_ENABLED:-true}
+      - API_RATE_LIMIT_MAX=${API_RATE_LIMIT_MAX:-600}
+      - API_RATE_LIMIT_IMPORT_MAX=${API_RATE_LIMIT_IMPORT_MAX:-30}
+      - API_RATE_LIMIT_EXPORT_MAX=${API_RATE_LIMIT_EXPORT_MAX:-5}
+      - API_RATE_LIMIT_WINDOW_SECONDS=${API_RATE_LIMIT_WINDOW_SECONDS:-60}
     networks:
       - wickermoney_default
     volumes:

@@ -79,6 +79,12 @@ export async function createHarness(overrides: Record<string, string> = {}): Pro
     // limiter; the limiter itself is tested on a dedicated low-limit app.
     AUTH_RATE_LIMIT_MAX: '100000',
     AUTH_EMAIL_RATE_LIMIT_MAX: '100000',
+    // The API-wide limit stays on (so every test runs through its hook) but is
+    // far above what any suite does: some files import or export dozens of times
+    // as one user. The limit itself is tested in `rateLimit/`, with small values.
+    API_RATE_LIMIT_MAX: '10000000',
+    API_RATE_LIMIT_IMPORT_MAX: '10000000',
+    API_RATE_LIMIT_EXPORT_MAX: '10000000',
     // Quiet by default, but `LOG_LEVEL=error pnpm test` surfaces the real cause
     // of a 500 when a test only tells you the status code.
     LOG_LEVEL: process.env['LOG_LEVEL'] ?? 'silent',

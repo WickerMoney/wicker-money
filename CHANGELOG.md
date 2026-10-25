@@ -11,6 +11,19 @@ curated, human-readable version.
 
 ### Changed
 
+- **The API now has a per-user rate limit, on by default.** Every signed-in
+  user may make 600 requests a minute to `/api/v1`, 30 CSV import requests
+  (`analyze` and `commit`) and 5 data exports; a request with no valid token
+  counts against the client address. Over the limit the API answers `429
+  rate_limited` with a `Retry-After` header, and the app shows the message. A
+  heavy normal session makes under a seventh of the general limit, so people
+  using the app will not meet it. **Upgrade note: anything that calls the API in
+  a loop (a sync, a poller, a script) may now get 429s. Raise
+  `API_RATE_LIMIT_MAX` (and `API_RATE_LIMIT_IMPORT_MAX`,
+  `API_RATE_LIMIT_EXPORT_MAX`), or set `API_RATE_LIMIT_ENABLED=false` to turn
+  the limit off.** The counters are per API process, so several instances each
+  count on their own. The sign-in limits are unchanged. See `DEVELOPMENT.md`,
+  "API rate limit".
 - **Plugin frames start when they scroll into view.** A dashboard widget that
   runs in a sandboxed frame no longer gets its iframe until its card is within
   600 px of the viewport; until then the card holds a placeholder of the frame's

@@ -16,6 +16,8 @@ import type { Db } from './db/client.js'
 import { pingDatabase } from './db/healthcheck.js'
 import { AppError } from './errors.js'
 import { registerOnboardingRoutes } from './onboarding/routes/index.js'
+import { InMemoryRateLimitStore } from './rateLimit/InMemoryRateLimitStore.js'
+import { registerGlobalRateLimit } from './rateLimit/registerGlobalRateLimit.js'
 import { registerPluginRoutes } from './plugins/routes/index.js'
 import { registerRecurringItemRoutes } from './recurring/routes/index.js'
 import { registerSettingsRoutes } from './settings/routes/index.js'
@@ -168,6 +170,8 @@ export function buildApp({ db, config, logStream, pluginOptions }: AppDeps): Fas
       return { status: 'ok', version: APP_VERSION, gitSha: GIT_SHA, sdkVersion: SDK_MAJOR_VERSION }
     })
 
+    // Before authentication, so a request it refuses never reaches the database or an import slot.
+    registerGlobalRateLimit(app, config, new InMemoryRateLimitStore())
     registerAuth(app, auth, services.plugins)
     registerAuthRoutes(app, auth)
     registerAccountRoutes(app, services)
