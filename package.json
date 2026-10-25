@@ -24,6 +24,7 @@
     "test:hostile": "pnpm --filter @wickermoney/api test:hostile && pnpm --filter @wickermoney/web test:hostile",
     "typecheck": "turbo run typecheck",
     "lint": "eslint .",
+    "test:e2e": "pnpm --filter @wickermoney/e2e test:e2e",
     "dev": "turbo run dev"
   },
   "devDependencies": {

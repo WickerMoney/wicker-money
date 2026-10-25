@@ -28,3 +28,7 @@ apps/web/public/plugins
 .DS_Store
 .vscode
 .idea
+
+# End-to-end test output (e2e/)
+e2e/reports
+e2e/test-results

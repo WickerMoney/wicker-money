@@ -23,6 +23,14 @@ curated, human-readable version.
   
 ### Added
 
+- **End-to-end tests (`e2e/`).** A private Playwright package that drives the
+  built image through a throwaway compose stack with the seeded demo data:
+  `e2e/run.ps1` on Windows, `e2e/run.sh` elsewhere, `pnpm test:e2e` against a
+  stack you already run. Seven smoke specs cover start-up, sign-in, the
+  dashboard widgets and plugin pages, tenant isolation and adding a
+  transaction. It is not part of `pnpm test`, adds no browser download to
+  `pnpm install`, and the shipped image is unchanged. See `DEVELOPMENT.md`,
+  "End-to-end tests".
 - **A notification toast in `@wickermoney/ui-kit`** (experimental, for the core
   app only for now): `ToastProvider`, `ToastViewport` and `useToast()`, plus the
   `--wm-shadow-raised` token. Nothing dismisses itself: a toast stays until it is

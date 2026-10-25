@@ -1,0 +1,3 @@
+# Playwright output: HTML report, JUnit file, traces, screenshots.
+reports/
+test-results/
