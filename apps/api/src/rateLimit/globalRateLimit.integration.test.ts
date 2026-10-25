@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { signPluginToken } from '../auth/pluginTokens.js'
 import { exportHeaders, mintExportTicket, TEST_USER_PASSWORD } from '../testing/exportTicket.js'
@@ -94,7 +97,10 @@ describe('the general bucket', () => {
   })
 
   it('leaves the health checks, the web bundle and the frame document alone however often they are asked for', async () => {
-    const web = await createHarness({ API_RATE_LIMIT_MAX: '2', WEB_DIST_DIR: new URL('../../../../apps/web/dist', import.meta.url).pathname })
+    // A stub bundle, not apps/web/dist: this task does not build the web app, so the real directory is absent on a clean runner.
+    const dist = mkdtempSync(join(tmpdir(), 'wickermoney-ratelimit-'))
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>Wicker Money</title>')
+    const web = await createHarness({ API_RATE_LIMIT_MAX: '2', WEB_DIST_DIR: dist })
     try {
       for (const url of ['/healthz', '/readyz', '/plugin-frame', '/']) {
         const codes = await statuses(8, () => get(web, url))
@@ -102,6 +108,7 @@ describe('the general bucket', () => {
       }
     } finally {
       await web.close()
+      rmSync(dist, { recursive: true, force: true })
     }
   })
 })
