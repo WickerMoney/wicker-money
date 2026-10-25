@@ -101,7 +101,7 @@ export function setUnauthorizedHandler(fn: () => void): void {
  */
 export async function parseError(res: Response): Promise<ApiError> {
   let code = 'request_failed'
-  let message = `Request failed (${res.status})`
+  let message = res.status === 429 ? tooManyRequestsMessage(res) : `Request failed (${res.status})`
   let issues: ApiError['issues'] = []
   try {
     const body = (await res.json()) as { code?: string; message?: string }
@@ -112,6 +112,18 @@ export async function parseError(res: Response): Promise<ApiError> {
     // Non-JSON error body; the defaults above are fine.
   }
   return new ApiError(message, res.status, code, issues)
+}
+
+/**
+ * What to tell a person whose request was refused for sending too many, when
+ * the response did not carry a message of its own (the API's own `429` does;
+ * a reverse proxy's may not). Uses `Retry-After` when it is a number of seconds.
+ */
+function tooManyRequestsMessage(res: Response): string {
+  const seconds = Number(res.headers.get('retry-after'))
+  return Number.isInteger(seconds) && seconds > 0
+    ? `Too many requests. Wait ${seconds} ${seconds === 1 ? 'second' : 'seconds'} and try again.`
+    : 'Too many requests. Wait a moment and try again.'
 }
 
 /** Ends the local session and tells the registered handler. */

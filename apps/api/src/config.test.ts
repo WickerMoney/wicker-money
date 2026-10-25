@@ -39,6 +39,8 @@ describe('defaults', () => {
       IMPORT_MAX_ROWS: 100_000,
       IMPORT_MAX_CONCURRENT: 5,
       IMPORT_QUEUE_WAIT_SECONDS: 30,
+      API_RATE_LIMIT_ENABLED: true,
+      API_RATE_LIMIT_WINDOW_SECONDS: 60,
     })
     expect(config.COOKIE_SECURE).toBeUndefined()
     expect(config.BOOTSTRAP_OWNER_EMAIL).toBeUndefined()
@@ -370,4 +372,35 @@ describe('IMPORT_QUEUE_WAIT_SECONDS', () => {
   it.each(['-1', '601', '2.5', 'long'])('rejects %j', (value) => {
     expect(failure({ IMPORT_QUEUE_WAIT_SECONDS: value })).toContain('IMPORT_QUEUE_WAIT_SECONDS')
   })
+})
+
+describe('API_RATE_LIMIT_*', () => {
+  it('is on by default, with a 60 second window and the bucket sizes in config.ts', () => {
+    const config = loadConfig(env())
+    expect(config.API_RATE_LIMIT_ENABLED).toBe(true)
+    expect(config.API_RATE_LIMIT_WINDOW_SECONDS).toBe(60)
+    expect(config.API_RATE_LIMIT_MAX).toBeGreaterThan(config.API_RATE_LIMIT_IMPORT_MAX)
+    expect(config.API_RATE_LIMIT_MAX).toBeGreaterThan(config.API_RATE_LIMIT_EXPORT_MAX)
+  })
+
+  it('turns off with false and nothing else', () => {
+    expect(loadConfig(env({ API_RATE_LIMIT_ENABLED: 'false' })).API_RATE_LIMIT_ENABLED).toBe(false)
+    expect(failure({ API_RATE_LIMIT_ENABLED: '0' })).toContain('API_RATE_LIMIT_ENABLED')
+  })
+
+  it('takes whole numbers for the allowances and the window', () => {
+    const config = loadConfig(env({
+      API_RATE_LIMIT_MAX: '5000', API_RATE_LIMIT_IMPORT_MAX: '90', API_RATE_LIMIT_EXPORT_MAX: '20', API_RATE_LIMIT_WINDOW_SECONDS: '10',
+    }))
+    expect(config).toMatchObject({
+      API_RATE_LIMIT_MAX: 5000, API_RATE_LIMIT_IMPORT_MAX: 90, API_RATE_LIMIT_EXPORT_MAX: 20, API_RATE_LIMIT_WINDOW_SECONDS: 10,
+    })
+  })
+
+  it.each(['API_RATE_LIMIT_MAX', 'API_RATE_LIMIT_IMPORT_MAX', 'API_RATE_LIMIT_EXPORT_MAX', 'API_RATE_LIMIT_WINDOW_SECONDS'] as const)(
+    'refuses a %s of zero, a fraction or a word',
+    (name) => {
+      for (const value of ['0', '1.5', 'many']) expect(failure({ [name]: value })).toContain(name)
+    },
+  )
 })
