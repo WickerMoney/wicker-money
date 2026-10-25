@@ -18,15 +18,15 @@ export interface TransactionMatches {
   /** Loads the occurrences one transaction could settle and opens the list for its row. */
   readonly openPicker: (transaction: Transaction) => Promise<void>
   readonly closePicker: () => void
-  /** Records a suggested match. */
+  /** Records a suggested match. Closes the list. */
   readonly confirm: (transaction: Transaction, suggestion: MatchSuggestion) => Promise<void>
   /** Records a match picked from the list. */
   readonly match: (transaction: Transaction, occurrence: OccurrenceRef) => Promise<void>
-  /** The transaction no longer settles the occurrence. */
+  /** The transaction no longer settles the occurrence. Keeps its own list open, refreshed. */
   readonly unmatch: (transaction: Transaction, occurrence: OccurrenceRef) => Promise<void>
-  /** The transaction is not this occurrence: stop suggesting the pair. */
+  /** The transaction is not this occurrence: stop suggesting the pair. Keeps its own list open, refreshed. */
   readonly dismiss: (transaction: Transaction, occurrence: OccurrenceRef) => Promise<void>
-  /** Undoes a dismissal. */
+  /** Undoes a dismissal. Keeps its own list open, refreshed. */
   readonly undismiss: (transaction: Transaction, occurrence: OccurrenceRef) => Promise<void>
 }
 
@@ -108,25 +108,40 @@ export function useTransactionMatches(
     return () => { clearTimeout(timer); latest.cancel() }
   }, [idsKey, revision, load, latest])
 
-  const run = useCallback(async (work: () => Promise<unknown>, failure: string) => {
+  // What the open list is about, for `run`, without making every action depend on it.
+  const pickerOf = useRef<string | null>(null)
+  pickerOf.current = picker?.transactionId ?? null
+
+  const fetchPicker = useCallback(
+    (transactionId: string) => api.get<TransactionCandidates>(`/recurring-items/transaction-matches/${transactionId}`),
+    [],
+  )
+
+  /**
+   * Does one action, then re-reads the column. The open list is closed, except
+   * that an action taken from a transaction's own list (`keep`) leaves that list
+   * open and re-reads it, so Not this, Restore and Unmatch can be done in turn.
+   */
+  const run = useCallback(async (work: () => Promise<unknown>, failure: string, keep?: string) => {
     begin()
     try {
       await work()
-      setPicker(null)
+      if (keep !== undefined && pickerOf.current === keep) setPicker(await fetchPicker(keep))
+      else setPicker(null)
       await load(idsRef.current)
     } catch (e) {
       show(e instanceof Error ? e.message : failure)
     } finally { end() }
-  }, [begin, end, show, load])
+  }, [begin, end, show, load, fetchPicker])
 
   const openPicker = useCallback(async (t: Transaction) => {
     begin()
     try {
-      setPicker(await api.get<TransactionCandidates>(`/recurring-items/transaction-matches/${t.id}`))
+      setPicker(await fetchPicker(t.id))
     } catch (e) {
       show(e instanceof Error ? e.message : 'Could not look for recurring items this could be.')
     } finally { end() }
-  }, [begin, end, show])
+  }, [begin, end, show, fetchPicker])
 
   const closePicker = useCallback(() => setPicker(null), [])
 
@@ -143,9 +158,11 @@ export function useTransactionMatches(
     closePicker,
     confirm: (t, s) => match(t, s.occurrence),
     match,
-    unmatch: (t, o) => run(() => api.del(`${occurrenceUrl(o)}/matches/${t.id}`), 'Could not unmatch that transaction.'),
+    unmatch: (t, o) =>
+      run(() => api.del(`${occurrenceUrl(o)}/matches/${t.id}`), 'Could not unmatch that transaction.', t.id),
     dismiss: (t, o) =>
-      run(() => api.post(`${occurrenceUrl(o)}/dismissals`, { transactionId: t.id }), 'Could not dismiss the suggestion.'),
-    undismiss: (t, o) => run(() => api.del(`${occurrenceUrl(o)}/dismissals/${t.id}`), 'Could not undo the dismissal.'),
+      run(() => api.post(`${occurrenceUrl(o)}/dismissals`, { transactionId: t.id }), 'Could not dismiss the suggestion.', t.id),
+    undismiss: (t, o) =>
+      run(() => api.del(`${occurrenceUrl(o)}/dismissals/${t.id}`), 'Could not undo the dismissal.', t.id),
   }), [byId, picker, openPicker, closePicker, match, run])
 }

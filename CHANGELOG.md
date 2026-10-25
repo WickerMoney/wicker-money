@@ -11,6 +11,13 @@ curated, human-readable version.
 
 ### Changed
 
+- **The Transactions recurring column is quieter.** A matched row shows its
+  recurring item as a pill with an *Unmatch* button, and the occurrence's date
+  only when it is not the transaction's own; an unmatched row shows nothing
+  there. A **Link** button, first among the row buttons (accent colour and a dot
+  when an item is suggested), opens a list under the row with the suggestion
+  (*Match*, *Not this*), the other items it could be, the dismissed ones
+  (*Restore*) and *Close*. Not this, Restore and Unmatch keep the list open.
 - **Plugin frames start when they scroll into view.** A dashboard widget that
   runs in a sandboxed frame no longer gets its iframe until its card is within
   600 px of the viewport; until then the card holds a placeholder of the frame's

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { EmptyState, Spinner, Table } from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { Category, Transaction } from '../../../models/index.js'
@@ -8,6 +9,7 @@ import { TransactionAmountCell } from './TransactionAmountCell.js'
 import { TransactionCategoryCell } from './TransactionCategoryCell.js'
 import { TransactionEditDialog } from './TransactionEditDialog.js'
 import { TransactionRecurringCell } from './TransactionRecurringCell.js'
+import { TransactionRecurringPicker } from './TransactionRecurringPicker.js'
 
 /** Props for {@link TransactionTable}. */
 export interface TransactionTableProps {
@@ -42,6 +44,13 @@ export function TransactionTable({
 }: TransactionTableProps) {
   const row = useTransactionEditing(status, onChanged)
   const busy = status.busy
+  const openPicker = matches?.openPicker
+  const closePicker = matches?.closePicker
+  /** The Link button: opens the row's picker, or closes it when it is open. */
+  const toggleLink = useCallback((t: Transaction, open: boolean) => {
+    if (open) void openPicker?.(t)
+    else closePicker?.()
+  }, [openPicker, closePicker])
 
   if (items === null) return <Spinner />
 
@@ -91,10 +100,22 @@ export function TransactionTable({
             ...(matches === undefined ? [] : [{ key: 'recur', header: 'Recurring',
               render: (t: Transaction) => <TransactionRecurringCell transaction={t} matches={matches} busy={busy} /> }]),
             { key: 'actions', header: '',
-              render: (t: Transaction) => <TransactionActionsCell transaction={t} onEdit={row.start} onDelete={row.remove} busy={busy} /> },
+              render: (t: Transaction) => (
+                <TransactionActionsCell
+                  transaction={t} onEdit={row.start} onDelete={row.remove} busy={busy}
+                  summary={matches?.byId.get(t.id)}
+                  pickerOpen={matches?.picker?.transactionId === t.id}
+                  onToggleLink={matches === undefined ? undefined : toggleLink}
+                />
+              ) },
           ]}
           rows={items}
           rowKey={(t) => t.id}
+          rowDetail={(t) => (
+            matches !== undefined && matches.picker?.transactionId === t.id
+              ? <TransactionRecurringPicker transaction={t} matches={matches} busy={busy} />
+              : null
+          )}
           empty={
             onlyUncategorized
               ? <EmptyState title="Nothing uncategorized" hint="Every transaction has a category." />
