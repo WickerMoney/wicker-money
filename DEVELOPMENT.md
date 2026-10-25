@@ -221,6 +221,104 @@ for another page), instead of every row: 19 KB instead of 21 MB for an 8 MB
 file. `commit` classifies the file itself, so rows never shown are handled the
 same way.
 
+### API rate limit
+
+Every request under `/api/v1` counts against a per-user limit, **on by default**.
+It exists so one client in a loop (a script, a runaway tab, a stolen token) cannot
+use the whole API process: the sign-in routes and the password-confirmed actions
+had limits of their own, and nothing else did.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `API_RATE_LIMIT_ENABLED` | `true` | `false` turns the whole limit off. The sign-in limits (`AUTH_RATE_LIMIT_*`) are separate and stay on. |
+| `API_RATE_LIMIT_MAX` | `600` | Requests per user per window, everything except import and export. |
+| `API_RATE_LIMIT_IMPORT_MAX` | `30` | CSV import requests per user per window: `analyze` (each page of flagged rows is one) and `commit` together. |
+| `API_RATE_LIMIT_EXPORT_MAX` | `5` | Data export downloads per user per window. Each also needs a password ticket. |
+| `API_RATE_LIMIT_WINDOW_SECONDS` | `60` | Length of the window, 1 to 86400. |
+
+**Who is counted.** A bearer token with a valid signature, expiry, issuer and
+audience counts against its user. That includes a plugin token, which counts as
+the user it speaks for, together with that user's own requests. A request with no
+valid token, including one with a forged or expired token, counts against the
+client address instead: the forwarded address when `TRUST_PROXY=true`, the
+connection's address otherwise. Behind a proxy without `TRUST_PROXY`, every
+unauthenticated request then shares the proxy's address, which for a household is
+only the sign-in and refresh calls. The token is checked for its signature only
+(no database query), so a revoked session still names a bucket but is refused by
+the route's own authentication, and it can only spend its own user's allowance.
+
+**Which bucket.** A request counts against exactly one bucket: `POST` `analyze`
+and `commit` of the Import CSV plugin in the import bucket, `GET
+/settings/export` in the export bucket, everything else (the export ticket, the
+erase actions and the rest of the import plugin's routes included) in the general
+one. `/healthz`, `/readyz`, the web app's files and the plugin frame document are
+never counted: only paths under `/api/v1/` are.
+
+**Refusal.** Over the allowance the request is answered `429`, code
+`rate_limited`, the usual `{ code, message }` body with a message that says how
+many seconds to wait, and a `Retry-After` header in seconds. Windows are fixed, so
+a client can spend one window's allowance at its end and the next one's at its
+start: at most twice the limit in any window-length span. The web app shows the
+message in the same alert as any other failed request; it never signs the person
+out for a 429.
+
+**How it composes with the import gate and the other limits.** The hook runs in
+`onRequest`, before authentication and before any handler, so a request it refuses
+never reaches the database and never takes an import slot. The three limits that
+can apply to an import are different things:
+
+1. the rate limit counts *requests* per user and runs first; over it the person
+   sees `429 rate_limited`, whatever the gate is doing;
+2. the gate (`IMPORT_MAX_CONCURRENT`) caps *commits in flight* per process and
+   runs inside the plugin's handler; a request that passed the rate limit and
+   finds every slot busy for `IMPORT_QUEUE_WAIT_SECONDS` sees `503 import_busy`;
+3. the sign-in and password-attempt limiters (`AUTH_*`) are unchanged and keep
+   their own counters. A request can be counted by this limit and by one of them,
+   and either can refuse it; their refusal says "Try again later." and carries no
+   number of seconds in the message.
+
+A refused request does not refund anything: it was counted. A request refused by
+the gate (503) was counted too, so a retry loop on `import_busy` spends the
+import allowance. Retry after `Retry-After`, not at once.
+
+**What the defaults rest on.** A scripted browser session (Chromium against the
+seeded `hero` account, a built web app, the API on PostgreSQL 16) did, with every
+request counted in the browser, including those the sandboxed plugin frames make:
+login and a dashboard scrolled to the bottom (9 requests, 43 a minute at the
+pace it ran), a full reload (8), opening Transactions and making 16 searches, date
+and sort changes and 20 pages (47-49 in 14 seconds, 205-217 a minute, which is
+faster than a person clicks), importing 5,000 rows and the same file again with
+every row flagged and every page of them shown (11 `analyze` requests and 2
+`commit` requests, besides the mapping and history reads) and one export (the
+password ticket and the download). Whole session: 95 requests in 63 seconds; the
+busiest 60 seconds held 87. The web app makes no periodic requests, so an idle tab
+adds none. One machine, one seeded account, one pace: the shape is what matters.
+
+| Bucket | Default | Measured | Headroom |
+|---|---|---|---|
+| General | 600 | 87 in the busiest minute of the whole session; 217 a minute in its fastest stretch | 6.9x the busiest minute, 2.8x the fastest stretch |
+| Import | 30 | 11 `analyze` and 2 `commit` for two 5,000-row files within 22 seconds | about 2.3x, at a pace faster than "Show more" is clicked |
+| Export | 5 | 1 download | 5x |
+
+Import is deliberately tighter than the rest: each `analyze` parses the whole
+file (about a second for 100,000 rows, stalling the event loop for most of it) and
+each page of flagged rows asks for it again. Thirty a minute can still keep one
+process busy for half a minute of CPU, which is the point of having it.
+
+**Scripts.** A script that polls or syncs may meet the general limit: raise
+`API_RATE_LIMIT_MAX` for the instance, or set `API_RATE_LIMIT_ENABLED=false`. The
+limit is per user, so one script does not slow anyone else, and it is per API
+process. There is no per-script setting yet.
+
+**Per process only.** The counters are in this process's memory
+(`InMemoryRateLimitStore`): they reset on restart, and with more than one API
+instance behind a load balancer each instance counts on its own, so a client can
+make up to that many times the limit. The limiter talks to its counters through a
+small interface (`RateLimitStore`: count a request against a key in a window), so
+a store shared between instances can replace the in-memory one without touching
+the limiter, but no shared store exists yet and nothing here claims one. The
+sign-in and password-attempt limiters are in memory too, in separate counters.
+
 ### PgBouncer
 
 Run the API through PgBouncer in **transaction** mode only if you need to
@@ -1433,7 +1531,8 @@ nothing was added to the image for this), no published port, and a `playwright`
 service (profile `test`) on the official Playwright image. Everything is thrown
 away afterwards. The passwords in it are public test values that pass the API's
 placeholder-credential check under `NODE_ENV=production`; the sign-in rate limits
-are raised for this stack only.
+are raised and the API rate limit (`API_RATE_LIMIT_ENABLED`) is off for this stack
+only.
 
 ```powershell
 # Windows, Docker Desktop: builds wickermoney:e2e from this checkout, runs, tears down
