@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../api/client.js'
@@ -9,6 +9,8 @@ import type {
 import { makeAccount } from '../../testing/makeAccount.js'
 import { errorOf } from '../../testing/errorOf.js'
 import { makeCategory } from '../../testing/makeCategory.js'
+import { renderWithToasts } from '../../testing/renderWithToasts.js'
+import { shownToasts } from '../../testing/shownToasts.js'
 import { validationFailed } from '../../testing/validationFailed.js'
 import { RecurringPage } from './RecurringPage.js'
 
@@ -100,7 +102,7 @@ afterEach(() => { vi.restoreAllMocks() })
 describe('the list', () => {
   it('groups income, outgoings and transfers, showing the derived next due date, never the anchor', async () => {
     serve(full)
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
 
     const income = await screen.findByRole('heading', { name: 'Income' })
     expect(income).toBeTruthy()
@@ -120,14 +122,14 @@ describe('the list', () => {
 
   it('shows the server\'s monthly tiles', async () => {
     serve(full)
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     expect(await screen.findByText('Left over')).toBeTruthy()
     expect(screen.getByText('Transfers between your own accounts are not counted.')).toBeTruthy()
   })
 
   it('shows an empty state with the add button still available', async () => {
     serve({ ...full, items: [], summary: { monthlyIncome: '0.0000', monthlyOutgoings: '0.0000', monthlyNet: '0.0000' } })
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     expect(await screen.findByText('Nothing recurring yet')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Add recurring item' })).toBeTruthy()
   })
@@ -144,7 +146,7 @@ describe('the form', () => {
     serve(full)
     const post = vi.spyOn(api, 'post').mockResolvedValue({})
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     await openForm(user)
 
     await user.type(screen.getByLabelText('Name'), 'Phones')
@@ -156,12 +158,16 @@ describe('the form', () => {
       name: 'Phones', kind: 'bill', frequency: 'monthly', seriesStartDate: '2026-09-28',
       legs: [{ accountId: 'chk', amount: '-85' }],
     }))
+    // The dialog is gone, so the outcome is a toast, not a line in the page banner.
+    await waitFor(() => { expect(shownToasts()).toEqual(["Added 'Phones'."]) })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('offers only categories of the matching kind, and none for a transfer', async () => {
     serve(full)
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     await openForm(user)
 
     const options = () => Array.from((screen.getByLabelText('Category (optional)') as HTMLSelectElement).options).map((o) => o.text)
@@ -175,7 +181,7 @@ describe('the form', () => {
   it('only offers cards and loans as a debt payment\'s destination', async () => {
     serve(full)
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     await openForm(user)
     await user.selectOptions(screen.getByLabelText('Kind'), 'debt_payment')
     const to = Array.from((screen.getByLabelText('Pays (card or loan)') as HTMLSelectElement).options).map((o) => o.text)
@@ -185,7 +191,7 @@ describe('the form', () => {
   it('previews the next dates from the server\'s today', async () => {
     serve(full)
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     await openForm(user)
     const start = screen.getByLabelText('First date')
     await user.clear(start)
@@ -199,7 +205,7 @@ describe('the form', () => {
     serve(full)
     const put = vi.spyOn(api, 'put').mockRejectedValue(new Error('legs: A transfer is two legs that cancel out.'))
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     const row = (await screen.findByText('Vacation Fund')).closest('tr') as HTMLElement
     await user.click(within(row).getByRole('button', { name: 'Edit' }))
 
@@ -218,7 +224,7 @@ describe('errors on the add/edit form', () => {
     serve(full)
     const post = vi.spyOn(api, 'post')
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     await openForm(user)
 
     await user.type(screen.getByLabelText('Amount'), '0')
@@ -236,7 +242,7 @@ describe('errors on the add/edit form', () => {
       validationFailed([['legs', 0, 'accountId'], 'That account is archived; restore it or pick another.']),
     )
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     await openForm(user)
 
     await user.type(screen.getByLabelText('Name'), 'Phones')
@@ -250,7 +256,7 @@ describe('errors on the add/edit form', () => {
 describe('paid / landed matching', () => {
   async function changeMortgage() {
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     const row = (await screen.findByText('Mortgage')).closest('tr') as HTMLElement
     await user.click(within(row).getByRole('button', { name: 'History' }))
     await screen.findByText('Upcoming')
@@ -290,7 +296,7 @@ describe('paid / landed matching', () => {
     serve(full, [{ occurrence: occurrence({}), accountId: 'chk', candidate: candidates.legs[0]!.candidates[0]! }])
     const post = vi.spyOn(api, 'post').mockResolvedValue(occurrence({ status: 'cleared' }))
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     const panel = (await screen.findByText('Did these land?')).closest('section') ?? document.body
     expect(within(panel as HTMLElement).getByText(/BANK MORTGAGE/).textContent).toContain('3 days early')
     expect(post).not.toHaveBeenCalled()
@@ -299,6 +305,8 @@ describe('paid / landed matching', () => {
     await waitFor(() => expect(post).toHaveBeenCalledWith(
       '/recurring-items/mortgage/occurrences/2026-09-30/matches', { transactionId: 't-sep' },
     ))
+    await waitFor(() => { expect(shownToasts()).toEqual(["Matched 'BANK MORTGAGE' to Mortgage."]) })
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('dismisses a suggestion so it is not offered again, and undoes a dismissal', async () => {
@@ -311,7 +319,7 @@ describe('paid / landed matching', () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({})
     const del = vi.spyOn(api, 'del').mockResolvedValue(undefined)
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     const panel = (await screen.findByText('Did these land?')).closest('section') as HTMLElement
 
     await user.click(within(panel).getByRole('button', { name: 'Not Mortgage: BANK MORTGAGE' }))
@@ -322,18 +330,35 @@ describe('paid / landed matching', () => {
     expect(within(panel).getByText(/is not Vacation Fund/)).toBeTruthy()
     await user.click(within(panel).getByRole('button', { name: 'Undo: Hardware Store is not Vacation Fund' }))
     await waitFor(() => expect(del).toHaveBeenCalledWith('/recurring-items/vac/occurrences/2026-09-30/dismissals/t-shop'))
+    // One toast for the family: the later message replaced the earlier one.
+    await waitFor(() => { expect(shownToasts()).toEqual(["'Hardware Store' can be suggested for Vacation Fund again."]) })
+  })
+
+  it('reports a refused match as an error toast that stays', async () => {
+    serve(full, [{ occurrence: occurrence({}), accountId: 'chk', candidate: candidates.legs[0]!.candidates[0]! }])
+    vi.spyOn(api, 'post').mockRejectedValue(new Error('That leg of this occurrence is already matched. Unmatch it first.'))
+    const user = userEvent.setup()
+    renderWithToasts(<RecurringPage />)
+    const panel = (await screen.findByText('Did these land?')).closest('section') as HTMLElement
+
+    await user.click(within(panel).getByRole('button', { name: 'Match' }))
+
+    await waitFor(() => {
+      expect(shownToasts()).toEqual(['Error: That leg of this occurrence is already matched. Unmatch it first.'])
+    })
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('shows no suggestions panel when there is nothing to confirm', async () => {
     serve(full)
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     await screen.findByText('Vacation Fund')
     expect(screen.queryByText('Did these land?')).toBeNull()
   })
 
   it('flags a late occurrence on the item', async () => {
     serve({ ...full, items: [item({ id: 'mortgage', tracked: true, late: ['2026-09-25'] })] })
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     expect(await screen.findByText(`Late: ${formatDate('2026-09-25')}`)).toBeTruthy()
   })
 
@@ -341,7 +366,7 @@ describe('paid / landed matching', () => {
     serve(full)
     const post = vi.spyOn(api, 'post').mockResolvedValue(occurrence({ status: 'cleared' }))
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     const row = (await screen.findByText('Mortgage')).closest('tr') as HTMLElement
     await user.click(within(row).getByRole('button', { name: 'History' }))
 
@@ -353,19 +378,21 @@ describe('paid / landed matching', () => {
     await waitFor(() => expect(post).toHaveBeenCalledWith(
       '/recurring-items/mortgage/occurrences/2026-09-30/matches', { transactionId: 't-sep' },
     ))
+    await waitFor(() => { expect(shownToasts()).toEqual([`Matched 'BANK MORTGAGE' to Mortgage (${formatDate('2026-09-30')}).`]) })
   })
 
   it('skips one occurrence, and changes one with the amount typed positive and sent negative', async () => {
     serve(full)
     const put = vi.spyOn(api, 'put').mockResolvedValue(occurrence({}))
     const user = userEvent.setup()
-    render(<RecurringPage />)
+    renderWithToasts(<RecurringPage />)
     const row = (await screen.findByText('Mortgage')).closest('tr') as HTMLElement
     await user.click(within(row).getByRole('button', { name: 'History' }))
     await screen.findByText('Upcoming')
 
     await user.click(screen.getByRole('button', { name: 'Skip' }))
     await waitFor(() => expect(put).toHaveBeenCalledWith('/recurring-items/mortgage/occurrences/2026-09-30', { skipped: true }))
+    await waitFor(() => { expect(shownToasts()).toEqual([`Skipped Mortgage (${formatDate('2026-09-30')}).`]) })
 
     await user.click(screen.getByRole('button', { name: 'Change' }))
     const amount = screen.getByLabelText('Amount, Monthly Expenses')
@@ -375,5 +402,38 @@ describe('paid / landed matching', () => {
     await waitFor(() => expect(put).toHaveBeenLastCalledWith('/recurring-items/mortgage/occurrences/2026-09-30', {
       expectedDate: null, legs: [{ accountId: 'chk', amount: '-2150' }],
     }))
+    await waitFor(() => { expect(shownToasts()).toEqual([`Changed Mortgage (${formatDate('2026-09-30')}).`]) })
+  })
+})
+
+describe('ending and deleting an item', () => {
+  it('says which item was ended or deleted, in one toast at a time', async () => {
+    serve(full)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(api, 'post').mockResolvedValue({})
+    vi.spyOn(api, 'del').mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    renderWithToasts(<RecurringPage />)
+    const row = (await screen.findByText('Vacation Fund')).closest('tr') as HTMLElement
+
+    await user.click(within(row).getByRole('button', { name: 'End' }))
+    await waitFor(() => { expect(shownToasts()).toEqual(["Ended 'Vacation Fund'."]) })
+
+    await user.click(within((await screen.findByText('Vacation Fund')).closest('tr') as HTMLElement).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => { expect(shownToasts()).toEqual(["Deleted 'Vacation Fund'."]) })
+  })
+
+  it('reports a refused delete as an error toast, not in the page banner', async () => {
+    serve(full)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(api, 'del').mockRejectedValue(new Error('Something still depends on that item.'))
+    const user = userEvent.setup()
+    renderWithToasts(<RecurringPage />)
+    const row = (await screen.findByText('Vacation Fund')).closest('tr') as HTMLElement
+
+    await user.click(within(row).getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => { expect(shownToasts()).toEqual(['Error: Something still depends on that item.']) })
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
