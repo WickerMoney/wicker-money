@@ -654,9 +654,16 @@
   .txn-recur, .recur2__picker { --recur-hit: 40px; }
   .recur2__picker .wm-btn { min-height: 40px; }
 }
-/* A focused row scrolls into view clear of the toast banner (ui-kit Toast: sticky under the phone bar;
-   one two-line toast and its margin are about 84px). The toast session may set this from the measured banner. */
-.txn-table tbody tr { scroll-margin-top: calc(var(--wm-toast-offset-top, 0px) + 96px); }
+/* A control scrolled into view (Tab, Shift+Tab) clears what is stuck to the top of the screen: the phone bar
+   (--wm-toast-offset-top, set by the shell) and the toast banner. The margin has to be on the control, not the
+   row: the browser scrolls the focused element, and a margin on its ancestor does nothing. The banner's height
+   is set by useToastClearance (0px with no toast); a fixed number was either too small for a full stack or
+   wasted a third of a phone screen when there was none. */
+.txn-list { --txn-toast-clear: 0px; }
+.txn-list :is(button, select, input, a, [tabindex]),
+.txn-table tbody tr {
+  scroll-margin-top: calc(var(--wm-toast-offset-top, 0px) + var(--txn-toast-clear, 0px) + 8px);
+}
 
 /* Matched: pill, then the date, on one line. The pill gives way (ellipsis), the date never wraps. */
 .recur2__line { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; }
