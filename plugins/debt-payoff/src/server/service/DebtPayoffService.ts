@@ -7,6 +7,7 @@ import type { DebtUnitOfWork } from '../repository/DebtUnitOfWork.js'
 import type { AccountSuggestion } from './AccountSuggestion.js'
 import type { Clock } from './Clock.js'
 import type { Debt } from './Debt.js'
+import { checkTimeline } from './checkTimeline.js'
 import { DebtPayoffError } from './DebtPayoffError.js'
 import type { DebtChanges, NewDebtInput } from './DebtFields.js'
 import { isConstraintError } from './isConstraintError.js'
@@ -83,6 +84,15 @@ export class DebtPayoffService {
       if (!archived) await this.requireRoom(repos)
       const accountId = input.accountId ?? null
       if (accountId !== null) await this.requireLinkableAccount(repos, accountId)
+      const timeline = {
+        repaymentStartsOn: input.repaymentStartsOn ?? null,
+        promoApr: input.promoApr ?? null,
+        promoEndsOn: input.promoEndsOn ?? null,
+        promoDeferredInterest: input.promoDeferredInterest ?? false,
+        promoInterestBase: input.promoInterestBase ?? 'original',
+        compounding: input.compounding ?? 'monthly',
+      } as const
+      checkTimeline(timeline)
 
       const row = await this.linking(() =>
         repos.debts.insert({
@@ -95,6 +105,7 @@ export class DebtPayoffService {
           archived,
           included: input.included ?? true,
           extraPayment: input.extraPayment ?? NO_EXTRA,
+          ...timeline,
         }),
       )
       if (row === undefined) throw new DebtPayoffError('The debt could not be saved.', 500, 'not_saved')
@@ -122,6 +133,15 @@ export class DebtPayoffService {
         await this.requireLinkableAccount(repos, accountId)
       }
       if (current.archived && !archived) await this.requireRoom(repos)
+      const timeline = {
+        repaymentStartsOn: changes.repaymentStartsOn === undefined ? current.repayment_starts_on : changes.repaymentStartsOn,
+        promoApr: changes.promoApr === undefined ? current.promo_apr : changes.promoApr,
+        promoEndsOn: changes.promoEndsOn === undefined ? current.promo_ends_on : changes.promoEndsOn,
+        promoDeferredInterest: changes.promoDeferredInterest ?? current.promo_deferred_interest,
+        promoInterestBase: changes.promoInterestBase ?? current.promo_interest_base,
+        compounding: changes.compounding ?? current.compounding,
+      } as const
+      checkTimeline(timeline)
 
       const row = await this.linking(() =>
         repos.debts.replace(id, {
@@ -134,6 +154,7 @@ export class DebtPayoffService {
           archived,
           included: changes.included ?? current.included,
           extraPayment: changes.extraPayment ?? current.extra_payment,
+          ...timeline,
         }),
       )
       if (row === undefined) throw DebtPayoffError.debtNotFound()
@@ -299,5 +320,11 @@ function toDebtInput(row: DebtRow) {
     apr: row.apr,
     minimumPayment: row.minimum_payment,
     extraPayment: row.extra_payment,
+    repaymentStartsOn: row.repayment_starts_on,
+    promoApr: row.promo_apr,
+    promoEndsOn: row.promo_ends_on,
+    promoDeferredInterest: row.promo_deferred_interest,
+    promoInterestBase: row.promo_interest_base,
+    compounding: row.compounding,
   }
 }
