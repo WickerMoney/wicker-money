@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OnboardingProvider } from './OnboardingProvider.js'
 import { useOnboarding } from './useOnboarding.js'
 import { SetupWizard } from './SetupWizard.js'
 import { api } from '../api/client.js'
+import { renderWithToasts } from '../testing/renderWithToasts.js'
+import { findToast, toastTexts } from '../testing/toastTexts.js'
 
 const GROUPS = [
   {
@@ -32,7 +34,7 @@ let get: ReturnType<typeof vi.spyOn>
 let post: ReturnType<typeof vi.spyOn>
 
 function mount() {
-  return render(
+  return renderWithToasts(
     <OnboardingProvider>
       <SetupWizard />
     </OnboardingProvider>,
@@ -125,6 +127,25 @@ describe('when setup has never been run', () => {
     await user.click(screen.getByRole('button', { name: 'Create categories' }))
 
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+    // Said once the wizard has closed, because a toast cannot be reached from inside it.
+    expect(await findToast()).toEqual(['Finished setup. Your starter categories are ready.'])
+  })
+
+  it('keeps a failure inside the wizard, as a modal cannot reach a toast', async () => {
+    const user = userEvent.setup()
+    mount()
+    await screen.findByRole('dialog')
+    post.mockImplementation(async (path: string) => {
+      if (path === '/onboarding/complete') throw new Error('Could not reach the server.')
+      return { total: 61, parents: 18, slugs: [] }
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Create categories' }))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not reach the server.')
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(toastTexts()).toEqual([])
   })
 
   it('can be put off, and says so rather than pretending to be permanent', async () => {
@@ -168,7 +189,7 @@ describe('when setup has never been run', () => {
 
   it('keeps Tab and Shift+Tab inside the dialog', async () => {
     const user = userEvent.setup()
-    render(
+    renderWithToasts(
       <OnboardingProvider>
         <button type="button">outside</button>
         <SetupWizard />
@@ -182,7 +203,7 @@ describe('when setup has never been run', () => {
 
   it('returns focus to the opener when it closes', async () => {
     const user = userEvent.setup()
-    render(
+    renderWithToasts(
       <OnboardingProvider>
         <button type="button">opener</button>
         <SetupWizard />
@@ -206,7 +227,7 @@ describe('while the questions are loading', () => {
       return <button type="button" onClick={start}>open setup</button>
     }
     const user = userEvent.setup()
-    render(<OnboardingProvider><Opener /><SetupWizard /></OnboardingProvider>)
+    renderWithToasts(<OnboardingProvider><Opener /><SetupWizard /></OnboardingProvider>)
     await user.click(screen.getByRole('button', { name: 'open setup' }))
     const dialog = await screen.findByRole('dialog', { name: 'Setup' })
     expect(document.activeElement).toBe(dialog)
