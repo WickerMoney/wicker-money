@@ -238,7 +238,7 @@ async function behaviour(pw: typeof Playwright): Promise<void> {
         if (await page.evaluate(() => document.activeElement?.closest('.plugin-frame[data-status="waiting"]') != null)) onPlaceholder = true
         if (seen.at(-1) === 'body') break
       }
-      check('Tab gets past the frames to the end of the page (and then leaves it)', seen.at(-1) === 'body' && seen.some((x) => x.startsWith('BUTTON:Add a debt')), seen.slice(-6))
+      check('Tab gets past the frames to the end of the page (and then leaves it)', seen.at(-1) === 'body' && seen.some((x) => x.startsWith('IFRAME:')), [...new Set(seen)])
       check('focus never rests on a placeholder', !onPlaceholder)
 
       // Scroll to the bottom: every frame gets created and connects.

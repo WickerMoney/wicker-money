@@ -26,7 +26,7 @@ html[data-wm-frame="page"] {
 
 /*
  * The host's own stylesheet does not reach a frame, and it has one rule written for plugin pages
- * (`.shell__main .wm-surface__body` in app.css): below the phone breakpoint a wide table inside a card scrolls
+ * (`.shell__main .wm-surface__body` in app.css) and one for checkboxes: below the phone breakpoint a wide table inside a card scrolls
  * inside the card. Without it a table wider than the frame is clipped by the iframe, with no scrollbar to reach it.
  * The host breakpoint is a window width of 860 px; the page frame is 24 px narrower than the window there (the
  * content area's side padding), and media queries in a frame see the frame's width, so the same point is 836 px.
@@ -34,6 +34,11 @@ html[data-wm-frame="page"] {
 @media (max-width: 836px) {
   html[data-wm-frame="page"] .wm-surface__body {
     overflow-x: auto;
+  }
+  /* The host makes checkboxes 20 px for a thumb in its content area (app.css); a page frame needs the same. */
+  html[data-wm-frame="page"] input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
   }
 }
 

@@ -20,19 +20,25 @@ describe('pluginRuntimeFor', () => {
 
   // Not derived from the set: these are the ports that have landed, and a plugin leaving the set by
   // mistake (or returning to it) should fail here.
-  it('runs the ported plugins in a frame, forecast and its page included', () => {
+  it('runs the ported plugins in a frame, the Forecast and Debt payoff pages included', () => {
     const byId = (id: string): PluginManifest => BUNDLED_PLUGINS.find((m) => m.id === id)!
-    for (const id of ['wickermoney.insights', 'wickermoney.spending-trends', 'wickermoney.upcoming', 'wickermoney.forecast']) {
+    for (const id of [
+      'wickermoney.insights', 'wickermoney.spending-trends', 'wickermoney.upcoming', 'wickermoney.forecast',
+      'wickermoney.debt-payoff',
+    ]) {
       expect(pluginRuntimeFor(byId(id), true), id).toBe('isolated')
     }
     expect(byId('wickermoney.forecast').contributes.pages).toHaveLength(1)
+    expect(byId('wickermoney.debt-payoff').contributes.pages).toHaveLength(1)
+    expect(byId('wickermoney.debt-payoff').contributes.widgets).toHaveLength(1)
   })
 
   it('keeps the plugins that are not ported in-realm', () => {
     const byId = (id: string): PluginManifest => BUNDLED_PLUGINS.find((m) => m.id === id)!
-    for (const id of ['wickermoney.budgets', 'wickermoney.import-csv', 'wickermoney.debt-payoff']) {
+    for (const id of ['wickermoney.budgets', 'wickermoney.import-csv']) {
       expect(pluginRuntimeFor(byId(id), true), id).toBe('in-realm')
     }
+    expect([...IN_REALM_PLUGIN_IDS].sort()).toEqual(['wickermoney.budgets', 'wickermoney.import-csv'])
   })
 
   it('lists only plugins that are actually bundled', () => {
