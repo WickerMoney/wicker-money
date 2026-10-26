@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../api/ApiError.js'
 import { api } from '../../../api/client.js'
 import { deferred } from '../../../testing/deferred.js'
 import { errorOf } from '../../../testing/errorOf.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
+import { findToast, toastTexts } from '../../../testing/toastTexts.js'
 
 const downloadJson = vi.fn()
 vi.mock('../helpers/downloadJson.js', () => ({ downloadJson }))
@@ -21,7 +23,7 @@ const WRONG = new ApiError('Password is incorrect.', 403, 'password_incorrect', 
 function mount() {
   const post = vi.spyOn(api, 'post').mockResolvedValue({ ticket: 'tkt-1', expiresAt: '2026-10-11T20:00:00Z' })
   const get = vi.spyOn(api, 'get').mockResolvedValue({ core: { profile: { id: 'u1' } } })
-  render(<ExportSection />)
+  renderWithToasts(<ExportSection />)
   return { post, get, user: userEvent.setup() }
 }
 
@@ -85,14 +87,14 @@ describe('the export section', () => {
     expect(String(downloadJson.mock.calls[0]?.[1])).toMatch(/^wickermoney-export-\d{4}-\d{2}-\d{2}\.json$/)
   })
 
-  it('closes after the download, says so in a status region, and gives focus back to the button', async () => {
+  it('closes after the download, says so in a toast, and gives focus back to the button', async () => {
     const { user } = mount()
     await user.click(openButton())
     await user.type(password(), 'pw')
     await user.click(submit())
 
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
-    expect(screen.getByRole('status').textContent).toBe('Downloaded.')
+    expect(await findToast()).toEqual(['Downloaded your data as a JSON file.'])
     expect(document.activeElement).toBe(openButton())
   })
 
@@ -202,15 +204,29 @@ describe('the export section', () => {
     expect(get).not.toHaveBeenCalled()
   })
 
-  it('clears the "Downloaded." note when the dialog is opened again', async () => {
+  it('replaces the earlier toast instead of stacking a second one on the next download', async () => {
     const { user } = mount()
-    await user.click(openButton())
-    await user.type(password(), 'pw')
-    await user.click(submit())
-    await waitFor(() => { expect(screen.getByRole('status').textContent).toBe('Downloaded.') })
+    for (let i = 0; i < 2; i++) {
+      await user.click(openButton())
+      await user.type(password(), 'pw')
+      await user.click(submit())
+      await findToast()
+      await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+    }
+    expect(toastTexts()).toEqual(['Downloaded your data as a JSON file.'])
+  })
 
+  it('raises no toast while the download is refused', async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(WRONG)
+    vi.spyOn(api, 'get').mockResolvedValue({})
+    const user = userEvent.setup()
+    renderWithToasts(<ExportSection />)
     await user.click(openButton())
-    expect(screen.getByRole('status').textContent).toBe('')
+    await user.type(password(), 'nope')
+    await user.click(submit())
+
+    await waitFor(() => { expect(errorOf('Your password')).toBe('Password is incorrect.') })
+    expect(toastTexts()).toEqual([])
   })
 
   it('keeps the password out of the page after it is sent: not in the DOM, a link or the document title', async () => {

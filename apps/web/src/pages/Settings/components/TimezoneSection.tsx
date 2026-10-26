@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Button, FormError, NO_FORM_ERRORS, SelectField, Surface, formErrorsFrom, type FormErrors,
+  Button, FormError, NO_FORM_ERRORS, SelectField, Surface, formErrorsFrom, useToast, type FormErrors,
 } from '@wickermoney/ui-kit'
 import { useAuth } from '../../../auth/index.js'
 import { browserTimezone } from '../../../lib/browserTimezone.js'
@@ -24,14 +24,27 @@ export function TimezoneSection() {
   const [choice, setChoice] = useState(current)
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
-  const [saved, setSaved] = useState(false)
+  const toast = useToast()
+  const formRef = useRef<HTMLFormElement>(null)
+  /** Set when focus was in the section as Save ran; the effect below acts on it once the picker is enabled again. */
+  const refocus = useRef(false)
+
+  useEffect(() => {
+    if (busy || !refocus.current) return
+    refocus.current = false
+    formRef.current?.querySelector('select')?.focus()
+  }, [busy])
 
   const save = async (zone: string) => {
-    setBusy(true); setErrors(NO_FORM_ERRORS); setSaved(false)
+    // Whether the person was on one of this section's controls, so focus can
+    // be put back once they come out of their busy state (see `finally`).
+    const section = formRef.current?.closest('section') ?? formRef.current?.parentElement ?? null
+    const hadFocus = section?.contains(document.activeElement) === true
+    setBusy(true); setErrors(NO_FORM_ERRORS)
     try {
       await setTimezone(zone)
       setChoice(zone)
-      setSaved(true)
+      toast.show(`Saved your time zone as ${zone.replaceAll('_', ' ')}.`, { kind: 'success', key: 'settings:timezone' })
     } catch (e) {
       // Every choice in the list is a zone the server knows, so there is
       // nothing to check before sending; the server's answer goes on the
@@ -39,6 +52,10 @@ export function TimezoneSection() {
       setErrors(formErrorsFrom(e, ['timezone'], 'Could not save the time zone.'))
     } finally {
       setBusy(false)
+      // Save disables itself on success (the choice now equals the saved zone),
+      // and the picker is disabled while saving, so a keyboard user's focus
+      // would fall to the page. The picker is the section's own control.
+      if (hadFocus) refocus.current = true
     }
   }
 
@@ -64,12 +81,12 @@ export function TimezoneSection() {
           <Button onClick={() => { void save(browser) }} disabled={busy}>Use {browser.replaceAll('_', ' ')}</Button>
         </p>
       ) : null}
-      <form className="tz-form" onSubmit={onSubmit}>
+      <form className="tz-form" onSubmit={onSubmit} ref={formRef}>
         <SelectField
           label="Time zone"
           value={choice}
           error={errors.fields['timezone']}
-          onChange={(e) => { setChoice(e.target.value); setSaved(false); setErrors(NO_FORM_ERRORS) }}
+          onChange={(e) => { setChoice(e.target.value); setErrors(NO_FORM_ERRORS) }}
           disabled={busy}
         >
           {zones.map((z) => <option key={z} value={z}>{z.replaceAll('_', ' ')}</option>)}
@@ -77,7 +94,6 @@ export function TimezoneSection() {
         <Button type="submit" variant="primary" disabled={busy || choice === current}>
           {busy ? 'Saving…' : 'Save'}
         </Button>
-        {saved && choice === current ? <span className="wm-muted" role="status">Saved.</span> : null}
       </form>
       <FormError message={errors.form} />
     </Surface>

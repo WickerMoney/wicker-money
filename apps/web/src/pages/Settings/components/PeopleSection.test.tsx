@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,8 @@ import { AuthCtx } from '../../../auth/authContext.js'
 import type { AuthState } from '../../../auth/AuthState.js'
 import type { CurrentUser } from '../../../auth/CurrentUser.js'
 import type { Person, RoleChange } from '../../../models/index.js'
+import { findToast, toastTexts } from '../../../testing/toastTexts.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
 import { deferred } from '../../../testing/deferred.js'
 import { validationFailed } from '../../../testing/validationFailed.js'
 
@@ -43,7 +45,7 @@ function mount(role: 'owner' | 'member' = 'owner', afterRefresh: 'owner' | 'memb
     }
     return <MemoryRouter><AuthCtx.Provider value={value}><PeopleSection /></AuthCtx.Provider></MemoryRouter>
   }
-  render(<Host />)
+  renderWithToasts(<Host />)
 }
 
 const roleSelect = (email: string) => screen.getByRole<HTMLSelectElement>('combobox', { name: `Role for ${email}` })
@@ -123,8 +125,9 @@ describe('making someone an owner', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(setPersonRole).toHaveBeenCalledWith('bob', 'owner')
     await waitFor(() => { expect(roleSelect('bob@example.com').value).toBe('owner') })
-    expect(screen.getByText('bob@example.com is now an owner.')).toBeTruthy()
-    expect(screen.getByText('bob@example.com is now an owner.').getAttribute('role')).toBe('status')
+    expect(await findToast()).toEqual(['bob@example.com is now an owner.'])
+    // The announcement lives in the toast, not in a status line under the table.
+    expect(document.querySelector('.people-announcement')).toBeNull()
   })
 
   it('keeps the old role showing, locked and marked busy, until the server answers', async () => {
@@ -189,6 +192,8 @@ describe('making someone an owner', () => {
     expect(document.getElementById(described ?? '')?.textContent).toBe('Account not found.')
     // Only that row carries the error.
     expect(roleSelect('me@example.com').getAttribute('aria-invalid')).toBe('false')
+    // A refusal belongs to the field; nothing is announced as done.
+    expect(toastTexts()).toEqual([])
   })
 
   it('uses the issue the server attached to the role field', async () => {
@@ -282,7 +287,7 @@ describe('making an owner a member', () => {
     await act(async () => { pending.resolve(changeOf(cat, 'member')) })
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
     expect(roleSelect('cat@example.com').value).toBe('member')
-    expect(screen.getByText('cat@example.com is now a member.')).toBeTruthy()
+    expect(await findToast()).toEqual(['cat@example.com is now a member.'])
     expect(refreshUser).not.toHaveBeenCalled()
   })
 
@@ -337,6 +342,8 @@ describe('an owner stepping down', () => {
     // The role selects are gone: nothing left on screen to misuse.
     expect(screen.queryByRole('combobox')).toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
+    // The notice says it and holds focus; a toast on top would say it twice.
+    expect(toastTexts()).toEqual([])
   })
 
   it('still shows the notice if re-reading who they are fails', async () => {
