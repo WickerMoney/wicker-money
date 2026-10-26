@@ -258,6 +258,33 @@ describe('host to frame updates', () => {
   })
 })
 
+describe('modal dialogs in a page frame', () => {
+  it('modal sends the state once per change', async () => {
+    const { conn, seen } = await connect()
+    conn.modal(false)
+    conn.modal(true)
+    conn.modal(true)
+    conn.modal(false)
+    conn.modal(false)
+    await tick()
+    expect(seen).toEqual([{ type: 'modal', open: true }, { type: 'modal', open: false }])
+  })
+
+  it('delivers the host\'s modal-layout to subscribers and ignores a malformed one', async () => {
+    const { conn, reply } = await connect()
+    const seen: unknown[] = []
+    conn.subscribe((c) => seen.push(c))
+    reply({ type: 'modal-layout', lifted: true, x: 18, y: -504, width: 1036 })
+    reply({ type: 'modal-layout', lifted: true, x: 'a', y: 0, width: 10 })
+    reply({ type: 'modal-layout', lifted: false, x: 0, y: 0, width: 0 })
+    await tick()
+    expect(seen).toEqual([
+      { type: 'modal-layout', lifted: true, x: 18, y: -504, width: 1036 },
+      { type: 'modal-layout', lifted: false, x: 0, y: 0, width: 0 },
+    ])
+  })
+})
+
 describe('frame to host helpers', () => {
   it('navigate, focusOut and notify send their messages', async () => {
     const { conn, seen } = await connect((m, reply) => {

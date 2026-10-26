@@ -181,6 +181,23 @@ export interface FocusOutMessage {
 }
 
 /**
+ * Pages only: a modal dialog (a native `<dialog>` shown with `showModal()`) is open in the frame, or the last one
+ * closed.
+ *
+ * A page frame is as tall as its content and the window scrolls, so a `position: fixed` element in it is placed
+ * against the frame, not the window. While `open` is true the host lifts the frame to a fixed layer over the visible
+ * part of the content area, so the dialog fills the window as it does for the app's own pages, and tells the frame
+ * where its page sits in that layer with {@link ModalLayoutMessage}. The host never covers its own navigation, and
+ * the lift ends when the frame sends `open: false`, goes away, or the person leaves the page. A widget frame's
+ * message is ignored. A host that does not know the message ignores it, and the dialog is then placed against the
+ * frame as before.
+ */
+export interface ModalMessage {
+  readonly type: 'modal'
+  readonly open: boolean
+}
+
+/**
  * Reserved for the `notify` permission, which no host implements yet. A host
  * answers with a `not_supported` error response. The message exists so the
  * protocol does not change when `notify` is built.
@@ -200,6 +217,7 @@ export type PluginMessage =
   | NavigateMessage
   | ResizeMessage
   | FocusOutMessage
+  | ModalMessage
   | NotifyMessage
 
 // ---------------------------------------------------------------------------
@@ -263,6 +281,24 @@ export interface FocusInMessage {
   readonly direction: 'first' | 'last'
 }
 
+/**
+ * Pages only: where the page sits while the host has the frame lifted for a modal dialog (see {@link ModalMessage}).
+ *
+ * While `lifted` the frame's viewport is the visible part of the content area, not the page's own rectangle, so the
+ * page is drawn `x` and `y` pixels in from the viewport's top left, `width` pixels wide, to stay where it was.
+ * `lifted: false` puts it back; the other fields are then 0.
+ */
+export interface ModalLayoutMessage {
+  readonly type: 'modal-layout'
+  readonly lifted: boolean
+  /** Pixels from the viewport's left edge to the page's left edge. */
+  readonly x: number
+  /** Pixels from the viewport's top edge to the page's top edge; negative when the window was scrolled past it. */
+  readonly y: number
+  /** The page's width, in CSS pixels: what it had before the lift, so it does not reflow. */
+  readonly width: number
+}
+
 /** Every message the host may send on the port. */
 export type HostMessage =
   | InitMessage
@@ -272,3 +308,4 @@ export type HostMessage =
   | PropsMessage
   | RouteMessage
   | FocusInMessage
+  | ModalLayoutMessage

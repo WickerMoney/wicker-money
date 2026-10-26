@@ -23,10 +23,14 @@
  * Decisions recorded by this entry point:
  * - **Additive.** Existing manifests and `/runtime` are unchanged, and
  *   `SDK_MAJOR_VERSION` stays `0`. A manifest opts in with `isolated: true`.
- * - **No host-rendered dialogs in protocol 1.** A widget frame is small and
- *   clips overlays; a widget that needs a dialog should `navigate` to its page,
- *   whose frame is full height and can show dialogs itself. Adding a dialog
- *   message later is not a protocol bump (unknown messages are ignored).
+ * - **No host-rendered dialogs.** A widget frame is small and clips overlays; a
+ *   widget that needs a dialog should `navigate` to its page. A page frame is as
+ *   tall as its content, so a native modal `<dialog>` in it would be placed
+ *   against the frame, not the window: the frame says `modal` while one is open
+ *   and the host lifts the frame over the visible content area and answers with
+ *   `modal-layout` (ADR 0015). Both messages are additive, not a protocol bump
+ *   (unknown messages are ignored, and an older host leaves the dialog where it
+ *   was).
  * - **`notify` is reserved.** The message exists and a host answers it with
  *   `not_supported` until the permission is built.
  * - **`RequestInit` is narrowed** to `signal` and `cache`. Headers and
@@ -65,6 +69,8 @@ export type {
   HostTheme,
   InitMessage,
   LocaleMessage,
+  ModalLayoutMessage,
+  ModalMessage,
   NavigateMessage,
   NotifyMessage,
   PluginApiIssue,
@@ -85,6 +91,6 @@ export type {
 export { applyHostTheme } from './theme.js'
 export type { ThemeTarget } from './theme.js'
 export {
-  MAX_NOTIFY_LENGTH, MAX_PATH_LENGTH, MAX_REPORTED_HEIGHT, MAX_THEME_TOKENS,
+  MAX_MODAL_LAYOUT, MAX_NOTIFY_LENGTH, MAX_PATH_LENGTH, MAX_REPORTED_HEIGHT, MAX_THEME_TOKENS,
   parseFrameHello, parseHostMessage, parseHostReply, parsePluginMessage,
 } from './validate.js'

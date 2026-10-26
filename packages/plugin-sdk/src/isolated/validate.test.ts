@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_PATH_LENGTH, MAX_REPORTED_HEIGHT, parseFrameHello, parseHostMessage, parseHostReply, parsePluginMessage,
+  MAX_MODAL_LAYOUT, MAX_PATH_LENGTH, MAX_REPORTED_HEIGHT, parseFrameHello, parseHostMessage, parseHostReply, parsePluginMessage,
 } from './validate.js'
 
 const theme = { scheme: 'dark', tokens: { '--surface': '#111' } }
@@ -21,6 +21,8 @@ describe('parsePluginMessage (frame to host)', () => {
     expect(parsePluginMessage({ type: 'focus-out', direction: 'next' })).toEqual({ type: 'focus-out', direction: 'next' })
     expect(parsePluginMessage({ type: 'notify', id: 3, level: 'info', message: 'hi' }))
       .toEqual({ type: 'notify', id: 3, level: 'info', message: 'hi' })
+    expect(parsePluginMessage({ type: 'modal', open: true })).toEqual({ type: 'modal', open: true })
+    expect(parsePluginMessage({ type: 'modal', open: false, extra: 1 })).toEqual({ type: 'modal', open: false })
   })
 
   it('drops unknown fields rather than passing them on', () => {
@@ -52,6 +54,8 @@ describe('parsePluginMessage (frame to host)', () => {
     ['a bad direction', { type: 'focus-out', direction: 'up' }],
     ['a bad notify level', { type: 'notify', id: 1, level: 'fatal', message: 'x' }],
     ['an over-long notify', { type: 'notify', id: 1, level: 'info', message: 'x'.repeat(501) }],
+    ['a modal with no state', { type: 'modal' }],
+    ['a modal whose state is not a boolean', { type: 'modal', open: 'yes' }],
   ])('rejects %s', (_name, data) => {
     expect(parsePluginMessage(data)).toBeNull()
   })
@@ -79,6 +83,13 @@ describe('parseHostMessage (host to frame)', () => {
     expect(parseHostMessage({ type: 'focus-in', direction: 'last' })).toEqual({ type: 'focus-in', direction: 'last' })
   })
 
+  it('accepts modal-layout, lifted or not', () => {
+    expect(parseHostMessage({ type: 'modal-layout', lifted: true, x: 18, y: -504.5, width: 1036 }))
+      .toEqual({ type: 'modal-layout', lifted: true, x: 18, y: -504.5, width: 1036 })
+    expect(parseHostMessage({ type: 'modal-layout', lifted: false, x: 0, y: 0, width: 0 }))
+      .toEqual({ type: 'modal-layout', lifted: false, x: 0, y: 0, width: 0 })
+  })
+
   it.each([
     ['an unknown type', { type: 'confetti' }],
     ['init with a bad kind', { ...init, kind: 'popup' }],
@@ -87,6 +98,11 @@ describe('parseHostMessage (host to frame)', () => {
     ['init with a bad time zone', { ...init, locale: { locale: 'en-GB', timezone: 'Mars/Olympus' } }],
     ['init with a token not starting --', { ...init, theme: { scheme: 'dark', tokens: { color: 'red' } } }],
     ['init with a bad scheme', { ...init, theme: { scheme: 'sepia', tokens: {} } }],
+    ['modal-layout with no lifted flag', { type: 'modal-layout', x: 0, y: 0, width: 10 }],
+    ['modal-layout with a string offset', { type: 'modal-layout', lifted: true, x: '1', y: 0, width: 10 }],
+    ['modal-layout with a negative width', { type: 'modal-layout', lifted: true, x: 0, y: 0, width: -1 }],
+    ['modal-layout with an absurd offset', { type: 'modal-layout', lifted: true, x: MAX_MODAL_LAYOUT + 1, y: 0, width: 10 }],
+    ['modal-layout with NaN', { type: 'modal-layout', lifted: true, x: NaN, y: 0, width: 10 }],
     ['a response with neither ok nor error', { type: 'response', id: 1 }],
     ['an error response with no message', { type: 'response', id: 1, ok: false, error: { code: 'x' } }],
     ['a range with a bad date', { type: 'props', range: { key: '12m', label: 'x', months: 12, from: 'yesterday', to: '2026-01-01' } }],

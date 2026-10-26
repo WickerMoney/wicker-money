@@ -21,6 +21,8 @@ export const MAX_PATH_LENGTH = 2048
 export const MAX_REPORTED_HEIGHT = 100_000
 /** Most theme tokens accepted in one message. */
 export const MAX_THEME_TOKENS = 512
+/** Largest offset or width a modal layout may carry, in CSS pixels. */
+export const MAX_MODAL_LAYOUT = 100_000
 /** Longest notification text accepted, in characters. */
 export const MAX_NOTIFY_LENGTH = 500
 
@@ -141,6 +143,8 @@ export function parsePluginMessage(data: unknown): PluginMessage | null {
       const d = data['direction']
       return d === 'next' || d === 'previous' ? { type: 'focus-out', direction: d } : null
     }
+    case 'modal':
+      return typeof data['open'] === 'boolean' ? { type: 'modal', open: data['open'] } : null
     case 'notify': {
       const { id, level, message } = data
       if (!isId(id) || !isStr(message) || message.length > MAX_NOTIFY_LENGTH) return null
@@ -215,6 +219,12 @@ export function parseHostMessage(data: unknown): HostMessage | null {
     case 'focus-in': {
       const d = data['direction']
       return d === 'first' || d === 'last' ? { type: 'focus-in', direction: d } : null
+    }
+    case 'modal-layout': {
+      const { lifted, x, y, width } = data
+      const inRange = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= MAX_MODAL_LAYOUT
+      if (typeof lifted !== 'boolean' || !inRange(x) || !inRange(y) || !inRange(width) || width < 0) return null
+      return { type: 'modal-layout', lifted, x, y, width }
     }
     default:
       return null
