@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import {
-  Button, Field, FormError, SelectField, formErrorsFrom, hasFormErrors, useFormErrors,
+  Button, Field, FormError, SelectField, formErrorsFrom, hasFormErrors, useFormErrors, useToast,
 } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -12,7 +12,7 @@ import { slugify } from '../helpers/slugify.js'
 export interface AddCategoryFormProps {
   /** Top-level categories, offered as the possible parent. */
   readonly parents: readonly Category[]
-  /** Busy flag and error message shared with the page. */
+  /** Busy flag shared with the page. */
   readonly status: ActionStatus
   /** Called after a category is created so the list can be re-read. */
   readonly onChanged: () => Promise<void>
@@ -30,6 +30,7 @@ export function AddCategoryForm({ parents, status, onChanged, onCreated }: AddCa
   const [newParentId, setNewParentId] = useState('')
   const [newKind, setNewKind] = useState<Category['kind']>('expense')
   const form = useFormErrors()
+  const toast = useToast()
 
   const addCategory = async (event: FormEvent) => {
     event.preventDefault()
@@ -46,9 +47,12 @@ export function AddCategoryForm({ parents, status, onChanged, onCreated }: AddCa
         parentId,
         kind: newKind,
       })
+      const added = name.trim()
       setName('')
       onCreated?.(parentId)
       await onChanged()
+      // After the dialog has closed: a toast cannot be reached from inside it.
+      toast.show(`Added category '${added}'.`, { kind: 'success', key: 'categories:add' })
     } catch (e) {
       form.show(formErrorsFrom(
         e,

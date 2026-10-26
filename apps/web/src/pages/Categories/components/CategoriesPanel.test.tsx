@@ -1,8 +1,9 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { useExpandedGroups } from '../../../disclosure/index.js'
 import { makeCategory } from '../../../testing/makeCategory.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
 import { CategoriesPanel } from './CategoriesPanel.js'
 
@@ -15,7 +16,7 @@ const rent = makeCategory({ id: 'rent', name: 'Rent', slug: 'rent', parent_id: '
 const all = [food, groceries, dining, home, rent, solo]
 
 function mount(categories = all) {
-  render(
+  renderWithToasts(
     <CategoriesPanel
       categories={categories}
       parents={categories.filter((c) => c.parent_id === null)}
@@ -103,7 +104,7 @@ describe('CategoriesPanel with the page owning the open groups', () => {
         />
       )
     }
-    render(<Page />)
+    renderWithToasts(<Page />)
     expect(screen.queryByText('Rent')).toBeNull()
 
     await act(async () => { open('home') })

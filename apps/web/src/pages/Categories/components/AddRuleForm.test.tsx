@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
 import { errorOf } from '../../../testing/errorOf.js'
 import { makeCategory } from '../../../testing/makeCategory.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { findToast } from '../../../testing/toastTexts.js'
 import { validationFailed } from '../../../testing/validationFailed.js'
 import { AddRuleForm } from './AddRuleForm.js'
 
@@ -13,7 +15,7 @@ const categories = [makeCategory({ id: '00000000-0000-4000-8000-000000000001', n
 function mount() {
   const status = makeStatus()
   const onChanged = vi.fn(async () => {})
-  render(<AddRuleForm categories={categories} status={status} onChanged={onChanged} />)
+  renderWithToasts(<AddRuleForm categories={categories} status={status} onChanged={onChanged} />)
   return { status, onChanged, user: userEvent.setup() }
 }
 
@@ -85,6 +87,30 @@ describe('checking in the browser', () => {
     await user.type(screen.getByLabelText('Priority'), '{backspace}')
 
     expect(errorOf('Priority')).toBeNull()
+  })
+})
+
+describe('saving', () => {
+  it('says how many existing transactions were recategorized, in a toast', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({ recategorized: 12 })
+    const { user, status, onChanged } = mount()
+    await user.type(screen.getByLabelText('Text'), 'FUEL')
+
+    await user.click(screen.getByRole('button', { name: 'Save rule' }))
+
+    expect(await findToast()).toEqual(['Saved the rule. 12 existing transactions recategorized.'])
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    expect(status.show).not.toHaveBeenCalled()
+  })
+
+  it('says the rule was saved when nothing existing changed', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({ recategorized: 0 })
+    const { user } = mount()
+    await user.type(screen.getByLabelText('Text'), 'FUEL')
+
+    await user.click(screen.getByRole('button', { name: 'Save rule' }))
+
+    expect(await findToast()).toEqual(['Saved the rule.'])
   })
 })
 

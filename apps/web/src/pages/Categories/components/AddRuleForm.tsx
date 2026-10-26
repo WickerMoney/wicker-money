@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import {
   Button, CategoryOptions, EmptyState, Field, FormError, SelectField, formErrorsFrom, hasFormErrors,
-  useFormErrors,
+  useFormErrors, useToast,
 } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -40,6 +40,7 @@ export function AddRuleForm({ categories, status, onChanged }: AddRuleFormProps)
   const [applyToExisting, setApplyToExisting] = useState(false)
   const [preview, setPreview] = useState<RulePreview | null>(null)
   const form = useFormErrors()
+  const toast = useToast()
 
   // Until the user picks one, the first category is the selection.
   const selectedCategoryId = ruleCategoryId === '' ? (categories?.[0]?.id ?? '') : ruleCategoryId
@@ -99,8 +100,14 @@ export function AddRuleForm({ categories, status, onChanged }: AddRuleFormProps)
       const r = await api.post<{ recategorized: number }>('/category-rules', body)
       setConditions([newConditionDraft()])
       setPreview(null)
-      status.show(r.recategorized > 0 ? `Rule saved. ${r.recategorized} existing transactions recategorized.` : null)
       await onChanged()
+      // After the dialog has closed: a toast cannot be reached from inside it.
+      toast.show(
+        r.recategorized > 0
+          ? `Saved the rule. ${r.recategorized} existing transaction${r.recategorized === 1 ? '' : 's'} recategorized.`
+          : 'Saved the rule.',
+        { kind: 'success', key: 'categories:rule' },
+      )
     } catch (e) {
       form.show(formErrorsFrom(e, fieldFor, 'Could not save that rule.'))
     } finally { status.end() }
