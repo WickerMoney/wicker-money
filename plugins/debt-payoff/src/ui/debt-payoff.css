@@ -104,6 +104,10 @@
 
 /* The dialog. */
 .dp-archive { margin: 4px 0 8px; }
+.dp-more { margin: 8px 0 12px; border: 1px solid var(--wm-border); border-radius: 8px; padding: 0 12px 4px; }
+.dp-more > summary { cursor: pointer; padding: 10px 0; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.dp-more[open] > summary { border-bottom: 1px solid var(--wm-border); margin-bottom: 8px; }
+.dp-more > summary:focus-visible { outline: 2px solid var(--wm-focus, currentColor); outline-offset: 2px; }
 .dp-remove, .dp-confirm { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--wm-border); }
 .dp-confirm p { margin: 0 0 8px; font-size: 13px; }
 .dp-confirm:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 4px; }

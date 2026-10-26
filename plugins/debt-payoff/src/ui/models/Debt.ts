@@ -17,4 +17,16 @@ export interface Debt {
   readonly included: boolean
   /** Extra paid toward this debt every month on top of its minimum, apart from the extra for all debts. `'0.0000'` for none. */
   readonly extraPayment: string
+  /** The day repayment begins for a loan in deferment, `YYYY-MM-DD`, or `null` if it has begun. */
+  readonly repaymentStartsOn: string | null
+  /** The promotional rate as a percentage, or `null` for none. */
+  readonly promoApr: string | null
+  /** The promotion's last day, `YYYY-MM-DD`, or `null`. */
+  readonly promoEndsOn: string | null
+  /** Whether interest is charged back to the start if it is not paid off by `promoEndsOn`. */
+  readonly promoDeferredInterest: boolean
+  /** What that backdated interest is charged on. */
+  readonly promoInterestBase: 'original' | 'declining'
+  /** How interest is worked out each month. */
+  readonly compounding: 'monthly' | 'daily' | 'daily_simple'
 }
