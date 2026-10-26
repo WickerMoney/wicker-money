@@ -44,6 +44,11 @@ const WIDGETS = [
   ['Spending Trends', /\/plugins\/spending-trends\/assets\/SpendingTrendsWidget-[\w-]+\.js$/],
 ] as const
 
+/** The plugin pages that run in a frame, as `[iframe title, built chunk the page comes from]`. */
+const PAGES = [
+  ['Forecast', /\/plugins\/forecast\/assets\/ForecastPage-[\w-]+\.js$/],
+] as const
+
 /** Prefix of the console message the init script writes for each violation event. */
 const TAG = '__wm_csp__'
 
@@ -169,6 +174,35 @@ async function main(): Promise<void> {
     await sleep(500)
     const canary = violations.slice(before).filter(isEval)
     rec.check('canary: the recorder sees the refusal of a deliberate eval in each frame', canary.length === frameDocs.length, { frames: frameDocs.length, seen: canary })
+
+    // The plugin pages that run in a frame. A page is never lazy, so its frame exists as soon as the route renders.
+    // Reached through the shell's own navigation, as a person would, so the frame starts inside a running app.
+    const beforePages = violations.length
+    const refusedBefore = refusals.length
+    for (const [title, chunk] of PAGES) {
+      const href = BUNDLED_PLUGINS.find((m) => m.name === title)?.contributes.pages[0]
+      const id = BUNDLED_PLUGINS.find((m) => m.name === title)?.id
+      await page.locator(`nav a[href="/p/${id}/${href?.path}"]`).first().click()
+      await page.waitForFunction((t) => {
+        const frames = [...document.querySelectorAll<HTMLIFrameElement>(`iframe[title^="${t}"]`)]
+        return frames.length === 1 && frames.every((f) => f.style.visibility === 'visible')
+      }, title, { timeout: 30_000 }).catch(() => undefined)
+      await sleep(1500)
+      const frames = await page.locator(`iframe[title^="${title}"]`).count()
+      rec.check(`${title}: its page frame is on the page`, frames === 1, frames)
+      rec.check(`${title}: its page chunk was loaded`, scripts.some((u) => chunk.test(new URL(u).pathname)), scripts.filter((u) => u.includes('/plugins/')).slice(-8))
+      const pageAlerts = await Promise.all(page.frames().filter((f) => f.url().includes('kind=page')).map((f) => f.locator('p[role=alert]').allTextContents().catch(() => [])))
+      rec.check(`${title}: its page frame shows no load error`, pageAlerts.length === 1 && pageAlerts.every((a) => a.length === 0), pageAlerts.flat())
+    }
+    const pageViolations = violations.slice(beforePages)
+    rec.check('no eval-blocked CSP violation from a plugin page or its frame', pageViolations.filter(isEval).length === 0 && refusals.length === refusedBefore, { violations: pageViolations.filter(isEval), console: refusals.slice(refusedBefore) })
+    rec.check('no CSP violation of any kind from a plugin page', pageViolations.length === 0, pageViolations)
+    // The canary, in the page frame: the recorder sees a deliberate eval where the page runs.
+    const pageFrames = page.frames().filter((f) => f.url().includes('kind=page'))
+    const beforeCanary = violations.length
+    for (const f of pageFrames) await f.evaluate(() => { setTimeout(() => { try { new Function('return 1')() } catch { /* the point */ } }, 0) })
+    await sleep(500)
+    rec.check('canary: the recorder sees the refusal of a deliberate eval in the page frame', violations.slice(beforeCanary).filter(isEval).length === pageFrames.length && pageFrames.length === PAGES.length, { frames: pageFrames.length, seen: violations.slice(beforeCanary) })
 
     const out = process.env['EVAL_VIOLATIONS_OUT']
     if (out !== undefined) writeFileSync(out, JSON.stringify({ violations, refusals, canary: canary.length, scripts: scripts.filter((u) => u.includes('.js')) }, null, 2))

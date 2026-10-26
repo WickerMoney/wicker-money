@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore, type ComponentType } from 'react'
-import type { HostConnection, IsolatedState } from '@wickermoney/plugin-sdk/isolated'
+import type { FocusDirection, HostConnection, IsolatedState } from '@wickermoney/plugin-sdk/isolated'
 
 /** Props for {@link FrameApp}. */
 export interface FrameAppProps {
@@ -7,6 +7,9 @@ export interface FrameAppProps {
   /** The plugin's component. */
   readonly Plugin: ComponentType<Record<string, unknown>>
 }
+
+/** How long to wait for the browser to move focus out of the frame by itself before asking the host to, in milliseconds. */
+export const FOCUS_OUT_GRACE_MS = 60
 
 const TABBABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
@@ -17,9 +20,9 @@ const tabbables = (root: ParentNode): HTMLElement[] =>
  * Renders the plugin inside the frame and wires it to the host.
  *
  * It gives the plugin the props the in-realm host would (`ctx`, and `size` and
- * `range` for a widget), re-renders when the host pushes new ones, reports the
- * content height, and hands keyboard focus back to the host at either end so a
- * keyboard user is never trapped in the frame.
+ * `range` for a widget; for a page also `path`, the part of the address under the page), re-renders when the host pushes new ones, reports the
+ * content height, and, when the browser does not itself carry Tab out of the frame at either
+ * end, hands keyboard focus to the host so a keyboard user is never trapped in the frame.
  */
 export function FrameApp({ connection, Plugin }: FrameAppProps) {
   const state: IsolatedState = useSyncExternalStore(
@@ -45,19 +48,27 @@ export function FrameApp({ connection, Plugin }: FrameAppProps) {
     if (event.key !== 'Tab') return
     const items = tabbables(rootRef.current ?? document)
     if (items.length === 0) return
-    if (!event.shiftKey && document.activeElement === items.at(-1)) {
-      event.preventDefault()
-      connection.focusOut('next')
-    } else if (event.shiftKey && document.activeElement === items[0]) {
-      event.preventDefault()
-      connection.focusOut('previous')
-    }
+    const from = document.activeElement
+    const direction: FocusDirection | null = !event.shiftKey && from === items.at(-1) ? 'next'
+      : event.shiftKey && from === items[0] ? 'previous' : null
+    if (direction === null) return
+    // The key is not cancelled: the browser carries focus out of the frame itself, to the next control in the
+    // page, or at the end of the page to its own interface, exactly as it does for content in the page. Cancelling
+    // it and asking the host to move focus (as this did first) traps a keyboard user when the frame is the last
+    // thing on the page, which a page frame is: the host has no next control to give. Only when focus is still
+    // here a moment later, the browser having declined to leave, does the host take it.
+    window.setTimeout(() => {
+      if (document.activeElement === from && document.hasFocus()) connection.focusOut(direction)
+    }, FOCUS_OUT_GRACE_MS)
   }
 
   const props: Record<string, unknown> = { ctx: connection.ctx }
   if (state.kind === 'widget') {
     props['size'] = state.size
     if (state.range !== undefined) props['range'] = state.range
+  } else if (state.path !== undefined) {
+    // The path under the page's route. `PluginPageProps` does not declare it yet (a page reads it untyped).
+    props['path'] = state.path
   }
   return (
     <div ref={rootRef} onKeyDown={onKeyDown}>

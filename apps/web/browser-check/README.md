@@ -48,6 +48,19 @@ only the first widget (to price the second frame), `SHOTS_DIR` keeps screenshots
 `AXE_PATH` is not a dependency of the repo; install `axe-core` anywhere and point
 at its `axe.min.js`.
 
+## Page frame check (`forecast.ts`)
+
+`forecast.ts` checks a plugin page in a frame, with the Forecast page, against the seeded `household` persona (same setup
+and run command as the Insights check: from `apps/api`, `npx tsx --env-file=../../.env ../web/browser-check/forecast.ts`).
+`ONLY=load,size,route,drawer,a11y,visual,focus,measure` runs some groups. It checks that the frame is titled, sandboxed and
+makes only the granted read; that it is as tall as its content at desktop, laptop and phone width, follows a content change
+and a window resize, and that the host page scrolls to a focused control low in the frame; deep links, a path under the page,
+back and forward, `ctx.navigate` from the frame and the tab title; the phone drawer (the page behind it is inert); one `main`
+(the host's), one `h1` (the frame's), axe on the host and the frame with the page-level rules named in the decision record,
+the live regions in the frame's accessibility tree; the frame canvas and the theme switch; every frame of a load sampled for a
+flash of the other scheme; the Tab and Shift+Tab sequence against the in-realm page; and time, memory and bytes against the
+in-realm page, alternating (`SAMPLES`, `MODES=in-realm` with `WEB_DIST_DIR` for an earlier build).
+
 ## Toast check
 
 `toast.ts` checks the notification toast (ADR 0009) with no API or database: it
@@ -93,6 +106,9 @@ API received (auth kind, status and a marker the fixture puts on every URL it bu
   another, fails the suite so the change is noticed and the ADR 0005 table is updated.
 - A call made over the DevTools protocol may `eval` where a page may not, so attempts that depend on the policy run from a
   timer inside the page.
+
+The `pageframe` phase tries what is new for a page: a 100 000 px height request, a fixed full-size overlay and the host's own
+messages sent by the frame. The eval-violation check also opens the Forecast page.
 
 ## Eval-violation check (`hostile/evalViolations.ts`)
 

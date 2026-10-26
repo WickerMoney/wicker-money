@@ -41,6 +41,8 @@ export async function mountPlugin(
     showError(root, params.error)
     return () => {}
   }
+  // Styling only (frame.css): a page paints the page background, a widget stays transparent over its card.
+  root.ownerDocument.documentElement.setAttribute('data-wm-frame', params.kind)
   const connection = await (deps.connect ?? (() => connectToHost()))().catch((error: unknown) => {
     showError(root, error instanceof Error ? error.message : 'Could not connect to Wicker Money.')
     return null

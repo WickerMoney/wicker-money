@@ -1,10 +1,38 @@
 /*
- * The frame is drawn inside the host's card, so it paints nothing of its own:
+ * A widget frame is drawn inside the host's card, so it paints nothing of its own:
  * the ui-kit gives `body` the page background, which here would show as a
  * differently coloured box inside the card (the card is the surface colour).
  * The host's `.plugin-frame__frame` is transparent to match.
+ *
+ * A page frame is the page: it fills the content area, so it paints the page background itself.
+ * That keeps the frame readable on its own (a contrast checker inside the frame sees the real
+ * colour) and does not depend on the host showing through. The tokens come from the host
+ * (`applyHostTheme`) as soon as the frame connects; the host shows the frame only then.
+ * The frame grows to its content (the host sets its height), so it never scrolls on its own:
+ * a scrollbar would take width and make the layout, and so the height, change under the host.
+ * `data-wm-frame` is set by `mountPlugin` from the fragment.
  */
 html,
 body {
   background: transparent;
+}
+html[data-wm-frame="page"],
+html[data-wm-frame="page"] body {
+  background: var(--wm-bg);
+}
+html[data-wm-frame="page"] {
+  overflow-y: hidden;
+}
+
+/*
+ * The host's own stylesheet does not reach a frame, and it has one rule written for plugin pages
+ * (`.shell__main .wm-surface__body` in app.css): below the phone breakpoint a wide table inside a card scrolls
+ * inside the card. Without it a table wider than the frame is clipped by the iframe, with no scrollbar to reach it.
+ * The host breakpoint is a window width of 860 px; the page frame is 24 px narrower than the window there (the
+ * content area's side padding), and media queries in a frame see the frame's width, so the same point is 836 px.
+ */
+@media (max-width: 836px) {
+  html[data-wm-frame="page"] .wm-surface__body {
+    overflow-x: auto;
+  }
 }

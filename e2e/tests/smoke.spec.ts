@@ -46,11 +46,14 @@ test.describe('sign-in and the pages that matter', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
   })
 
-  test('household reaches the forecast page', async ({ page, signIn, watch }) => {
+  test('household reaches the forecast page, which runs in a frame', async ({ page, signIn, watch }) => {
     await signIn('household')
     const seen = watch()
     await page.locator('nav a[href="/p/wickermoney.forecast/forecast"]').first().click()
-    await expect(page.getByRole('heading', { name: 'Forecast' }).first()).toBeVisible()
+    // Forecast is an isolated plugin: the page's own heading is inside the sandboxed frame, which the host titles
+    // "<plugin name> · <page title>".
+    const frame = page.frameLocator('iframe[title="Forecast · Forecast"]')
+    await expect(frame.getByRole('heading', { level: 1, name: 'Forecast' })).toBeVisible()
     await page.waitForLoadState('networkidle')
     expectNoProblems(seen)
   })
