@@ -102,6 +102,10 @@ curated, human-readable version.
 
 ### Fixed
 
+- **A hovered primary button keeps its colours.** The neutral hover rule
+  out-ranked the primary variant, so every primary button turned light grey
+  under its light text on hover (contrast 1.1:1); it now keeps its accent
+  background.
 - **Phone layout: text buttons overlapped their neighbours.** On a phone,
   "Match…" in the Transactions recurring column sat on top of the line below it,
   and "Unmatch" touched the date before it; the Recurring page's "Undo" had no
