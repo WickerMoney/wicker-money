@@ -1,3 +1,5 @@
+import type { Compounding, PromoInterestBase } from '../../shared/index.js'
+
 /** A debt as the API returns it. Amounts are decimal strings with four decimal places. */
 export interface Debt {
   readonly id: string
@@ -18,4 +20,16 @@ export interface Debt {
   readonly included: boolean
   /** Extra paid toward this debt every month on top of its minimum and outside the shared extra: `'0.0000'` for none. */
   readonly extraPayment: string
+  /** The day repayment begins for a loan in deferment, `YYYY-MM-DD`, or `null` if it has begun. */
+  readonly repaymentStartsOn: string | null
+  /** The promotional APR percentage (`'0.0000'` for a 0% promotion), or `null` for none. */
+  readonly promoApr: string | null
+  /** The promotion's last day, `YYYY-MM-DD`, or `null`. */
+  readonly promoEndsOn: string | null
+  /** Whether interest is charged back to the start if the debt is not cleared by `promoEndsOn`. */
+  readonly promoDeferredInterest: boolean
+  /** What that backdated interest is charged on. */
+  readonly promoInterestBase: PromoInterestBase
+  /** How interest is worked out each month. */
+  readonly compounding: Compounding
 }

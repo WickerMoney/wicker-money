@@ -380,6 +380,7 @@ describe('adding and editing a debt', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(backend.api.post).toHaveBeenCalledWith(expect.stringContaining('/debts'), {
       name: 'Dentist', balance: '640', apr: '9.9', minimumPayment: '40', accountId: null, included: true, extraPayment: '0',
+      repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false, promoInterestBase: 'original', compounding: 'monthly',
     })
     expect(await within(screen.getByRole('table', { name: 'Your debts' })).findByText('Dentist')).not.toBeNull()
     expect(document.querySelector('[aria-live="polite"].wm-visually-hidden')?.textContent).toBe('Dentist added. Updating the plan.')
@@ -498,5 +499,91 @@ describe('a long list', () => {
     await user.click(screen.getByRole('button', { name: 'Add a debt' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(seen()).toBe(rowCalls)
+  })
+})
+
+describe('deferred loans, promotions and compounding', () => {
+  const loan = (): Debt => makeDebt({
+    id: 'loan', name: 'Student loan', balance: '10000.0000', apr: '6.0000', minimumPayment: '100.0000',
+    repaymentStartsOn: '2027-04-10',
+  })
+  const promoCard = (): Debt => makeDebt({
+    id: 'promo', name: 'Store card', balance: '1200.0000', apr: '24.9900', minimumPayment: '25.0000',
+    promoApr: '0.0000', promoEndsOn: '2027-10-10', promoDeferredInterest: true,
+  })
+
+  it('says in the list when repayment starts and when a promotion ends', async () => {
+    await open(makeBackend([loan(), promoCard()]))
+    const debts = screen.getByRole('table', { name: 'Your debts' })
+    expect(within(debts).getByText('Repayment starts 2027-04-10')).not.toBeNull()
+    expect(within(debts).getByText(/0\.?0*% until 2027-10-10, interest charged back if not paid off/)).not.toBeNull()
+  })
+
+  it('warns that interest would be added, and what would clear it in time', async () => {
+    await open(makeBackend([promoCard()]))
+    expect(await screen.findByText(/Store card is not paid off by 2027-10-10 at these payments/)).not.toBeNull()
+    expect(screen.getByText(/299\.88/)).not.toBeNull()
+    expect(screen.getByText(/Another \$75\.0000 a month would clear it in time/)).not.toBeNull()
+  })
+
+  it('says the plan pays enough first when the budget allows', async () => {
+    const backend = makeBackend([promoCard()])
+    backend.state.settings = { strategy: 'avalanche', extraPayment: '75.0000', saved: true }
+    await open(backend)
+    expect(await screen.findByText(/pays at least \$100\.0000 a month toward it first/)).not.toBeNull()
+  })
+
+  it('says what a deferred loan will owe when repayment starts', async () => {
+    await open(makeBackend([loan()]))
+    expect(await screen.findByText(/No payment is due on Student loan until 2027-04-10/)).not.toBeNull()
+    expect(screen.getByText(/so it will owe \$10252\.5126 by then instead of \$10000\.0000/)).not.toBeNull()
+  })
+
+  it('adds a deferred loan with a promotion from the section in the dialog, closed until needed', async () => {
+    const backend = makeBackend([visa()])
+    const { user } = await open(backend)
+    await user.click(screen.getByRole('button', { name: 'Add a debt' }))
+    const dialog = screen.getByRole('dialog', { name: 'Add a debt' })
+    const section = dialog.querySelector('details')
+    expect(section?.open).toBe(false)
+
+    await user.type(within(dialog).getByLabelText('Name'), 'Dental card')
+    await user.type(within(dialog).getByLabelText('Balance'), '900')
+    await user.type(within(dialog).getByLabelText('Interest rate (% a year)'), '26.99')
+    await user.type(within(dialog).getByLabelText('Minimum payment (a month)'), '30')
+    await user.click(within(dialog).getByText('Timing and interest (optional)'))
+    expect(section?.open).toBe(true)
+
+    await user.type(within(dialog).getByLabelText('Promotional rate (% a year)'), '0')
+    const deferred = within(dialog).getByRole('checkbox', { name: /charged back to the start/ })
+    await user.click(deferred)
+    expect(within(dialog).getByLabelText('Charged back on')).not.toBeNull()
+    await user.click(within(dialog).getByRole('button', { name: 'Add debt' }))
+    // A rate without an end date is refused on the end date.
+    const end = within(dialog).getByLabelText('Promotional rate ends on')
+    expect(end.getAttribute('aria-invalid')).toBe('true')
+    expect(backend.api.post).not.toHaveBeenCalled()
+
+    await user.type(end, '2027-10-10')
+    await user.selectOptions(within(dialog).getByLabelText('How interest is worked out'), 'daily')
+    await user.click(within(dialog).getByRole('button', { name: 'Add debt' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(backend.api.post).toHaveBeenCalledWith(expect.stringContaining('/debts'), expect.objectContaining({
+      promoApr: '0', promoEndsOn: '2027-10-10', promoDeferredInterest: true, promoInterestBase: 'original',
+      compounding: 'daily', repaymentStartsOn: null,
+    }))
+  })
+
+  it('opens the section when the debt already uses it, and when a problem is inside it', async () => {
+    const { user } = await open(makeBackend([loan(), visa()]))
+    await user.click(screen.getByRole('button', { name: 'Edit Student loan' }))
+    const open1 = screen.getByRole('dialog', { name: 'Edit Student loan' })
+    expect(open1.querySelector('details')?.open).toBe(true)
+    expect((within(open1).getByLabelText('Repayment starts on') as HTMLInputElement).value).toBe('2027-04-10')
+    await user.click(within(open1).getByRole('button', { name: 'Cancel' }))
+
+    await user.click(screen.getByRole('button', { name: 'Edit Visa' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit Visa' })
+    expect(dialog.querySelector('details')?.open).toBe(false)
   })
 })

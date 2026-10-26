@@ -96,8 +96,41 @@ describe('draft conversion', () => {
   })
   it('sends text, trimmed, and only an edit may archive', () => {
     const draft = { ...EMPTY_DRAFT, name: ' Visa ', balance: ' 10.5 ', apr: '1', minimumPayment: '2', accountId: '', archived: true }
-    expect(draftBody(draft, false)).toEqual({ name: 'Visa', balance: '10.5', apr: '1', minimumPayment: '2', accountId: null, included: true, extraPayment: '0' })
+    expect(draftBody(draft, false)).toEqual({ name: 'Visa', balance: '10.5', apr: '1', minimumPayment: '2', accountId: null, included: true, extraPayment: '0', repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false, promoInterestBase: 'original', compounding: 'monthly' })
     expect(draftBody(draft, true)).toMatchObject({ archived: true })
+  })
+})
+
+describe('timing and interest on the form', () => {
+  const saved = makeDebt({
+    repaymentStartsOn: '2027-04-10', promoApr: '0.0000', promoEndsOn: '2027-10-10',
+    promoDeferredInterest: true, promoInterestBase: 'declining', compounding: 'daily_simple',
+  })
+
+  it('fills from a saved debt, the promotional rate trimmed like the rate', () => {
+    expect(draftFromDebt(saved)).toMatchObject({
+      repaymentStartsOn: '2027-04-10', promoApr: '0', promoEndsOn: '2027-10-10',
+      promoDeferredInterest: true, promoInterestBase: 'declining', compounding: 'daily_simple',
+    })
+    expect(draftFromDebt(makeDebt())).toMatchObject({ repaymentStartsOn: '', promoApr: '', promoEndsOn: '', compounding: 'monthly' })
+  })
+
+  it('sends blanks as null and drops deferred interest when there is no promotion', () => {
+    const body = draftBody({ ...EMPTY_DRAFT, name: 'x', promoDeferredInterest: true }, false)
+    expect(body).toMatchObject({ repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false })
+    expect(draftBody(draftFromDebt(saved), true)).toMatchObject({
+      repaymentStartsOn: '2027-04-10', promoApr: '0', promoEndsOn: '2027-10-10', promoDeferredInterest: true,
+    })
+  })
+
+  it('checks the dates, and wants a promotional rate and its end date together', () => {
+    const good = { ...EMPTY_DRAFT, name: 'x', balance: '1', apr: '1', minimumPayment: '1' }
+    expect(checkDraft({ ...good, repaymentStartsOn: '2027-02-30' }).fields['repaymentStartsOn']).toMatch(/calendar/)
+    expect(checkDraft({ ...good, repaymentStartsOn: 'soon' }).fields['repaymentStartsOn']).toMatch(/year-month-day/)
+    expect(checkDraft({ ...good, promoApr: '0' }).fields['promoEndsOn']).toMatch(/Enter the day/)
+    expect(checkDraft({ ...good, promoEndsOn: '2027-10-10' }).fields['promoApr']).toMatch(/Enter the promotional rate/)
+    expect(checkDraft({ ...good, promoApr: '-1', promoEndsOn: '2027-10-10' }).fields['promoApr']).toBeDefined()
+    expect(checkDraft({ ...good, repaymentStartsOn: '2027-04-10', promoApr: '0', promoEndsOn: '2027-10-10' }).fields).toEqual({})
   })
 })
 

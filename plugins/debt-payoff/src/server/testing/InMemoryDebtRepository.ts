@@ -14,6 +14,8 @@ const row = (d: StoredDebt): DebtRow => ({
   id: d.id, name: d.name, balance: d.balance, apr: d.apr, minimum_payment: d.minimum_payment,
   account_id: d.account_id, sort_order: d.sort_order, archived: d.archived,
   included: d.included, extra_payment: d.extra_payment,
+  repayment_starts_on: d.repayment_starts_on, promo_apr: d.promo_apr, promo_ends_on: d.promo_ends_on,
+  promo_deferred_interest: d.promo_deferred_interest, promo_interest_base: d.promo_interest_base, compounding: d.compounding,
 })
 
 /** {@link DebtRepository} over an {@link InMemoryDebtStore}, scoped to one user the way row-level security is. */
@@ -52,6 +54,9 @@ export class InMemoryDebtRepository implements DebtRepository {
       name: debt.name, balance: debt.balance, apr: debt.apr, minimum_payment: debt.minimumPayment,
       account_id: debt.accountId, sort_order: debt.sortOrder ?? last + 1, archived: debt.archived,
       included: debt.included, extra_payment: debt.extraPayment,
+      repayment_starts_on: debt.repaymentStartsOn, promo_apr: debt.promoApr, promo_ends_on: debt.promoEndsOn,
+      promo_deferred_interest: debt.promoDeferredInterest, promo_interest_base: debt.promoInterestBase,
+      compounding: debt.compounding,
     }
     this.store.debts.push(stored)
     return row(stored)
@@ -68,6 +73,9 @@ export class InMemoryDebtRepository implements DebtRepository {
       name: debt.name, balance: debt.balance, apr: debt.apr, minimum_payment: debt.minimumPayment,
       account_id: debt.accountId, sort_order: debt.sortOrder, archived: debt.archived,
       included: debt.included, extra_payment: debt.extraPayment,
+      repayment_starts_on: debt.repaymentStartsOn, promo_apr: debt.promoApr, promo_ends_on: debt.promoEndsOn,
+      promo_deferred_interest: debt.promoDeferredInterest, promo_interest_base: debt.promoInterestBase,
+      compounding: debt.compounding,
     })
     return row(found)
   }

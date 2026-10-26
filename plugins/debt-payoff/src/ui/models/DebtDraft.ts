@@ -11,4 +11,13 @@ export interface DebtDraft {
   readonly included: boolean
   /** The earmark as typed; blank means none. */
   readonly extraPayment: string
+  /** The day repayment begins, `YYYY-MM-DD`, or `''` if it has begun. */
+  readonly repaymentStartsOn: string
+  /** The promotional rate as typed; blank means no promotion. */
+  readonly promoApr: string
+  /** The promotion's last day, `YYYY-MM-DD`, or `''`. */
+  readonly promoEndsOn: string
+  readonly promoDeferredInterest: boolean
+  readonly promoInterestBase: 'original' | 'declining'
+  readonly compounding: 'monthly' | 'daily' | 'daily_simple'
 }

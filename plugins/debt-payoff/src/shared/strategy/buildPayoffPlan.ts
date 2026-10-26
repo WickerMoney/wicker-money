@@ -1,6 +1,9 @@
 import { addMonths } from '@wickermoney/plugin-sdk/date'
 import { unitsToMoney } from '@wickermoney/plugin-sdk/money'
+import { daysBetween } from './daysBetween.js'
 import { MAX_PLAN_MONTHS } from './MAX_PLAN_MONTHS.js'
+import type { ParsedDebt } from './ParsedDebt.js'
+import type { PlanPromo } from './PlanPromo.js'
 import { monthlyInterest } from './monthlyInterest.js'
 import type { DebtInput } from './DebtInput.js'
 import type { PayoffPlan } from './PayoffPlan.js'
@@ -45,6 +48,26 @@ import { STRATEGIES } from './STRATEGIES.js'
  *   earmark stops: it does not move to another debt (the debt-free date moves
  *   later instead). Freed minimums still roll. An earmark is capped at what
  *   the debt still owes, and the minimums-only scenario ignores it.
+ * - **Compounding.** A debt may instead compound daily, or accrue simple
+ *   daily interest (`Compounding`); both use the real number of days in
+ *   each month between payment dates. The default is the monthly rule above.
+ * - **Deferment.** A debt with a repayment start date owes no minimum until the
+ *   first plan month whose payment date is on or after it. Until then interest
+ *   accrues into the balance, the pooled money skips it (only its earmark can
+ *   pay it) and its minimum is not in the pool. A debt paid off before it
+ *   starts never adds a minimum. The monthly amount therefore rises when a
+ *   deferred debt starts; `monthlyBudget` is the first month's.
+ * - **Promotions.** Until its end date a debt uses the promotional rate. With
+ *   deferred interest, interest at the standard APR is tracked for every month
+ *   of the promotion (on the starting balance or on the falling balance, as
+ *   chosen) and added to the balance in the promotion's last month if anything
+ *   is still owed. So the plan does not let that happen by choice, a debt with
+ *   deferred interest is paid, before the strategy is applied, the even
+ *   payment that clears it in time, out of the pool, earliest deadline first.
+ *   If the pool cannot cover it the shortfall is reported and the interest is
+ *   charged. A promotion that ended before the first payment is taken as over
+ *   and the balance as already including any charge. The minimums-only
+ *   scenario pays minimums only and so can trigger the charge.
  * - **Limit.** A schedule is at most {@link MAX_PLAN_MONTHS} months. Past that,
  *   or once a balance outgrows what the database can store, the plan stops,
  *   is flagged `capped` and has no debt-free date.
@@ -80,15 +103,16 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
   const extra = amount(options.extraPayment, 'extra payment')
   addMonths(options.startDate, 0) // validates the date up front, so an empty plan refuses a bad one too
 
-  const parsed = parseDebts(debts)
+  const parsed = parseDebts(debts, options.startDate)
   const owing = parsed.filter((debt) => debt.balance > 0n)
   const settled = parsed.filter((debt) => debt.balance === 0n)
   const ordered = priorityOrder(owing, options.strategy)
 
-  const plan = simulate({ debts: ordered, extra, rollover: true })
-  const baseline = simulate({ debts: ordered, extra: 0n, rollover: false })
-
   const dateOf = (month: number): string => addMonths(options.startDate, month)
+  const daysIn = (month: number): number => daysBetween(dateOf(month - 1), dateOf(month))
+
+  const plan = simulate({ debts: ordered, extra, rollover: true, daysIn })
+  const baseline = simulate({ debts: ordered, extra: 0n, rollover: false, daysIn })
 
   const planDebts: PlanDebt[] = [
     ...plan.runs.map((run): PlanDebt => ({
@@ -104,6 +128,7 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
       payoffDate: run.payoffMonth === null ? null : dateOf(run.payoffMonth),
       totalInterest: unitsToMoney(run.interest),
       totalPaid: unitsToMoney(run.paid),
+      ...timelineOf(run.debt, run),
     })),
     ...settled.map((debt): PlanDebt => ({
       id: debt.id,
@@ -118,6 +143,7 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
       payoffDate: options.startDate,
       totalInterest: unitsToMoney(0n),
       totalPaid: unitsToMoney(0n),
+      ...timelineOf(debt, null),
     })),
   ]
 
@@ -143,7 +169,7 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
     strategy: options.strategy,
     extraPayment: unitsToMoney(extra),
     startDate: options.startDate,
-    monthlyBudget: unitsToMoney(owing.reduce((sum, debt) => sum + debt.minimum, 0n) + extra),
+    monthlyBudget: unitsToMoney(owing.reduce((sum, debt) => (debt.startMonth <= 1 ? sum + debt.minimum : sum), 0n) + extra),
     earmarked: unitsToMoney(owing.reduce((sum, debt) => sum + debt.extra, 0n)),
     order: ordered.map((debt) => debt.id),
     debts: planDebts,
@@ -164,6 +190,32 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
             plan.runs.reduce((sum, run) => sum + run.interest, 0n),
         )
       : null,
+  }
+}
+
+/** The timeline, compounding and promotion figures of one debt, for its {@link PlanDebt}. */
+function timelineOf(
+  debt: ParsedDebt,
+  run: { readonly payoffMonth: number | null; readonly backdated: bigint; readonly requiredFirst: bigint | null; readonly shortfall: bigint } | null,
+): Pick<PlanDebt, 'repaymentStartsOn' | 'repaymentStartMonth' | 'compounding' | 'promo'> {
+  const { promo } = debt
+  const active = promo !== null && promo.months > 0
+  const planPromo: PlanPromo | null = promo === null ? null : {
+    apr: unitsToMoney(promo.apr),
+    endsOn: promo.endsOn,
+    deferredInterest: promo.deferredInterest,
+    interestBase: promo.base,
+    active,
+    clearedInTime: !active || run === null ? null : run.payoffMonth !== null && run.payoffMonth <= promo.months,
+    backdatedInterest: unitsToMoney(run?.backdated ?? 0n),
+    requiredPayment: !active || !promo.deferredInterest || run?.requiredFirst == null ? null : unitsToMoney(run.requiredFirst),
+    shortfall: unitsToMoney(run?.shortfall ?? 0n),
+  }
+  return {
+    repaymentStartsOn: debt.repaymentStartsOn,
+    repaymentStartMonth: debt.startMonth,
+    compounding: debt.compounding,
+    promo: planPromo,
   }
 }
 

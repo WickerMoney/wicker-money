@@ -46,7 +46,9 @@ export function makeBackend(debts: readonly Debt[] = [], suggestions: readonly A
       const plan = buildPayoffPlan(
         active.filter((d) => d.included).map((d) => ({
           id: d.id, name: d.name, balance: d.balance, apr: d.apr, minimumPayment: d.minimumPayment,
-          extraPayment: d.extraPayment,
+          extraPayment: d.extraPayment, repaymentStartsOn: d.repaymentStartsOn, promoApr: d.promoApr,
+          promoEndsOn: d.promoEndsOn, promoDeferredInterest: d.promoDeferredInterest,
+          promoInterestBase: d.promoInterestBase, compounding: d.compounding,
         })),
         {
           strategy: (params.get('strategy') ?? state.settings.strategy) as Strategy,
@@ -76,6 +78,12 @@ export function makeBackend(debts: readonly Debt[] = [], suggestions: readonly A
       archived: false,
       included: b['included'] !== false,
       extraPayment: b['extraPayment'] === undefined ? '0.0000' : `${Number(b['extraPayment']).toFixed(4)}`,
+      repaymentStartsOn: (b['repaymentStartsOn'] ?? null) as string | null,
+      promoApr: b['promoApr'] == null ? null : `${Number(b['promoApr']).toFixed(4)}`,
+      promoEndsOn: (b['promoEndsOn'] ?? null) as string | null,
+      promoDeferredInterest: b['promoDeferredInterest'] === true,
+      promoInterestBase: (b['promoInterestBase'] ?? 'original') as Debt['promoInterestBase'],
+      compounding: (b['compounding'] ?? 'monthly') as Debt['compounding'],
     }
     state.debts.push(debt)
     return debt
