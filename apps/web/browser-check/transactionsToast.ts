@@ -13,6 +13,8 @@
  *   page before any toast, because the page itself may have findings of its own);
  * - Escape on a focused toast closes it;
  * - the real height of one-line and two-line toasts, and of a stack, is measured;
+ * - the recurring picker (seeded `household`): Not this keeps it open with the focus inside and says so in a toast,
+ *   Close and Match put focus on Link, and a toast raised after the picker closed does not take it;
  * - with the banner stuck to the top, Shift+Tab up a long list never leaves the
  *   focused control behind the banner (the row scroll margin).
  *
@@ -249,8 +251,67 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         await ctx.close()
         check(`${tag}: no page errors`, errors.length === 0, errors)
       }
+      if (vp.name !== 'phone-360') await pickerFlow(browser, base, vp)
     }
   } finally { await browser.close() }
+}
+
+/** The recurring picker, as `household` (who has suggestions): what a toast does to its focus and open state. */
+async function pickerFlow(browser: Playwright.Browser, base: string, vp: { name: string; width: number; height: number }): Promise<void> {
+  const tag = `${vp.name}/light picker`
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, colorScheme: 'light' })
+  await ctx.addCookies([{ name: 'wickermoney_refresh', value: await login(base, 'household@seed.wickermoney.test', 'SeedHousehold!2026'), url: base }])
+  const page = await ctx.newPage()
+  await page.goto(`${base}/transactions`)
+  await page.locator('.txn-table tbody tr').first().waitFor()
+  await page.locator('.recur-linkbtn').first().waitFor()
+  const picker = (): Playwright.Locator => page.getByRole('group', { name: /^Recurring items for/ })
+  const activeId = (): Promise<string> => page.evaluate(() => document.activeElement?.id ?? '')
+  const suggest = page.locator('.recur-linkbtn--suggest')
+  // The matches arrive after the rows, so wait for the first dot before deciding there is none.
+  await suggest.first().waitFor({ timeout: 5000 }).catch(() => undefined)
+  if ((await suggest.count()) === 0) {
+    check(`${tag}: the seeded household has a suggestion on the first page`, false, 'no suggestion to open')
+    await ctx.close()
+    return
+  }
+
+  // Not this: the picker stays open, focus stays inside it, and the toast says what happened.
+  await suggest.first().click()
+  await picker().waitFor()
+  await page.getByRole('button', { name: / is not / }).first().click()
+  check(`${tag}: Not this says what it did`, await waitToast(page, /^Marked '.+' as not .+\.$/), await toastTexts(page))
+  check(`${tag}: the picker is still open after the toast`, (await picker().count()) === 1)
+  check(`${tag}: focus is still inside the picker`, await picker().evaluate((el) => el.contains(document.activeElement)))
+
+  // Close: focus goes to Link, and the toast is still there.
+  await picker().getByRole('button', { name: 'Close' }).click()
+  await picker().waitFor({ state: 'detached' })
+  check(`${tag}: Close puts focus on Link`, (await activeId()).startsWith('recur-link-'), await activeId())
+  check(`${tag}: the toast stays after the picker closed`, (await toastTexts(page)).some((t) => t.startsWith('Marked ')))
+
+  // Match: the picker closes and the toast raised after it leaves focus on Link. Try the Link buttons in turn
+  // until one picker offers a Match (a suggestion's picker does; a row with nothing to offer does not).
+  let matched = false
+  const links = page.locator('.recur-linkbtn')
+  for (let i = 0; i < Math.min(await links.count(), 15) && !matched; i++) {
+    await links.nth(i).click()
+    await picker().waitFor()
+    const match = picker().getByRole('button', { name: /^Match / }).first()
+    if ((await match.count()) === 0) {
+      await picker().getByRole('button', { name: 'Close' }).click()
+      await picker().waitFor({ state: 'detached' })
+      continue
+    }
+    matched = true
+    await match.click()
+    check(`${tag}: Match says what it did`, await waitToast(page, /^Matched '.+' to .+\.$/), await toastTexts(page))
+    await picker().waitFor({ state: 'detached' })
+    await sleep(300)
+    check(`${tag}: the toast raised after the picker closed left focus on Link`, (await activeId()).startsWith('recur-link-'), await activeId())
+  }
+  if (!matched) check(`${tag}: a picker with a Match button to try`, false, 'none of the first 15 rows offers one')
+  await ctx.close()
 }
 
 async function main(): Promise<void> {
