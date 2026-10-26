@@ -1,3 +1,5 @@
+import type { Compounding, PromoInterestBase } from '../../shared/index.js'
+
 /** A debt row as the data export writes it, timestamps included. */
 export interface ExportedDebt {
   id: string
@@ -10,6 +12,12 @@ export interface ExportedDebt {
   archived: boolean
   included: boolean
   extra_payment: string
+  repayment_starts_on: string | null
+  promo_apr: string | null
+  promo_ends_on: string | null
+  promo_deferred_interest: boolean
+  promo_interest_base: PromoInterestBase
+  compounding: Compounding
   created_at: Date
   updated_at: Date
 }
