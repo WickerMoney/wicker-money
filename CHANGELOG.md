@@ -22,6 +22,18 @@ curated, human-readable version.
   repeat of the same kind of action replaces the last toast. The page banner is
   now only for a list that failed to load, and a form's own problems stay on the
   form.
+- **Accounts, Categories and Settings say what an action did in a toast.**
+  Adding, renaming, archiving, deleting or moving an account, correcting an
+  opening balance, the safe-to-spend checkbox, adding, editing, disabling or
+  deleting a category or a rule, resetting setup, finishing the setup wizard,
+  the time zone, a plugin switch, a role change and the data export each raise a
+  notification that names what changed and stays until you close it (Escape or
+  its Close button) or the next action of the same kind replaces it. A refusal
+  that no field owns is an error toast instead of a message at the top of the
+  page, and one raised from inside a dialog stays in the dialog. The
+  "Downloaded." and "Saved." lines and the role announcement under the People
+  table are gone. The time zone picker takes keyboard focus back after Save
+  disables itself.
 - **The Transactions recurring column is quieter.** A matched row shows its
   recurring item as a pill with an *Unmatch* button, and the occurrence's date
   only when it is not the transaction's own; an unmatched row shows nothing
