@@ -137,6 +137,8 @@
   border: 1px solid var(--wm-border);
 }
 .form-hint { font-size: 12px; color: var(--wm-text-muted); margin: -4px 0 8px; }
+/* A hint that is always in the page and often empty (a live region): no space while it has nothing to say. */
+.form-hint--live:empty { margin: 0; }
 
 /* The transactions select-all for phones and for rows laid out as cards at
    tablet widths; the blocks below turn it on. */

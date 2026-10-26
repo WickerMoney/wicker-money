@@ -85,14 +85,45 @@ describe('recording spending or income', () => {
   it('says it worked and puts the cursor back on the merchant, ready for the next entry', async () => {
     vi.spyOn(api, 'post').mockResolvedValue({})
     const { user } = mount()
-    expect(screen.queryByRole('status')).toBeNull()
+    // The live region is in the page before it has anything to say, so the first announcement is reliable.
+    const region = screen.getByRole('status')
+    expect(region.textContent).toBe('')
 
     await user.type(screen.getByLabelText('Merchant'), 'Cafe')
     await user.type(screen.getByLabelText('Amount'), '4')
     await user.click(screen.getByRole('button', { name: 'Record' }))
 
-    expect((await screen.findByRole('status')).textContent).toMatch(/Recorded/)
+    await waitFor(() => { expect(region.textContent).toBe('Recorded. Add another, or close this.') })
+    expect(screen.getByRole('status')).toBe(region)
     expect(document.activeElement).toBe(screen.getByLabelText('Merchant'))
+  })
+
+  it('changes the text on every entry, so each one is announced', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({})
+    const { user } = mount()
+    const region = screen.getByRole('status')
+
+    for (const [n, text] of [[1, 'Recorded. Add another, or close this.'], [2, 'Recorded (2 so far). Add another, or close this.']] as const) {
+      await user.type(screen.getByLabelText('Merchant'), `Cafe ${n}`)
+      await user.type(screen.getByLabelText('Amount'), '4')
+      await user.click(screen.getByRole('button', { name: 'Record' }))
+      await waitFor(() => { expect(region.textContent).toBe(text) })
+    }
+  })
+
+  it('empties the text when the mode changes, keeping the same element', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({})
+    const { user } = mount()
+    const region = screen.getByRole('status')
+    await user.type(screen.getByLabelText('Merchant'), 'Cafe')
+    await user.type(screen.getByLabelText('Amount'), '4')
+    await user.click(screen.getByRole('button', { name: 'Record' }))
+    await waitFor(() => { expect(region.textContent).not.toBe('') })
+
+    await user.click(screen.getByRole('button', { name: 'Transfer' }))
+
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region.textContent).toBe('')
   })
 
   it('leaves the category out so the rules can choose it', async () => {
