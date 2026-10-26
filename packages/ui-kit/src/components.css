@@ -58,6 +58,7 @@
 .wm-table th, .wm-table td {
   text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--wm-border);
 }
+.wm-table__row--open > td { border-bottom-color: transparent; }
 .wm-table th { font-size: 12px; color: var(--wm-text-muted); font-weight: 600; }
 .wm-table td.wm-num, .wm-table th.wm-num { text-align: right; font-family: var(--wm-mono); }
 /* Positioned so that the visually hidden "Actions" header label (position:

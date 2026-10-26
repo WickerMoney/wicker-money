@@ -686,10 +686,15 @@ series. An item you have matched at least once is *tracked*: an occurrence that
 has not arrived is flagged late for up to a week and still counted, on the next
 projected day. Items you never match behave as they did before.
 
-You can also match from the **Transactions** page: its Recurring column shows
-the occurrence a transaction paid (with *Unmatch*), a suggestion to confirm, or
-*Other* to pick an occurrence yourself. *Not this* dismisses a suggestion on
-either page, so that pairing is not offered again, and *Undo* brings it back.
+You can also match from the **Transactions** page. A transaction that has been
+matched shows the occurrence it paid in its Recurring column, as a pill with an
+*Unmatch* button (and the occurrence's date when that is not the transaction's).
+Every row has a **Link** button first among its row buttons, highlighted with a
+dot when an occurrence is suggested; it opens a list under the row: the
+suggestion (*Match*, *Not this*), the other occurrences it could settle, the
+ones dismissed for it (*Restore*) and *Close*. *Not this* dismisses a suggestion
+on either page, so that pairing is not offered again; *Restore* (*Undo* on the
+Recurring page) brings it back.
 
 ### Forecast
 

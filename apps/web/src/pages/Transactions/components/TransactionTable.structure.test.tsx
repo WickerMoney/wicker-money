@@ -109,7 +109,7 @@ describe('TransactionTable structure', () => {
     expect(onToggleAll).toHaveBeenCalledTimes(2)
   })
 
-  it('tabs through a row as the cells run: checkbox, category, recurring, then Edit and Delete', async () => {
+  it('tabs through a row as the cells run: checkbox, category, the pill remove button, then Link, Edit and Delete', async () => {
     render(<Harness />)
     const row = screen.getByRole('checkbox', { name: 'Select Oakwood Phone' }).closest('tr')!
     const inRow = within(row)
@@ -118,6 +118,8 @@ describe('TransactionTable structure', () => {
     expect(document.activeElement).toBe(inRow.getByRole('combobox', { name: 'Category for Oakwood Phone' }))
     await userEvent.tab()
     expect(document.activeElement).toBe(inRow.getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }))
+    await userEvent.tab()
+    expect(document.activeElement).toBe(inRow.getByRole('button', { name: /^Change recurring item for Oakwood Phone/ }))
     await userEvent.tab()
     expect(document.activeElement).toBe(inRow.getByRole('button', { name: 'Edit' }))
     await userEvent.tab()

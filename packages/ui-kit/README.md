@@ -50,11 +50,11 @@ A federated remote's emitted stylesheet is never requested.
 |---|---|
 | `Surface` | Card/panel with an optional title and header action |
 | `Button` | `variant`: `default`, `primary` or `danger` |
-| `IconButton` | Square icon-only button for table rows. `icon` is one of `edit`, `delete`, `disable`, `enable`, `archive`, `history`, `end` or `balance`; `label` is required and is both the accessible name and the hover tooltip; `variant`: `default` or `danger`. Takes any other native `<button>` attribute |
+| `IconButton` | Square icon-only button for table rows. `icon` is one of `edit`, `delete`, `disable`, `enable`, `archive`, `history`, `end`, `balance` or `link`; `label` is required and is both the accessible name and the hover tooltip; `variant`: `default` or `danger`. Takes any other native `<button>` attribute |
 | `Dialog` | Modal built on the native `<dialog>` (`showModal()`): a side drawer on a desktop window, a full-screen sheet on a phone. `title` is the heading and the accessible name; `describedBy` (optional) is the id of an element in the body that gives its accessible description; `onClose` is called on Escape, the close button or a click on the backdrop. The page behind is inert, Tab stays inside, the first input in the body gets focus, and focus returns to what opened it when it unmounts. Render it only while it is wanted |
 | `Field`, `SelectField` | Labelled form inputs; optional `hint` and `error` (wires `aria-invalid` and `aria-describedby`) |
 | `FormError` | A form-level error, shown beside the form's submit button |
-| `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align. `empty` is rendered instead of the table when `rows` is empty; `className` adds a class to the table's scroller. Optional `caption` names the table: it is rendered as a visually hidden `<caption>` that a screen reader announces. Header cells carry `scope="col"`, and a column whose `header` is an empty string (a column of row buttons) gets a visually hidden "Actions" label in its header cell, so no header cell is empty |
+| `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align. `empty` is rendered instead of the table when `rows` is empty; `className` adds a class to the table's scroller. Optional `caption` names the table: it is rendered as a visually hidden `<caption>` that a screen reader announces. Header cells carry `scope="col"`, and a column whose `header` is an empty string (a column of row buttons) gets a visually hidden "Actions" label in its header cell, so no header cell is empty. Optional `rowDetail(row)` adds a full-width detail row under a row (experimental, see [Table row detail](#table-row-detail)) |
 | `Stat` | Label + value; `tone="auto"` colours by sign |
 | `CategoryOptions`, `orderByParent` | Category `<option>` list grouped under parents |
 | `Alert` | Inline error or notice (`role="alert"`) |
@@ -76,14 +76,31 @@ Every component's props type is exported alongside it (`SurfaceProps`,
 `IconName`, `FieldCommon`, `GroupableCategory`, and the form-error types
 `FormErrors`, `FormErrorState`, `FieldMatcher` and `ValidationIssue`.
 
+### Table row detail
+
+> **Stability: experimental.** `Table`'s `rowDetail` prop may change in any 0.x
+> minor release, and it is **for the core app only until it has a second user**.
+> Every other part of `Table` keeps the "Pre-1.0" rule above.
+
+`rowDetail={(row) => node}` renders `node` in a full-width row directly under
+`row`: `<tr class="wm-table__detail"><td colSpan>`. Return `null`, `undefined`
+or `false` for no detail row. The row it belongs to gets the class
+`wm-table__row--open` (its bottom border is hidden, so the two read as one). Use
+it for something that belongs to one row but does not fit in its cells, such as
+an inline picker. The content is yours: name it (`role="group"` and
+`aria-label`), move focus into it when it opens and back to the control that
+opened it when it closes. A page that restyles its table into cards on a phone
+styles the detail row itself (`.wm-table__detail`); the cells in it carry no
+`data-col`.
+
 ### Toasts
 
 > **Stability: experimental.** `ToastProvider`, `ToastViewport`, `useToast` and
 > their types may change in any 0.x minor release, and they are **for the core
 > app only until the plugin path ships**. A plugin's copy of this package has no
 > provider, so `useToast()` throws there with a message saying so; plugins will
-> get `ctx.notify` in a later release. Every other export keeps the "Pre-1.0"
-> rule above.
+> get `ctx.notify` in a later release. Every other export, apart from
+> `Table`'s `rowDetail`, keeps the "Pre-1.0" rule above.
 
 A toast reports the result of a discrete action ("Deleted 'Coffee'."). State
 stays inline, and anything inside a modal stays inline too: a toast cannot be

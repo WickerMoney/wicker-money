@@ -11,6 +11,13 @@ curated, human-readable version.
 
 ### Changed
 
+- **The Transactions recurring column is quieter.** A matched row shows its
+  recurring item as a pill with an *Unmatch* button, and the occurrence's date
+  only when it is not the transaction's own; an unmatched row shows nothing
+  there. A **Link** button, first among the row buttons (accent colour and a dot
+  when an item is suggested), opens a list under the row with the suggestion
+  (*Match*, *Not this*), the other items it could be, the dismissed ones
+  (*Restore*) and *Close*. Not this, Restore and Unmatch keep the list open.
 - **The API now has a per-user rate limit, on by default.** Every signed-in
   user may make 600 requests a minute to `/api/v1`, 30 CSV import requests
   (`analyze` and `commit`) and 5 data exports; a request with no valid token
@@ -37,6 +44,9 @@ curated, human-readable version.
   
 ### Added
 
+- **`Table` can show a detail row under a row** (`@wickermoney/ui-kit`,
+  experimental): the optional `rowDetail(row)` prop renders a full-width row
+  directly under the row it belongs to. `IconButton` also draws a `link` icon.
 - **Debt payoff: leave a debt out of the plan.** Each debt has an "In plan"
   switch, saved as soon as you change it, like "safe to spend" on Accounts. A
   debt that is switched off stays in your list, muted and marked "Not in plan",
@@ -85,6 +95,11 @@ curated, human-readable version.
 
 ### Fixed
 
+- **Phone layout: text buttons overlapped their neighbours.** On a phone,
+  "Match…" in the Transactions recurring column sat on top of the line below it,
+  and "Unmatch" touched the date before it; the Recurring page's "Undo" had no
+  tap area. The 560 px rule for the bigger tap area was cancelled by a later
+  rule, leaving only its negative margin.
 - **Erase my data and a write in flight.** A write that was open when the erase
   started was invisible to it and committed afterwards, leaving a row for the
   signed-out user (or, for a row pointing at an account, failing the erase with

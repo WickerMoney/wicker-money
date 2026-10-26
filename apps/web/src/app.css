@@ -280,8 +280,6 @@
   .cat-table.tbl-cards .wm-table td[data-col="actions"] { justify-self: start; }
   .disclosure--icon { width: 40px; height: 40px; }
   .disclosure--header { min-height: 44px; }
-  /* Text-style buttons in table rows: a taller hit area without a taller look. */
-  .recur-link { padding: 10px 4px; margin: -10px -4px; }
   .cat-cell__select { min-height: 40px; }
   .recur-status--button { min-height: 32px; }
 }
@@ -576,6 +574,11 @@
   padding: 0; border: 0; background: none; font: inherit; font-size: 12px; cursor: pointer;
   color: var(--wm-accent); text-decoration: underline; text-underline-offset: 2px;
 }
+/* Text-style buttons in table rows: a taller hit area without a taller look. This
+   sits after the base rule on purpose: inside the 560px block further up it was
+   cancelled by the base `padding: 0` (same specificity, later wins) while its
+   negative margin still applied, which pulled the button over its neighbours. */
+@media (max-width: 560px) { .recur-link { padding: 10px 4px; margin: -10px -4px; } }
 .recur-suggestions, .recur-occurrences, .recur-occurrence__legs, .recur-candidates ul {
   list-style: none; margin: 0; padding: 0;
 }
@@ -632,14 +635,99 @@
 
 /* Recurring matching on the Transactions page and dismissed suggestions on the Recurring page. */
 .recur-dismissed { margin-top: var(--wm-gap-sm); }
-/* Narrow on purpose: the ledger table already holds seven columns. */
-.txn-recur { display: flex; flex-direction: column; gap: 4px; min-width: 150px; max-width: 210px; font-size: 13px; }
-.txn-recur__suggestion { display: flex; flex-direction: column; gap: 4px; }
-.txn-recur__actions { justify-content: flex-start; align-items: center; flex-wrap: wrap; }
-.txn-recur__actions .wm-btn { padding: 2px 8px; font-size: 12px; white-space: nowrap; }
-.txn-recur__find { align-self: flex-start; color: var(--wm-text-muted); }
-.txn-recur__picker { margin-top: 2px; padding: 6px; font-size: 12px; }
-.txn-recur__picker .recur-candidate { grid-template-columns: minmax(0, 1fr) auto; }
+/* Transactions: the recurring column, the Link button in the row actions and the picker row.
+
+   The column shows only the pill of a matched row (name, remove button, and the
+   occurrence's date when it is not the transaction's); an unmatched row's cell is
+   empty. The Link button opens the picker in its own table row under the row
+   (ui-kit Table `rowDetail`: `.wm-table__detail`, and `.wm-table__row--open` on
+   the row it belongs to).
+
+   Rules: no negative margins anywhere (the .recur-link overlap came from one), and
+   every phone/touch size comes from one custom property, --recur-hit, never from a
+   media-block rule that a later rule of equal specificity could cancel. */
+.txn-recur, .recur2__picker { --recur-hit: 28px; }
+.txn-recur { min-width: 0; max-width: 210px; font-size: 13px; }
+@media (max-width: 560px), (pointer: coarse) {
+  .txn-recur, .recur2__picker { --recur-hit: 40px; }
+  .recur2__picker .wm-btn { min-height: 40px; }
+}
+/* A focused row scrolls into view clear of the toast banner (ui-kit Toast: sticky under the phone bar;
+   one two-line toast and its margin are about 84px). The toast session may set this from the measured banner. */
+.txn-table tbody tr { scroll-margin-top: calc(var(--wm-toast-offset-top, 0px) + 96px); }
+
+/* Matched: pill, then the date, on one line. The pill gives way (ellipsis), the date never wraps. */
+.recur2__line { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; }
+.recur2__date { flex: none; font-size: 12px; white-space: nowrap; }
+.recur2__chip {
+  display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 5rem; max-width: 100%;
+  min-height: calc(var(--recur-hit) + 2px); padding-left: 10px;
+  border: 1px solid var(--wm-positive); border-radius: 999px;
+  color: var(--wm-positive); font-size: 12px; font-weight: 500;
+}
+.recur2__chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recur2__chip-x {
+  flex: none; display: grid; place-items: center; align-self: stretch;
+  width: var(--recur-hit); padding: 0; margin: 0; cursor: pointer;
+  color: inherit; background: transparent; border: 0; border-radius: 999px;
+}
+.recur2__chip-x:hover:not(:disabled) { background: var(--wm-surface-alt); }
+.recur2__chip-x:disabled { opacity: .55; cursor: not-allowed; }
+.recur2__chip.is-busy { opacity: .7; }
+
+/* The Link button: same family as Edit and Delete (wm-btn wm-icon-btn: 32px, 40px on phones).
+   Muted when there is nothing to link; accent colour AND a dot when there is a suggestion. */
+.recur-linkbtn { position: relative; color: var(--wm-text-muted); }
+.recur-linkbtn:hover:not(:disabled) { color: var(--wm-text); }
+.recur-linkbtn[aria-expanded="true"] { background: var(--wm-surface-alt); color: var(--wm-text); }
+.recur-linkbtn--suggest, .recur-linkbtn--suggest:hover:not(:disabled), .recur-linkbtn--suggest[aria-expanded="true"] {
+  color: var(--wm-accent); border-color: var(--wm-accent);
+}
+.recur-linkbtn--suggest::after {
+  content: ""; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--wm-accent); box-shadow: 0 0 0 2px var(--wm-surface);
+}
+
+/* Focus ring (the app's ring for custom controls; .wm-btn has none of its own). */
+.txn-recur :focus-visible, .wm-row-actions :focus-visible, .recur2__picker :focus-visible {
+  outline: 2px solid var(--wm-accent); outline-offset: 2px;
+}
+
+/* The picker, in its own table row under the row it belongs to. */
+.wm-table__detail > td { padding: 0 10px 12px; }
+.recur2__picker {
+  max-width: 44rem; padding: 10px; font-size: 13px;
+  border: 1px solid var(--wm-border); border-radius: var(--wm-radius-sm); background: var(--wm-surface);
+}
+.recur2__picker:focus { outline: none; }
+.recur2__picker:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 2px; }
+.recur2__section { margin: 10px 0 2px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--wm-text-muted); }
+.recur2__section:first-child { margin-top: 0; }
+.recur2__list { list-style: none; margin: 0; padding: 0; }
+.recur2__item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 0; border-top: 1px solid var(--wm-border); }
+.recur2__item:first-child { border-top: 0; }
+.recur2__item-text { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+.recur2__item-actions { display: flex; gap: 6px; flex: none; }
+.recur2__item .wm-btn, .recur2__footer .wm-btn { padding: 2px 10px; font-size: 12px; }
+.recur2__empty { margin: 0; }
+.recur2__footer { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+/* Card layouts (phones, and under 880px of room): the picker row is a continuation of the card above it;
+   an empty recurring cell takes no line (it would still cost one row gap). */
+@media (max-width: 560px) {
+  .txn-table td[data-col="recur"]:empty { display: none; }
+  .txn-table .wm-table tr.wm-table__row--open { border-bottom: 0; padding-bottom: 6px; }
+  .txn-table .wm-table tr.wm-table__detail { display: block; padding: 0 4px 12px; }
+  .wm-table__detail > td { padding: 0; }
+}
+@media (min-width: 561px) {
+  @container txn-list (max-width: 879px) {
+    .txn-table td[data-col="recur"]:empty { display: none; }
+    .txn-table .wm-table tr.wm-table__row--open { border-bottom: 0; padding-bottom: 6px; }
+    .txn-table .wm-table tr.wm-table__detail { display: block; padding: 0 4px 12px; }
+    .wm-table__detail > td { padding: 0; }
+  }
+}
 
 /* Transactions at tablet and laptop widths (561px and up; phones have their own
    card layout in the 560px block above).
