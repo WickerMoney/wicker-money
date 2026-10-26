@@ -36,3 +36,23 @@ html[data-wm-frame="page"] {
     overflow-x: auto;
   }
 }
+
+/*
+ * A modal dialog in a page frame (ModalLift, ADR 0015). A page frame is as tall as its content, so a modal
+ * `<dialog>` is placed against the frame, not the window. While one is open the host lifts the iframe over the
+ * visible part of the content area and tells the frame where its page sits in it; the dialog then fills what the
+ * person sees, and the page is drawn where it was, dimmed behind the backdrop.
+ *
+ * `pending`: the host has been asked and has not answered yet. The dialog is held invisible, and its backdrop
+ * clear, so nothing is drawn against the frame for the moment the lift takes. `lifted`: the page is shifted to
+ * where it was on screen, at the width it had, so it does not reflow. `inplace`: no answer came, and the dialog is
+ * shown against the frame, as it is in a host that predates the lift.
+ */
+html[data-wm-modal="pending"] dialog:modal { opacity: 0; }
+html[data-wm-modal="pending"] dialog:modal::backdrop { background: transparent; }
+html[data-wm-modal="lifted"] body {
+  position: relative;
+  left: var(--wm-lift-x, 0px);
+  top: var(--wm-lift-y, 0px);
+  width: var(--wm-lift-width, auto);
+}

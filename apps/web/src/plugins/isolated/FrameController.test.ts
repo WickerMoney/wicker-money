@@ -44,7 +44,7 @@ function setup(kind: 'widget' | 'page' = 'widget', extra: { loadTimeoutMs?: numb
   const heights: number[] = []
   const currentTheme = { value: theme('light') }
   const events: FrameEvents = {
-    onState: (s) => states.push(s), onHeight: (h) => heights.push(h), onNavigate: vi.fn(), onFocusOut: vi.fn(),
+    onState: (s) => states.push(s), onHeight: (h) => heights.push(h), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(),
   }
   const controller = new FrameController({
     iframe: frame.iframe, manifest, userId: 'u1', email: 'u1@example.com', timezone: 'UTC', kind,
@@ -354,6 +354,57 @@ describe('focus and navigation', () => {
     await tick()
     expect(s.frame.iframe.focus).toHaveBeenCalled()
     expect(s.received.at(-1)).toEqual({ type: 'focus-in', direction: 'last' })
+    s.controller.dispose()
+  })
+})
+
+describe('modal dialogs', () => {
+  it('passes a page frame\'s modal open and close on', async () => {
+    const s = setup('page')
+    const port = connect(s)
+    port.postMessage({ type: 'ready', protocol: 1 })
+    port.postMessage({ type: 'modal', open: true })
+    port.postMessage({ type: 'modal', open: false })
+    await tick()
+    // The first call is the hello's own "nothing is open" reset.
+    expect(vi.mocked(s.events.onModal).mock.calls).toEqual([[false], [true], [false]])
+    s.controller.dispose()
+  })
+
+  it('ignores a widget frame\'s modal message', async () => {
+    const s = setup('widget')
+    const port = connect(s)
+    port.postMessage({ type: 'ready', protocol: 1 })
+    port.postMessage({ type: 'modal', open: true })
+    await tick()
+    expect(vi.mocked(s.events.onModal).mock.calls.every(([open]) => open === false)).toBe(true)
+    s.controller.dispose()
+  })
+
+  it('ends a lift when the frame says hello again or fails', async () => {
+    const s = setup('page')
+    const port = connect(s)
+    port.postMessage({ type: 'ready', protocol: 1 })
+    port.postMessage({ type: 'modal', open: true })
+    await tick()
+    vi.mocked(s.events.onModal).mockClear()
+    s.hello()
+    expect(vi.mocked(s.events.onModal).mock.calls).toEqual([[false]])
+    vi.mocked(s.events.onModal).mockClear()
+    s.hello(s.frame.win, { type: 'wm.hello', protocols: [7] })
+    expect(vi.mocked(s.events.onModal).mock.calls.at(-1)).toEqual([false])
+    s.controller.dispose()
+  })
+
+  it('sends the page layout to a ready frame, and nothing before it is', async () => {
+    const s = setup('page')
+    const port = connect(s)
+    s.controller.setModalLayout({ lifted: true, x: 18, y: -40, width: 900 })
+    port.postMessage({ type: 'ready', protocol: 1 })
+    await tick()
+    s.controller.setModalLayout({ lifted: true, x: 18, y: -40, width: 900 })
+    await tick()
+    expect(s.received.filter((m) => m.type === 'modal-layout')).toEqual([{ type: 'modal-layout', lifted: true, x: 18, y: -40, width: 900 }])
     s.controller.dispose()
   })
 })

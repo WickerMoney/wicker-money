@@ -6,8 +6,10 @@
 .auth__hint { font-size: 12px; color: var(--wm-text-muted); margin: 0 0 8px; }
 
 .shell {
+  /* The sidebar's width: the left edge of a plugin page frame lifted for a modal dialog (see below). */
+  --wm-nav-width: 208px;
   display: grid; min-height: 100dvh;
-  grid-template-columns: 208px 1fr;
+  grid-template-columns: var(--wm-nav-width) 1fr;
   grid-template-areas: "nav main";
 }
 /* Sticky at viewport height, so the foot stays visible while the page scrolls
@@ -152,7 +154,7 @@
    visibility:hidden, so its links are not in the tab order; the visibility
    change is delayed until the slide finishes so it still animates out. */
 @media (max-width: 860px) {
-  .shell { grid-template-columns: minmax(0, 1fr); grid-template-areas: "bar" "main"; grid-template-rows: auto 1fr; }
+  .shell { --wm-nav-width: 0px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "bar" "main"; grid-template-rows: auto 1fr; }
 
   .shell__bar {
     grid-area: bar; position: sticky; top: 0; z-index: 20;
@@ -863,6 +865,19 @@
 .plugin-frame { position: relative; width: 100%; }
 /* No `color-scheme` here: an iframe whose scheme differs from its document's is painted on an opaque canvas, so it must inherit the host's (the frame is told the same scheme). */
 .plugin-frame__frame { display: block; width: 100%; border: 0; background: transparent; }
+/* A page frame with a modal dialog open is lifted (PageFrameLift): its iframe is fixed over the visible part of
+   <main>, which is what the dialog fills. Never over the sidebar or the phone's top bar, so the navigation stays in
+   reach, and under the toast banner (z-index 15) and the phone bar (20). Sized with calc, not stretched with inset:
+   an iframe is a replaced element, so top and bottom do not stretch it. !important beats the inline height the
+   frame's own size gets. The holder keeps the iframe's place (min-height set by script). */
+.plugin-frame[data-lifted] > .plugin-frame__frame {
+  position: fixed; z-index: 10;
+  top: var(--wm-toast-offset-top, 0px); left: var(--wm-nav-width, 0px);
+  width: calc(100vw - var(--wm-nav-width, 0px)) !important;
+  height: calc(100dvh - var(--wm-toast-offset-top, 0px)) !important;
+}
+/* The window does not scroll while a page frame is lifted, as it does not behind the app's own dialogs. */
+html[data-wm-frame-modal] { overflow: hidden; }
 .plugin-frame__status { display: flex; align-items: center; justify-content: center; min-height: 96px; padding: var(--wm-space-3, 0.75rem); }
 .plugin-frame__status--waiting { color: var(--wm-text-muted, inherit); font-size: 13px; text-align: center; }
 .plugin-frame[data-status="loading"] > .plugin-frame__status { position: absolute; inset: 0; }
