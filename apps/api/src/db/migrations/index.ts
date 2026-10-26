@@ -34,6 +34,7 @@ import * as m031 from './031_ledger_sort_indexes.js'
 import * as m032 from './032_erase_instance.js'
 import * as m033 from './033_tenant_lookup_policies.js'
 import * as m034 from './034_debt_payoff_plan_controls.js'
+import * as m035 from './035_debt_payoff_timelines.js'
 
 /**
  * The complete, ordered set of schema migrations, keyed by migration name.
@@ -86,6 +87,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '032_erase_instance': m032,
   '033_tenant_lookup_policies': m033,
   '034_debt_payoff_plan_controls': m034,
+  '035_debt_payoff_timelines': m035,
 }
 
 /** Kysely {@link MigrationProvider} that serves the fixed {@link MIGRATIONS} set. */
