@@ -1,3 +1,6 @@
+import type { Compounding } from './Compounding.js'
+import type { PlanPromo } from './PlanPromo.js'
+
 /** How one debt fares in a plan. */
 export interface PlanDebt {
   /** The debt. */
@@ -32,4 +35,12 @@ export interface PlanDebt {
   readonly totalInterest: string
   /** Everything paid to this debt over the plan. */
   readonly totalPaid: string
+  /** The day repayment begins for a deferred loan, as given, or `null` if repayment has begun. */
+  readonly repaymentStartsOn: string | null
+  /** The first plan month a minimum is due: `1` unless the debt is deferred. */
+  readonly repaymentStartMonth: number
+  /** How its interest is worked out. */
+  readonly compounding: Compounding
+  /** Its promotional rate, or `null` if it has none. */
+  readonly promo: PlanPromo | null
 }
