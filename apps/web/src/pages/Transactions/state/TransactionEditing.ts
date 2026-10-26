@@ -22,6 +22,9 @@ export interface TransactionEditing {
   readonly save: () => Promise<void>
   /** Confirms with the user, then deletes a transaction (or both legs of a transfer). */
   readonly remove: (transaction: Transaction) => Promise<void>
-  /** Assigns one transaction's category inline; an empty string clears it. */
-  readonly assign: (id: string, categoryId: string) => Promise<void>
+  /**
+   * Assigns one transaction's category inline; an empty string clears it.
+   * `categoryName` is what the toast calls the category.
+   */
+  readonly assign: (transaction: Transaction, categoryId: string, categoryName: string) => Promise<void>
 }
