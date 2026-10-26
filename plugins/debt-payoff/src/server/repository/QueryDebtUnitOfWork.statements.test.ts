@@ -83,7 +83,8 @@ describe('the tables the repositories touch', () => {
   it('are the plugin\'s own two and core accounts, and nothing else', async () => {
     const { q, seen } = recorder(2)
     const { debts, settings, accounts } = createDebtRepositories(q)
-    const row = { name: 'x', balance: '1', apr: '1', minimumPayment: '1', accountId: null, sortOrder: 0, archived: false, included: true, extraPayment: '0' }
+    const row = { name: 'x', balance: '1', apr: '1', minimumPayment: '1', accountId: null, sortOrder: 0, archived: false, included: true, extraPayment: '0',
+      repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false, promoInterestBase: 'original' as const, compounding: 'monthly' as const }
     await Promise.all([
       debts.list(true), debts.find('a'), debts.findForUpdate('a'), debts.countActive(),
       debts.insert({ ...row, sortOrder: undefined }), debts.replace('a', row), debts.delete('a'), debts.listAll(),

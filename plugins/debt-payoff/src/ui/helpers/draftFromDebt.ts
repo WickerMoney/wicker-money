@@ -20,5 +20,11 @@ export function draftFromDebt(debt: Debt): DebtDraft {
     included: debt.included,
     // Blank for none, so the field is not a column of zeros.
     extraPayment: isZeroMoney(debt.extraPayment) ? '' : editableMoney(debt.extraPayment),
+    repaymentStartsOn: debt.repaymentStartsOn ?? '',
+    promoApr: debt.promoApr === null ? '' : debt.promoApr.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''),
+    promoEndsOn: debt.promoEndsOn ?? '',
+    promoDeferredInterest: debt.promoDeferredInterest,
+    promoInterestBase: debt.promoInterestBase,
+    compounding: debt.compounding,
   }
 }

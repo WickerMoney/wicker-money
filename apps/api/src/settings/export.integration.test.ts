@@ -183,14 +183,19 @@ describe('GET /api/v1/settings/export', () => {
   it('exports the debt payoff plugin\'s debts and settings, and only the caller\'s', async () => {
     const mine = await createUser(h)
     await send(mine, 'POST', '/api/v1/p/wickermoney.debt-payoff/debts',
-      { name: 'Exported card', balance: '500', apr: '19.99', minimumPayment: '25', included: false, extraPayment: '15' }, DEBT_PAYOFF)
+      { name: 'Exported card', balance: '500', apr: '19.99', minimumPayment: '25', included: false, extraPayment: '15',
+        repaymentStartsOn: '2027-04-10', promoApr: '0', promoEndsOn: '2027-10-10', promoDeferredInterest: true, compounding: 'daily' }, DEBT_PAYOFF)
     await send(mine, 'PUT', '/api/v1/p/wickermoney.debt-payoff/settings',
       { strategy: 'snowball', extraPayment: '40' }, DEBT_PAYOFF)
 
     const { doc } = await exportFor(mine)
     const exported = doc.plugins[DEBT_PAYOFF] as unknown as { debts: Array<Record<string, unknown>>; settings: Record<string, unknown> | null }
     expect(exported.debts).toEqual([
-      expect.objectContaining({ name: 'Exported card', included: false, extra_payment: '15.0000' }),
+      expect.objectContaining({
+        name: 'Exported card', included: false, extra_payment: '15.0000',
+        repayment_starts_on: '2027-04-10', promo_apr: '0.0000', promo_ends_on: '2027-10-10',
+        promo_deferred_interest: true, promo_interest_base: 'original', compounding: 'daily',
+      }),
     ])
     expect(exported.settings).toEqual(expect.objectContaining({ strategy: 'snowball' }))
 

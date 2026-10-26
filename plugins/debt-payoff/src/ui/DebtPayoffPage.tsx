@@ -160,7 +160,7 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
                   single debts, until each is paid off.
                 </p>
               ) : null}
-              <PlanNotices plan={plan} formatMoney={formatMoney} />
+              <PlanNotices plan={plan} formatMoney={formatMoney} formatDate={formatDate} />
               <PlanTotals plan={plan} formatMoney={formatMoney} formatDate={formatDate} />
               <h3 className="dp-h3">What you owe, month by month</h3>
               <PayoffChart plan={plan} colors={colors} formatMoney={formatMoney} formatDate={formatDate} />

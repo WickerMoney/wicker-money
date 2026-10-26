@@ -55,6 +55,18 @@ export const DebtsTable = memo(function DebtsTable({
             {d.accountId !== null ? (
               <span className="dp-sub">Linked to {accountNames.get(d.accountId) ?? 'an account'}</span>
             ) : null}
+            {d.repaymentStartsOn !== null ? (
+              <span className="dp-sub">Repayment starts {formatDate(d.repaymentStartsOn)}</span>
+            ) : null}
+            {d.promoApr !== null && d.promoEndsOn !== null ? (
+              <span className="dp-sub">
+                {rate(d.promoApr)} until {formatDate(d.promoEndsOn)}
+                {d.promoDeferredInterest ? ', interest charged back if not paid off' : ''}
+              </span>
+            ) : null}
+            {d.compounding !== 'monthly' ? (
+              <span className="dp-sub">{d.compounding === 'daily' ? 'Compounds daily' : 'Simple daily interest'}</span>
+            ) : null}
           </span>
         </span>
       ),

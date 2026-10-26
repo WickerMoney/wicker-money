@@ -113,6 +113,36 @@ describe('the in-plan switch and the earmark', () => {
   })
 })
 
+describe('the timeline and interest fields', () => {
+  it('are optional on create and carry their values through', () => {
+    expect(createDebtBody.parse(base)).not.toHaveProperty('compounding')
+    expect(createDebtBody.parse({
+      ...base, repaymentStartsOn: '2027-04-10', promoApr: '0', promoEndsOn: '2027-10-10',
+      promoDeferredInterest: true, promoInterestBase: 'declining', compounding: 'daily',
+    })).toMatchObject({
+      repaymentStartsOn: '2027-04-10', promoApr: '0.0000', promoEndsOn: '2027-10-10',
+      promoDeferredInterest: true, promoInterestBase: 'declining', compounding: 'daily',
+    })
+  })
+
+  it('can be cleared with null on update', () => {
+    expect(updateDebtBody.parse({ repaymentStartsOn: null, promoApr: null, promoEndsOn: null })).toEqual({
+      repaymentStartsOn: null, promoApr: null, promoEndsOn: null,
+    })
+  })
+
+  it('refuse a date that is not on the calendar, a number, an unknown option and a bad rate', () => {
+    for (const body of [
+      { repaymentStartsOn: '2027-02-30' }, { repaymentStartsOn: '04/10/2027' }, { repaymentStartsOn: 20270410 },
+      { promoEndsOn: '2027-13-01' }, { promoApr: -1 }, { promoApr: '1000' }, { promoInterestBase: 'average' },
+      { compounding: 'weekly' }, { promoDeferredInterest: 'yes' },
+    ]) {
+      expect(createDebtBody.safeParse({ ...base, ...body }).success, JSON.stringify(body)).toBe(false)
+      expect(updateDebtBody.safeParse(body).success, JSON.stringify(body)).toBe(false)
+    }
+  })
+})
+
 describe('updateDebtBody', () => {
   it('takes any one field', () => {
     expect(updateDebtBody.parse({ balance: '12' })).toEqual({ balance: '12.0000' })

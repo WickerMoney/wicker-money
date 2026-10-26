@@ -22,6 +22,11 @@ export interface DebtDialogProps {
   readonly onClose: () => void
 }
 
+/** Whether a form already uses the timing and interest section, so it starts open. */
+function hasTimeline(d: DebtDraft): boolean {
+  return d.repaymentStartsOn !== '' || d.promoApr !== '' || d.promoEndsOn !== '' || d.compounding !== 'monthly'
+}
+
 const ACCOUNT_KINDS: Readonly<Record<string, string>> = { credit_card: 'credit card', loan: 'loan' }
 
 /**
@@ -35,11 +40,14 @@ const ACCOUNT_KINDS: Readonly<Record<string, string>> = { credit_card: 'credit c
 export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemove, onClose }: DebtDialogProps) {
   const [draft, setDraft] = useState<DebtDraft>(initial)
   const [confirming, setConfirming] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(() => hasTimeline(initial))
   const { errors, ref, show, clearField } = useFormErrors<HTMLFormElement>()
   const confirmRef = useRef<HTMLDivElement>(null)
   const removeRef = useRef<HTMLDivElement>(null)
   const wasConfirming = useRef(false)
   const err = (field: string) => errors.fields[field]
+  // A problem inside the closed section opens it, so it is never hidden.
+  const moreError = ['repaymentStartsOn', 'promoApr', 'promoEndsOn', 'promoDeferredInterest'].some((f) => err(f) !== undefined)
 
   useEffect(() => {
     if (confirming) confirmRef.current?.focus()
@@ -133,6 +141,70 @@ export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemo
             <option key={a.id} value={a.id}>{a.name} ({ACCOUNT_KINDS[a.accountType] ?? a.accountType})</option>
           ))}
         </SelectField>
+
+        <details className="dp-more" open={moreOpen || moreError} onToggle={(e) => setMoreOpen(e.currentTarget.open)}>
+          <summary>Timing and interest (optional)</summary>
+          <Field
+            label="Repayment starts on"
+            hint="For a loan in deferment: the first day you must pay. Until then no minimum is due and interest keeps adding to the balance. Leave blank if you are already paying."
+            type="date"
+            value={draft.repaymentStartsOn}
+            error={err('repaymentStartsOn')}
+            onChange={(e) => change({ repaymentStartsOn: e.target.value }, 'repaymentStartsOn')}
+          />
+          <Field
+            label="Promotional rate (% a year)"
+            hint="A temporary rate, such as 0 for a no-interest offer. Leave blank if there is none."
+            inputMode="decimal"
+            autoComplete="off"
+            value={draft.promoApr}
+            error={err('promoApr')}
+            onChange={(e) => change({ promoApr: e.target.value }, 'promoApr')}
+          />
+          <Field
+            label="Promotional rate ends on"
+            hint="The last day the rate applies, or the pay-off deadline."
+            type="date"
+            value={draft.promoEndsOn}
+            error={err('promoEndsOn')}
+            onChange={(e) => change({ promoEndsOn: e.target.value }, 'promoEndsOn')}
+          />
+          <label className="check dp-archive">
+            <input
+              type="checkbox"
+              checked={draft.promoDeferredInterest}
+              disabled={draft.promoApr.trim() === ''}
+              onChange={(e) => change({ promoDeferredInterest: e.target.checked }, 'promoDeferredInterest')}
+            />
+            <span>
+              Interest is charged back to the start if it is not paid off by then (deferred interest).
+              The plan then pays enough each month to clear it in time, before spreading the rest, and warns if your
+              budget cannot.
+            </span>
+          </label>
+          {err('promoDeferredInterest') !== undefined ? <FormError message={err('promoDeferredInterest') ?? null} /> : null}
+          {draft.promoDeferredInterest && draft.promoApr.trim() !== '' ? (
+            <SelectField
+              label="Charged back on"
+              hint="Check your agreement. Most charge on the original balance whatever you pay in the meantime; some charge on the balance as it falls."
+              value={draft.promoInterestBase}
+              onChange={(e) => change({ promoInterestBase: e.target.value as DebtDraft['promoInterestBase'] })}
+            >
+              <option value="original">The original balance</option>
+              <option value="declining">The balance as it falls</option>
+            </SelectField>
+          ) : null}
+          <SelectField
+            label="How interest is worked out"
+            hint="Monthly is the yearly rate divided by 12. Cards usually compound daily. Many student loans charge simple daily interest on what you borrowed and add it to the balance when repayment starts."
+            value={draft.compounding}
+            onChange={(e) => change({ compounding: e.target.value as DebtDraft['compounding'] })}
+          >
+            <option value="monthly">Monthly</option>
+            <option value="daily">Compounded daily</option>
+            <option value="daily_simple">Simple daily interest</option>
+          </SelectField>
+        </details>
 
         <label className="check dp-archive">
           <input
