@@ -39,8 +39,10 @@ export function Dialog({ title, describedBy, onClose, children }: DialogProps) {
     if (dialog !== null && !dialog.open) {
       if (typeof dialog.showModal === 'function') dialog.showModal()
       else dialog.setAttribute('open', '')
-      // showModal() would focus the close button; a form wants its first field.
-      dialog.querySelector<HTMLElement>('.wm-dialog__body :is(input, select, textarea)')?.focus()
+      // showModal() would focus the close button; a form wants its first field. preventScroll: the dialog is
+      // fixed to the window, so there is nothing to scroll to, and in a plugin's page frame (as tall as its
+      // content, inside a scrolling window) the scroll would throw the person to the top of the frame.
+      dialog.querySelector<HTMLElement>('.wm-dialog__body :is(input, select, textarea)')?.focus({ preventScroll: true })
     }
     return () => { opener?.focus() }
   }, [])
