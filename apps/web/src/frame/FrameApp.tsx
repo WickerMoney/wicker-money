@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import type { FocusDirection, HostConnection, IsolatedState } from '@wickermoney/plugin-sdk/isolated'
+import { startFormSubmit } from './formSubmit.js'
 
 /** Props for {@link FrameApp}. */
 export interface FrameAppProps {
@@ -36,6 +37,9 @@ export function FrameApp({ connection, Plugin }: FrameAppProps) {
     if (root === null) return undefined
     return connection.observeSize(root)
   }, [connection])
+
+  // The sandbox has no allow-forms, so the browser never submits a form; the runtime sends the submit event itself.
+  useEffect(() => startFormSubmit(), [])
 
   // The host takes focus in from either side.
   useEffect(() => connection.subscribe((change) => {
