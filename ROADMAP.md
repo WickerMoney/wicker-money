@@ -4,7 +4,7 @@ Wicker Money is pre-1.0 and has a single maintainer. This is direction, not a
 promise: items move, shrink or disappear, and there are no dates.
 
 **Now** is what the next release is working toward. The current release is
-`v0.6.1`; see `CHANGELOG.md` for what each tag contains.
+`v0.7.0`; see `CHANGELOG.md` for what each tag contains.
 
 ## Shipped
 
@@ -14,6 +14,7 @@ promise: items move, shrink or disappear, and there are no dates.
 | M2 | The shell and the first plugin: Module Federation host, dashboard widgets from plugins, scoped plugin client |
 | M3 | Import and categorization: CSV import, category rules with preview, triage tools |
 | M4 (`v0.1.0`) | Release readiness and brand identity: self-hosting quickstart, published container image and `plugin-sdk`/`ui-kit`, first-run hardening, `semimonthly` recurrence, the `--wm-` design-token rename, the theme switcher, and a real brand accent and chart palette derived from the logo |
+| `v0.7.0` | Daily use, load limits and the next plugins in frames: every action on Transactions, Recurring, Accounts, Categories and Settings says what it did in a notification toast (no Undo, nothing closes itself), the Transactions recurring column is a Link button with an inline picker, Upcoming, Forecast (the first page in a frame) and Debt payoff run in sandboxed frames (dialogs and forms included, so only Budgets and Import CSV remain in the app's own page), plugin frames start when they scroll into view, Debt payoff can leave a debt out of the plan, give one debt an extra amount, defer a loan, apply a promotional rate and compound per debt (migrations 034 and 035), a per-user API rate limit that is on by default, a limit on concurrent CSV imports, `pnpm dev` serving frames through the API, the `@wickermoney/ui-kit` toast (experimental) and two additive protocol messages in `plugin-sdk/isolated`, and the first end-to-end smoke specs |
 | `v0.6.1` | A patch on `v0.6.0`: an owner confirms in Settings before switching on a third-party plugin (the dialog names its origin and granted tables and repeats the known gaps), the Transactions table and its row actions fit narrower windows, the `Origin-Agent-Cluster` console warning and the DevTools "blocks the use of `eval`" issue for the plugin frame are gone, migration 033 gives the account lines policy the per-statement user lookup, and the frame egress spike is recorded (no control closes the gaps in Chromium 141) |
 | `v0.6.0` | UI plugin isolation and owner tooling: a sandboxed frame for plugin UI (Insights and Spending Trends now run in one), plugin-scoped tokens with default-deny routes, an integrity pin and an operator manifest directory for third-party plugins (experimental, no install flow), a hostile-plugin suite in CI, a password-confirmed data export, a Settings danger zone (erase my data, erase this instance), owners changing roles from People, the debt payoff plugin, configurable pool and statement limits with a 100,000-row import cap and paged analyze, merchant and amount sort indexes, lazy core pages and compressed responses, an accessibility sweep, and the API integration suite in CI |
 | `v0.5.0` | Plugin platform hardening and account allowances: `plugin-sdk/server` (the host-to-plugin contract in one place), SDK stability tiers and shared `addDays` / `addMonths`, one shared read for dashboard widgets, one data load for recurring matches, `BOOTSTRAP_OWNER_EMAIL`, account allowances on Budgets (a monthly amount against one checking account, with rollover), an honest account of the plugin trust boundary, add and edit forms in the shared dialog, and a lint on `sql.raw` |
@@ -26,9 +27,11 @@ promise: items move, shrink or disappear, and there are no dates.
 
 ## Now
 
-After `v0.6.1`:
+After `v0.7.0`:
 
-- Close what the `:edge` soak and the real-device pass turn up.
+- Close what the `:edge` soak and the real-device pass turn up. Firefox, Safari,
+  a screen reader, a real phone and arm64 have not been checked for the frame
+  work or the toasts.
 - Close the known gaps in the plugin frame, which the frame's content security
   policy does not cover in Chromium. The spike found no header, `allow` value or
   CSP directive that closes prerender or WebRTC in Chromium 141 (see
@@ -39,24 +42,23 @@ After `v0.6.1`:
 
 ## Next
 
-- Lazy frames: start a widget's frame when it scrolls into view, with a
-  handshake timeout that counts visible time, so a long dashboard pays for the
-  frames a person actually sees.
-- Move the remaining bundled plugins (Budgets, Import CSV, Upcoming, Forecast,
-  Debt payoff) into sandboxed frames. They still run in the app's own page.
-- A per-process limit on concurrent CSV imports. Ten people committing 50,000
-  rows at once held every connection of the default pool for about 45 seconds;
-  `DB_POOL_MAX` is the mitigation today (see DEVELOPMENT.md).
+- Move the last two bundled plugins, Budgets and Import CSV, into sandboxed
+  frames, aimed at `v0.8.0`. A design spike (ADR 0010) found that both can run
+  in a frame. Budgets goes first and is small: it needs its categories and
+  accounts loaded once and its month changes debounced, because clicking
+  through months quickly tripped the broker's request limit. Import CSV is
+  larger: the broker refuses bodies over 256 KiB, so the file would be staged on
+  the server in chunks of about 200,000 characters through the existing broker
+  (about 36 requests, around a second for 100,000 rows), then analysed and
+  committed by upload id, with quotas on staged files. The spike rejected a
+  larger body limit, because one hostile frame could then stall the host.
 - Deep amount-sorted pages in the ledger and merchant search, which the new
   sort indexes do not speed up (about 65 ms and 130 to 165 ms on the largest
   synthetic ledger measured).
-- A global per-user rate limit, stricter on import and export. Today only the
-  sign-in routes and the password-confirmed actions (erase and export) are
-  limited; ordinary data routes are not.
-- End-to-end tests of the app's user flows in a browser (the test-pipeline
-  plan's T2 to T4). None exist yet: CI runs unit tests, the API integration
-  suite and the hostile-plugin suite, and every soak check for a release is
-  manual.
+- End-to-end tests of the app's user flows in a browser, beyond the seven smoke
+  specs in `e2e/`. They are not part of CI and the stack has not yet run under
+  Docker, so the first real run may need fixing. Every soak check for a release
+  is still manual.
 - A per-plugin theme contribution point (`contributes.themes` on the plugin
   manifest), so a plugin can ship an additional theme alongside the built-in
   light/dark/system switcher. Also decided, not yet built — do not confuse
@@ -86,7 +88,8 @@ After `v0.6.1`:
   `PLUGIN_MANIFEST_DIR`), and it runs only in a sandboxed frame with the table
   reads it is granted. It has no server-side code: that needs a connection
   boundary the project does not have, so it stays first-party only. Some
-  bundled plugins still run in the app's own page until they are ported.
+  bundled plugins (Budgets and Import CSV) still run in the app's own page until
+  they are ported.
 - Caching layers beyond the per-user response cache, and an authentication
   lookup cache. Unmeasured, and the performance sweep reduced the need; revisit
   with numbers.
@@ -94,6 +97,32 @@ After `v0.6.1`:
   later validate, batched backfills, asynchronous import jobs and a per-tenant
   plugin registry cache. Nothing here helps a self-hoster, and a hosted tier is
   undecided.
+- A way for a plugin to raise a toast (`ctx.notify`, ADR 0005 reserves the
+  message). The spike advises against building it with the Budgets and Import CSV
+  ports, since neither needs it, and the question is open for Debt payoff, whose
+  messages stay inline on its page. Plugins keep inline status until it exists.
 - Freezing the plugin API (`SDK_MAJOR_VERSION`) ahead of 1.0. The plugin SDK's
   entry points now carry stability tiers (see its README); the freeze applies
   to the stable ones.
+
+## Ideas
+
+Smaller things noticed during `v0.7.0`. These are not plans.
+
+- Tab order between frames: there is an extra Tab stop between two adjacent
+  frames, and the focus hand-off out of a frame (the host steps in 60 ms after
+  the frame) is timing dependent, which makes the Forecast Tab-order check fail
+  about half the time.
+- A control that disables itself while its request runs (`disabled` on table
+  buttons and checkboxes) drops keyboard focus to the page; the time zone Save
+  is the only one fixed.
+- Pressing Escape in the open phone navigation drawer drops focus.
+- Publishing the toast banner's height from the app shell or the ui-kit, so the
+  Transactions table does not have to measure it to keep a focused control
+  clear of it.
+- The frame's startup downloads the SDK root (about 85 kB) for a plugin that
+  could import only what it uses.
+- A docs-site page for the `API_RATE_LIMIT_*` variables, and a closer look at an
+  import of 25 MB or more under the new rate and concurrency limits.
+- Retake the README screenshots of Transactions, which still show the earlier
+  recurring column.
