@@ -78,12 +78,12 @@ Out of scope:
 
 | Plugin | Where its UI runs | Trust |
 | --- | --- | --- |
-| Insights, Spending Trends | A sandboxed frame | Confined to its grants (below) |
-| Budgets, Import CSV, Upcoming, Forecast, Debt payoff | **The app's own page** | **Fully trusted, not sandboxed** |
+| Insights, Spending Trends, Upcoming, Forecast, Debt payoff | A sandboxed frame | Confined to its grants (below) |
+| Budgets, Import CSV | **The app's own page** | **Fully trusted, not sandboxed** |
 | A third-party plugin an operator has added | A sandboxed frame, always | Confined to its grants (below) |
 
-The bundled plugins in the second row have not been moved into frames yet. Their
-front-end code runs in the app's own origin with the signed-in user's access to
+The two bundled plugins in the second row have not been moved into frames yet.
+Their front-end code runs in the app's own origin with the signed-in user's access to
 the whole API; their manifest's `requiredTables` and the `x-wickermoney-plugin`
 header are not a security boundary for that code. They ship in the image and
 are reviewed with the rest of the application.
@@ -100,7 +100,7 @@ each request against the plugin's grants and forwards it with a plugin-specific
 token. The server gives that token nothing but a few read-only aggregate routes
 for the tables the manifest lists, and the plugin's own `/p/<id>/` routes. Every
 other route, including sign-in, refresh, export, erase and plugin management, is
-refused for it. A hostile-plugin test suite attempts about 140 escapes, and a
+refused for it. A hostile-plugin test suite attempts about 150 escapes, and a
 remote-origin test drives a real build through the integrity pin, in Chromium on
 every pull request.
 
@@ -115,6 +115,14 @@ every pull request.
   application role and lose the manifest's table limits. Row-level security still
   holds: such a statement reads no other user's rows. A report of that is a known
   limitation, not a vulnerability.
+- **A page frame can draw over its own page.** While a plugin page has a modal
+  dialog open, the host lifts the page's frame over the visible part of the
+  content area so the dialog fills the window. The frame asks for that with a
+  message and the host does not check that a dialog is open, so a hostile page can
+  ask for it, rate limited, and draw over the rest of the content area. The lift
+  never covers the navigation or the phone's top bar, ends when the frame says it
+  is done, goes away or the person leaves the page, and a widget frame's request is
+  ignored. It gives the frame no new access to data.
 - **A plugin keeps what it is granted.** A plugin can read what its grants allow
   and what the host tells it about the session (the user's email and id). The
   grant, not the sandbox, limits what it can learn.

@@ -53,7 +53,7 @@ module documentation (`@stable` or `@experimental`).
 | `@wickermoney/plugin-sdk/money` | stable | Exact money arithmetic on decimal strings | The web app, the Budgets, Insights and Spending Trends plugins, and the API's tests |
 | `@wickermoney/plugin-sdk/server` | stable | The server-side contract between the host and a bundled plugin's `register` function | The API, Budgets and Import CSV |
 | `@wickermoney/plugin-sdk/date` | stable | The `addDays` and `addMonths` calendar helpers | The API, the web app and Budgets |
-| `@wickermoney/plugin-sdk/isolated` | experimental | The runtime contract for UI plugins that run in a sandboxed frame: protocol, validators, in-frame client. Stays experimental until the isolation work has shipped and settled | The web app's frame host and broker. The Insights and Spending Trends plugins run in a frame but are written against `/runtime`, unchanged |
+| `@wickermoney/plugin-sdk/isolated` | experimental | The runtime contract for UI plugins that run in a sandboxed frame: protocol, validators, in-frame client. Stays experimental until the isolation work has shipped and settled | The web app's frame host and broker. Insights, Spending Trends, Upcoming, Forecast and Debt payoff run in a frame but are written against `/runtime`, unchanged |
 | `@wickermoney/plugin-sdk/recurrence` | experimental | Recurring-item date maths and projections. It still re-exports `addDays` and `addMonths` so older imports work; import them from `/date` | The API and the web app. No plugin uses the projections yet |
 
 The root also re-exports the `/date`, `/recurrence`, `/money` and `/server` exports. It does
@@ -293,7 +293,7 @@ What differs from the in-realm `ctx.api`:
 - There is no `localStorage`, cookie or network of its own in the frame. A widget frame
   clips overlays, so a widget that needs a dialog should `navigate` to its page, whose
   frame is full height. A page's modal `<dialog>` (opened with `showModal()`) is lifted over
-  the window by the host while it is open (`modal`, `modal-layout`, below); nothing in the
+  the window by the host while it is open (`modal`, `modal-layout`, in the table above); nothing in the
   plugin has to ask. Protocol 1 has no host-rendered dialog.
 - A `<form>` works: the frame has no `allow-forms`, so the runtime dispatches `submit` itself
   on a submit-button click or Enter. Nothing is navigated.

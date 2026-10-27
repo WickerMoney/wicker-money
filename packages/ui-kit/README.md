@@ -97,9 +97,9 @@ styles the detail row itself (`.wm-table__detail`); the cells in it carry no
 
 > **Stability: experimental.** `ToastProvider`, `ToastViewport`, `useToast` and
 > their types may change in any 0.x minor release, and they are **for the core
-> app only until the plugin path ships**. A plugin's copy of this package has no
-> provider, so `useToast()` throws there with a message saying so; plugins will
-> get `ctx.notify` in a later release. Every other export, apart from
+> app only until a plugin path exists**. A plugin's copy of this package has no
+> provider, so `useToast()` throws there with a message saying so; the plugin
+> SDK has a reserved `notify` message but no host answers it yet. Every other export, apart from
 > `Table`'s `rowDetail`, keeps the "Pre-1.0" rule above.
 
 A toast reports the result of a discrete action ("Deleted 'Coffee'."). State
