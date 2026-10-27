@@ -35,7 +35,7 @@ test.describe('fresh stack', () => {
     const hero = await api('hero')
     const plugins = await listPlugins(hero)
     expect(plugins.filter((p) => p.bundled).map((p) => p.id)).toEqual(
-      expect.arrayContaining(['wickermoney.insights', 'wickermoney.budgets', 'wickermoney.forecast']),
+      expect.arrayContaining(['wickermoney.insights', 'wickermoney.budgets', 'wickermoney.forecast', 'wickermoney.debt-payoff']),
     )
   })
 })
@@ -54,6 +54,17 @@ test.describe('sign-in and the pages that matter', () => {
     // "<plugin name> · <page title>".
     const frame = page.frameLocator('iframe[title="Forecast · Forecast"]')
     await expect(frame.getByRole('heading', { level: 1, name: 'Forecast' })).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    expectNoProblems(seen)
+  })
+
+  test('household reaches the debt payoff page, which runs in a frame', async ({ page, signIn, watch }) => {
+    await signIn('household')
+    const seen = watch()
+    await page.locator('nav a[href="/p/wickermoney.debt-payoff/debt-payoff"]').first().click()
+    // Debt payoff is an isolated plugin too: its heading is inside the sandboxed frame.
+    const frame = page.frameLocator('iframe[title="Debt Payoff · Debt payoff"]')
+    await expect(frame.getByRole('heading', { level: 1, name: 'Debt payoff' })).toBeVisible()
     await page.waitForLoadState('networkidle')
     expectNoProblems(seen)
   })

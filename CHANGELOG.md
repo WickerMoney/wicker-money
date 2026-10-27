@@ -70,6 +70,7 @@ curated, human-readable version.
   starts when the frame is created and stops while the tab is hidden, so a tab in
   the background no longer fails a widget. Find-in-page and printing only see
   frames that have started.
+- **Debt payoff runs in a sandboxed plugin frame.** The "Debt payoff" page and the "Debt-free date" widget no longer run in the app's own page; they read and write through the host's broker with only the plugin's own routes. The page looks and behaves as before, including the add, edit and remove dialogs: while one is open the page's frame fills the window next to the navigation, the page stays where it was, the window does not scroll, Tab stays in the dialog and Escape returns focus to the button that opened it. Forms inside a plugin frame now submit (the frame's sandbox has no `allow-forms`, so the frame runtime sends the `submit` event itself).
 - **Upcoming runs in a sandboxed frame.** The "Until payday" widget no longer runs in the app's own page; it reads through the host's broker with only its two read grants, and its upcoming list scrolls inside the widget.
   
 ### Added

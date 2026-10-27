@@ -1,5 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import type { FocusDirection, HostConnection, IsolatedState } from '@wickermoney/plugin-sdk/isolated'
+import { startFormSubmit } from './formSubmit.js'
+import { ModalLift } from './modalLift.js'
 
 /** Props for {@link FrameApp}. */
 export interface FrameAppProps {
@@ -36,6 +38,14 @@ export function FrameApp({ connection, Plugin }: FrameAppProps) {
     if (root === null) return undefined
     return connection.observeSize(root)
   }, [connection])
+
+  // The sandbox has no allow-forms, so the browser never submits a form; the runtime sends the submit event itself.
+  useEffect(() => startFormSubmit(), [])
+
+  // A modal dialog in a page asks the host to lift the frame over the window while it is open (ADR 0015). A widget
+  // frame has nothing to lift: the host would ignore the message, so it is not sent.
+  const isPage = state.kind === 'page'
+  useEffect(() => (isPage ? new ModalLift(connection).start() : undefined), [connection, isPage])
 
   // The host takes focus in from either side.
   useEffect(() => connection.subscribe((change) => {

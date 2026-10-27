@@ -559,6 +559,69 @@ async function phasePageFrame(w: World): Promise<void> {
     reason: `the address stayed ${new URL(url1).pathname}; the host's theme stayed ${String(themeAfter)} and --wm-bg ${bgAfter}`,
     pass: url0 === url1 && themeBefore === themeAfter && bgAfter !== 'red' && w.apiLog.withMarker('page-route').length === 0, detail: { odd, url0, url1, themeBefore, themeAfter },
   })
+
+  // The one message that moves the frame: `modal` (ADR 0015). A page that says it has a dialog open, with no dialog, and a
+  // page that says it over and over. The lift may cover the content area the person is looking at and nothing else.
+  const lift = (): Promise<{ position: string; left: number; top: number; right: number; bottom: number; navRight: number; barBottom: number; vw: number; vh: number; locked: boolean; lifted: number; atNavLink: string | null; atBar: string | null }> => w.page.evaluate(() => {
+    const f = document.querySelector('iframe[title^="Hostile"]')!
+    const r = f.getBoundingClientRect()
+    const nav = document.querySelector('.shell__nav')!.getBoundingClientRect()
+    const bar = document.querySelector('.shell__bar')?.getBoundingClientRect()
+    const link = document.querySelector('.shell__nav a')!.getBoundingClientRect()
+    const hit = document.elementFromPoint(link.left + link.width / 2, link.top + link.height / 2)
+    const barHit = bar === undefined || bar.height === 0 ? null : document.elementFromPoint(bar.left + 10, bar.top + bar.height / 2)
+    return {
+      position: getComputedStyle(f).position, left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom), navRight: Math.round(nav.right),
+      barBottom: bar === undefined ? 0 : Math.round(bar.bottom), vw: innerWidth, vh: innerHeight, locked: document.documentElement.hasAttribute('data-wm-frame-modal'),
+      lifted: document.querySelectorAll('[data-lifted]').length, atNavLink: hit === null ? null : (hit.closest('a')?.getAttribute('href') ?? hit.tagName),
+      atBar: barHit === null ? null : (barHit.tagName === 'IFRAME' ? 'IFRAME' : 'host'),
+    }
+  })
+  await boot(w, 'page')
+  await call(w, 'takePort')
+  await call(w, 'rawMessages', [{ type: 'modal', open: true }])
+  await sleep(500)
+  const lied = await lift()
+  add({
+    id: 'page-modal-lift-bounds', group: 'page frame', title: 'a page frame says a modal dialog is open when none is (modal, open: true)', expected: 'contained',
+    reason: `the host lifts it over the content area only: from x ${lied.left} (navigation ends at ${lied.navRight}) to ${lied.right} of ${lied.vw}, y ${lied.top} to ${lied.bottom} of ${lied.vh}; the first nav link is still the element at its centre (${String(lied.atNavLink)})`,
+    pass: lied.position === 'fixed' && lied.left >= lied.navRight && lied.right <= lied.vw && lied.top >= lied.barBottom && lied.bottom <= lied.vh && lied.atNavLink !== null && lied.atNavLink !== 'IFRAME' && lied.atBar !== 'IFRAME', detail: lied,
+  })
+  // The person can always leave: a click on the navigation goes through, and the lift and the scroll lock go with the page.
+  await w.page.locator('.shell__nav a[href="/accounts"]').first().click()
+  await w.page.waitForURL('**/accounts')
+  await sleep(300)
+  const left = await w.page.evaluate(() => ({ locked: document.documentElement.hasAttribute('data-wm-frame-modal'), lifted: document.querySelectorAll('[data-lifted]').length, frames: document.querySelectorAll('iframe[title^="Hostile"]').length }))
+  add({
+    id: 'page-modal-can-leave', group: 'page frame', title: 'the same lifted frame: the person clicks a link in the navigation', expected: 'contained',
+    reason: `the navigation took the click (now ${new URL(w.page.url()).pathname}); scroll lock ${left.locked ? 'still set' : 'released'}, ${left.lifted} lifted, ${left.frames} hostile frames left`,
+    pass: new URL(w.page.url()).pathname === '/accounts' && !left.locked && left.lifted === 0 && left.frames === 0, detail: left,
+  })
+  // Spam: the host answers open requests at a few a second and strikes the rest; closing is never limited.
+  await boot(w, 'page')
+  await call(w, 'takePort')
+  await call(w, 'rawMessages', Array.from({ length: 40 }, (_, i) => ({ type: 'modal', open: i % 2 === 0 })))
+  await call(w, 'rawMessages', [{ type: 'modal', open: false }]).catch(() => undefined)
+  await sleep(500)
+  const ms = await (async () => { const t = Date.now(); await w.page.evaluate(() => 1); return Date.now() - t })()
+  const spam = await lift().catch(() => null)
+  add({
+    id: 'page-modal-spam', group: 'page frame', title: 'a page frame sends 40 modal messages, open and close alternately, then close', expected: 'broker-refusal',
+    reason: `the host still answers in ${ms} ms; afterwards the frame is ${spam === null ? 'gone (the host struck it)' : spam.position === 'fixed' ? 'still lifted' : 'back in the page'}, scroll lock ${spam?.locked === true ? 'set' : 'released'}`,
+    pass: ms < 1500 && (spam === null || (spam.position !== 'fixed' && !spam.locked && spam.lifted === 0)), detail: { ms, spam },
+  })
+  // A widget frame has nothing to lift: modal from a widget is ignored.
+  await boot(w, 'dashboard')
+  await call(w, 'takePort')
+  const wmark = await w.page.evaluate(() => document.querySelector('iframe[title^="Hostile"]')!.getBoundingClientRect().toJSON())
+  await call(w, 'rawMessages', [{ type: 'modal', open: true }])
+  await sleep(500)
+  const wafter = await w.page.evaluate(() => ({ r: document.querySelector('iframe[title^="Hostile"]')!.getBoundingClientRect().toJSON(), locked: document.documentElement.hasAttribute('data-wm-frame-modal'), lifted: document.querySelectorAll('[data-lifted]').length, pos: getComputedStyle(document.querySelector('iframe[title^="Hostile"]')!).position }))
+  add({
+    id: 'widget-modal-ignored', group: 'page frame', title: 'a widget frame sends modal, open: true', expected: 'broker-refusal',
+    reason: `the widget stayed where it was (position ${wafter.pos}, ${wafter.lifted} lifted), scroll lock ${wafter.locked ? 'set' : 'not set'}`,
+    pass: wafter.pos === 'static' && !wafter.locked && wafter.lifted === 0 && Math.abs(wafter.r.top - wmark.top) < 2, detail: { wmark, wafter },
+  })
 }
 
 // ---------------------------------------------------------------------------

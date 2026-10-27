@@ -994,10 +994,10 @@ Consequences for contributors:
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
   (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights`,
-  `spending-trends`, `upcoming` and `forecast` have been ported and run in frames.
-  The other three bundled plugins (`budgets`, `import-csv`, `debt-payoff`) are
-  still listed and run in the page, fully trusted. The list shrinks as plugins
-  are ported.
+  `spending-trends`, `upcoming`, `forecast` and `debt-payoff` have been ported and
+  run in frames. The other two bundled plugins (`budgets`, `import-csv`) are still
+  listed and run in the page, fully trusted. The list shrinks as plugins are
+  ported.
 
 ### Isolated plugin frames
 
@@ -1064,13 +1064,25 @@ sequenceDiagram
   host moves focus past the iframe (`focusAround`). (Cancelling the key and always
   asking the host, as this did first, traps a keyboard user when the frame is the
   last thing on the page, as a page frame is.) `focus-in` goes the other way.
-- **Dialogs and overlays.** Protocol 1 has no host-rendered dialog (the decision
-  recorded with the protocol). A dialog inside a widget frame is clipped by the
-  frame, so a widget that needs one navigates to a page (`navigate`). A page
-  frame is as tall as the page, so a `position: fixed` dialog in it is centred on
-  the frame, which may be well below the window: a page that needs a dialog
-  needs a host-rendered one (decision record 0014). The broker ignores a `dialog`
-  message like any unknown type.
+- **Dialogs and overlays.** Protocol 1 has no host-rendered dialog. A dialog
+  inside a widget frame is clipped by the frame, so a widget that needs one
+  navigates to a page (`navigate`). A page frame is as tall as the page, so a
+  modal `<dialog>` in it would be placed against the frame, which may be well
+  below the window. A page needs no code for this: while a modal dialog is open
+  the frame says so (`modal`), and the host lifts the iframe to a fixed layer over
+  the content area (never over the navigation or the phone bar), locks the window
+  scroll, and tells the frame where its page sits so the page stays where it was
+  on screen (`modal-layout`). The frame also keeps Tab inside the dialog (the
+  browser would move on to the host's controls) and stops `showModal()` scrolling
+  the host. A widget's `modal` is ignored, opens are rate limited, and a host
+  that predates it shows the dialog against the frame (decision record 0015). Only
+  `<dialog>` + `showModal()` is lifted; a hand-made `position: fixed` overlay is
+  not.
+- **Forms.** The frame's sandbox has no `allow-forms`, so the browser blocks every
+  form submission before the `submit` event fires. The frame runtime (`formSubmit`)
+  takes over a click on a submit button and Enter in a field, checks the form's
+  constraints, and dispatches `submit` on the form itself, so a React `onSubmit`
+  works unchanged. Nothing is submitted or navigated; the sandbox is not widened.
 - **Page frames.** A plugin page runs in a frame the same way (`MountedPage`, a
   `kind=page` frame, never lazy). The frame is as tall as its content (240 to
   20 000 px) and the host page scrolls; the frame never scrolls on its own

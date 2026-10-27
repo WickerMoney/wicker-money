@@ -62,7 +62,7 @@ function rig(opts: {
   })
   const send = vi.fn(opts.send ?? (async () => ({ rows: [] })))
   const api: BrokerApi = { mint, send }
-  const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onFatal: vi.fn() }
+  const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onFatal: vi.fn() }
   const cache = new ResponseCache({ now: () => clock.t })
   const state = { user: 'u1' as string | null }
   const broker = new PluginBroker({
@@ -233,6 +233,33 @@ describe('host commands', () => {
     const r = rig()
     for (let i = 0; i < 10; i++) r.port.frame({ type: 'navigate', path: `/x${i}` })
     expect(r.handlers.onNavigate).toHaveBeenCalledTimes(3)
+  })
+
+  it('passes modal open and close to the handler', () => {
+    const r = rig()
+    r.port.frame({ type: 'modal', open: true })
+    r.port.frame({ type: 'modal', open: false })
+    expect(r.handlers.onModal.mock.calls).toEqual([[true], [false]])
+  })
+
+  it('limits how fast a frame can open a modal, and never limits closing one', () => {
+    const r = rig()
+    for (let i = 0; i < 12; i++) {
+      r.port.frame({ type: 'modal', open: true })
+      r.port.frame({ type: 'modal', open: false })
+    }
+    expect(r.handlers.onModal.mock.calls.filter(([open]) => open === true)).toHaveLength(4)
+    // Every close got through, so a lift is always ended.
+    expect(r.handlers.onModal.mock.calls.filter(([open]) => open === false)).toHaveLength(12)
+    // The refused opens count as strikes; the connection survives a burst this size.
+    expect(r.handlers.onFatal).not.toHaveBeenCalled()
+  })
+
+  it('treats a malformed modal message as a strike, not a command', () => {
+    const r = rig()
+    r.port.frame({ type: 'modal', open: 'yes' })
+    r.port.frame({ type: 'modal' })
+    expect(r.handlers.onModal).not.toHaveBeenCalled()
   })
 
   it('sends host messages to the frame', () => {

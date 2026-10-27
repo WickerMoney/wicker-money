@@ -50,6 +50,11 @@ export interface FrameEvents {
   onNavigate(path: string): void
   /** Focus left the frame; the host should move it past the iframe. */
   onFocusOut(direction: FocusDirection): void
+  /**
+   * A page frame has a modal dialog open (`true`) or the last one closed. Only ever called for a page, and with
+   * `false` when the frame's connection is replaced or it fails, so a lift is always ended.
+   */
+  onModal(open: boolean): void
 }
 
 /** Everything a {@link FrameController} needs. */
@@ -134,6 +139,8 @@ export class FrameController {
         onResize: (height) => { options.events.onHeight(this.clamp(height)) },
         onNavigate: (path) => { options.events.onNavigate(path) },
         onFocusOut: (direction) => { options.events.onFocusOut(direction) },
+        // A widget frame is a card in a grid: it has nothing to lift, so its message is ignored.
+        onModal: (open) => { if (options.kind === 'page') options.events.onModal(open) },
         onFatal: (reason) => { this.fail(reason) },
       },
     })
@@ -196,6 +203,8 @@ export class FrameController {
       this.fail('This plugin needs a different version of Wicker Money.')
       return
     }
+    // A frame that says hello again has lost whatever it had open.
+    this.options.events.onModal(false)
     const channel = new MessageChannel()
     if (!this.broker.attach(channel.port1, () => this.makeInit())) {
       channel.port1.close()
@@ -241,6 +250,7 @@ export class FrameController {
     this.ready = false
     this.stopTimer()
     this.broker.dispose()
+    this.options.events.onModal(false)
     this.options.events.onState({ status: 'failed', reason })
   }
 
@@ -301,6 +311,12 @@ export class FrameController {
     if (path === this.path) return
     this.path = path
     if (this.ready) this.broker.send({ type: 'route', path })
+  }
+
+  /** Tells a page frame where its page sits while it is lifted for a modal dialog (`ModalLayoutMessage`). */
+  setModalLayout(layout: { readonly lifted: boolean; readonly x: number; readonly y: number; readonly width: number }): void {
+    if (!this.ready) return
+    this.broker.send({ type: 'modal-layout', ...layout })
   }
 
   /** Moves keyboard focus into the frame: its `first` or `last` focusable element. */

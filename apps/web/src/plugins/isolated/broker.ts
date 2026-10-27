@@ -12,7 +12,7 @@ import type { BrokerApi } from './brokerApi.js'
 import { RateLimiter } from './RateLimiter.js'
 
 /** The message types a frame may send. Anything else is ignored, not punished: a newer plugin may send more. */
-const KNOWN_TYPES: ReadonlySet<string> = new Set(['ready', 'request', 'cancel', 'navigate', 'resize', 'focus-out', 'notify'])
+const KNOWN_TYPES: ReadonlySet<string> = new Set(['ready', 'request', 'cancel', 'navigate', 'resize', 'focus-out', 'modal', 'notify'])
 
 /** Tunables for {@link PluginBroker}; each has a default chosen for a dashboard widget that reads aggregates. */
 export interface BrokerLimits {
@@ -56,6 +56,8 @@ export interface BrokerHandlers {
   onNavigate(path: string): void
   /** Focus left the frame past its last (`next`) or before its first (`previous`) element. */
   onFocusOut(direction: FocusDirection): void
+  /** A modal dialog is open in the frame (`true`) or the last one closed. Opening is rate limited; closing never is. */
+  onModal(open: boolean): void
   /** The connection was cut off for a reason a person should be told. The broker has already disposed itself. */
   onFatal(reason: string): void
 }
@@ -126,6 +128,8 @@ export class PluginBroker {
   private readonly granted: ReadonlySet<string>
   private readonly limiter: RateLimiter
   private readonly navigations: RateLimiter
+  /** Opening a modal lifts the frame over the window, so a frame may not do it in a loop. Closing is never limited. */
+  private readonly modals: RateLimiter
   private readonly pending = new Map<number, AbortController>()
   private port: MessagePort | null = null
   private makeInit: (() => InitMessage) | null = null
@@ -145,6 +149,7 @@ export class PluginBroker {
     this.granted = new Set(options.manifest.requiredTables.map((g) => g.table))
     this.limiter = new RateLimiter(this.limits.burst, this.limits.perSecond, this.now)
     this.navigations = new RateLimiter(3, 1, this.now)
+    this.modals = new RateLimiter(4, 2, this.now)
     this.strikeWindowStart = this.now()
     this.handshakeWindowStart = this.now()
   }
@@ -282,6 +287,10 @@ export class PluginBroker {
         else this.strike()
         return
       case 'focus-out': handlers.onFocusOut(message.direction); return
+      case 'modal':
+        if (!message.open || this.modals.tryTake()) handlers.onModal(message.open)
+        else this.strike()
+        return
       case 'notify':
         // Reserved: no host implements `notify` yet (ADR 0005, question 5).
         this.reply(from, message.id, {

@@ -14,6 +14,7 @@ import type {
   HostTheme,
   InitMessage,
   LocaleMessage,
+  ModalLayoutMessage,
   NotifyMessage,
   PluginMessage,
   PluginRequestCache,
@@ -40,7 +41,7 @@ export interface IsolatedState {
 }
 
 /** A change the host pushed after `init`. `state` already reflects it by the time listeners run. */
-export type HostChange = ThemeMessage | LocaleMessage | PropsMessage | RouteMessage | FocusInMessage
+export type HostChange = ThemeMessage | LocaleMessage | PropsMessage | RouteMessage | FocusInMessage | ModalLayoutMessage
 
 /** The live link between a plugin frame and the host. */
 export interface HostConnection {
@@ -69,6 +70,12 @@ export interface HostConnection {
    * @returns A function that stops observing. `dispose()` stops it too.
    */
   observeSize(element: ObservedElement, observer?: ResizeObserverCtor): () => void
+  /**
+   * Tells the host that a modal dialog is open in this page frame, or that the last one closed, so it can lift the
+   * frame over the window while one is open (see `ModalMessage`). Pages only; a host ignores it from a widget, and
+   * one that does not know it ignores it too. Repeats of the same state are not sent.
+   */
+  modal(open: boolean): void
   /** Tells the host that focus left the frame, past its last (`next`) or before its first (`previous`) focusable element. */
   focusOut(direction: FocusDirection): void
   /**
@@ -236,6 +243,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
   const pending = new Map<number, Pending>()
   let nextId = 1
   let lastHeight = -1
+  let lastModal = false
   let closed = false
   /** Stop functions of the `observeSize` calls still running, so `dispose` can end them. */
   const sizeObservers = new Set<() => void>()
@@ -353,6 +361,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
         state = { ...state, path: msg.path }
         return emit(msg)
       case 'focus-in':
+      case 'modal-layout':
         return emit(msg)
       case 'init':
         return // a second init is ignored; the first one defines the frame
@@ -384,6 +393,11 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
       const stop = (): void => { clearInterval(timer); ro?.disconnect(); sizeObservers.delete(stop) }
       sizeObservers.add(stop)
       return stop
+    },
+    modal(open) {
+      if (open === lastModal) return
+      lastModal = open
+      post({ type: 'modal', open })
     },
     focusOut: (direction) => { post({ type: 'focus-out', direction }) },
     notify: (level, message) =>

@@ -26,7 +26,7 @@ html[data-wm-frame="page"] {
 
 /*
  * The host's own stylesheet does not reach a frame, and it has one rule written for plugin pages
- * (`.shell__main .wm-surface__body` in app.css): below the phone breakpoint a wide table inside a card scrolls
+ * (`.shell__main .wm-surface__body` in app.css) and one for checkboxes: below the phone breakpoint a wide table inside a card scrolls
  * inside the card. Without it a table wider than the frame is clipped by the iframe, with no scrollbar to reach it.
  * The host breakpoint is a window width of 860 px; the page frame is 24 px narrower than the window there (the
  * content area's side padding), and media queries in a frame see the frame's width, so the same point is 836 px.
@@ -35,4 +35,29 @@ html[data-wm-frame="page"] {
   html[data-wm-frame="page"] .wm-surface__body {
     overflow-x: auto;
   }
+  /* The host makes checkboxes 20 px for a thumb in its content area (app.css); a page frame needs the same. */
+  html[data-wm-frame="page"] input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/*
+ * A modal dialog in a page frame (ModalLift, ADR 0015). A page frame is as tall as its content, so a modal
+ * `<dialog>` is placed against the frame, not the window. While one is open the host lifts the iframe over the
+ * visible part of the content area and tells the frame where its page sits in it; the dialog then fills what the
+ * person sees, and the page is drawn where it was, dimmed behind the backdrop.
+ *
+ * `pending`: the host has been asked and has not answered yet. The dialog is held invisible, and its backdrop
+ * clear, so nothing is drawn against the frame for the moment the lift takes. `lifted`: the page is shifted to
+ * where it was on screen, at the width it had, so it does not reflow. `inplace`: no answer came, and the dialog is
+ * shown against the frame, as it is in a host that predates the lift.
+ */
+html[data-wm-modal="pending"] dialog:modal { opacity: 0; }
+html[data-wm-modal="pending"] dialog:modal::backdrop { background: transparent; }
+html[data-wm-modal="lifted"] body {
+  position: relative;
+  left: var(--wm-lift-x, 0px);
+  top: var(--wm-lift-y, 0px);
+  width: var(--wm-lift-width, auto);
 }

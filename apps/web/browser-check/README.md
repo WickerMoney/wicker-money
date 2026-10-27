@@ -61,6 +61,19 @@ the live regions in the frame's accessibility tree; the frame canvas and the the
 flash of the other scheme; the Tab and Shift+Tab sequence against the in-realm page; and time, memory and bytes against the
 in-realm page, alternating (`SAMPLES`, `MODES=in-realm` with `WEB_DIST_DIR` for an earlier build).
 
+## Debt payoff check (`debtPayoff.ts`)
+
+`debtPayoff.ts` checks the Debt payoff page and widget in frames, with the writes and the dialogs (same setup and run command
+as the Forecast check). `ONLY=load,writes,dialog,a11y,visual,measure` runs some groups. `writes` drives every write through
+the broker (create and update with `extraPayment`, the "In plan" switch as `PUT`, archive, delete, the shared extra in the
+settings, a field error from the server, the 50-debt limit) and records each request's method, path, body size and status.
+`dialog` opens the dialog with the window scrolled down a 2 900 px frame and checks that the window does not move, that the
+dialog fills the window and the page stays where it was, scroll lock, Tab and Shift+Tab, Escape, a click on the backdrop,
+focus return, the theme switch, a resize and leaving with the dialog open, then the same at phone width. `a11y` runs axe on the
+host and the frame (and with the dialog open), the Tab order against the in-realm page, and the live regions. `measure` is the
+alternating before/after as in the Forecast check; its RSS counts every Chromium on the machine, so it is only meaningful on a
+quiet one. The hostile suite's page-frame phase covers what a page that lies about `modal` can do.
+
 ## Toast check
 
 `toast.ts` checks the notification toast (ADR 0009) with no API or database: it

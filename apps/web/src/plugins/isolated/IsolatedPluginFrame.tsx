@@ -8,6 +8,7 @@ import { hostBrokerApi, type BrokerApi } from './brokerApi.js'
 import { focusAround } from './focusAround.js'
 import { FrameController, HEIGHT_LIMITS, PLACEHOLDER_HEIGHT, type FrameState } from './FrameController.js'
 import { frameUrl } from './frameUrl.js'
+import { PageFrameLift } from './pageFrameLift.js'
 import { useNearViewport } from './useNearViewport.js'
 
 /** Props for {@link IsolatedPluginFrame}. */
@@ -84,6 +85,11 @@ export function IsolatedPluginFrame({
     if (!started || iframe === null) return undefined
     setState({ status: 'loading' })
     const { size: s, range: r, path: p } = live.current
+    const root = rootRef.current
+    // Pages only: a modal dialog in a page frame lifts it over the window while it is open (ADR 0015).
+    const lift = kind === 'page' && root !== null
+      ? new PageFrameLift({ iframe, root, send: (layout) => { controllerRef.current?.setModalLayout(layout) } })
+      : null
     setHeight(s !== undefined && kind === 'widget' ? PLACEHOLDER_HEIGHT[s] : HEIGHT_LIMITS[kind].min)
     const controller = new FrameController({
       iframe, manifest, userId, email, timezone, kind, api,
@@ -97,12 +103,14 @@ export function IsolatedPluginFrame({
         onHeight: setHeight,
         onNavigate: (to) => { live.current.ctx.navigate(to) },
         onFocusOut: (direction) => { focusAround(iframe, direction === 'next' ? 'next' : 'previous') },
+        onModal: (open) => { if (open) lift?.lift(); else lift?.release() },
       },
     })
     controllerRef.current = controller
     // The listener exists before the frame can say hello: the source is set last.
     iframe.src = frameUrl({ pluginId: manifest.id, remoteEntry: manifest.remoteEntry, module, kind, integrity: manifest.integrity })
     return () => {
+      lift?.dispose()
       controller.dispose()
       controllerRef.current = null
       iframe.removeAttribute('src')
