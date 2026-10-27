@@ -16,6 +16,12 @@ export function makeDebt(over: Partial<Debt> = {}): Debt {
     archived: false,
     included: true,
     extraPayment: '0.0000',
+    repaymentStartsOn: null,
+    promoApr: null,
+    promoEndsOn: null,
+    promoDeferredInterest: false,
+    promoInterestBase: 'original',
+    compounding: 'monthly',
     ...over,
   }
 }

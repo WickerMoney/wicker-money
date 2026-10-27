@@ -62,6 +62,24 @@ curated, human-readable version.
   
 ### Added
 
+- **Debt payoff: loans in deferment.** A debt can have a repayment start date.
+  Until the first month on or after it, no minimum is due, the extra money skips
+  the debt (only an amount set on that debt can pay it early) and interest keeps
+  adding to its balance. Its minimum joins the monthly payment when it starts, so
+  the monthly amount can rise. The plan page says what the loan will owe by then.
+- **Debt payoff: promotional rates and deferred interest.** A debt can have a
+  promotional rate and the day it ends. With "interest is charged back" ticked,
+  the plan pays that debt, before spreading the rest, the even amount that clears
+  it by the end date, as far as your monthly payment allows. If it still falls
+  short, the page says how much interest back to the start would be added (on the
+  original balance or the falling one, your choice; the original is the default)
+  and how much more a month would clear it in time. This is an estimate; check
+  your agreement.
+- **Debt payoff: how interest is worked out, per debt.** Monthly (as before),
+  compounded daily, or simple daily interest, which charges on what you borrowed
+  and adds it to the balance when repayment starts. Daily options use the real
+  number of days between payment dates. Debts that use none of this get exactly
+  the plan they got before.
 - **`Table` can show a detail row under a row** (`@wickermoney/ui-kit`,
   experimental): the optional `rowDetail(row)` prop renders a full-width row
   directly under the row it belongs to. `IconButton` also draws a `link` icon.
@@ -113,6 +131,10 @@ curated, human-readable version.
 
 ### Fixed
 
+- **A hovered primary button keeps its colours.** The neutral hover rule
+  out-ranked the primary variant, so every primary button turned light grey
+  under its light text on hover (contrast 1.1:1); it now keeps its accent
+  background.
 - **Phone layout: text buttons overlapped their neighbours.** On a phone,
   "Match…" in the Transactions recurring column sat on top of the line below it,
   and "Unmatch" touched the date before it; the Recurring page's "Undo" had no
@@ -148,15 +170,21 @@ curated, human-readable version.
 
 ### Migrations
 
-One new migration, so an upgrade runs one more step. **Back up your database
-before upgrading** (`pg_dump -Fc`); going back is `node dist/db/cli.js down` once
-with the newer image, then start the older image.
+Two new migrations, so an upgrade runs two more steps. **Back up your database
+before upgrading** (`pg_dump -Fc`); going back is `node dist/db/cli.js down` twice
+with the newer image (once per migration), then start the older image.
 
 - **034_debt_payoff_plan_controls** adds `included boolean not null default true`
   and `extra_payment numeric(19,4) not null default 0` (never negative) to
   `plugin_debt_payoff.debts`. Existing debts are all in the plan with no extra, so
   nothing changes until you use them. Its `down` drops both columns, which
   discards any switch and extra amounts you set.
+- **035_debt_payoff_timelines** adds six columns to `plugin_debt_payoff.debts`:
+  `repayment_starts_on`, `promo_apr` and `promo_ends_on` (nullable, the last two
+  set together), `promo_deferred_interest`, `promo_interest_base` and
+  `compounding`, each with a default that leaves today's behaviour. Checks refuse
+  a half promotion, deferred interest without one, and unknown options. Its `down`
+  drops the six columns, which discards what you set in them.
 
 ## [0.6.1] - 2026-10-23
 

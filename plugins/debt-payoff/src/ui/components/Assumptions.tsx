@@ -38,6 +38,23 @@ export function Assumptions({ plan, formatDate }: AssumptionsProps) {
         keep that money working.
       </li>
       <li>
+        <strong>Deferred loans:</strong> a debt with a repayment start date owes no minimum until the first month
+        whose payment date falls on or after it. Until then interest keeps adding to its balance and the extra money
+        skips it (only an amount set on that debt can pay it early). Its minimum joins the monthly payment when it
+        starts.
+      </li>
+      <li>
+        <strong>Promotional rates:</strong> a debt uses its promotional rate through the last payment on or before
+        the promotion's end date. With interest charged back if not paid off, the plan first pays that debt the even
+        amount that would clear it in time, out of your monthly payment, then spreads the rest. If the payment cannot
+        cover it, the interest at the standard rate for the whole promotion is added in the last month, on the
+        original balance or the falling one as you chose.
+      </li>
+      <li>
+        <strong>How interest is worked out:</strong> monthly unless a debt says otherwise. Daily compounding and
+        simple daily interest use the real number of days between payment dates.
+      </li>
+      <li>
         <strong>Left out:</strong> a debt with "In plan" switched off stays in your list but is not counted anywhere:
         not in the dates, the totals, the order, or the money that moves on when another debt is paid off.
       </li>
@@ -46,7 +63,7 @@ export function Assumptions({ plan, formatDate }: AssumptionsProps) {
         avalanche by highest rate.
       </li>
       <li>
-        <strong>Not modelled:</strong> new spending, fees, rate changes and promotional rates. The plan stops after{' '}
+        <strong>Not modelled:</strong> new spending, fees and rate changes. The plan stops after{' '}
         {plan === null ? '50 years' : durationText(plan.monthLimit)}.
       </li>
     </ul>
