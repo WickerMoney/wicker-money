@@ -98,6 +98,25 @@ AXE_PATH=/path/to/axe.min.js pnpm --filter @wickermoney/web test:toast:pages
 It changes the seeded data (edits and deletes rows of `hero`), so reseed with `seed:reset` to run it again from the same
 state. Run it from the repo root with the `.env` the Insights check uses; `SHOTS_DIR=dir` keeps screenshots.
 
+## Feedback check (`feedback.ts`)
+
+`feedback.ts` checks the toasts that Accounts, Categories and Settings raise (ADR 0009) with no API or database. It
+builds `feedback-harness/` (the real `AppShell`, the real pages, `app.css` and ui-kit, a stand-in account menu and a fake
+sign-in) and answers the API itself with Playwright route handlers, so the page's own handlers raise a real toast through
+the real provider, banner and announcer. At desktop and 390 px, light and dark, it raises a toast from the safe-to-spend
+checkbox and from a refusal of it, from disabling a category, and from the time zone, a plugin switch, a role change and
+the export (after its password dialog has closed). For each it checks the text, that it is announced once in the banner
+and that the old page banner is empty; it runs axe with the toasts showing, presses Escape on a toast, and reports where
+keyboard focus is afterwards (the time zone Save button disables itself, which used to send focus to the page).
+
+```
+AXE_PATH=/path/to/axe.min.js pnpm --filter @wickermoney/web test:feedback
+```
+
+`SHOTS_DIR` keeps screenshots and `BROWSER_CHECK_OUT` the report. The table controls on these pages are disabled
+while a request runs, which sends focus to `<body>` in Chromium; the check records that for the safe-to-spend
+checkbox as a note rather than a failure.
+
 ## Lazy frames (`lazyFrames.ts`)
 
 `MODE=check` (default) drives the seeded dashboard (as for the Insights check) and verifies that a frame below the

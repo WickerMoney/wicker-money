@@ -20,10 +20,9 @@ import { useOpeningBalanceFix } from './hooks/useOpeningBalanceFix.js'
  */
 export function AccountsPage() {
   const status = useActionStatus()
-  const [notice, setNotice] = useState<string | null>(null)
   const { accounts, includeArchived, setIncludeArchived, reload } = useAccountList(status)
-  const fix = useOpeningBalanceFix(status, reload, setNotice)
-  const deletion = useAccountDeletion(status, accounts, reload, setNotice)
+  const fix = useOpeningBalanceFix(status, reload)
+  const deletion = useAccountDeletion(status, accounts, reload)
   const [adding, setAdding] = useState(false)
 
   return (
@@ -33,7 +32,6 @@ export function AccountsPage() {
         <Button variant="primary" onClick={() => setAdding(true)}>Add account</Button>
       </div>
       {status.message !== null ? <Alert>{status.message}</Alert> : null}
-      {notice !== null ? <Alert>{notice}</Alert> : null}
 
       <AccountsPanel
         accounts={accounts}

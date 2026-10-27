@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { PluginManifest } from '@wickermoney/plugin-sdk'
 import { MemoryRouter } from 'react-router'
@@ -7,6 +7,8 @@ import { ApiError } from '../../../api/ApiError.js'
 import type { PluginEnabledChange, RegisteredPlugin } from '../../../models/index.js'
 import { AuthCtx } from '../../../auth/authContext.js'
 import { PluginRegistryCtx } from '../../../plugins/registry/pluginRegistryContext.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
+import { findToast, toastTexts } from '../../../testing/toastTexts.js'
 import { deferred } from '../../../testing/deferred.js'
 
 const fetchRegisteredPlugins = vi.fn<() => Promise<RegisteredPlugin[]>>()
@@ -47,7 +49,7 @@ function mount(loaded: readonly PluginManifest[] = [], role: 'owner' | 'member' 
     user: { id: 'u1', email: `${role}@example.com`, timezone: 'UTC', role }, ready: true,
     signIn: vi.fn(), register: vi.fn(), signOut: vi.fn(), setTimezone: vi.fn(), refreshUser: vi.fn(),
   }
-  render(
+  renderWithToasts(
     <MemoryRouter>
       <AuthCtx.Provider value={auth}>
         <PluginRegistryCtx.Provider value={{ plugins: loaded, failures: [], refresh }}>
@@ -117,6 +119,7 @@ describe('PluginsSection, for an owner', () => {
     expect(switchOf('Budgets').getAttribute('aria-checked')).toBe('false')
     expect(within(card('Budgets')).getByText('Disabled')).toBeTruthy()
     expect(screen.getByText('0 of 1 on')).toBeTruthy()
+    expect(await findToast()).toEqual(['Turned off Budgets.'])
   })
 
   it('rolls back and says why when the server refuses', async () => {
@@ -132,6 +135,8 @@ describe('PluginsSection, for an owner', () => {
     expect(switchOf('Forecast').getAttribute('aria-checked')).toBe('false')
     expect(switchOf('Forecast').disabled).toBe(false)
     expect(refresh).not.toHaveBeenCalled()
+    // The refusal stays beside the switch that was used; nothing is announced as done.
+    expect(toastTexts()).toEqual([])
   })
 
   it('clears the error once a retry succeeds', async () => {

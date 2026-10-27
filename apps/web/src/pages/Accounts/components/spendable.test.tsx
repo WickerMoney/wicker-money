@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
 import { makeAccount } from '../../../testing/makeAccount.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
 import { AccountsPanel } from './AccountsPanel.js'
 import { AddAccountForm } from './AddAccountForm.js'
 
@@ -11,7 +12,7 @@ afterEach(() => { vi.restoreAllMocks() })
 
 function panel(accounts = [makeAccount()]) {
   const onChanged = vi.fn(async () => {})
-  render(
+  renderWithToasts(
     <AccountsPanel
       accounts={accounts} includeArchived={false} onIncludeArchivedChange={vi.fn()}
       status={makeStatus()} onChanged={onChanged}
@@ -73,7 +74,7 @@ describe('adding an account', () => {
   it('counts checking by default, not savings, and offers nothing for a card', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({})
     const user = userEvent.setup()
-    render(<AddAccountForm status={makeStatus()} onCreated={vi.fn(async () => {})} />)
+    renderWithToasts(<AddAccountForm status={makeStatus()} onCreated={vi.fn(async () => {})} />)
     const box = () => screen.queryByLabelText('Count toward safe to spend') as HTMLInputElement | null
 
     expect(box()?.checked).toBe(true)

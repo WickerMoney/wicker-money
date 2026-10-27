@@ -1,15 +1,17 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
 import { errorOf } from '../../../testing/errorOf.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
+import { findToast, toastTexts } from '../../../testing/toastTexts.js'
 import { validationFailed } from '../../../testing/validationFailed.js'
 import { AddAccountForm } from './AddAccountForm.js'
 
 function mount() {
   const onCreated = vi.fn(async () => {})
-  render(<AddAccountForm status={makeStatus()} onCreated={onCreated} />)
+  renderWithToasts(<AddAccountForm status={makeStatus()} onCreated={onCreated} />)
   return { onCreated, user: userEvent.setup() }
 }
 
@@ -39,5 +41,17 @@ describe('AddAccountForm', () => {
 
     await waitFor(() => { expect(errorOf('Name')).toBe('Must be 200 characters or fewer.') })
     expect(onCreated).not.toHaveBeenCalled()
+    expect(toastTexts()).toEqual([])
+  })
+
+  it('says which account was added, once the caller has closed the dialog', async () => {
+    vi.spyOn(api, 'post').mockResolvedValue({})
+    const { user, onCreated } = mount()
+
+    await user.type(screen.getByLabelText('Name'), '  Checking ')
+    await user.click(screen.getByRole('button', { name: 'Add account' }))
+
+    expect(await findToast()).toEqual(["Added account 'Checking'."])
+    expect(onCreated).toHaveBeenCalledTimes(1)
   })
 })

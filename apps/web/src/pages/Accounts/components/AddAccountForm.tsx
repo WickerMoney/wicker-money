@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import {
-  Button, Field, FormError, SelectField, formErrorsFrom, hasFormErrors, useFormErrors,
+  Button, Field, FormError, SelectField, formErrorsFrom, hasFormErrors, useFormErrors, useToast,
 } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -9,7 +9,7 @@ import { ACCOUNT_TYPES, SPENDABLE_TYPES } from '../helpers/accountTypes.js'
 
 /** Props for {@link AddAccountForm}. */
 export interface AddAccountFormProps {
-  /** Busy flag and error message shared with the page. */
+  /** Busy flag shared with the page. */
   readonly status: ActionStatus
   /** Called after an account is created so the list can be re-read. */
   readonly onCreated: () => Promise<void>
@@ -24,6 +24,7 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
   const [spendable, setSpendable] = useState(true)
   const canSpend = SPENDABLE_TYPES.includes(type)
   const form = useFormErrors()
+  const toast = useToast()
 
   const changeType = (next: string) => {
     setType(next)
@@ -40,8 +41,11 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
       await api.post('/accounts', {
         name, accountType: type, initialBalance: opening.trim(), spendable: canSpend && spendable,
       })
+      const added = name.trim()
       setName(''); setOpening('0'); changeType('checking')
       await onCreated()
+      // After the dialog has closed: a toast cannot be reached from inside it.
+      toast.show(`Added account '${added}'.`, { kind: 'success', key: 'accounts:add' })
     } catch (e) {
       form.show(formErrorsFrom(e, ['name', 'accountType', 'initialBalance'], 'Could not create the account.'))
     } finally { status.end() }

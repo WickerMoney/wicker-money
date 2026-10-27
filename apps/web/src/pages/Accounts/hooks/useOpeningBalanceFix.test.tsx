@@ -5,6 +5,7 @@ import type { BalancePreview } from '../../../models/index.js'
 import { deferred } from '../../../testing/deferred.js'
 import { makeAccount } from '../../../testing/makeAccount.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { ToastsWrapper, findToast } from '../../../testing/toastTexts.js'
 import { validationFailed } from '../../../testing/validationFailed.js'
 import { useOpeningBalanceFix } from './useOpeningBalanceFix.js'
 
@@ -16,9 +17,8 @@ const previewFor = (newBalance: string): BalancePreview => ({
 function setup() {
   const status = makeStatus()
   const reload = vi.fn(async () => {})
-  const showNotice = vi.fn()
-  const hook = renderHook(() => useOpeningBalanceFix(status, reload, showNotice))
-  return { ...hook, status, reload, showNotice }
+  const hook = renderHook(() => useOpeningBalanceFix(status, reload), { wrapper: ToastsWrapper })
+  return { ...hook, status, reload }
 }
 
 afterEach(() => { vi.restoreAllMocks() })
@@ -124,7 +124,7 @@ describe('useOpeningBalanceFix', () => {
     const post = vi.spyOn(api, 'post')
       .mockResolvedValueOnce(previewFor('300.00'))
       .mockResolvedValueOnce({})
-    const { result, status, reload, showNotice } = setup()
+    const { result, status, reload } = setup()
     act(() => result.current.open(makeAccount()))
     await act(async () => { await result.current.preview('300.00') })
 
@@ -132,7 +132,7 @@ describe('useOpeningBalanceFix', () => {
 
     expect(post).toHaveBeenLastCalledWith('/accounts/acc-1/initial-balance', { initialBalance: '300.00' })
     expect(reload).toHaveBeenCalledTimes(1)
-    expect(showNotice).toHaveBeenCalledWith(expect.stringContaining('$250.00 to $300.00'))
+    expect(await findToast('$250.00 to $300.00')).toHaveLength(1)
     expect(result.current.fixing).toBeNull()
     expect(status.begin).toHaveBeenCalled()
     expect(status.end).toHaveBeenCalled()

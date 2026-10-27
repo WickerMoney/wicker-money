@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
-import { Alert, Spinner, Surface, formErrorsFrom } from '@wickermoney/ui-kit'
+import { Alert, Spinner, Surface, formErrorsFrom, useToast } from '@wickermoney/ui-kit'
 import { useAuth } from '../../../auth/index.js'
 import { ApiError } from '../../../api/ApiError.js'
 import type { Person } from '../../../models/index.js'
@@ -45,14 +45,13 @@ export function PeopleSection() {
   const { user, refreshUser } = useAuth()
   const isOwner = user?.role === 'owner'
   const state = usePeople(isOwner)
+  const toast = useToast()
   const location = useLocation()
   /** The latest known state of each account this page has changed, over the listing. */
   const [changed, setChanged] = useState<Readonly<Record<string, Person>>>({})
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set())
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
   const [confirming, setConfirming] = useState<Person | null>(null)
-  /** What was announced after the last change, for the live region. */
-  const [announcement, setAnnouncement] = useState('')
   /** Set once this owner stopped being one while the page was open; replaces the section with a notice. */
   const [lostAccess, setLostAccess] = useState<string | null>(null)
   const notice = useRef<HTMLParagraphElement>(null)
@@ -78,30 +77,41 @@ export function PeopleSection() {
     setErrors((all) => ({ ...all, [id]: messages.fields['role'] ?? messages.form ?? 'Could not change the role.' }))
   }
 
-  /** Saves a role. Resolves once the row has settled, so a dialog can stay open until then. */
-  const apply = async (person: Person, role: Role): Promise<void> => {
+  /**
+   * Saves a role. Resolves once the row has settled, so a dialog can stay open
+   * until then, with the sentence to say about it (`null` when there is
+   * nothing to say, because the section was replaced by a notice or it failed).
+   * The caller says it with {@link announce} after any dialog has closed.
+   */
+  const apply = async (person: Person, role: Role): Promise<string | null> => {
     const id = person.id
     setSaving((s) => new Set(s).add(id))
     setErrors(({ [id]: _dropped, ...rest }) => rest)
-    setAnnouncement('')
     try {
       const result = await setPersonRole(id, role)
       setChanged((c) => ({ ...c, [id]: result.user }))
-      setAnnouncement(
-        result.changed
-          ? `${person.email} is now ${roleWord(result.user.role)}.`
-          : `${person.email} was already ${roleWord(result.user.role)}.`,
-      )
+      const sentence = result.changed
+        ? `${person.email} is now ${roleWord(result.user.role)}.`
+        : `${person.email} was already ${roleWord(result.user.role)}.`
       if (id === user?.id && result.user.role !== 'owner') {
         // Say so first: the notice replaces the section whether or not the re-read succeeds.
         setLostAccess('You are now a member. You can no longer turn plugins on or off or change anyone\u2019s role; another owner can give that back.')
         await refreshUser().catch(() => { /* The notice already says it; the next page load will agree. */ })
+        // The notice that replaced the section says it, and takes focus.
+        return null
       }
+      return sentence
     } catch (e) {
       fail(id, e)
+      return null
     } finally {
       setSaving((s) => { const copy = new Set(s); copy.delete(id); return copy })
     }
+  }
+
+  /** Says what a role change did, as a toast; the field keeps any refusal. */
+  const announce = (sentence: string | null): void => {
+    if (sentence !== null) toast.show(sentence, { kind: 'success', key: 'settings:role' })
   }
 
   if (lostAccess !== null) {
@@ -126,7 +136,7 @@ export function PeopleSection() {
 
     const choose = (person: Person, role: Role): void => {
       if (role === person.role || saving.has(person.id)) return
-      if (role === 'owner') { void apply(person, role); return }
+      if (role === 'owner') { void apply(person, role).then(announce); return }
       if (person.id === user?.id && owners <= 1) {
         // The server would refuse; say so without the round trip.
         setErrors((all) => ({ ...all, [person.id]: ONLY_OWNER }))
@@ -161,7 +171,10 @@ export function PeopleSection() {
             isSelf={confirming.id === user?.id}
             busy={saving.has(confirming.id)}
             onCancel={() => { setConfirming(null) }}
-            onConfirm={() => { void apply(confirming, 'member').then(() => { setConfirming(null) }) }}
+            onConfirm={() => {
+              // Close the dialog first, then say it: a toast raised under a modal waits for it.
+              void apply(confirming, 'member').then((sentence) => { setConfirming(null); announce(sentence) })
+            }}
           />
         ) : null}
       </>
@@ -173,7 +186,6 @@ export function PeopleSection() {
     <div id={ANCHOR} className="settings-anchor">
       <Surface title="People" action={count === null ? null : <span className="wm-muted">{count} {count === 1 ? 'account' : 'accounts'}</span>}>
         {body}
-        <p className="wm-muted people-announcement" role="status">{announcement}</p>
       </Surface>
     </div>
   )

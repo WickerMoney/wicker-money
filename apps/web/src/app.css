@@ -865,7 +865,6 @@
   .people-row__who, .people-row__role { flex: none; width: 100%; }
   .people-row__role .wm-field { flex: 1 1 100%; }
 }
-.people-announcement { margin: 8px 0 0; min-height: 1.4em; font-size: 13px; }
 .people-row .wm-field__control[aria-disabled="true"] { opacity: .55; cursor: progress; }
 
 /* Isolated plugin frames. The slot decides the width; the frame reports its height. */

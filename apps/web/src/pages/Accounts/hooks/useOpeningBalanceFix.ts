@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NO_FORM_ERRORS, formErrorsFrom, type FormErrors } from '@wickermoney/ui-kit'
+import { NO_FORM_ERRORS, formErrorsFrom, useToast, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
@@ -39,16 +39,18 @@ export interface OpeningBalanceFix {
  * its own preview and its own explicit "Apply" rather than sharing the Save
  * button of a rename.
  *
- * @param status - Busy flag and error message shared with the page.
+ * The result is a toast raised after the panel has closed; a refusal stays in
+ * the panel (ADR 0009).
+ *
+ * @param status - Busy flag shared with the page.
  * @param reload - Re-reads the accounts after a successful change.
- * @param showNotice - Shows a success message.
  * @returns The account being corrected, its preview, and the open, preview and apply actions.
  */
 export function useOpeningBalanceFix(
   status: ActionStatus,
   reload: () => Promise<void>,
-  showNotice: (message: string | null) => void,
 ): OpeningBalanceFix {
+  const toast = useToast()
   const [fixing, setFixing] = useState<Account | null>(null)
   const [balanceInput, setBalanceInput] = useState('')
   const [balancePreview, setBalancePreview] = useState<BalancePreview | null>(null)
@@ -101,8 +103,9 @@ export function useOpeningBalanceFix(
       setFixing(null)
       setBalancePreview(null)
       await reload()
-      showNotice(
-        `'${accountName}''s balance moved from ${formatMoney(currentBalance)} to ${formatMoney(newBalance)}, throughout its history.`,
+      toast.show(
+        `Moved the balance of '${accountName}' from ${formatMoney(currentBalance)} to ${formatMoney(newBalance)}, throughout its history.`,
+        { kind: 'success', key: 'accounts:balance' },
       )
     } catch (e) {
       setErrors(formErrorsFrom(e, ['initialBalance'], 'Could not update that opening balance.'))

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -6,6 +6,8 @@ import { AuthCtx } from '../../../auth/authContext.js'
 import type { AuthState } from '../../../auth/AuthState.js'
 import type { CurrentUser } from '../../../auth/CurrentUser.js'
 import { errorOf } from '../../../testing/errorOf.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
+import { findToast, toastTexts } from '../../../testing/toastTexts.js'
 import { validationFailed } from '../../../testing/validationFailed.js'
 import { TimezoneSection } from './TimezoneSection.js'
 
@@ -22,7 +24,7 @@ function mount(start: string, setTimezone = vi.fn(async (z: string) => z)) {
     }
     return <AuthCtx.Provider value={value}><TimezoneSection /></AuthCtx.Provider>
   }
-  render(<Host />)
+  renderWithToasts(<Host />)
   return setTimezone
 }
 
@@ -37,18 +39,35 @@ describe('TimezoneSection', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(save).toHaveBeenCalledWith(other)
-    expect(await screen.findByText('Saved.')).toBeTruthy()
+    expect(await findToast()).toEqual([`Saved your time zone as ${other.replaceAll('_', ' ')}.`])
+    expect(screen.queryByText('Saved.')).toBeNull()
+  })
+
+  it('keeps keyboard focus in the section after saving, since Save disables itself', async () => {
+    mount(BROWSER)
+    const select = screen.getByLabelText<HTMLSelectElement>('Time zone')
+    const other = BROWSER === 'Asia/Tokyo' ? 'Europe/London' : 'Asia/Tokyo'
+    await userEvent.selectOptions(select, other)
+    const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' })
+    save.focus()
+
+    await userEvent.keyboard('{Enter}')
+
+    await findToast()
+    await waitFor(() => { expect(document.activeElement).toBe(select) })
+    expect(save.disabled).toBe(true)
   })
 
   it("offers the browser's zone when the account is on another one", async () => {
     const away = BROWSER === 'UTC' ? 'Asia/Tokyo' : 'UTC'
     const save = mount(away)
-    expect(screen.getByRole('status').textContent).toContain(`uses ${away.replaceAll('_', ' ')}`)
+    expect(document.querySelector('.tz-mismatch')?.textContent).toContain(`uses ${away.replaceAll('_', ' ')}`)
 
     await userEvent.click(screen.getByRole('button', { name: `Use ${BROWSER.replaceAll('_', ' ')}` }))
 
     expect(save).toHaveBeenCalledWith(BROWSER)
     await waitFor(() => { expect(screen.queryByRole('button', { name: `Use ${BROWSER.replaceAll('_', ' ')}` })).toBeNull() })
+    expect(await findToast()).toEqual([`Saved your time zone as ${BROWSER.replaceAll('_', ' ')}.`])
   })
 
   it('says nothing about a mismatch when the zones agree, and Save starts disabled', () => {
@@ -76,5 +95,6 @@ describe('TimezoneSection', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect((await screen.findByRole('alert')).textContent).toContain('not a known IANA time zone')
+    expect(toastTexts()).toEqual([])
   })
 })
