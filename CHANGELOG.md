@@ -11,6 +11,17 @@ curated, human-readable version.
 
 ### Changed
 
+- **Transactions and Recurring say what an action did in a toast, not in the
+  page banner.** Deleting a transaction now says what was deleted ("Deleted
+  'Coffee' (-$4.50)."; a transfer says both sides were removed), and so do
+  saving an edit, setting a category, bulk categorize ("12 transactions
+  updated."), matching, unmatching, *Not this* and *Restore*, and on Recurring
+  adding, updating, ending and deleting an item, confirming or dismissing a
+  suggestion, and skipping, moving or matching an occurrence. A refused row
+  action is an error toast. Nothing offers Undo and nothing closes itself; a
+  repeat of the same kind of action replaces the last toast. The page banner is
+  now only for a list that failed to load, and a form's own problems stay on the
+  form.
 - **The Transactions recurring column is quieter.** A matched row shows its
   recurring item as a pill with an *Unmatch* button, and the occurrence's date
   only when it is not the transaction's own; an unmatched row shows nothing

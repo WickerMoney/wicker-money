@@ -1,3 +1,4 @@
+import { useToast } from '@wickermoney/ui-kit'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -18,6 +19,9 @@ export interface Suggestions {
   readonly reload: () => Promise<void>
 }
 
+/** Match, Not this and Undo share one toast key with the occurrence panel's matching (ADR 0009). */
+const TOAST_KEY = 'recurring:match'
+
 /** The URL of one occurrence. */
 const occurrenceUrl = (o: { itemId: string; nominalDate: string }) => `/recurring-items/${o.itemId}/occurrences/${o.nominalDate}`
 
@@ -26,20 +30,19 @@ const occurrenceUrl = (o: { itemId: string; nominalDate: string }) => `/recurrin
  * recent occurrence's payment) and confirms or dismisses them one at a time.
  * Nothing is matched without a click.
  *
- * @param status - Busy flag and error message shared with the page.
+ * @param status - Busy flag shared with the page; also receives the message when the load fails.
  * @param afterChange - Re-reads the page's data after a match.
- * @param showNotice - Shows a confirmation line.
  * @returns The suggestions and actions.
  */
 export function useSuggestions(
   status: ActionStatus,
   afterChange: () => Promise<void>,
-  showNotice: (message: string | null) => void,
 ): Suggestions {
   const [suggestions, setSuggestions] = useState<readonly MatchSuggestion[]>([])
   const [dismissed, setDismissed] = useState<readonly DismissedSuggestion[]>([])
   const latest = useLatestRequest()
   const { show } = status
+  const toast = useToast().show
 
   const reload = useCallback(
     () => latest.run(
@@ -58,11 +61,11 @@ export function useSuggestions(
     status.begin()
     try {
       await work()
-      showNotice(notice)
+      toast(notice, { kind: 'success', key: TOAST_KEY })
       // A dismissal changes only the suggestions; a match changes the items too.
       await (everything ? Promise.all([reload(), afterChange()]) : reload())
     } catch (e) {
-      status.show(e instanceof Error ? e.message : failure)
+      toast(e instanceof Error ? e.message : failure, { kind: 'error', key: TOAST_KEY })
     } finally { status.end() }
   }
 

@@ -6,8 +6,8 @@ import type { Category, Transaction } from '../../../models/index.js'
 export interface TransactionCategoryCellProps {
   /** The row. */
   readonly transaction: Transaction
-  /** Assigns this row's category; an empty string clears it. Must keep its identity between renders. */
-  readonly onAssign: (id: string, categoryId: string) => Promise<void>
+  /** Assigns this row's category (named `categoryName`); an empty string clears it. Must keep its identity between renders. */
+  readonly onAssign: (transaction: Transaction, categoryId: string, categoryName: string) => Promise<void>
   /** Returns the categories to offer in this row's picker. */
   readonly categoryOptionsFor: (currentId: string | null) => readonly Category[]
 }
@@ -27,7 +27,7 @@ export const TransactionCategoryCell = memo(function TransactionCategoryCell(
     <div className="cat-cell">
       <select className="cat-cell__select" value={t.category_id ?? ''}
               aria-label={`Category for ${t.merchant}`}
-              onChange={(e) => void onAssign(t.id, e.target.value)}>
+              onChange={(e) => void onAssign(t, e.target.value, e.target.selectedOptions[0]?.textContent ?? '')}>
         <CategoryOptions
           categories={categoryOptionsFor(t.category_id)}
           placeholder={{ value: '', label: '—' }}

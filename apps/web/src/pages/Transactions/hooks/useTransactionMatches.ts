@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useToast } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
@@ -29,6 +30,9 @@ export interface TransactionMatches {
   /** Undoes a dismissal. Keeps its own list open, refreshed. */
   readonly undismiss: (transaction: Transaction, occurrence: OccurrenceRef) => Promise<void>
 }
+
+/** Every match action shares one toast key, so triage replaces the last message instead of stacking (ADR 0009). */
+const TOAST_KEY = 'transactions:match'
 
 /** The URL of one occurrence. */
 const occurrenceUrl = (o: OccurrenceRef) => `/recurring-items/${o.itemId}/occurrences/${o.nominalDate}`
@@ -74,6 +78,7 @@ export function useTransactionMatches(
   const [picker, setPicker] = useState<TransactionCandidates | null>(null)
   const latest = useLatestRequest()
   const { begin, end, show } = status
+  const toast = useToast().show
   const idsKey = useMemo(() => (items ?? []).map((t) => t.id).join(','), [items])
   // What `reload` asks about, without making every action depend on the rows.
   const idsRef = useRef(idsKey)
@@ -121,33 +126,38 @@ export function useTransactionMatches(
    * Does one action, then re-reads the column. The open list is closed, except
    * that an action taken from a transaction's own list (`keep`) leaves that list
    * open and re-reads it, so Not this, Restore and Unmatch can be done in turn.
+   * The outcome is a toast either way: what happened to which row, or the error.
    */
-  const run = useCallback(async (work: () => Promise<unknown>, failure: string, keep?: string) => {
+  const run = useCallback(async (work: () => Promise<unknown>, done: string, failure: string, keep?: string) => {
     begin()
     try {
       await work()
+      toast(done, { kind: 'success', key: TOAST_KEY })
       if (keep !== undefined && pickerOf.current === keep) setPicker(await fetchPicker(keep))
       else setPicker(null)
       await load(idsRef.current)
     } catch (e) {
-      show(e instanceof Error ? e.message : failure)
+      toast(e instanceof Error ? e.message : failure, { kind: 'error', key: TOAST_KEY })
     } finally { end() }
-  }, [begin, end, show, load, fetchPicker])
+  }, [begin, end, toast, load, fetchPicker])
 
   const openPicker = useCallback(async (t: Transaction) => {
     begin()
     try {
       setPicker(await fetchPicker(t.id))
     } catch (e) {
-      show(e instanceof Error ? e.message : 'Could not look for recurring items this could be.')
+      toast(e instanceof Error ? e.message : 'Could not look for recurring items this could be.', { kind: 'error', key: TOAST_KEY })
     } finally { end() }
-  }, [begin, end, show, fetchPicker])
+  }, [begin, end, toast, fetchPicker])
 
   const closePicker = useCallback(() => setPicker(null), [])
 
   const match = useCallback(
     (t: Transaction, o: OccurrenceRef) =>
-      run(() => api.post(`${occurrenceUrl(o)}/matches`, { transactionId: t.id }), 'Could not record the match.'),
+      run(
+        () => api.post(`${occurrenceUrl(o)}/matches`, { transactionId: t.id }),
+        `Matched '${t.merchant}' to ${o.name}.`, 'Could not record the match.',
+      ),
     [run],
   )
 
@@ -159,10 +169,19 @@ export function useTransactionMatches(
     confirm: (t, s) => match(t, s.occurrence),
     match,
     unmatch: (t, o) =>
-      run(() => api.del(`${occurrenceUrl(o)}/matches/${t.id}`), 'Could not unmatch that transaction.', t.id),
+      run(
+        () => api.del(`${occurrenceUrl(o)}/matches/${t.id}`),
+        `Unmatched '${t.merchant}' from ${o.name}.`, 'Could not unmatch that transaction.', t.id,
+      ),
     dismiss: (t, o) =>
-      run(() => api.post(`${occurrenceUrl(o)}/dismissals`, { transactionId: t.id }), 'Could not dismiss the suggestion.', t.id),
+      run(
+        () => api.post(`${occurrenceUrl(o)}/dismissals`, { transactionId: t.id }),
+        `Marked '${t.merchant}' as not ${o.name}.`, 'Could not dismiss the suggestion.', t.id,
+      ),
     undismiss: (t, o) =>
-      run(() => api.del(`${occurrenceUrl(o)}/dismissals/${t.id}`), 'Could not undo the dismissal.', t.id),
+      run(
+        () => api.del(`${occurrenceUrl(o)}/dismissals/${t.id}`),
+        `'${t.merchant}' can be suggested for ${o.name} again.`, 'Could not undo the dismissal.', t.id,
+      ),
   }), [byId, picker, openPicker, closePicker, match, run])
 }

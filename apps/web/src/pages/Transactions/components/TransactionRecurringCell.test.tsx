@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
@@ -9,6 +9,8 @@ import type {
 } from '../../../models/index.js'
 import { deferred } from '../../../testing/deferred.js'
 import { makeTransaction } from '../../../testing/makeTransaction.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
+import { shownToasts } from '../../../testing/shownToasts.js'
 import { useTransactionMatches } from '../hooks/useTransactionMatches.js'
 import { TransactionTable } from './TransactionTable.js'
 
@@ -83,12 +85,11 @@ function makeWorld(): World {
 }
 
 /** The table as the panel wires it: the matching hook fed the listed rows. */
-function Harness({ rows = items, showStatus = false }: { rows?: readonly Transaction[]; showStatus?: boolean }) {
+function Harness({ rows = items }: { rows?: readonly Transaction[] }) {
   const status = useActionStatus()
   const matches = useTransactionMatches(rows, status)
   return (
     <>
-      {showStatus && status.message !== null ? <p role="alert">{status.message}</p> : null}
       <TransactionTable
         items={rows} selected={new Set()} onlyUncategorized={false} categoryOptionsFor={() => []} status={status}
         matches={matches} onToggleSelected={() => {}} onToggleAllSelected={() => {}} onChanged={async () => {}}
@@ -124,7 +125,7 @@ afterEach(() => { vi.restoreAllMocks() })
 describe('recurring column and picker on the Transactions page', () => {
   it('asks once for the whole page, not once per row, and never fetches a picker until asked', async () => {
     const { get } = serve()
-    render(<Harness />)
+    renderWithToasts(<Harness />)
     await screen.findByText('Phone')
     expect(get).toHaveBeenCalledTimes(1)
     expect(get.mock.calls[0]?.[0]).toBe('/recurring-items/transaction-matches?transactionIds=same,late,long,suggested,garden,coffee,none')
@@ -133,7 +134,7 @@ describe('recurring column and picker on the Transactions page', () => {
   describe('the cell', () => {
     it('is empty for every unmatched row, whatever it has: nothing, a suggestion, dismissals', async () => {
       serve()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       await screen.findByText('Phone')
       for (const merchant of ['CHECK #1042', 'Garden Centre', 'Coffee', 'Newsstand']) {
         const r = await rowOf(merchant)
@@ -148,7 +149,7 @@ describe('recurring column and picker on the Transactions page', () => {
       const world = makeWorld()
       world.summaries.set('none', { transactionId: 'none', linked: null, suggestion: null, dismissed: [lawn, pool, club] })
       serve(world)
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       await screen.findByText('Phone')
       const none = await rowOf('Newsstand')
       expect(recurCell(none).childNodes).toHaveLength(0)
@@ -158,7 +159,7 @@ describe('recurring column and picker on the Transactions page', () => {
 
     it('shows the pill with its remove button, and no date when it is the transaction date', async () => {
       serve()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Oakwood Phone')
       const cell = within(recurCell(r))
       expect(cell.getByText('Phone')).toBeTruthy()
@@ -169,7 +170,7 @@ describe('recurring column and picker on the Transactions page', () => {
 
     it('shows the occurrence date after the pill when it differs, with a hidden label for screen readers', async () => {
       serve()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Oakwood Rent')
       const date = recurCell(r).querySelector('.recur2__date') as HTMLElement
       expect(date.textContent).toBe('Occurrence date: 10/1/2026')
@@ -181,7 +182,7 @@ describe('recurring column and picker on the Transactions page', () => {
 
     it('keeps a long item name whole in the title and the remove button name, and cuts it in CSS', async () => {
       serve()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('IRS Payment')
       const chip = recurCell(r).querySelector('.recur2__chip') as HTMLElement
       expect(chip.getAttribute('title')).toBe(LONG)
@@ -193,13 +194,17 @@ describe('recurring column and picker on the Transactions page', () => {
       const { world } = serve()
       const del = vi.spyOn(api, 'del').mockImplementation(async () => { world.summaries.delete('same') })
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Oakwood Phone')
       await user.click(within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }))
       expect(del).toHaveBeenCalledWith('/recurring-items/phone/occurrences/2026-10-01/matches/same')
       await waitFor(() => { expect(recurCell(r).childNodes).toHaveLength(0) })
       await waitFor(() => { expect(document.activeElement).toBe(linkIn(r)) })
       expect(linkIn(r).getAttribute('aria-label')).toBe('Link Oakwood Phone to a recurring item')
+      // A plain confirmation, not a banner and not an Undo: Restore in the picker is the way back.
+      await waitFor(() => { expect(shownToasts()).toEqual(["Unmatched 'Oakwood Phone' from Phone."]) })
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.queryByRole('button', { name: /undo/i })).toBeNull()
     })
 
     it('disables the pill and the Link button while a request is in flight', async () => {
@@ -207,7 +212,7 @@ describe('recurring column and picker on the Transactions page', () => {
       const gate = deferred<unknown>()
       vi.spyOn(api, 'del').mockReturnValue(gate.promise as Promise<void>)
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Oakwood Phone')
       await user.click(within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }))
       await waitFor(() => { expect((linkIn(r) as HTMLButtonElement).disabled).toBe(true) })
@@ -221,7 +226,7 @@ describe('recurring column and picker on the Transactions page', () => {
   describe('the Link button', () => {
     it('comes first in the row actions, before Edit and Delete', async () => {
       serve()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Newsstand')
       const names = [...r.querySelectorAll('td[data-col="actions"] button')].map((b) => b.getAttribute('aria-label'))
       expect(names).toEqual(['Link Newsstand to a recurring item', 'Edit', 'Delete'])
@@ -229,7 +234,7 @@ describe('recurring column and picker on the Transactions page', () => {
 
     it('is neutral without a suggestion and accent with a dot (and says so in its name) with one', async () => {
       serve()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       await screen.findByText('Phone')
       const plain = linkIn(await rowOf('Newsstand'))
       expect(plain.className).toBe('wm-btn wm-icon-btn recur-linkbtn')
@@ -247,7 +252,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('opens the picker in its own row under the row, moves focus into it and says so with aria-expanded', async () => {
       const { get } = serve()
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Coffee')
       const link = linkIn(r)
       expect(link.getAttribute('aria-expanded')).toBe('false')
@@ -266,7 +271,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('closes the picker when pressed again, and keeps focus on itself', async () => {
       serve()
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Coffee')
       await user.click(linkIn(r))
       await waitFor(() => pickerOf('Coffee'))
@@ -278,7 +283,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('has one picker at a time', async () => {
       serve()
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       await user.click(linkIn(await rowOf('Coffee')))
       await waitFor(() => pickerOf('Coffee'))
       await user.click(linkIn(await rowOf('Newsstand')))
@@ -291,7 +296,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('lists the suggestion, then the other items, then the dismissed ones, then Close, in tab order', async () => {
       serve()
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       await user.click(linkIn(await rowOf('CHECK #1042')))
       const picker = await waitFor(() => pickerOf('CHECK #1042'))
       const sections = [...picker.querySelectorAll('.recur2__section')].map((e) => e.textContent)
@@ -323,7 +328,7 @@ describe('recurring column and picker on the Transactions page', () => {
       serve()
       const post = vi.spyOn(api, 'post').mockResolvedValue({})
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Coffee')
       await user.click(linkIn(r))
       const list = await screen.findByRole('list', { name: 'Recurring items Coffee could be' })
@@ -341,7 +346,7 @@ describe('recurring column and picker on the Transactions page', () => {
       const { get } = serve()
       const post = vi.spyOn(api, 'post').mockResolvedValue(occurrence({ status: 'cleared' }))
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('CHECK #1042')
       await user.click(linkIn(r))
       await user.click(await screen.findByRole('button', { name: 'Match CHECK #1042 to Rent' }))
@@ -350,6 +355,9 @@ describe('recurring column and picker on the Transactions page', () => {
       await waitFor(() => { expect(get.mock.calls.filter((c) => String(c[0]).includes('transaction-matches?'))).toHaveLength(2) })
       await waitFor(() => { expect(screen.queryByRole('group', { name: /Recurring items for/ })).toBeNull() })
       await waitFor(() => { expect(document.activeElement).toBe(linkIn(r)) })
+      // Raised after the picker closed: it said what happened and left focus on Link.
+      await waitFor(() => { expect(shownToasts()).toEqual(["Matched 'CHECK #1042' to Rent."]) })
+      expect(document.activeElement).toBe(linkIn(r))
     })
 
     it('dismisses with Not this, keeps the picker open and refreshed, and puts focus on its first control', async () => {
@@ -364,7 +372,7 @@ describe('recurring column and picker on the Transactions page', () => {
         return {}
       })
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('CHECK #1042')
       await user.click(linkIn(r))
       await user.click(await screen.findByRole('button', { name: 'CHECK #1042 is not Rent' }))
@@ -379,6 +387,9 @@ describe('recurring column and picker on the Transactions page', () => {
       expect(get.mock.calls.filter((c) => c[0] === '/recurring-items/transaction-matches/suggested')).toHaveLength(2)
       expect(linkIn(r).className).not.toContain('--suggest')
       expect(r.nextElementSibling?.className).toBe('wm-table__detail')
+      // The toast did not close the picker or move focus out of it.
+      expect(shownToasts()).toEqual(["Marked 'CHECK #1042' as not Rent."])
+      expect(pickerOf('CHECK #1042').contains(document.activeElement)).toBe(true)
     })
 
     it('restores a dismissal with Restore and keeps the picker open', async () => {
@@ -387,7 +398,7 @@ describe('recurring column and picker on the Transactions page', () => {
         world.summaries.set('garden', { transactionId: 'garden', linked: null, suggestion: null, dismissed: [pool] })
       })
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       await user.click(linkIn(await rowOf('Garden Centre')))
       const picker = await waitFor(() => pickerOf('Garden Centre'))
       expect(within(picker).getAllByRole('button', { name: /^Restore / })).toHaveLength(2)
@@ -395,12 +406,32 @@ describe('recurring column and picker on the Transactions page', () => {
       expect(del).toHaveBeenCalledWith('/recurring-items/lawn/occurrences/2026-10-21/dismissals/garden')
       await waitFor(() => { expect(within(pickerOf('Garden Centre')).getAllByRole('button', { name: /^Restore / })).toHaveLength(1) })
       await waitFor(() => { expect(document.activeElement).toBe(within(pickerOf('Garden Centre')).getByRole('button', { name: /^Restore Pool/ })) })
+      expect(shownToasts()).toEqual(["'Garden Centre' can be suggested for Lawn Service again."])
+    })
+
+    it('replaces the toast of the last match action instead of stacking them', async () => {
+      const { world } = serve()
+      vi.spyOn(api, 'del').mockImplementation(async () => {
+        world.summaries.set('garden', { transactionId: 'garden', linked: null, suggestion: null, dismissed: [pool] })
+      })
+      vi.spyOn(api, 'post').mockResolvedValue({})
+      const user = userEvent.setup()
+      renderWithToasts(<Harness />)
+      await user.click(linkIn(await rowOf('Garden Centre')))
+      const picker = await waitFor(() => pickerOf('Garden Centre'))
+      await user.click(within(picker).getByRole('button', { name: 'Restore Lawn Service 2026-10-21 as a suggestion for Garden Centre' }))
+      await waitFor(() => { expect(shownToasts()).toHaveLength(1) })
+
+      await user.click(linkIn(await rowOf('CHECK #1042')))
+      await user.click(await screen.findByRole('button', { name: 'Match CHECK #1042 to Rent' }))
+
+      await waitFor(() => { expect(shownToasts()).toEqual(["Matched 'CHECK #1042' to Rent."]) })
     })
 
     it('says so when there is nothing to offer', async () => {
       serve()
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       await user.click(linkIn(await rowOf('Newsstand')))
       const picker = await waitFor(() => pickerOf('Newsstand'))
       expect(within(picker).getByText('No recurring item expects this within 10 days of 10/2/2026.')).toBeTruthy()
@@ -414,7 +445,7 @@ describe('recurring column and picker on the Transactions page', () => {
         world.pickers.set('same', { today: '2026-10-04', transactionId: 'same', linked: null, candidates: [candidate(lawn, 'same')] })
       })
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Oakwood Phone')
       await user.click(linkIn(r))
       const picker = await waitFor(() => pickerOf('Oakwood Phone'))
@@ -431,7 +462,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('closes with Close and returns focus to Link', async () => {
       serve()
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Coffee')
       await user.click(linkIn(r))
       await user.click(await screen.findByRole('button', { name: 'Close' }))
@@ -442,7 +473,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('closes with Escape from inside it and returns focus to Link', async () => {
       serve()
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('Coffee')
       await user.click(linkIn(r))
       await waitFor(() => pickerOf('Coffee'))
@@ -457,7 +488,7 @@ describe('recurring column and picker on the Transactions page', () => {
       const gate = deferred<unknown>()
       vi.spyOn(api, 'post').mockReturnValue(gate.promise)
       const user = userEvent.setup()
-      render(<Harness />)
+      renderWithToasts(<Harness />)
       const r = await rowOf('CHECK #1042')
       await user.click(linkIn(r))
       await user.click(await screen.findByRole('button', { name: 'CHECK #1042 is not Rent' }))
@@ -472,10 +503,14 @@ describe('recurring column and picker on the Transactions page', () => {
       serve()
       vi.spyOn(api, 'post').mockRejectedValue(new Error('That leg of this occurrence is already matched. Unmatch it first.'))
       const user = userEvent.setup()
-      render(<Harness showStatus />)
+      renderWithToasts(<Harness />)
       await user.click(linkIn(await rowOf('CHECK #1042')))
       await user.click(await screen.findByRole('button', { name: 'Match CHECK #1042 to Rent' }))
-      expect((await screen.findByRole('alert')).textContent).toContain('already matched')
+      // A refusal belongs to no field: an error toast, which stays, and the picker stays open.
+      await waitFor(() => {
+        expect(shownToasts()).toEqual(['Error: That leg of this occurrence is already matched. Unmatch it first.'])
+      })
+      expect(screen.queryByRole('alert')).toBeNull()
       expect(pickerOf('CHECK #1042')).toBeTruthy()
     })
   })

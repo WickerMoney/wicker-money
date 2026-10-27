@@ -28,7 +28,6 @@ import { useSuggestions } from './hooks/useSuggestions.js'
  */
 export function RecurringPage() {
   const status = useActionStatus()
-  const [notice, setNotice] = useState<string | null>(null)
   const data = useRecurringData(status)
 
   return (
@@ -42,12 +41,11 @@ export function RecurringPage() {
         </label>
       </div>
       {status.message !== null ? <Alert>{status.message}</Alert> : null}
-      {notice !== null ? <Alert>{notice}</Alert> : null}
 
       {data.list === null ? <Spinner /> : (
         <Workspace
           list={data.list} accounts={data.accounts} categories={data.categories}
-          status={status} reload={data.reload} showNotice={setNotice}
+          status={status} reload={data.reload}
         />
       )}
     </div>
@@ -61,16 +59,15 @@ interface WorkspaceProps {
   readonly categories: readonly Category[]
   readonly status: ActionStatus
   readonly reload: () => Promise<void>
-  readonly showNotice: (message: string | null) => void
 }
 
 /** The loaded page: summary, grouped lists and the form. Mounted once the server's today is known. */
-function Workspace({ list, accounts, categories, status, reload, showNotice }: WorkspaceProps) {
+function Workspace({ list, accounts, categories, status, reload }: WorkspaceProps) {
   const active = useMemo(() => accounts.filter((a) => a.archivedAt === null), [accounts])
   // New bills default to paying from a checking account, not whichever account sorts first.
   const payer = active.find((a) => a.accountType === 'checking') ?? active[0]
-  const editing = useRecurringEditing(status, reload, list.today, payer?.id ?? '', showNotice)
-  const suggested = useSuggestions(status, reload, showNotice)
+  const editing = useRecurringEditing(status, reload, list.today, payer?.id ?? '')
+  const suggested = useSuggestions(status, reload)
   const [historyId, setHistoryId] = useState<string | null>(null)
   // Follow the item through reloads, so the panel shows its latest state.
   const history: RecurringItem | null = list.items.find((i) => i.id === historyId) ?? null

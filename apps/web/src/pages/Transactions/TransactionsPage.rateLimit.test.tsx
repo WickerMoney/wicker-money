@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setAccessToken } from '../../api/client.js'
 import { responseCache } from '../../api/responseCache.js'
+import { renderWithToasts } from '../../testing/renderWithToasts.js'
 import { TransactionsPage } from './TransactionsPage.js'
 
 /**
@@ -24,7 +25,7 @@ describe('Transactions when the API refuses with 429', () => {
     ))
     vi.stubGlobal('fetch', fetchMock)
 
-    render(<TransactionsPage />)
+    renderWithToasts(<TransactionsPage />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Transactions' })).toBeTruthy()
     expect((await screen.findAllByText('Too many requests. Wait 12 seconds and try again.')).length).toBeGreaterThan(0)
@@ -35,7 +36,7 @@ describe('Transactions when the API refuses with 429', () => {
   it('says how long to wait from Retry-After when the response has no message (a proxy\'s 429)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('slow down', { status: 429, headers: { 'retry-after': '30' } })))
 
-    render(<TransactionsPage />)
+    renderWithToasts(<TransactionsPage />)
 
     expect((await screen.findAllByText('Too many requests. Wait 30 seconds and try again.')).length).toBeGreaterThan(0)
   })

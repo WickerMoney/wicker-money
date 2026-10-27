@@ -1,10 +1,13 @@
 import { useCallback, useState, type RefObject } from 'react'
-import { formErrorsFrom, useFormErrors, type FormErrors } from '@wickermoney/ui-kit'
+import { formErrorsFrom, useFormErrors, useToast, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { RecurringItem } from '../../../models/index.js'
 import { draftFromItem, emptyDraft, fieldForPath, payloadFromDraft } from '../helpers/draft.js'
 import type { RecurringDraft } from '../state/RecurringDraft.js'
+
+/** Add, edit, end and delete share one toast key, so the last of them is the one on screen (ADR 0009). */
+const TOAST_KEY = 'recurring:item'
 
 /** What {@link useRecurringEditing} returns. */
 export interface RecurringEditing {
@@ -31,11 +34,13 @@ export interface RecurringEditing {
 /**
  * The add/edit form and the per-row actions.
  *
- * @param status - Busy flag and error message shared with the page.
+ * What an action did is said in a toast: the item added, updated, ended or
+ * deleted, or why a row action failed. The form's own problems stay on the form.
+ *
+ * @param status - Busy flag shared with the page.
  * @param reload - Re-reads the list after a change.
  * @param today - The server's today, used as the default first date.
  * @param defaultAccountId - The account a new item pays from, or `''`.
- * @param showNotice - Shows a confirmation line on the page.
  * @returns Form state and actions.
  */
 export function useRecurringEditing(
@@ -43,12 +48,12 @@ export function useRecurringEditing(
   reload: () => Promise<void>,
   today: string,
   defaultAccountId: string,
-  showNotice: (message: string | null) => void,
 ): RecurringEditing {
   const [draft, setDraft] = useState<RecurringDraft>(() => emptyDraft(today, defaultAccountId))
   const [editing, setEditing] = useState<RecurringItem | null>(null)
   const [open, setOpen] = useState(false)
   const form = useFormErrors()
+  const toast = useToast().show
   const { clear: clearErrors, clearField } = form
 
   const change = useCallback((patch: Partial<RecurringDraft>) => {
@@ -69,25 +74,23 @@ export function useRecurringEditing(
     setEditing(null)
     setDraft(emptyDraft(today, defaultAccountId))
     clearErrors()
-    showNotice(null)
     setOpen(true)
-  }, [today, defaultAccountId, showNotice, clearErrors])
+  }, [today, defaultAccountId, clearErrors])
 
   const edit = useCallback((item: RecurringItem) => {
     setOpen(true)
     setEditing(item)
     setDraft(draftFromItem(item))
     clearErrors()
-    showNotice(null)
-  }, [showNotice, clearErrors])
+  }, [clearErrors])
 
   const run = async (work: () => Promise<string>) => {
     status.begin()
     try {
-      showNotice(await work())
+      toast(await work(), { kind: 'success', key: TOAST_KEY })
       await reload()
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not save the change.')
+      toast(e instanceof Error ? e.message : 'Could not save the change.', { kind: 'error', key: TOAST_KEY })
     } finally { status.end() }
   }
 
@@ -104,7 +107,8 @@ export function useRecurringEditing(
       }
       const verb = editing === null ? 'Added' : 'Updated'
       reset()
-      showNotice(`${verb} '${built.payload.name}'.`)
+      // The dialog is closed by now, so the outcome is a toast (ADR 0009, section 3).
+      toast(`${verb} '${built.payload.name}'.`, { kind: 'success', key: TOAST_KEY })
       await reload()
     } catch (e) {
       // On the field the API names; a rule about the item as a whole (legs

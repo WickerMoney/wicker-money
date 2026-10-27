@@ -1,9 +1,10 @@
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { useActionStatus } from '../../../hooks/useActionStatus.js'
 import type { RecurringOccurrence, Transaction, TransactionMatchSummary } from '../../../models/index.js'
 import { makeTransaction } from '../../../testing/makeTransaction.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
 import type { TransactionMatches } from '../hooks/useTransactionMatches.js'
 import { TransactionTable } from './TransactionTable.js'
 
@@ -59,7 +60,7 @@ const COLUMNS = ['sel', 'date', 'merchant', 'cat', 'amt', 'recur', 'actions']
 
 describe('TransactionTable structure', () => {
   it('names the table and gives every header cell a scope and something to announce', () => {
-    render(<Harness />)
+    renderWithToasts(<Harness />)
     const table = screen.getByRole('table', { name: 'Transactions' })
     const headers = [...table.querySelectorAll('thead th')]
     expect(headers).toHaveLength(COLUMNS.length)
@@ -74,7 +75,7 @@ describe('TransactionTable structure', () => {
   })
 
   it('keeps the cells in one order, which the layouts place by data-col and the keyboard follows', () => {
-    render(<Harness />)
+    renderWithToasts(<Harness />)
     const table = screen.getByRole('table', { name: 'Transactions' })
     expect([...table.querySelectorAll('thead th')].map((th) => th.getAttribute('data-col'))).toEqual(COLUMNS)
     for (const tr of table.querySelectorAll('tbody tr')) {
@@ -83,14 +84,14 @@ describe('TransactionTable structure', () => {
   })
 
   it('leaves the Recurring column out without matches, and the other columns in their order', () => {
-    render(<Harness withMatches={false} />)
+    renderWithToasts(<Harness withMatches={false} />)
     const table = screen.getByRole('table', { name: 'Transactions' })
     expect([...table.querySelectorAll('thead th')].map((th) => th.getAttribute('data-col')))
       .toEqual(['sel', 'date', 'merchant', 'cat', 'amt', 'actions'])
   })
 
   it('puts the select-all and the table in the one wrapper the container query measures', () => {
-    const { container } = render(<Harness />)
+    const { container } = renderWithToasts(<Harness />)
     const wrapper = container.querySelector('.txn-list')
     expect(wrapper).not.toBeNull()
     const selectAll = wrapper!.querySelector('.txn-select-all')
@@ -103,14 +104,14 @@ describe('TransactionTable structure', () => {
 
   it('selects every row from the visible select-all and from the header checkbox', async () => {
     const onToggleAll = vi.fn()
-    render(<Harness onToggleAll={onToggleAll} />)
+    renderWithToasts(<Harness onToggleAll={onToggleAll} />)
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select all on this page' }))
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select all shown' }))
     expect(onToggleAll).toHaveBeenCalledTimes(2)
   })
 
   it('tabs through a row as the cells run: checkbox, category, the pill remove button, then Link, Edit and Delete', async () => {
-    render(<Harness />)
+    renderWithToasts(<Harness />)
     const row = screen.getByRole('checkbox', { name: 'Select Oakwood Phone' }).closest('tr')!
     const inRow = within(row)
     await userEvent.click(inRow.getByRole('checkbox', { name: 'Select Oakwood Phone' }))

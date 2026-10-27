@@ -80,6 +80,24 @@ alone and Escape gives it back, and that reduced motion removes the animation.
 `SHOTS_DIR` keeps screenshots and `BROWSER_CHECK_OUT` the report. `AXE_PATH` is
 not a dependency of the repo (see the Insights check).
 
+## Toasts from real Transactions actions (`transactionsToast.ts`)
+
+`toast.ts` raises toasts from a harness; this one raises them from the real Transactions page. It starts the API (built web
+app) against the seeded database, signs in as `hero` and, at desktop, 390 px and 360 px in light and dark, changes a
+category, saves the edit dialog with a long merchant name and deletes a row. It checks what each toast says (and that the
+announcer carries the same words), that focus stays put, that a toast raised by the edit dialog arrives after the dialog
+closed, that nothing offers Undo and nothing closes itself, that Escape closes a focused toast, that axe finds nothing it
+did not find before the toast, and that Shift+Tab up the list with a full stack never leaves the focused control behind the
+banner. It prints the real height of one toast and of the stack, per width (`BROWSER_CHECK_OUT=file.json` keeps them).
+
+```
+pnpm build && pnpm migrate && pnpm --filter @wickermoney/api seed
+AXE_PATH=/path/to/axe.min.js pnpm --filter @wickermoney/web test:toast:pages
+```
+
+It changes the seeded data (edits and deletes rows of `hero`), so reseed with `seed:reset` to run it again from the same
+state. Run it from the repo root with the `.env` the Insights check uses; `SHOTS_DIR=dir` keeps screenshots.
+
 ## Lazy frames (`lazyFrames.ts`)
 
 `MODE=check` (default) drives the seeded dashboard (as for the Insights check) and verifies that a frame below the

@@ -1,8 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { EmptyState, Spinner, Table } from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import type { Category, Transaction } from '../../../models/index.js'
 import { useTransactionEditing } from '../hooks/useTransactionEditing.js'
+import { useToastClearance } from '../hooks/useToastClearance.js'
 import type { TransactionMatches } from '../hooks/useTransactionMatches.js'
 import { TransactionActionsCell } from './TransactionActionsCell.js'
 import { TransactionAmountCell } from './TransactionAmountCell.js'
@@ -43,6 +44,9 @@ export function TransactionTable({
   onToggleSelected, onToggleAllSelected, onChanged,
 }: TransactionTableProps) {
   const row = useTransactionEditing(status, onChanged)
+  const list = useRef<HTMLDivElement>(null)
+  // A control scrolled into view clears the sticky toast banner (see app.css, `.txn-list`).
+  useToastClearance(list, items !== null)
   const busy = status.busy
   const openPicker = matches?.openPicker
   const closePicker = matches?.closePicker
@@ -65,7 +69,7 @@ export function TransactionTable({
           880px of room, and on phones, rows stop being table rows and the header
           row, with the select-all in it, is hidden, so the same control is offered
           here. Wider, the label stays hidden and the header checkbox does it. */}
-      <div className="txn-list">
+      <div className="txn-list" ref={list}>
         {items.length > 0 ? (
           <label className="txn-select-all">
             <input type="checkbox" checked={allSelected} aria-label="Select all on this page"

@@ -1,5 +1,5 @@
 import {
-  Button, CategoryOptions, FormError, NO_FORM_ERRORS, SelectField, formErrorsFrom, type FormErrors,
+  Button, CategoryOptions, FormError, NO_FORM_ERRORS, SelectField, formErrorsFrom, useToast, type FormErrors,
 } from '@wickermoney/ui-kit'
 import { useState } from 'react'
 import { api } from '../../../api/client.js'
@@ -16,7 +16,7 @@ export interface TriageBarProps {
   readonly selectedIds: ReadonlySet<string>
   /** Categories offered for bulk assignment. */
   readonly enabledCategories: readonly Category[]
-  /** Busy flag and error message shared with the page. */
+  /** Busy flag shared with the page. */
   readonly status: ActionStatus
   /** Called after a bulk change succeeds, so the selection can be cleared and the list re-read. */
   readonly onApplied: () => Promise<void>
@@ -34,6 +34,7 @@ export function TriageBar({
 }: TriageBarProps) {
   const [bulkCategoryId, setBulkCategoryId] = useState('')
   const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
+  const toast = useToast()
 
   const assignSelected = async () => {
     setErrors(NO_FORM_ERRORS)
@@ -44,7 +45,9 @@ export function TriageBar({
         categoryId: bulkCategoryId === '' ? null : bulkCategoryId,
       })
       await onApplied()
-      status.show(`${r.updated} transaction${r.updated === 1 ? '' : 's'} updated.`)
+      toast.show(`${r.updated} transaction${r.updated === 1 ? '' : 's'} updated.`, {
+        kind: 'success', key: 'transactions:categorize',
+      })
     } catch (e) {
       setErrors(formErrorsFrom(e, ['categoryId'], 'Could not update those transactions.'))
     } finally { status.end() }
