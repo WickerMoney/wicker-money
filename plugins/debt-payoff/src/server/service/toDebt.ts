@@ -19,5 +19,11 @@ export function toDebt(row: DebtRow): Debt {
     archived: row.archived,
     included: row.included,
     extraPayment: row.extra_payment,
+    repaymentStartsOn: row.repayment_starts_on,
+    promoApr: row.promo_apr,
+    promoEndsOn: row.promo_ends_on,
+    promoDeferredInterest: row.promo_deferred_interest,
+    promoInterestBase: row.promo_interest_base,
+    compounding: row.compounding,
   }
 }

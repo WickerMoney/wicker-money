@@ -25,7 +25,10 @@
 .wm-btn--primary {
   background: var(--wm-accent); border-color: var(--wm-accent); color: var(--wm-accent-text);
 }
-.wm-btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
+/* Must restate the background: `.wm-btn:hover:not(:disabled)` above has three classes' worth of
+   specificity to the variant's one, so without it a hovered primary button turns light grey under
+   its light text. Same specificity as that rule and later, so this one wins. */
+.wm-btn--primary:hover:not(:disabled) { background: var(--wm-accent); filter: brightness(1.08); }
 .wm-btn--danger { color: var(--wm-negative); }
 /* Icon-only buttons: square and fixed, so a column of them lines up whatever the row holds. */
 .wm-icon-btn, .wm-icon-slot { flex: none; width: 32px; height: 32px; padding: 0; }

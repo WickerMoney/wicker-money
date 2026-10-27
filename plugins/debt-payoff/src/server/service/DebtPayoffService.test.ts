@@ -164,6 +164,54 @@ describe('changing a debt', () => {
   })
 })
 
+describe('repayment start, promotion and compounding', () => {
+  const promo = { promoApr: '0.0000', promoEndsOn: '2027-10-11', promoDeferredInterest: true }
+
+  it('default to a debt that is repaying, with no promotion, compounding monthly', async () => {
+    expect(await service.createDebt(ALICE, card)).toMatchObject({
+      repaymentStartsOn: null, promoApr: null, promoEndsOn: null,
+      promoDeferredInterest: false, promoInterestBase: 'original', compounding: 'monthly',
+    })
+  })
+
+  it('are saved as given', async () => {
+    const debt = await service.createDebt(ALICE, {
+      ...card, ...promo, repaymentStartsOn: '2027-04-11', promoInterestBase: 'declining', compounding: 'daily_simple',
+    })
+    expect(debt).toMatchObject({
+      repaymentStartsOn: '2027-04-11', promoApr: '0.0000', promoEndsOn: '2027-10-11',
+      promoDeferredInterest: true, promoInterestBase: 'declining', compounding: 'daily_simple',
+    })
+    expect(await service.getDebt(ALICE, debt.id)).toEqual(debt)
+  })
+
+  it('refuse half a promotion and deferred interest without one, naming the field', async () => {
+    const issue = async (work: Promise<unknown>) => {
+      try { await work } catch (e) { if (e instanceof DebtPayoffError) return [e.code, e.issues?.[0]?.path[0]] }
+      return undefined
+    }
+    expect(await issue(service.createDebt(ALICE, { ...card, promoApr: '0.0000' }))).toEqual(['bad_promotion', 'promoEndsOn'])
+    expect(await issue(service.createDebt(ALICE, { ...card, promoEndsOn: '2027-10-11' }))).toEqual(['bad_promotion', 'promoApr'])
+    expect(await issue(service.createDebt(ALICE, { ...card, promoDeferredInterest: true }))).toEqual(['bad_promotion', 'promoDeferredInterest'])
+  })
+
+  it('are changed one at a time, leaving the rest, and cleared with null', async () => {
+    const debt = await service.createDebt(ALICE, { ...card, ...promo })
+    const dated = await service.updateDebt(ALICE, debt.id, { repaymentStartsOn: '2027-01-11' })
+    expect(dated).toMatchObject({ repaymentStartsOn: '2027-01-11', promoApr: '0.0000', promoDeferredInterest: true })
+    expect(await service.updateDebt(ALICE, debt.id, { compounding: 'daily' })).toMatchObject({ compounding: 'daily', repaymentStartsOn: '2027-01-11' })
+    expect(await service.updateDebt(ALICE, debt.id, { repaymentStartsOn: null })).toMatchObject({ repaymentStartsOn: null })
+  })
+
+  it('cannot clear a promotion while it still has deferred interest, or half of it', async () => {
+    const debt = await service.createDebt(ALICE, { ...card, ...promo })
+    expect((await codeOf(service.updateDebt(ALICE, debt.id, { promoApr: null, promoEndsOn: null }))).code).toBe('bad_promotion')
+    expect((await codeOf(service.updateDebt(ALICE, debt.id, { promoEndsOn: null }))).code).toBe('bad_promotion')
+    const cleared = await service.updateDebt(ALICE, debt.id, { promoApr: null, promoEndsOn: null, promoDeferredInterest: false })
+    expect(cleared).toMatchObject({ promoApr: null, promoEndsOn: null, promoDeferredInterest: false })
+  })
+})
+
 describe('reading and deleting', () => {
   it('lists a person\'s own debts in their own order, hiding archived ones unless asked', async () => {
     const b = await service.createDebt(ALICE, { ...card, name: 'B', sortOrder: 2 })
@@ -292,6 +340,20 @@ describe('the plan', () => {
     expect(plan.earmarked).toBe('100.0000')
     expect(plan.debts.find((d) => d.name === 'Small')).toMatchObject({ extraPayment: '100.0000' })
     expect(plan.schedule[0]?.debts.find((d) => d.debtId === small?.id)?.payment).toBe('150.0000')
+  })
+
+  it('does not pay a deferred loan until its start, and says how a promotion fares', async () => {
+    const loan = await service.createDebt(ALICE, { name: 'Loan', balance: '5000.0000', apr: '6.0000', minimumPayment: '100.0000', repaymentStartsOn: '2027-04-11' })
+    await service.createDebt(ALICE, {
+      name: 'Store card', balance: '1200.0000', apr: '24.9900', minimumPayment: '25.0000',
+      promoApr: '0.0000', promoEndsOn: '2027-10-11', promoDeferredInterest: true,
+    })
+    const plan = await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'avalanche', extraPayment: '0' })
+    expect(plan.schedule[0]?.debts.find((d) => d.debtId === loan.id)?.payment).toBe('0.0000')
+    expect(plan.debts.find((d) => d.id === loan.id)).toMatchObject({ repaymentStartMonth: 6, repaymentStartsOn: '2027-04-11' })
+    expect(plan.debts.find((d) => d.name === 'Store card')?.promo).toMatchObject({
+      active: true, deferredInterest: true, clearedInTime: false, requiredPayment: '100.0000', shortfall: '75.0000',
+    })
   })
 
   it('is debt free today when there are no debts', async () => {

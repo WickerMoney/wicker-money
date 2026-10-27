@@ -53,6 +53,8 @@ interface DebtBody {
   id: string; name: string; balance: string; apr: string; minimumPayment: string
   accountId: string | null; sortOrder: number; archived: boolean
   included: boolean; extraPayment: string
+  repaymentStartsOn: string | null; promoApr: string | null; promoEndsOn: string | null
+  promoDeferredInterest: boolean; promoInterestBase: string; compounding: string
 }
 
 async function debt(u: TestUser, over: Record<string, unknown> = {}): Promise<DebtBody> {
@@ -69,6 +71,8 @@ describe('debts CRUD', () => {
     expect(created).toMatchObject({
       name: 'Card', balance: '1234.5000', apr: '19.9900', minimumPayment: '35.0000',
       accountId: null, archived: false, included: true, extraPayment: '0.0000',
+      repaymentStartsOn: null, promoApr: null, promoEndsOn: null,
+      promoDeferredInterest: false, promoInterestBase: 'original', compounding: 'monthly',
     })
 
     const read = await req('GET', `/debts/${created.id}`, user)
@@ -100,6 +104,38 @@ describe('debts CRUD', () => {
     await expect(
       asRole(user.id, 'UPDATE plugin_debt_payoff.debts SET extra_payment = -1 WHERE id = ?::uuid', created.id),
     ).rejects.toThrow(/ck_debts_extra_payment/)
+  })
+
+  it('stores the repayment start, the promotion and the compounding, and clears them', async () => {
+    const created = await debt(user, {
+      name: 'Store card', repaymentStartsOn: '2027-04-10', promoApr: '0', promoEndsOn: '2027-10-10',
+      promoDeferredInterest: true, promoInterestBase: 'declining', compounding: 'daily',
+    })
+    expect(created).toMatchObject({
+      repaymentStartsOn: '2027-04-10', promoApr: '0.0000', promoEndsOn: '2027-10-10',
+      promoDeferredInterest: true, promoInterestBase: 'declining', compounding: 'daily',
+    })
+    expect((await req('GET', `/debts/${created.id}`, user)).json()).toEqual(created)
+
+    const cleared = await req('PUT', `/debts/${created.id}`, user, {
+      repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false,
+    })
+    expect(cleared.json()).toMatchObject({
+      repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false, compounding: 'daily',
+    })
+  })
+
+  it('refuses half a promotion on the field, and the database says the same', async () => {
+    const created = await debt(user, { name: 'Checked' })
+    const half = await req('PUT', `/debts/${created.id}`, user, { promoApr: '0' })
+    expect(half.statusCode).toBe(400)
+    expect(half.json()).toMatchObject({ code: 'bad_promotion' })
+    for (const payload of [{ repaymentStartsOn: '2027-02-30' }, { compounding: 'weekly' }, { promoDeferredInterest: true }]) {
+      expect((await req('PUT', `/debts/${created.id}`, user, payload)).statusCode, JSON.stringify(payload)).toBe(400)
+    }
+    await expect(
+      asRole(user.id, "UPDATE plugin_debt_payoff.debts SET promo_apr = 0 WHERE id = ?::uuid", created.id),
+    ).rejects.toThrow(/ck_debts_promo_pair/)
   })
 
   it('lists in the person’s own order and hides archived debts unless asked', async () => {
@@ -143,6 +179,14 @@ describe('row-level security between two people', () => {
 
     const still = (await req('GET', `/debts/${mine.id}`, user)).json() as DebtBody
     expect(still.name).toBe('Mine')
+  })
+
+  it('keeps the timeline fields per person', async () => {
+    const mine = await debt(user, { name: 'Mine, deferred', repaymentStartsOn: '2030-01-01', compounding: 'daily_simple' })
+    expect((await req('PUT', `/debts/${mine.id}`, other, { repaymentStartsOn: null, compounding: 'monthly' })).statusCode).toBe(404)
+    expect(await asRole(other.id, 'SELECT id FROM plugin_debt_payoff.debts WHERE id = ?::uuid', mine.id)).toEqual([])
+    const still = (await req('GET', `/debts/${mine.id}`, user)).json() as DebtBody
+    expect(still).toMatchObject({ repaymentStartsOn: '2030-01-01', compounding: 'daily_simple' })
   })
 
   it('keeps the in-plan switch and the earmark per person', async () => {
@@ -291,6 +335,22 @@ describe('settings and plan', () => {
     // Its 400 stops with it: month 3 is only B, at 200.
     expect(body.schedule[2]?.payment).toBe('200.0000')
     expect(body.months).toBe(6)
+  })
+
+  it('leaves a deferred loan alone until it starts and reports a promotion', async () => {
+    const who = await createUser(h)
+    const loan = await debt(who, { name: 'Loan', balance: '6000', apr: '0', minimumPayment: '100', repaymentStartsOn: '2027-03-01' })
+    const card = await debt(who, {
+      name: 'Card', balance: '1200', apr: '24.99', minimumPayment: '25',
+      promoApr: '0', promoEndsOn: '2099-01-01', promoDeferredInterest: true,
+    })
+    const body = (await req('GET', '/plan?strategy=avalanche&extra=0&tz=UTC', who)).json() as {
+      schedule: Array<{ debts: Array<{ debtId: string; payment: string }> }>
+      debts: Array<{ id: string; repaymentStartMonth: number; promo: { active: boolean; deferredInterest: boolean } | null }>
+    }
+    expect(body.schedule[0]?.debts.find((d) => d.debtId === loan.id)?.payment).toBe('0.0000')
+    expect(body.debts.find((d) => d.id === loan.id)?.repaymentStartMonth).toBeGreaterThan(1)
+    expect(body.debts.find((d) => d.id === card.id)?.promo).toMatchObject({ active: true, deferredInterest: true })
   })
 
   it('refuses a bad time zone or strategy', async () => {

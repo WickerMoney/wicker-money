@@ -166,3 +166,17 @@ changed entry are refused before any of their code runs; an origin that is not a
 and crafted manifests (server code, `isolated: false`, no pin, an origin that is not allowlisted) are refused or still isolated.
 A frame opened by hand with no pin is covered by the unit tests (`src/frame/verifyPinnedFiles.test.ts`), because the browser only
 reaches that check after the host handshake.
+
+## Button check
+
+`buttons.ts` checks the ui-kit buttons (default, primary, danger, icon, disabled) with no API, database or build: it loads
+`tokens.css`, `components.css` and `app.css` into a static page of the real button markup and, at 561 px and desktop in light
+and dark, hovers each button, computes the contrast of the colours the browser resolved, and runs axe with the pointer on it
+and with keyboard focus on it. It guards the cascade between `.wm-btn:hover` and the variant rules.
+
+```
+cd apps/api
+AXE_PATH=/path/to/axe.min.js npx tsx ../web/browser-check/buttons.ts
+```
+
+`BROWSER_CHECK_OUT` keeps the report, including the measured ratios.

@@ -20,7 +20,9 @@ export class QueryDebtRepository implements DebtRepository {
     return this.q<DebtRow>`
       SELECT id, name, balance::text AS balance, apr::text AS apr,
              minimum_payment::text AS minimum_payment, account_id, sort_order, archived,
-             included, extra_payment::text AS extra_payment
+             included, extra_payment::text AS extra_payment,
+             repayment_starts_on::text AS repayment_starts_on, promo_apr::text AS promo_apr,
+             promo_ends_on::text AS promo_ends_on, promo_deferred_interest, promo_interest_base, compounding
       FROM plugin_debt_payoff.debts
       WHERE (${includeArchived}::boolean OR NOT archived)
       ORDER BY sort_order, created_at, id
@@ -32,7 +34,9 @@ export class QueryDebtRepository implements DebtRepository {
     const rows = await this.q<DebtRow>`
       SELECT id, name, balance::text AS balance, apr::text AS apr,
              minimum_payment::text AS minimum_payment, account_id, sort_order, archived,
-             included, extra_payment::text AS extra_payment
+             included, extra_payment::text AS extra_payment,
+             repayment_starts_on::text AS repayment_starts_on, promo_apr::text AS promo_apr,
+             promo_ends_on::text AS promo_ends_on, promo_deferred_interest, promo_interest_base, compounding
       FROM plugin_debt_payoff.debts
       WHERE id = ${id}::uuid
     `
@@ -44,7 +48,9 @@ export class QueryDebtRepository implements DebtRepository {
     const rows = await this.q<DebtRow>`
       SELECT id, name, balance::text AS balance, apr::text AS apr,
              minimum_payment::text AS minimum_payment, account_id, sort_order, archived,
-             included, extra_payment::text AS extra_payment
+             included, extra_payment::text AS extra_payment,
+             repayment_starts_on::text AS repayment_starts_on, promo_apr::text AS promo_apr,
+             promo_ends_on::text AS promo_ends_on, promo_deferred_interest, promo_interest_base, compounding
       FROM plugin_debt_payoff.debts
       WHERE id = ${id}::uuid
       FOR UPDATE
@@ -67,16 +73,21 @@ export class QueryDebtRepository implements DebtRepository {
     const rows = await this.q<DebtRow>`
       INSERT INTO plugin_debt_payoff.debts
         (user_id, name, balance, apr, minimum_payment, account_id, sort_order, archived,
-         included, extra_payment)
+         included, extra_payment, repayment_starts_on, promo_apr, promo_ends_on,
+         promo_deferred_interest, promo_interest_base, compounding)
       VALUES (
         core.current_user_id(), ${debt.name}, ${debt.balance}::numeric, ${debt.apr}::numeric,
         ${debt.minimumPayment}::numeric, ${debt.accountId}::uuid,
         COALESCE(${debt.sortOrder ?? null}::integer, (SELECT COALESCE(max(sort_order) + 1, 0) FROM plugin_debt_payoff.debts)),
-        ${debt.archived}, ${debt.included}, ${debt.extraPayment}::numeric
+        ${debt.archived}, ${debt.included}, ${debt.extraPayment}::numeric,
+        ${debt.repaymentStartsOn}::date, ${debt.promoApr}::numeric, ${debt.promoEndsOn}::date,
+        ${debt.promoDeferredInterest}, ${debt.promoInterestBase}, ${debt.compounding}
       )
       RETURNING id, name, balance::text AS balance, apr::text AS apr,
                 minimum_payment::text AS minimum_payment, account_id, sort_order, archived,
-             included, extra_payment::text AS extra_payment
+             included, extra_payment::text AS extra_payment,
+             repayment_starts_on::text AS repayment_starts_on, promo_apr::text AS promo_apr,
+             promo_ends_on::text AS promo_ends_on, promo_deferred_interest, promo_interest_base, compounding
     `
     return rows[0]
   }
@@ -97,11 +108,19 @@ export class QueryDebtRepository implements DebtRepository {
           archived = ${debt.archived},
           included = ${debt.included},
           extra_payment = ${debt.extraPayment}::numeric,
+          repayment_starts_on = ${debt.repaymentStartsOn}::date,
+          promo_apr = ${debt.promoApr}::numeric,
+          promo_ends_on = ${debt.promoEndsOn}::date,
+          promo_deferred_interest = ${debt.promoDeferredInterest},
+          promo_interest_base = ${debt.promoInterestBase},
+          compounding = ${debt.compounding},
           updated_at = now()
       WHERE id = ${id}::uuid
       RETURNING id, name, balance::text AS balance, apr::text AS apr,
                 minimum_payment::text AS minimum_payment, account_id, sort_order, archived,
-             included, extra_payment::text AS extra_payment
+             included, extra_payment::text AS extra_payment,
+             repayment_starts_on::text AS repayment_starts_on, promo_apr::text AS promo_apr,
+             promo_ends_on::text AS promo_ends_on, promo_deferred_interest, promo_interest_base, compounding
     `
     return rows[0]
   }
@@ -120,6 +139,8 @@ export class QueryDebtRepository implements DebtRepository {
       SELECT id, name, balance::text AS balance, apr::text AS apr,
              minimum_payment::text AS minimum_payment, account_id, sort_order, archived,
              included, extra_payment::text AS extra_payment,
+             repayment_starts_on::text AS repayment_starts_on, promo_apr::text AS promo_apr,
+             promo_ends_on::text AS promo_ends_on, promo_deferred_interest, promo_interest_base, compounding,
              created_at, updated_at
       FROM plugin_debt_payoff.debts
       ORDER BY sort_order, created_at, id
