@@ -11,6 +11,29 @@ curated, human-readable version.
 
 ### Changed
 
+- **Transactions and Recurring say what an action did in a toast, not in the
+  page banner.** Deleting a transaction now says what was deleted ("Deleted
+  'Coffee' (-$4.50)."; a transfer says both sides were removed), and so do
+  saving an edit, setting a category, bulk categorize ("12 transactions
+  updated."), matching, unmatching, *Not this* and *Restore*, and on Recurring
+  adding, updating, ending and deleting an item, confirming or dismissing a
+  suggestion, and skipping, moving or matching an occurrence. A refused row
+  action is an error toast. Nothing offers Undo and nothing closes itself; a
+  repeat of the same kind of action replaces the last toast. The page banner is
+  now only for a list that failed to load, and a form's own problems stay on the
+  form.
+- **Accounts, Categories and Settings say what an action did in a toast.**
+  Adding, renaming, archiving, deleting or moving an account, correcting an
+  opening balance, the safe-to-spend checkbox, adding, editing, disabling or
+  deleting a category or a rule, resetting setup, finishing the setup wizard,
+  the time zone, a plugin switch, a role change and the data export each raise a
+  notification that names what changed and stays until you close it (Escape or
+  its Close button) or the next action of the same kind replaces it. A refusal
+  that no field owns is an error toast instead of a message at the top of the
+  page, and one raised from inside a dialog stays in the dialog. The
+  "Downloaded." and "Saved." lines and the role announcement under the People
+  table are gone. The time zone picker takes keyboard focus back after Save
+  disables itself.
 - **The Transactions recurring column is quieter.** A matched row shows its
   recurring item as a pill with an *Unmatch* button, and the occurrence's date
   only when it is not the transaction's own; an unmatched row shows nothing
@@ -121,6 +144,10 @@ curated, human-readable version.
 
 ### Fixed
 
+- **A hovered primary button keeps its colours.** The neutral hover rule
+  out-ranked the primary variant, so every primary button turned light grey
+  under its light text on hover (contrast 1.1:1); it now keeps its accent
+  background.
 - **Phone layout: text buttons overlapped their neighbours.** On a phone,
   "Match…" in the Transactions recurring column sat on top of the line below it,
   and "Unmatch" touched the date before it; the Recurring page's "Undo" had no

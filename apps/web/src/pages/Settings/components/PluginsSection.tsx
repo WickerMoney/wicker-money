@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
-import { Alert, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
+import { Alert, EmptyState, Spinner, Surface, useToast } from '@wickermoney/ui-kit'
 import { useAuth } from '../../../auth/index.js'
 import type { RegisteredPlugin } from '../../../models/index.js'
 import { setPluginEnabled } from '../../../plugins/admin/pluginAdminApi.js'
@@ -39,6 +39,7 @@ export function PluginsSection() {
   const registered = useRegisteredPlugins(isOwner)
   const { plugins: loaded, refresh } = usePluginRegistry()
   const location = useLocation()
+  const toast = useToast()
   /** The latest known state of each plugin this page has changed, over the listing. */
   const [changed, setChanged] = useState<Readonly<Record<string, RegisteredPlugin>>>({})
   const [saving, setSaving] = useState<ReadonlySet<string>>(new Set())
@@ -74,6 +75,7 @@ export function PluginsSection() {
       setChanged((c) => ({ ...c, [id]: result.plugin }))
       // Applies the change to this tab's shell before the switch unlocks.
       await refresh()
+      toast.show(`Turned ${next ? 'on' : 'off'} ${current.name}.`, { kind: 'success', key: 'settings:plugin' })
     } catch (e) {
       setChanged((c) => ({ ...c, [id]: current }))
       setErrors((all) => ({

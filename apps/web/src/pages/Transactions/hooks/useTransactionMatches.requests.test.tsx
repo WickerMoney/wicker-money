@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { ToastProvider } from '@wickermoney/ui-kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
 import type { TransactionMatchList, TransactionPage } from '../../../models/index.js'
@@ -28,7 +29,7 @@ function setup() {
     const list = useTransactionList(status)
     const matches = useTransactionMatches(list.items, status, list.revision)
     return { list, matches }
-  })
+  }, { wrapper: ToastProvider })
 }
 
 type Get = { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }

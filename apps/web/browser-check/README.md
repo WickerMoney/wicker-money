@@ -93,6 +93,43 @@ alone and Escape gives it back, and that reduced motion removes the animation.
 `SHOTS_DIR` keeps screenshots and `BROWSER_CHECK_OUT` the report. `AXE_PATH` is
 not a dependency of the repo (see the Insights check).
 
+## Toasts from real Transactions actions (`transactionsToast.ts`)
+
+`toast.ts` raises toasts from a harness; this one raises them from the real Transactions page. It starts the API (built web
+app) against the seeded database, signs in as `hero` and, at desktop, 390 px and 360 px in light and dark, changes a
+category, saves the edit dialog with a long merchant name and deletes a row. It checks what each toast says (and that the
+announcer carries the same words), that focus stays put, that a toast raised by the edit dialog arrives after the dialog
+closed, that nothing offers Undo and nothing closes itself, that Escape closes a focused toast, that axe finds nothing it
+did not find before the toast, and that Shift+Tab up the list with a full stack never leaves the focused control behind the
+banner. It prints the real height of one toast and of the stack, per width (`BROWSER_CHECK_OUT=file.json` keeps them).
+
+```
+pnpm build && pnpm migrate && pnpm --filter @wickermoney/api seed
+AXE_PATH=/path/to/axe.min.js pnpm --filter @wickermoney/web test:toast:pages
+```
+
+It changes the seeded data (edits and deletes rows of `hero`), so reseed with `seed:reset` to run it again from the same
+state. Run it from the repo root with the `.env` the Insights check uses; `SHOTS_DIR=dir` keeps screenshots.
+
+## Feedback check (`feedback.ts`)
+
+`feedback.ts` checks the toasts that Accounts, Categories and Settings raise (ADR 0009) with no API or database. It
+builds `feedback-harness/` (the real `AppShell`, the real pages, `app.css` and ui-kit, a stand-in account menu and a fake
+sign-in) and answers the API itself with Playwright route handlers, so the page's own handlers raise a real toast through
+the real provider, banner and announcer. At desktop and 390 px, light and dark, it raises a toast from the safe-to-spend
+checkbox and from a refusal of it, from disabling a category, and from the time zone, a plugin switch, a role change and
+the export (after its password dialog has closed). For each it checks the text, that it is announced once in the banner
+and that the old page banner is empty; it runs axe with the toasts showing, presses Escape on a toast, and reports where
+keyboard focus is afterwards (the time zone Save button disables itself, which used to send focus to the page).
+
+```
+AXE_PATH=/path/to/axe.min.js pnpm --filter @wickermoney/web test:feedback
+```
+
+`SHOTS_DIR` keeps screenshots and `BROWSER_CHECK_OUT` the report. The table controls on these pages are disabled
+while a request runs, which sends focus to `<body>` in Chromium; the check records that for the safe-to-spend
+checkbox as a note rather than a failure.
+
 ## Lazy frames (`lazyFrames.ts`)
 
 `MODE=check` (default) drives the seeded dashboard (as for the Insights check) and verifies that a frame below the
@@ -142,3 +179,17 @@ changed entry are refused before any of their code runs; an origin that is not a
 and crafted manifests (server code, `isolated: false`, no pin, an origin that is not allowlisted) are refused or still isolated.
 A frame opened by hand with no pin is covered by the unit tests (`src/frame/verifyPinnedFiles.test.ts`), because the browser only
 reaches that check after the host handshake.
+
+## Button check
+
+`buttons.ts` checks the ui-kit buttons (default, primary, danger, icon, disabled) with no API, database or build: it loads
+`tokens.css`, `components.css` and `app.css` into a static page of the real button markup and, at 561 px and desktop in light
+and dark, hovers each button, computes the contrast of the colours the browser resolved, and runs axe with the pointer on it
+and with keyboard focus on it. It guards the cascade between `.wm-btn:hover` and the variant rules.
+
+```
+cd apps/api
+AXE_PATH=/path/to/axe.min.js npx tsx ../web/browser-check/buttons.ts
+```
+
+`BROWSER_CHECK_OUT` keeps the report, including the measured ratios.

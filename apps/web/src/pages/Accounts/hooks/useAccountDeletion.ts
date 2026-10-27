@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { NO_FORM_ERRORS, formErrorsFrom, type FormErrors } from '@wickermoney/ui-kit'
+import { NO_FORM_ERRORS, formErrorsFrom, useToast, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useLatestRequest } from '../../../hooks/useLatestRequest.js'
 import type { Account, AccountUsage, MigrationPlan, RecurringItemList } from '../../../models/index.js'
 import { describeUsage } from '../helpers/describeUsage.js'
 import type { DeleteResolution } from '../state/DeleteResolution.js'
+
+/** The toast family for archive, delete and move, so the next one replaces the last. */
+const TOAST_KEY = 'accounts:remove'
 
 /** What {@link useAccountDeletion} returns. */
 export interface AccountDeletion {
@@ -47,18 +50,21 @@ export interface AccountDeletion {
  * history (remove the account and its ledger rows together), and move (keep the
  * ledger rows by relocating them into another account first).
  *
- * @param status - Busy flag and error message shared with the page.
+ * Outcomes are toasts (ADR 0009), raised after the panel has closed. A refusal
+ * while the panel is open stays in the panel, because a toast cannot be reached
+ * from inside a modal.
+ *
+ * @param status - Busy flag shared with the page.
  * @param accounts - The loaded accounts, used to offer move targets.
  * @param reload - Re-reads the accounts after a successful change.
- * @param showNotice - Shows or clears the success message.
  * @returns The resolution state and the archive, delete and move actions.
  */
 export function useAccountDeletion(
   status: ActionStatus,
   accounts: readonly Account[] | null,
   reload: () => Promise<void>,
-  showNotice: (message: string | null) => void,
 ): AccountDeletion {
+  const toast = useToast()
   const [resolving, setResolving] = useState<DeleteResolution | null>(null)
   const [migrateTargetId, setMigrateTargetId] = useState('')
   const [migratePlan, setMigratePlan] = useState<MigrationPlan | null>(null)
@@ -77,26 +83,33 @@ export function useAccountDeletion(
   }
 
   const archive = async (a: Account) => {
-    status.begin(); showNotice(null)
+    status.begin()
+    const panelOpen = resolving !== null
     try {
       await api.post(`/accounts/${a.id}/archive`, {})
       setResolving(null)
       await reload()
-      showNotice(`'${a.name}' is archived. It's hidden from pickers, and every transaction it has keeps it.`)
+      toast.show(
+        `Archived '${a.name}'. It's hidden from pickers, and every transaction it has keeps it.`,
+        { kind: 'success', key: TOAST_KEY },
+      )
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not archive that account.')
+      // From the panel the refusal belongs beside its buttons; from the table, in a toast.
+      if (panelOpen) setErrors(formErrorsFrom(e, [], 'Could not archive that account.'))
+      else toast.show(e instanceof Error ? e.message : 'Could not archive that account.', { kind: 'error', key: TOAST_KEY })
     } finally { status.end() }
   }
 
   /** Checks usage before deleting, so the user finds out before the click rather than after. */
   const startDelete = async (a: Account) => {
-    status.begin(); showNotice(null)
+    status.begin()
     try {
       const usage = await api.get<AccountUsage>(`/accounts/${a.id}/usage`)
       if (usage.total === 0) {
         if (!window.confirm(`Delete '${a.name}'? Nothing is using it, so this is safe.`)) return
         await api.del(`/accounts/${a.id}`)
         await reload()
+        toast.show(`Deleted account '${a.name}'.`, { kind: 'success', key: TOAST_KEY })
         return
       }
       // Only asked for when something recurring uses the account, so a plain
@@ -110,7 +123,7 @@ export function useAccountDeletion(
       setMigratePlan(null)
       setErrors(NO_FORM_ERRORS)
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not check that account.')
+      toast.show(e instanceof Error ? e.message : 'Could not check that account.', { kind: 'error', key: TOAST_KEY })
     } finally { status.end() }
   }
 
@@ -127,10 +140,11 @@ export function useAccountDeletion(
       )
       setResolving(null)
       await reload()
-      showNotice(
+      toast.show(
         `Deleted '${account.name}', ${result.deletedTransactions} transaction` +
           `${result.deletedTransactions === 1 ? '' : 's'} and ${result.deletedRecurringItems} recurring item` +
           `${result.deletedRecurringItems === 1 ? '' : 's'} with it.`,
+        { kind: 'success', key: TOAST_KEY },
       )
     } catch (e) {
       setErrors(formErrorsFrom(e, [], 'Could not delete that account.'))
@@ -169,7 +183,7 @@ export function useAccountDeletion(
       setResolving(null)
       setMigratePlan(null)
       await reload()
-      showNotice(`Moved '${from}''s history into '${targetName}' and deleted '${from}'.`)
+      toast.show(`Moved the history of '${from}' into '${targetName}' and deleted '${from}'.`, { kind: 'success', key: TOAST_KEY })
     } catch (e) {
       setErrors(formErrorsFrom(e, ['toAccountId'], 'Could not complete that move.'))
     } finally { status.end() }

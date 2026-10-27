@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Button, EmptyState, IconButton, Surface, Table } from '@wickermoney/ui-kit'
+import { Button, EmptyState, IconButton, Surface, Table, useToast } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import { DisclosureButton, useExpandedGroups } from '../../../disclosure/index.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -13,7 +13,7 @@ export interface RulesPanelProps {
   readonly rules: readonly Rule[]
   /** Used to show each rule's category by name. */
   readonly categories: readonly Category[] | null
-  /** Busy flag and error message shared with the page. */
+  /** Busy flag shared with the page. */
   readonly status: ActionStatus
   /** Called after a rule is deleted so the list can be re-read. */
   readonly onChanged: () => Promise<void>
@@ -31,15 +31,16 @@ export interface RulesPanelProps {
  */
 export function RulesPanel({ rules, categories, status, onChanged }: RulesPanelProps) {
   const groups = useExpandedGroups()
+  const toast = useToast()
   const ruleGroups = useMemo(() => groupRulesByCategory(rules, categories), [rules, categories])
 
-  const removeRule = async (id: string) => {
-    status.show(null)
+  const removeRule = async (id: string, categoryName: string) => {
     try {
       await api.del(`/category-rules/${id}`)
       await onChanged()
+      toast.show(`Deleted a rule for '${categoryName}'.`, { kind: 'success', key: 'categories:rule' })
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not delete that rule.')
+      toast.show(e instanceof Error ? e.message : 'Could not delete that rule.', { kind: 'error', key: 'categories:rule' })
     }
   }
 
@@ -103,7 +104,7 @@ export function RulesPanel({ rules, categories, status, onChanged }: RulesPanelP
                               <div className="wm-row-actions">
                                 <IconButton
                                   icon="delete" label="Delete" variant="danger" disabled={status.busy}
-                                  onClick={() => void removeRule(r.id)}
+                                  onClick={() => void removeRule(r.id, g.name)}
                                 />
                               </div>
                             ) },

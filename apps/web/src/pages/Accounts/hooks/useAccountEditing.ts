@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, useToast, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import { checkMoney, checkText, fieldErrors } from '../../../lib/fieldChecks.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -10,7 +10,10 @@ import type { AccountEditing } from '../state/AccountEditing.js'
 /**
  * Owns the accounts table's inline editing.
  *
- * @param status - Busy flag and error message shared with the page.
+ * A saved edit or a checkbox change says so in a toast; a refused edit stays
+ * beside the row (ADR 0009).
+ *
+ * @param status - Busy flag shared with the page.
  * @param onChanged - Called after a save so the list can be re-read.
  * @returns The row being edited and the actions on it.
  */
@@ -19,6 +22,7 @@ export function useAccountEditing(
 ): AccountEditing {
   const [editing, setEditing] = useState<AccountEdit | null>(null)
   const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
+  const toast = useToast()
 
   const start = (a: Account) => {
     setEditing({
@@ -63,6 +67,7 @@ export function useAccountEditing(
       })
       setEditing(null)
       await onChanged()
+      toast.show(`Saved changes to '${editing.name.trim()}'.`, { kind: 'success', key: 'accounts:edit' })
     } catch (e) {
       setErrors(formErrorsFrom(
         e, ['name', 'currencyCode', 'bufferAmount'], 'Could not save that account.',
@@ -77,8 +82,12 @@ export function useAccountEditing(
     try {
       await api.patch(`/accounts/${a.id}`, { spendable })
       await onChanged()
+      toast.show(
+        `'${a.name}' ${spendable ? 'now counts' : 'no longer counts'} toward safe to spend.`,
+        { kind: 'success', key: 'accounts:edit' },
+      )
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not save that account.')
+      toast.show(e instanceof Error ? e.message : 'Could not save that account.', { kind: 'error', key: 'accounts:edit' })
     } finally { status.end() }
   }
 

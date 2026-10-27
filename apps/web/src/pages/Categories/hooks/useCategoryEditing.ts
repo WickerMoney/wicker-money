@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, useToast, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import { checkText, fieldErrors } from '../../../lib/fieldChecks.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
@@ -7,10 +7,17 @@ import type { Category, CategoryUsage } from '../../../models/index.js'
 import type { CategoryEdit } from '../state/CategoryEdit.js'
 import type { CategoryEditing } from '../state/CategoryEditing.js'
 
+/** The toast family for the category table, so the next action replaces the last. */
+const TOAST_KEY = 'categories:row'
+
 /**
  * Owns the category table's inline editing, enable/disable and delete.
  *
- * @param status - Busy flag and error message shared with the page.
+ * A saved edit, a disable or enable and a delete each say so in a toast, and a
+ * refusal that no field owns is an error toast (ADR 0009). A refused edit stays
+ * beside the row.
+ *
+ * @param status - Busy flag shared with the page.
  * @param onChanged - Called after any change so the list can be re-read.
  * @param onMovedUnder - Called with the parent a saved category now sits under, so
  *   the page can open it instead of leaving the row hidden in a collapsed group.
@@ -21,6 +28,7 @@ export function useCategoryEditing(
 ): CategoryEditing {
   const [editing, setEditing] = useState<CategoryEdit | null>(null)
   const [errors, setErrors] = useState<FormErrors>(NO_FORM_ERRORS)
+  const toast = useToast()
 
   const start = (c: Category) => {
     setEditing({ id: c.id, name: c.name, parentId: c.parent_id ?? '', kind: c.kind })
@@ -49,6 +57,7 @@ export function useCategoryEditing(
       setEditing(null)
       if (editing.parentId !== '') onMovedUnder?.(editing.parentId)
       await onChanged()
+      toast.show(`Saved changes to '${editing.name.trim()}'.`, { kind: 'success', key: TOAST_KEY })
     } catch (e) {
       // Re-parenting refusals ("cannot be its own parent") are not about the
       // name, so they land beside the row's Save button.
@@ -61,13 +70,14 @@ export function useCategoryEditing(
     try {
       await api.patch(`/categories/${c.id}`, { isEnabled })
       await onChanged()
-      status.show(
+      toast.show(
         isEnabled
-          ? null
-          : `'${c.name}' is hidden from the pickers. Transactions already filed under it keep it.`,
+          ? `Enabled '${c.name}'. It is back in the pickers.`
+          : `Disabled '${c.name}'. It is hidden from the pickers, and transactions already filed under it keep it.`,
+        { kind: 'success', key: TOAST_KEY },
       )
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not change that category.')
+      toast.show(e instanceof Error ? e.message : 'Could not change that category.', { kind: 'error', key: TOAST_KEY })
     } finally { status.end() }
   }
 
@@ -80,17 +90,19 @@ export function useCategoryEditing(
     try {
       const usage = await api.get<CategoryUsage>(`/categories/${c.id}/usage`)
       if (usage.total > 0) {
-        status.show(
+        toast.show(
           `'${c.name}' is still in use, so it cannot be deleted. Disable it instead — ` +
             `that hides it everywhere and keeps the history.`,
+          { kind: 'error', key: TOAST_KEY },
         )
         return
       }
       if (!window.confirm(`Delete '${c.name}'? Nothing is using it, so this is safe.`)) return
       await api.del(`/categories/${c.id}`)
       await onChanged()
+      toast.show(`Deleted category '${c.name}'.`, { kind: 'success', key: TOAST_KEY })
     } catch (e) {
-      status.show(e instanceof Error ? e.message : 'Could not delete that category.')
+      toast.show(e instanceof Error ? e.message : 'Could not delete that category.', { kind: 'error', key: TOAST_KEY })
     } finally { status.end() }
   }
 

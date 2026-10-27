@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, useToast, type FormErrors } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { checkMoney, checkText, fieldErrors, REQUIRED_MESSAGE } from '../../../lib/fieldChecks.js'
@@ -24,7 +24,8 @@ export function useTransactionEditing(
   // `start`, `assign` and `remove` are what every row's cells call, so they
   // keep their identity while the editor's fields change on each keystroke;
   // otherwise typing in the dialog would re-render every row behind it.
-  const { begin, end, show } = status
+  const { begin, end } = status
+  const toast = useToast().show
 
   const change = (next: TransactionEdit) => {
     // A field's message goes once that field changes; the others stay.
@@ -51,18 +52,21 @@ export function useTransactionEditing(
 
   const cancel = () => { setEditing(null); setErrors(NO_FORM_ERRORS) }
 
-  const assign = useCallback(async (id: string, next: string) => {
-    show(null)
+  const assign = useCallback(async (t: Transaction, next: string, categoryName: string) => {
     try {
       await api.post('/transactions/categorize', {
-        transactionIds: [id],
+        transactionIds: [t.id],
         categoryId: next === '' ? null : next,
       })
+      toast(
+        next === '' ? `Cleared the category of '${t.merchant}'.` : `Set '${t.merchant}' to ${categoryName}.`,
+        { kind: 'success', key: 'transactions:categorize' },
+      )
       await onChanged()
     } catch (e) {
-      show(e instanceof Error ? e.message : 'Could not set that category.')
+      toast(e instanceof Error ? e.message : 'Could not set that category.', { kind: 'error', key: 'transactions:categorize' })
     }
-  }, [show, onChanged])
+  }, [toast, onChanged])
 
   const save = async () => {
     if (editing === null) return
@@ -84,6 +88,8 @@ export function useTransactionEditing(
         notes: editing.notes.trim() === '' ? null : editing.notes.trim(),
       })
       setEditing(null)
+      // The dialog is closed by now, so the outcome is a toast (ADR 0009, section 3).
+      toast(`Updated '${editing.merchant.trim()}'.`, { kind: 'success', key: 'transactions:edit' })
       await onChanged()
     } catch (e) {
       setErrors(formErrorsFrom(
@@ -104,11 +110,18 @@ export function useTransactionEditing(
     try {
       await api.del(`/transactions/${t.id}`)
       setEditing((current) => (current?.id === t.id ? null : current))
+      // Says what went. A transfer's amount is shown without the sign of the leg that was clicked.
+      toast(
+        t.transfer_id !== null
+          ? `Deleted transfer of ${formatMoney(t.amount.replace(/^[-+]/, ''))}. Both sides were removed.`
+          : `Deleted '${t.merchant}' (${formatMoney(t.amount)}).`,
+        { kind: 'success', key: 'transactions:delete' },
+      )
       await onChanged()
     } catch (e) {
-      show(e instanceof Error ? e.message : 'Could not delete that transaction.')
+      toast(e instanceof Error ? e.message : 'Could not delete that transaction.', { kind: 'error', key: 'transactions:delete' })
     } finally { end() }
-  }, [begin, end, show, onChanged])
+  }, [begin, end, toast, onChanged])
 
   return { editing, errors, change, start, cancel, save, remove, assign }
 }

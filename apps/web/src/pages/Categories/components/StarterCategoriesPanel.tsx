@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Button, FormError, Surface } from '@wickermoney/ui-kit'
+import { Button, FormError, Surface, useToast } from '@wickermoney/ui-kit'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { useOnboarding } from '../../../onboarding/useOnboarding.js'
 
 /** Props for {@link StarterCategoriesPanel}. */
 export interface StarterCategoriesPanelProps {
-  /** Busy flag and error message shared with the page. */
+  /** Busy flag shared with the page. */
   readonly status: ActionStatus
   /** Called after setup is reset so the category list can be re-read. */
   readonly onChanged: () => Promise<void>
@@ -26,6 +26,7 @@ export function StarterCategoriesPanel({ status, onChanged }: StarterCategoriesP
   // Shown beside the buttons, not in the page's banner, which is far above
   // them once the category list is long.
   const [failure, setFailure] = useState<string | null>(null)
+  const toast = useToast()
 
   /**
    * What the wizard was told, in the words it used to ask.
@@ -50,13 +51,14 @@ export function StarterCategoriesPanel({ status, onChanged }: StarterCategoriesP
       })
       await onChanged()
       await refreshOnboarding()
-      status.show(
+      toast.show(
         r.removed === 0
-          ? 'Setup reset. Your categories were left alone.'
-          : `Setup reset and ${r.removed} unused categories removed.` +
+          ? 'Reset setup. Your categories were left alone.'
+          : `Reset setup and removed ${r.removed} unused ${r.removed === 1 ? 'category' : 'categories'}.` +
             (r.kept.length > 0
               ? ` ${r.kept.length} kept because transactions or rules use them: ${r.kept.slice(0, 5).join(', ')}${r.kept.length > 5 ? '…' : ''}.`
               : ''),
+        { kind: 'success', key: 'categories:setup' },
       )
     } catch (e) {
       setFailure(e instanceof Error ? e.message : 'Could not reset setup.')

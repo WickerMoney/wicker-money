@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { useActionStatus } from '../../../hooks/useActionStatus.js'
 import type { Category, Transaction } from '../../../models/index.js'
 import { makeTransaction } from '../../../testing/makeTransaction.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
 import { TransactionTable } from './TransactionTable.js'
 
 /**
@@ -42,7 +43,7 @@ function Harness({ optionsFor }: { optionsFor: (currentId: string | null) => rea
 describe('TransactionTable row rendering', () => {
   it('does not re-render the rows when a selection changes', async () => {
     const optionsFor = vi.fn((): readonly Category[] => [])
-    render(<Harness optionsFor={optionsFor} />)
+    renderWithToasts(<Harness optionsFor={optionsFor} />)
     expect(optionsFor).toHaveBeenCalledTimes(ROWS)
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select Merchant 3' }))
@@ -54,7 +55,7 @@ describe('TransactionTable row rendering', () => {
 
   it('does not re-render the rows while typing in the edit dialog', async () => {
     const optionsFor = vi.fn((): readonly Category[] => [])
-    render(<Harness optionsFor={optionsFor} />)
+    renderWithToasts(<Harness optionsFor={optionsFor} />)
     await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!)
     const afterOpen = optionsFor.mock.calls.length
 

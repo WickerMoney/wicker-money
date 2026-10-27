@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Spinner, useFocusTrap } from '@wickermoney/ui-kit'
+import { Alert, Spinner, useFocusTrap, useToast } from '@wickermoney/ui-kit'
 import { api } from '../api/client.js'
 import { useEscapeKey } from '../hooks/useEscapeKey.js'
 import type { SituationGroup } from './SituationGroup.js'
@@ -30,6 +30,7 @@ export function SetupWizard() {
   const [error, setError] = useState<string | null>(null)
   const panel = useRef<HTMLDivElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
+  const toast = useToast()
 
   const { chosen, toggle } = useWizardAnswers(open, status)
   const preview = useSetupPreview(open, chosen)
@@ -68,10 +69,13 @@ export function SetupWizard() {
     try {
       await api.post('/onboarding/complete', { situations })
       await refresh()
+      // The wizard has closed by now (refresh clears the request), so the toast
+      // is reachable. A failure stays in the wizard, which is a modal.
+      toast.show('Finished setup. Your starter categories are ready.', { kind: 'success', key: 'onboarding:finish' })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not finish setup.')
     } finally { setBusy(false) }
-  }, [refresh])
+  }, [refresh, toast])
 
   if (!open) return null
 

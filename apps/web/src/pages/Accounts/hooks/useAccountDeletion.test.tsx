@@ -5,6 +5,7 @@ import type { AccountUsage, MigrationPlan, RecurringItem } from '../../../models
 import { deferred } from '../../../testing/deferred.js'
 import { makeAccount } from '../../../testing/makeAccount.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { ToastsWrapper, findToast, toastTexts } from '../../../testing/toastTexts.js'
 import { validationFailed } from '../../../testing/validationFailed.js'
 import { useAccountDeletion } from './useAccountDeletion.js'
 
@@ -33,10 +34,11 @@ function serveUsage(u: AccountUsage) {
 function setup() {
   const status = makeStatus()
   const reload = vi.fn(async () => {})
-  const showNotice = vi.fn()
-  const hook = renderHook(() =>
-    useAccountDeletion(status, [doomed, target, archived], reload, showNotice))
-  return { ...hook, status, reload, showNotice }
+  const hook = renderHook(
+    () => useAccountDeletion(status, [doomed, target, archived], reload),
+    { wrapper: ToastsWrapper },
+  )
+  return { ...hook, status, reload }
 }
 
 let confirm: ReturnType<typeof vi.spyOn>
@@ -57,6 +59,7 @@ describe('starting a delete', () => {
     expect(del).toHaveBeenCalledWith('/accounts/acc-1')
     expect(reload).toHaveBeenCalledTimes(1)
     expect(result.current.resolving).toBeNull()
+    expect(await findToast()).toEqual(["Deleted account 'Checking'."])
   })
 
   it('deletes nothing when the user cancels the confirmation', async () => {
@@ -69,6 +72,7 @@ describe('starting a delete', () => {
 
     expect(del).not.toHaveBeenCalled()
     expect(reload).not.toHaveBeenCalled()
+    expect(toastTexts()).toEqual([])
   })
 
   it('opens the resolution panel instead of deleting when the account has history', async () => {
@@ -96,13 +100,14 @@ describe('starting a delete', () => {
     expect(result.current.resolving?.recurringItems).toEqual([])
   })
 
-  it('reports a failed usage check through the status', async () => {
+  it('reports a failed usage check in an error toast, not the page banner', async () => {
     vi.spyOn(api, 'get').mockRejectedValue(new Error('down'))
     const { result, status } = setup()
 
     await act(async () => { await result.current.startDelete(doomed) })
 
-    expect(status.show).toHaveBeenCalledWith('down')
+    expect(await findToast()).toEqual(['Error: down'])
+    expect(status.show).not.toHaveBeenCalled()
     expect(status.end).toHaveBeenCalled()
   })
 })
@@ -125,7 +130,7 @@ describe('resolving a delete that has history', () => {
   })
 
   it('deletes with history, sending the usage total as the confirm count', async () => {
-    const { result, reload, showNotice } = await resolving()
+    const { result, reload } = await resolving()
     const post = vi.spyOn(api, 'post').mockResolvedValue({ deletedTransactions: 42, deletedRecurringItems: 1 })
 
     await act(async () => { await result.current.deleteWithHistory() })
@@ -133,9 +138,7 @@ describe('resolving a delete that has history', () => {
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('42 transactions and 3 recurring items'))
     expect(post).toHaveBeenCalledWith('/accounts/acc-1/delete-with-history', { confirmCount: 45 })
     expect(reload).toHaveBeenCalled()
-    expect(showNotice).toHaveBeenCalledWith(
-      "Deleted 'Checking', 42 transactions and 1 recurring item with it.",
-    )
+    expect(await findToast()).toEqual(["Deleted 'Checking', 42 transactions and 1 recurring item with it."])
     expect(result.current.resolving).toBeNull()
   })
 
@@ -216,7 +219,7 @@ describe('resolving a delete that has history', () => {
   })
 
   it('moves the history with the previewed count as the confirm count', async () => {
-    const { result, reload, showNotice } = await resolving()
+    const { result, reload } = await resolving()
     const post = vi.spyOn(api, 'post').mockResolvedValueOnce(plan).mockResolvedValueOnce({})
     act(() => result.current.chooseTarget('acc-2'))
     await act(async () => { await result.current.previewMigrate() })
@@ -225,7 +228,7 @@ describe('resolving a delete that has history', () => {
 
     expect(post).toHaveBeenLastCalledWith('/accounts/acc-1/migrate', { toAccountId: 'acc-2', confirmCount: 45 })
     expect(reload).toHaveBeenCalled()
-    expect(showNotice).toHaveBeenCalledWith("Moved 'Checking''s history into 'Savings' and deleted 'Checking'.")
+    expect(await findToast()).toEqual(["Moved the history of 'Checking' into 'Savings' and deleted 'Checking'."])
     expect(result.current.resolving).toBeNull()
   })
 
@@ -243,21 +246,36 @@ describe('resolving a delete that has history', () => {
 describe('archiving', () => {
   it('archives, reloads and says what happened', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({})
-    const { result, reload, showNotice } = setup()
+    const { result, reload } = setup()
 
     await act(async () => { await result.current.archive(doomed) })
 
     expect(post).toHaveBeenCalledWith('/accounts/acc-1/archive', {})
     expect(reload).toHaveBeenCalled()
-    expect(showNotice).toHaveBeenLastCalledWith(expect.stringContaining("'Checking' is archived"))
+    expect(await findToast("Archived 'Checking'.")).toHaveLength(1)
   })
 
-  it('reports a failure through the status', async () => {
+  it('reports a failure from the table in an error toast', async () => {
     vi.spyOn(api, 'post').mockRejectedValue(new Error('nope'))
     const { result, status } = setup()
 
     await act(async () => { await result.current.archive(doomed) })
 
-    expect(status.show).toHaveBeenCalledWith('nope')
+    expect(await findToast()).toEqual(['Error: nope'])
+    expect(status.show).not.toHaveBeenCalled()
+  })
+
+  it('keeps a failure from inside the panel in the panel, where a toast could not be reached', async () => {
+    serveUsage(usage)
+    const { result, status } = setup()
+    await act(async () => { await result.current.startDelete(doomed) })
+    vi.spyOn(api, 'post').mockRejectedValue(new Error('nope'))
+
+    await act(async () => { await result.current.archive(doomed) })
+
+    expect(result.current.errors.form).toBe('nope')
+    expect(result.current.resolving).not.toBeNull()
+    expect(toastTexts()).toEqual([])
+    expect(status.show).not.toHaveBeenCalled()
   })
 })

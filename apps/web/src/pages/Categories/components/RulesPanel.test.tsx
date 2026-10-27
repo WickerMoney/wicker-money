@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../api/client.js'
 import type { Rule, RuleCondition } from '../../../models/index.js'
 import { makeCategory } from '../../../testing/makeCategory.js'
+import { renderWithToasts } from '../../../testing/renderWithToasts.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
+import { findToast } from '../../../testing/toastTexts.js'
 import { RulesPanel } from './RulesPanel.js'
 
 const condition = (id: string, text: string): RuleCondition => ({
@@ -22,7 +24,7 @@ const rules = [rule('r1', 'food', 'KROGER'), rule('r2', 'car', 'SHELL'), rule('r
 
 function mount(onChanged = vi.fn(async () => {})) {
   const status = makeStatus()
-  render(<RulesPanel rules={rules} categories={categories} status={status} onChanged={onChanged} />)
+  renderWithToasts(<RulesPanel rules={rules} categories={categories} status={status} onChanged={onChanged} />)
   return { user: userEvent.setup(), onChanged, status }
 }
 
@@ -64,10 +66,22 @@ describe('RulesPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => { expect(onChanged).toHaveBeenCalled() })
     expect(del).toHaveBeenCalledWith('/category-rules/r2')
+    expect(await findToast()).toEqual(["Deleted a rule for 'Car'."])
+  })
+
+  it('says why in an error toast when the delete is refused', async () => {
+    vi.spyOn(api, 'del').mockRejectedValue(new Error('down'))
+    const { user, onChanged, status } = mount()
+    await user.click(screen.getByRole('button', { name: /Car/ }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    expect(await findToast()).toEqual(['Error: down'])
+    expect(onChanged).not.toHaveBeenCalled()
+    expect(status.show).not.toHaveBeenCalled()
   })
 
   it('shows the empty state, with no groups, when there are no rules', () => {
-    render(<RulesPanel rules={[]} categories={categories} status={makeStatus()} onChanged={vi.fn(async () => {})} />)
+    renderWithToasts(<RulesPanel rules={[]} categories={categories} status={makeStatus()} onChanged={vi.fn(async () => {})} />)
     expect(screen.getByText('No rules yet')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Expand all' })).toBeNull()
   })
