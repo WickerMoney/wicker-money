@@ -25,6 +25,16 @@ html[data-wm-frame="page"] {
 }
 
 /*
+ * A page frame is exactly as wide as the content area, so a control at its left or top edge (the first field of a
+ * page's toolbar) has its focus ring drawn outside the iframe, where it is clipped. Draw the ring inside the
+ * control's border box instead. `body` in the selector outranks the ui-kit's and plugins' own focus rules, which set
+ * an outward offset.
+ */
+html[data-wm-frame="page"] body :focus-visible {
+  outline-offset: -2px;
+}
+
+/*
  * The host's own stylesheet does not reach a frame, and it has one rule written for plugin pages
  * (`.shell__main .wm-surface__body` in app.css) and one for checkboxes: below the phone breakpoint a wide table inside a card scrolls
  * inside the card. Without it a table wider than the frame is clipped by the iframe, with no scrollbar to reach it.
