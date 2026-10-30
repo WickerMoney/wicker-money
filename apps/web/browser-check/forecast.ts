@@ -634,6 +634,24 @@ async function visualChecks(pw: typeof Playwright, base: string): Promise<void> 
       check(`visual ${theme}: ${expectDark ? 'dark' : 'light'} is ${expectDark ? 'dark' : 'light'}`, expectDark ? luminance(framePx) < 0.3 : luminance(framePx) > 0.7, { framePx })
       await shot(o.page, `theme-${theme.toLowerCase()}`)
     }
+
+    // The first field sits flush at the frame's left edge, where an outward focus ring would be clipped by the iframe.
+    // The ring must be drawn inside the control, so its pixels at the frame's edge column are not the page colour.
+    const first = frame.locator('select').first()
+    await first.focus()
+    await sleep(150)
+    const ring = await first.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      const r = el.getBoundingClientRect()
+      return { offset: cs.outlineOffset, style: cs.outlineStyle, left: r.left, midY: r.top + r.height / 2, focusVisible: el.matches(':focus-visible') }
+    })
+    const edgeBox = await o.page.locator('iframe').boundingBox()
+    const edgePng = await o.page.screenshot()
+    const edge = (await pixels(helper, edgePng, [[Math.round(edgeBox!.x + ring.left + 1), Math.round(edgeBox!.y + ring.midY)], [Math.round(edgeBox!.x + ring.left + 8), Math.round(edgeBox!.y + ring.midY)]]))
+    const delta = Math.max(...edge[0]!.map((v, i) => Math.abs(v - edge[1]![i]!)))
+    check('focus ring: the first field shows :focus-visible with the ring drawn inside it', ring.focusVisible && ring.style === 'solid' && parseFloat(ring.offset) < 0, ring)
+    check('focus ring: the ring is visible at the frame edge (not clipped)', delta > 40, { ring, edge })
+    await shot(o.page, 'focus-ring-edge')
   } finally { await o.browser.close() }
 
   // No flash on load. The worst case is an app theme that differs from the operating system's: the frame's own
