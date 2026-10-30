@@ -20,8 +20,10 @@ The core owns identity, money movement and the app shell. Everything that
 *interprets* money — budgets, forecasting, net worth, FIRE, importers — is a
 plugin built against `@wickermoney/plugin-sdk`. A fresh install is useful on its
 own; bundled plugins ship enabled and are built against the same SDK a
-third-party plugin would use. Plugin code is fully trusted today (see
-[Plugins](#plugins)), so third-party plugin install is not supported yet.
+third-party plugin would use. Two bundled plugins still run fully trusted in the
+app's own page, and the sandbox the others run in has known gaps and has not been
+independently reviewed (see [Plugins](#plugins)), so third-party plugin install
+is not supported yet.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
@@ -283,6 +285,7 @@ previous image without restoring that backup depends on the release:
 
 | Release | Migrations | Going back to the previous image |
 |---|---|---|
+| `v0.7.0` | 034, 035 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one (this deletes the debt payoff plugin's per-debt "In plan" switches, extra amounts, repayment start dates, promotions and compounding choices; the debts themselves stay) |
 | `v0.6.1` | 033 (has a `down` that changes nothing) | Run `node dist/db/cli.js down` once with the new image, then start the old one (the policy rewrite stays; it returns the same rows) |
 | `v0.6.0` | 029, 030, 031, 032 (all have a `down`) | Run `node dist/db/cli.js down` four times with the new image, then start the old one (this deletes everything in the debt payoff plugin, and the owner-role and erase functions) |
 | `v0.5.0` | 027, 028 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one (this deletes account allowances) |
@@ -310,7 +313,16 @@ compresses responses you should stop the proxy compressing this upstream, as the
 API now does it itself. After upgrading to `v0.6.1`, nothing changes for existing
 accounts; an owner is now asked to confirm in Settings before switching on a
 third-party plugin, and the upgrade runs one more migration (033), which
-changes no access.
+changes no access. After upgrading to `v0.7.0`, the API has a per-user rate limit
+that is **on by default** (600 requests a minute per signed-in user, 30 CSV import
+requests and 5 data exports): people using the app will not meet it, but a script
+that calls the API in a loop may get `429 rate_limited`. Raise `API_RATE_LIMIT_MAX`
+(and `API_RATE_LIMIT_IMPORT_MAX`, `API_RATE_LIMIT_EXPORT_MAX`), or set
+`API_RATE_LIMIT_ENABLED=false` to turn it off. A CSV import can now wait its turn
+or be refused with `503 import_busy` when others are committing (see
+`IMPORT_MAX_CONCURRENT` and `IMPORT_QUEUE_WAIT_SECONDS` in `.env.example`), and the
+upgrade runs two more migrations (034 and 035), which add columns to the debt
+payoff plugin's table.
 Per-release
 notes are also on the docs site under [Upgrading](https://wickermoney.dev/docs/self-hosting/upgrading).
 
@@ -386,10 +398,11 @@ role stay, and turning it back on brings everything back. Plugins in the same
 area, such as two budgeting approaches, can be on together.
 
 **Where a plugin runs decides how far it is trusted.** Insights, Spending
-Trends and Upcoming run in a sandboxed frame and reach your data only through the host, with
-the grants their manifest lists. The other bundled plugins still run inside the
-app, in its own origin, with the same access to your data as you have; they ship
-in the image and are reviewed with it. There is no install flow or catalog for
+Trends, Upcoming, Forecast and Debt payoff run in a sandboxed frame and reach your
+data only through the host, with the grants their manifest lists. The other two
+bundled plugins, Budgets and Import CSV, still run inside the app, in its own
+origin, with the same access to your data as you have; they ship in the image and
+are reviewed with it. There is no install flow or catalog for
 third-party plugins: an operator can add one by hand (a manifest with an
 integrity pin in `PLUGIN_MANIFEST_DIR`, its origin in `PLUGIN_REMOTE_ORIGINS`),
 and it then runs only in a frame, with no server-side code. The sandbox has known
@@ -417,11 +430,16 @@ Argon2id digest with the application's own parameters by hand.
 
 ## Status
 
-**`v0.6.1`** is the current release, a small patch on `v0.6.0`: Settings asks an
-owner to confirm before switching on a third-party plugin, the Transactions table
-fits narrower windows, the browser console and DevTools no longer warn about
-the plugin frame, and one policy gets the per-statement user lookup. `v0.6.0`
-brought the isolation work: plugin front-end code can now run in a sandboxed frame, behind plugin-scoped tokens that the server holds to a plugin's
+**`v0.7.0`** is the current release. Every action on the core pages now says what
+it did in a notification, Upcoming, Forecast and Debt payoff run in sandboxed
+frames (Budgets and Import CSV are the two plugins left in the app's own page),
+Debt payoff can leave a debt out of the plan and handle deferred loans,
+promotional rates and daily interest, and the API has a per-user rate limit (on
+by default) and a limit on concurrent CSV imports. `v0.6.1` was a small patch on
+`v0.6.0`: Settings asks an owner to confirm before switching on a third-party
+plugin, the Transactions table fits narrower windows, the browser console and
+DevTools no longer warn about the plugin frame, and one policy gets the
+per-statement user lookup. `v0.6.0` brought the isolation work: plugin front-end code can now run in a sandboxed frame, behind plugin-scoped tokens that the server holds to a plugin's
 own grants; Insights and Spending Trends run that way, and an operator can add a
 third-party UI plugin by hand, as an experimental feature with no install flow.
 It also adds a password-confirmed data export, a danger zone for erasing data,

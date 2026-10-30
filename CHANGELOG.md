@@ -9,70 +9,26 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-### Changed
+## [0.7.0] - unreleased
 
-- **Transactions and Recurring say what an action did in a toast, not in the
-  page banner.** Deleting a transaction now says what was deleted ("Deleted
-  'Coffee' (-$4.50)."; a transfer says both sides were removed), and so do
-  saving an edit, setting a category, bulk categorize ("12 transactions
-  updated."), matching, unmatching, *Not this* and *Restore*, and on Recurring
-  adding, updating, ending and deleting an item, confirming or dismissing a
-  suggestion, and skipping, moving or matching an occurrence. A refused row
-  action is an error toast. Nothing offers Undo and nothing closes itself; a
-  repeat of the same kind of action replaces the last toast. The page banner is
-  now only for a list that failed to load, and a form's own problems stay on the
-  form.
-- **Accounts, Categories and Settings say what an action did in a toast.**
-  Adding, renaming, archiving, deleting or moving an account, correcting an
-  opening balance, the safe-to-spend checkbox, adding, editing, disabling or
-  deleting a category or a rule, resetting setup, finishing the setup wizard,
-  the time zone, a plugin switch, a role change and the data export each raise a
-  notification that names what changed and stays until you close it (Escape or
-  its Close button) or the next action of the same kind replaces it. A refusal
-  that no field owns is an error toast instead of a message at the top of the
-  page, and one raised from inside a dialog stays in the dialog. The
-  "Downloaded." and "Saved." lines and the role announcement under the People
-  table are gone. The time zone picker takes keyboard focus back after Save
-  disables itself.
-- **The Transactions recurring column is quieter.** A matched row shows its
-  recurring item as a pill with an *Unmatch* button, and the occurrence's date
-  only when it is not the transaction's own; an unmatched row shows nothing
-  there. A **Link** button, first among the row buttons (accent colour and a dot
-  when an item is suggested), opens a list under the row with the suggestion
-  (*Match*, *Not this*), the other items it could be, the dismissed ones
-  (*Restore*) and *Close*. Not this, Restore and Unmatch keep the list open.
-- **The API now has a per-user rate limit, on by default.** Every signed-in
-  user may make 600 requests a minute to `/api/v1`, 30 CSV import requests
-  (`analyze` and `commit`) and 5 data exports; a request with no valid token
-  counts against the client address. Over the limit the API answers `429
-  rate_limited` with a `Retry-After` header, and the app shows the message. A
-  heavy normal session makes under a seventh of the general limit, so people
-  using the app will not meet it. **Upgrade note: anything that calls the API in
-  a loop (a sync, a poller, a script) may now get 429s. Raise
-  `API_RATE_LIMIT_MAX` (and `API_RATE_LIMIT_IMPORT_MAX`,
-  `API_RATE_LIMIT_EXPORT_MAX`), or set `API_RATE_LIMIT_ENABLED=false` to turn
-  the limit off.** The counters are per API process, so several instances each
-  count on their own. The sign-in limits are unchanged. See `DEVELOPMENT.md`,
-  "API rate limit".
-- **The Forecast page runs in a sandboxed plugin frame**, the first page to do
-  so, like Insights and Spending Trends do for their widgets. The page looks and
-  behaves as before: the frame grows to its content and the window scrolls, Tab
-  order and the skip link are unchanged, and the tab title is the app's. Tab at
-  the last control of a frame now leaves it instead of staying put. Plugin page
-  routes also match addresses under the page (`/p/<id>/<page>/...`), which a
-  page in a frame is told about.
-- **Plugin frames start when they scroll into view.** A dashboard widget that
-  runs in a sandboxed frame no longer gets its iframe until its card is within
-  600 px of the viewport; until then the card holds a placeholder of the frame's
-  minimum height. Frames in the first screen start at load, as before, and a
-  browser without `IntersectionObserver` starts every frame at load. A started
-  frame is kept when scrolled away. The "plugin did not start in time" clock now
-  starts when the frame is created and stops while the tab is hidden, so a tab in
-  the background no longer fails a widget. Find-in-page and printing only see
-  frames that have started.
-- **Debt payoff runs in a sandboxed plugin frame.** The "Debt payoff" page and the "Debt-free date" widget no longer run in the app's own page; they read and write through the host's broker with only the plugin's own routes. The page looks and behaves as before, including the add, edit and remove dialogs: while one is open the page's frame fills the window next to the navigation, the page stays where it was, the window does not scroll, Tab stays in the dialog and Escape returns focus to the button that opened it. Forms inside a plugin frame now submit (the frame's sandbox has no `allow-forms`, so the frame runtime sends the `submit` event itself).
-- **Upcoming runs in a sandboxed frame.** The "Until payday" widget no longer runs in the app's own page; it reads through the host's broker with only its two read grants, and its upcoming list scrolls inside the widget.
-  
+Daily-use polish, load limits and more of the bundled plugins in sandboxed
+frames. Every action on the core pages (Transactions, Recurring, Accounts,
+Categories, Settings) now says what it did in a toast, the Transactions
+recurring column is quieter, and Debt payoff gains per-debt controls, deferred
+loans, promotional rates and per-debt compounding. Upcoming, Forecast and Debt
+payoff now run in sandboxed frames, so Budgets and Import CSV are the only
+bundled plugins left in the app's own page. The API now has a per-user rate
+limit that is **on by default** (a script that calls the API in a loop may need
+it raised or turned off) and a limit on concurrent CSV imports. `pnpm dev`
+serves plugin frames through the API. `@wickermoney/ui-kit` gains a public
+notification toast (experimental) and `@wickermoney/plugin-sdk/isolated` two
+additive messages. Two changes can affect a caller, the rate limit and the
+import queue, and each has a setting to change it; nothing is removed or
+renamed, so there is no Breaking section. It has two new migrations, 034 and
+035, both adding columns to the debt payoff plugin's table. **Back up your
+database before upgrading** (`pg_dump -Fc`), as for any release. See
+[Upgrading](README.md#upgrading).
+
 ### Added
 
 - **Debt payoff: loans in deferment.** A debt can have a repayment start date.
@@ -122,11 +78,14 @@ curated, human-readable version.
   "End-to-end tests".
 - **A notification toast in `@wickermoney/ui-kit`** (experimental, for the core
   app only for now): `ToastProvider`, `ToastViewport` and `useToast()`, plus the
-  `--wm-shadow-raised` token. Nothing dismisses itself: a toast stays until it is
-  closed (its button or Escape) or replaced by the same key. A polite screen
+  `--wm-shadow-raised` token. Nothing dismisses itself: a toast stays until it
+  is closed (its button or Escape) or replaced by the same key. A polite screen
   reader announcement is separate from the visible banner, which sits at the top
-  of the page content and stays in view under the phone bar. The app shell now
-  draws it; no page raises one yet.
+  of the page content and stays in view under the phone bar. The app shell draws
+  it, and the core pages raise them (see Changed). It is a new public export, in
+  the experimental tier: it may change in any 0.x minor release, and a plugin's
+  own copy of the package has no provider, so `useToast()` throws there with a
+  message saying so.
 - `pnpm --filter @wickermoney/web test:toast`, a browser check with axe for the
   toast (light and dark, desktop and phone widths, drawer, dialog, reduced motion).
 - **A limit on concurrent CSV imports.** Each commit holds a database connection
@@ -141,6 +100,94 @@ curated, human-readable version.
   shows the message, and sending the same file again imports it once. One person
   importing alone is not slowed. See `DEVELOPMENT.md`, "Pool, timeouts and import
   limits".
+- **Two more messages in the isolated plugin protocol**
+  (`@wickermoney/plugin-sdk/isolated`, experimental): `modal` (frame to host)
+  and `modal-layout` (host to frame), with their types `ModalMessage` and
+  `ModalLayoutMessage` and the constant `MAX_MODAL_LAYOUT`. A page frame says
+  `modal` while a native modal `<dialog>` is open, and the host answers with
+  `modal-layout` after it lifts the frame over the window. The change is
+  additive: protocol version 1 and `SDK_MAJOR_VERSION` 0 stay as they are, no
+  existing message or export changed, and a peer that does not know a message
+  ignores it (an older host leaves the dialog where it was). Plugins need no
+  change.
+
+### Changed
+
+- **Transactions and Recurring say what an action did in a toast, not in the
+  page banner.** Deleting a transaction now says what was deleted ("Deleted
+  'Coffee' (-$4.50)."; a transfer says both sides were removed), and so do
+  saving an edit, setting a category, bulk categorize ("12 transactions
+  updated."), matching, unmatching, *Not this* and *Restore*, and on Recurring
+  adding, updating, ending and deleting an item, confirming or dismissing a
+  suggestion, and skipping, moving or matching an occurrence. A refused row
+  action is an error toast. Nothing offers Undo and nothing closes itself; a
+  repeat of the same kind of action replaces the last toast. The page banner is
+  now only for a list that failed to load, and a form's own problems stay on the
+  form.
+- **Accounts, Categories and Settings say what an action did in a toast.**
+  Adding, renaming, archiving, deleting or moving an account, correcting an
+  opening balance, the safe-to-spend checkbox, adding, editing, disabling or
+  deleting a category or a rule, resetting setup, finishing the setup wizard,
+  the time zone, a plugin switch, a role change and the data export each raise a
+  notification that names what changed and stays until you close it (Escape or
+  its Close button) or the next action of the same kind replaces it. A refusal
+  that no field owns is an error toast instead of a message at the top of the
+  page, and one raised from inside a dialog stays in the dialog. The
+  "Downloaded." and "Saved." lines and the role announcement under the People
+  table are gone. The time zone picker takes keyboard focus back after Save
+  disables itself.
+- **The Transactions recurring column is quieter.** A matched row shows its
+  recurring item as a pill with an *Unmatch* button, and the occurrence's date
+  only when it is not the transaction's own; an unmatched row shows nothing
+  there. A **Link** button, first among the row buttons (accent colour and a dot
+  when an item is suggested), opens a list under the row with the suggestion
+  (*Match*, *Not this*), the other items it could be, the dismissed ones
+  (*Restore*) and *Close*. Not this, Restore and Unmatch keep the list open.
+- **The API now has a per-user rate limit, on by default.** Every signed-in user
+  may make 600 requests a minute to `/api/v1`, 30 CSV import requests (`analyze`
+  and `commit`) and 5 data exports; a request with no valid token counts against
+  the client address. Over the limit the API answers `429 rate_limited` with a
+  `Retry-After` header, and the app shows the message. A heavy normal session
+  makes under a seventh of the general limit, so people using the app will not
+  meet it. **Upgrade note: anything that calls the API in a loop (a sync, a
+  poller, a script) may now get 429s. Raise `API_RATE_LIMIT_MAX` (and
+  `API_RATE_LIMIT_IMPORT_MAX`, `API_RATE_LIMIT_EXPORT_MAX`), or set
+  `API_RATE_LIMIT_ENABLED=false` to turn the limit off.** The counters are per
+  API process, so several instances each count on their own. The window is
+  `API_RATE_LIMIT_WINDOW_SECONDS` (60). The sign-in limits are unchanged. See
+  `DEVELOPMENT.md`, "API rate limit".
+- **The Forecast page runs in a sandboxed plugin frame**, the first page to do
+  so, like Insights and Spending Trends do for their widgets. The page looks and
+  behaves as before: the frame grows to its content and the window scrolls, Tab
+  order and the skip link are unchanged, and the tab title is the app's. Tab at
+  the last control of a frame now leaves it instead of staying put. Plugin page
+  routes also match addresses under the page (`/p/<id>/<page>/...`), which a
+  page in a frame is told about.
+- **Plugin frames start when they scroll into view.** A dashboard widget that
+  runs in a sandboxed frame no longer gets its iframe until its card is within
+  600 px of the viewport; until then the card holds a placeholder of the frame's
+  minimum height. Frames in the first screen start at load, as before, and a
+  browser without `IntersectionObserver` starts every frame at load. A started
+  frame is kept when scrolled away. The "plugin did not start in time" clock now
+  starts when the frame is created and stops while the tab is hidden, so a tab in
+  the background no longer fails a widget. Find-in-page and printing only see
+  frames that have started.
+- **Debt payoff runs in a sandboxed plugin frame.** The "Debt payoff" page and
+  the "Debt-free date" widget no longer run in the app's own page; they read and
+  write through the host's broker with only the plugin's own routes. The page
+  looks and behaves as before, including the add, edit and remove dialogs: while
+  one is open the page's frame fills the window next to the navigation, the page
+  stays where it was, the window does not scroll, Tab stays in the dialog and
+  Escape returns focus to the button that opened it. Forms inside a plugin frame
+  now submit (the frame's sandbox has no `allow-forms`, so the frame runtime
+  sends the `submit` event itself).
+- **Upcoming runs in a sandboxed frame.** The "Until payday" widget no longer
+  runs in the app's own page; it reads through the host's broker with only its
+  two read grants, and its upcoming list scrolls inside the widget.
+- **`Dialog` no longer scrolls the page when it focuses its first field**
+  (`@wickermoney/ui-kit`). It focuses with `preventScroll`, because the dialog
+  is fixed to the window and in a plugin page frame the scroll threw the person
+  to the top of the frame. Nothing else about the focus changes.
 
 ### Fixed
 
@@ -1439,7 +1486,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/WickerMoney/wicker-money/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/WickerMoney/wicker-money/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/WickerMoney/wicker-money/compare/v0.4.2...v0.5.0

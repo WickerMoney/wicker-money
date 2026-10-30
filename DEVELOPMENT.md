@@ -953,10 +953,10 @@ What a bundled plugin still does not get:
 
 ### Plugin trust model
 
-Three of the seven bundled UI plugins (Insights, Spending Trends, Upcoming) and
-every third-party plugin run in a sandboxed frame. The other four bundled plugins
-(widgets and pages loaded over Module Federation) still run **fully trusted, in
-the host's origin**. Read this before writing or reviewing anything
+Five of the seven bundled UI plugins (Insights, Spending Trends, Upcoming,
+Forecast, Debt payoff) and every third-party plugin run in a sandboxed frame. The
+other two bundled plugins (Budgets and Import CSV: widgets and pages loaded over
+Module Federation) still run **fully trusted, in the host's origin**. Read this before writing or reviewing anything
 that talks about plugin "permissions", "scoping" or "sandboxing".
 
 | Layer | What it does | Boundary against plugin code? |
@@ -1156,8 +1156,10 @@ sequenceDiagram
     the seeded dashboard and measures it against an earlier build (see
     `apps/web/browser-check/README.md`).
 
-  Measured on the seeded `hero` dashboard (6 widgets: 3 in frames, Insights twice
-  and Spending Trends; the others in the page), Chromium 153, headless, the API
+  Measured on the seeded `hero` dashboard as it was for 0.6.1 (6 widgets: 3 in
+  frames, Insights twice and Spending Trends; the others in the page; the Upcoming
+  and Debt payoff widgets have run in frames since, so that dashboard now has more
+  frames than this table counts), Chromium 153, headless, the API
   and browser on one shared 2-CPU container, so the absolute numbers are noisy
   and only the before and after on the same run mean anything. Median of 7 runs,
   before and after alternated run by run, one discarded warm-up each. "First
@@ -1209,7 +1211,7 @@ sequenceDiagram
   What this costs you: a frame runs the **built** copy of its code, so there is no
   hot reload inside it. After changing the frame (`apps/web/src/frame`), the
   SDK's isolated entry or a plugin that runs in a frame (`insights`,
-  `spending-trends`), run the `build` line again and reload. Plugins that run in
+  `spending-trends`, `upcoming`, `forecast`, `debt-payoff`), run the `build` line again and reload. Plugins that run in
   the page are unchanged: Vite serves them from `apps/web/public/plugins`, which
   their watch builds rewrite. If the frame fails to start, the browser console
   names the likely cause (no built frame, API not running, something other than
@@ -1274,7 +1276,7 @@ four parts, and CI runs them as the required check **Hostile plugin suite**.
   logout or a password change, minted for another plugin, and used after the
   plugin is disabled.
 - **Browser half** (`apps/web/browser-check/hostile/`, Chromium). A hostile
-  widget runs beside an honest neighbour frame and attempts about 140 things:
+  widget runs beside an honest neighbour frame and attempts about 150 things:
   reading the host token or cookies, `fetch`, XHR, WebSocket, `sendBeacon`, images,
   fonts, workers, nested frames, forms, popups, top navigation and `ctx.navigate`
   to hostile paths, every route above through the broker and with a stolen token,
@@ -1553,7 +1555,7 @@ stack is healthy, migrated and seeded (all four seed personas sign in, the
 bundled plugins registered with no load failures); `hero` signs in and reaches the
 dashboard; `household` reaches the forecast page; every in-realm bundled plugin
 page loads with no console error or failed request; every dashboard widget
-loads, and the isolated ones (Insights, Spending Trends and Upcoming today) run in frames with
+loads, and the isolated ones (everything not in `IN_REALM_PLUGIN_IDS`) run in frames with
 no console error and no Content Security Policy violation; `hero` cannot read
 `household` data through the API or the UI; and a transaction added in the
 Transactions dialog appears in the ledger and lowers the dashboard's "Safe to
