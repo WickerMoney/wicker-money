@@ -15,6 +15,23 @@ function plusDays(date: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }
 
+/**
+ * The given date, or the 28th of its month when it falls later. A monthly series
+ * that starts on such a day has an occurrence on the same day of every month, so
+ * a date computed with {@link nextMonth} is always a real occurrence (30 days
+ * after the start is not: it is one only when the start month has 30 days).
+ */
+function onOrBeforeThe28th(date: string): string {
+  const day = Number(date.slice(8, 10))
+  return day > 28 ? plusDays(date, 28 - day) : date
+}
+
+/** The same day of the next month, for a date on or before the 28th. */
+function nextMonth(date: string): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number]
+  return new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10)
+}
+
 async function send(user: TestUser, method: 'GET' | 'POST', url: string, payload?: Record<string, unknown>) {
   const res = await h.app.inject({ method, url, headers: auth(user), ...(payload === undefined ? {} : { payload }) })
   expect(res.statusCode, `${url} ${res.body}`).toBeLessThan(300)
@@ -77,12 +94,12 @@ describe('transaction matches from one shared load', () => {
 
   it('describes a dismissal long ago with no suggestions to make', async () => {
     const { user, checking, today } = await household()
-    const old = plusDays(today, -120)
+    const old = onOrBeforeThe28th(plusDays(today, -120))
     const gym = await bill(user, checking, 'Gym', '-40.00', old)
     const payment = await transaction(user, checking, '-41.00', plusDays(old, 1))
     await send(user, 'POST', `/api/v1/recurring-items/${gym}/occurrences/${old}/dismissals`, { transactionId: payment })
     const linkedElsewhere = await transaction(user, checking, '-5.00', today)
-    await send(user, 'POST', `/api/v1/recurring-items/${gym}/occurrences/${plusDays(old, 30)}/matches`, { transactionId: linkedElsewhere })
+    await send(user, 'POST', `/api/v1/recurring-items/${gym}/occurrences/${nextMonth(old)}/matches`, { transactionId: linkedElsewhere })
 
     const out = await matches(user, [payment])
     expect(out.transactions).toEqual([
