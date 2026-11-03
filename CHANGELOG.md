@@ -9,7 +9,7 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-## [0.7.0] - unreleased
+## [0.7.0] - 2026-11-02
 
 Daily-use polish, load limits and more of the bundled plugins in sandboxed
 frames. Every action on the core pages (Transactions, Recurring, Accounts,
