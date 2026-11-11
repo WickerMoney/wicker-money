@@ -158,6 +158,13 @@ How it behaves:
   edge of anything fixed to the top of the window (the app shell does this for
   its phone bar). It pushes the page down rather than covering it. The fade is
   150 ms of opacity and is off under `prefers-reduced-motion`.
+- **Clearance.** While a banner shows, `ToastViewport` sets `--wm-toast-height`
+  (its height in px, rounded up) on its parent element and removes it when the
+  banner goes, so a stylesheet can keep a control that is scrolled to (Tab,
+  Shift+Tab) out from behind it without measuring: `scroll-margin-top:
+  calc(var(--wm-toast-offset-top, 0px) + var(--wm-toast-height, 0px) + 8px)`.
+  Put the rule on the control, not its row. Like the rest of the toast, the
+  property is experimental.
 - **Tokens.** `--wm-shadow-raised` (light and dark) is new; the rest are existing
   surface, border, text, accent and status colours.
 

@@ -1,5 +1,5 @@
 import {
-  useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
+  useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
   type KeyboardEvent, type ReactNode,
 } from 'react'
 import {
@@ -236,13 +236,45 @@ function ToastCard({ item, onDismiss }: { readonly item: ToastItem; readonly onD
   )
 }
 
+/** The custom property {@link ToastViewport} publishes: the banner's height in px, absent while no toast shows. */
+const TOAST_HEIGHT_PROPERTY = '--wm-toast-height'
+
+/**
+ * Publishes the banner's height as `--wm-toast-height` on the element that holds
+ * it, for as long as the banner is in the page, and removes it with the banner.
+ *
+ * It is the one place that measures the banner. Anything below it in the page can
+ * use the value in CSS instead of observing the banner itself, for example
+ * `scroll-margin-top: calc(var(--wm-toast-offset-top, 0px) + var(--wm-toast-height, 0px))`
+ * so a control scrolled into view is not left behind it.
+ */
+function usePublishHeight(banner: { readonly current: HTMLDivElement | null }): void {
+  useLayoutEffect(() => {
+    const element = banner.current
+    const host = element?.parentElement
+    if (element === null || element === undefined || host === null || host === undefined) return undefined
+    const publish = (): void => { host.style.setProperty(TOAST_HEIGHT_PROPERTY, `${Math.ceil(element.getBoundingClientRect().height)}px`) }
+    publish()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(publish)
+    observer?.observe(element)
+    return () => {
+      observer?.disconnect()
+      host.style.removeProperty(TOAST_HEIGHT_PROPERTY)
+    }
+  }, [banner])
+}
+
 /**
  * Draws the toasts as an in-flow banner that sticks to the top of the page
  * while it scrolls. Place it as the first child of `<main>`.
  *
  * It sticks at `top: var(--wm-toast-offset-top, 0px)`; set that custom
  * property (on `<main>` or any ancestor) to the bottom edge of anything fixed
- * to the top of the viewport. It takes no props, is not a live region (the
+ * to the top of the viewport. While the banner shows, it sets
+ * `--wm-toast-height` (its height in px, rounded up) on its parent element, so
+ * styles for the content below it can keep a focused or scrolled-to control
+ * clear of the banner; the property is absent, and a `var(--wm-toast-height, 0px)`
+ * fallback applies, when no toast shows. It takes no props, is not a live region (the
  * provider's announcer speaks), holds no tab stop when empty, and renders
  * nothing outside a {@link ToastProvider}.
  *
@@ -251,7 +283,12 @@ function ToastCard({ item, onDismiss }: { readonly item: ToastItem; readonly onD
 export function ToastViewport() {
   const view = useContext(ToastViewContext)
   if (view === null || view.visible.length === 0) return null
+  return <ToastBanner view={view} />
+}
+
+function ToastBanner({ view }: { readonly view: ToastView }) {
   const { visible, dismissMany, originRef, groupRef } = view
+  usePublishHeight(groupRef)
   return (
     <div ref={groupRef} className="wm-toast-viewport" role="group" aria-label="Notifications"
          onFocus={(e) => {

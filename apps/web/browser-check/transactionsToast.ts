@@ -220,6 +220,17 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         measure(`${tag}: full stack (${vp.limit} show)`, { ...stack, texts: await toastTexts(page) })
         check(`${tag}: ${vp.limit} toasts at most show at once`, stack.toasts.length <= vp.limit && stack.toasts.length >= 2, stack)
         await shot('transactions-stack')
+        // A row action's scroll margin is the phone bar + the published banner height + 8 px, not a measurement of its own.
+        const margin = await page.evaluate(() => {
+          const bar = document.querySelector('.shell__bar') as HTMLElement | null
+          const barBottom = bar !== null && getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().bottom : 0
+          const banner = Math.ceil(document.querySelector('[aria-label="Notifications"]')!.getBoundingClientRect().height)
+          const action = document.querySelector('.txn-list tbody button, .txn-list button')!
+          return { margin: parseFloat(getComputedStyle(action).scrollMarginTop), expected: barBottom + banner + 8,
+            published: document.querySelector('main')!.style.getPropertyValue('--wm-toast-height'), banner }
+        })
+        check(`${tag}: a row action's scroll margin is the bar, the published banner height and 8px`,
+          Math.abs(margin.margin - margin.expected) <= 1 && margin.published === `${margin.banner}px`, margin)
         await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
         await sleep(200)
         await rows().last().getByRole('button', { name: 'Edit', exact: true }).focus()
@@ -236,7 +247,7 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
           const hiddenBehind = window.scrollY > 0 && top < Math.max(bannerBottom, barBottom) - 0.5 && !banner.contains(el)
           return hiddenBehind ? {
             id: el.getAttribute('aria-label') ?? el.tagName, top, bannerBottom,
-            margin: getComputedStyle(el).scrollMarginTop, clear: document.querySelector<HTMLElement>('.txn-list')?.style.getPropertyValue('--txn-toast-clear') ?? '',
+            margin: getComputedStyle(el).scrollMarginTop, clear: document.querySelector<HTMLElement>('main')?.style.getPropertyValue('--wm-toast-height') ?? '',
           } : null
         })
         // Up through 60 tab stops, which crosses the rows on screen and those above it.
