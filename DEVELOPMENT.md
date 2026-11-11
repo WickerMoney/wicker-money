@@ -221,6 +221,96 @@ for another page), instead of every row: 19 KB instead of 21 MB for an 8 MB
 file. `commit` classifies the file itself, so rows never shown are handled the
 same way.
 
+### Staged CSV upload
+
+`analyze` and `commit` accept the file two ways: `csv` (the text in the body, up
+to 8 MB, as before) or `uploadId`, the id of a file sent earlier in pieces. The
+pieces exist because the sandboxed plugin frames reach the API through a broker
+whose messages stop at 256 KiB; a frame cannot send an 8 MB body. Send exactly
+one of the two: both is a `400`. The `csv` body is unchanged and stays the way
+for small files, scripts and the API; the Import CSV page still uses it until it
+moves into a frame. Everything after the file is read is the same code either way
+(`readCsv`, the mapping, the analysis, the commit), so a staged file gives the
+same rows and the same summary as the same text in a body.
+
+All routes are under `/api/v1/p/wickermoney.import-csv` and need the user's
+token like the rest of the plugin. Errors use the usual `{ code, message }` body.
+
+| Route | Body | Answer |
+|---|---|---|
+| `POST /upload/begin` | `{ chunks, bytes }`: how many chunks (1 to 64) and the exact size of the whole text in bytes of UTF-8 (1 to 8,000,000) | `{ uploadId, chunks, bytes, expiresInSeconds }` |
+| `POST /upload/chunk` | `{ uploadId, index, text }`: `index` from 0 to `chunks - 1`; `text` 1 byte to 256 KiB | `{ chunks, received, bytes }` |
+| `POST /upload/finish` | `{ uploadId }` | `{ chunks, received, bytes }` |
+| `POST /upload/abort` | `{ uploadId }` | `{}`, whether or not the id was live |
+| `POST /analyze`, `POST /commit` | the usual body with `uploadId` instead of `csv` | as before |
+
+**How the pieces are declared.** `begin` states the number of chunks and the
+exact byte size once. A chunk names its own position with `index`, so they may
+arrive in any order and several at a time (the page plans 6 in flight, about
+200,000 characters each, 36 for a 7 MB file). Sending an index again with the
+same text is accepted and changes nothing, so a lost answer can be retried; other
+text for a stored index is `409 chunk_conflict`. A chunk may end between the two
+halves of a character that needs a surrogate pair; the byte count accounts for it.
+
+**What `finish` checks**, in this order: every index from 0 to `chunks - 1` has
+arrived (`409 upload_incomplete`, naming the first missing; the upload stays
+open for the rest); the bytes add up to exactly what `begin` declared; the joined
+text is well-formed (`400 upload_size_mismatch` or `upload_not_text`, and the
+upload is discarded, since more chunks cannot repair it). JSON decoding has
+already replaced invalid UTF-8 bytes with U+FFFD before the server sees the
+text, so what is left to refuse is an unpaired surrogate. `finish` on a finished
+upload repeats its answer.
+
+**Limits, checked as data arrives** (not at `finish`):
+
+| Limit | Value | Over it |
+|---|---|---|
+| Live uploads per user | 2 | `begin`: `409 too_many_uploads` |
+| Size and chunks of one upload | 8,000,000 bytes, 64 chunks | `begin`: `400` |
+| One chunk | 256 KiB of UTF-8 | `413 chunk_too_large` |
+| Chunks add up to more than `begin` declared | the declared bytes | `413 upload_too_large`, upload discarded |
+| Time to live | 15 minutes after the last new chunk (`begin` counts as the first) | the upload is gone: `404 upload_not_found` |
+| All users together, per API process | 64,000,000 bytes (8 full-size uploads), reserved at `begin` | `begin`: `503 staging_full` with `Retry-After` |
+
+An upload is removed when its commit succeeds, when it expires, and on `abort`
+(so picking another file does not leave the person at the 2-upload limit for 15
+minutes). An id that was never issued, belongs to another user, has expired or
+has been imported all get the same `404 upload_not_found`, so an id cannot be
+probed. A duplicate chunk does not extend the 15 minutes; `analyze` and `commit`
+do not either, so a client that keeps a person on the mapping step for longer
+sends the file again when it meets `404`.
+
+**Retrying a commit.** A commit that carries `uploadId` and `idempotencyKey`
+frees the upload's text when it succeeds but keeps a small receipt (the key and
+the unmapped-row count, no text) for 15 minutes, at most 8 per user. The same
+`uploadId` with the same key then answers `200` with the first outcome and
+`replayed: true`, as a repeated key does for a `csv` body, so a lost response
+or a double click is safe. A different key, or none, for an imported upload is
+`404`. A commit that fails leaves the upload in place for another try until it
+expires; one that outlives the caller still runs to its end and frees the text.
+
+**Where the 64,000,000 comes from.** The text is held as JavaScript strings: one
+byte a character for Latin-1 text (typical bank CSV), two for anything else, and
+`finish` briefly holds the chunks and their join together. So 64,000,000 declared
+bytes is about 64 MB of heap in practice and 128 MB at worst, which is under the
+190 to 300 MB one 100,000-row `analyze` already adds, and it still lets four
+people each hold two files of the largest size. Measured on 2 vCPUs with the
+real app (in-process requests, so no network): staging a 100,000-row, 7,156,063-
+byte file in 36 chunks of 200,000 characters, 6 in flight, took a median of 124
+ms (7 runs, 109 to 172), added a peak of 19.6 MB of heap and left 6.9 MB held
+while staged, all of it back after the commit.
+
+**Single process, in memory.** State lives in the API process: a restart empties
+it (the person is told the upload is not available and sends the file again), and
+with several API instances each has its own store, so every request of one upload
+must reach the same instance. A shared store would need a database table and a
+migration; none is added.
+
+**Rate limit.** `begin` counts in the import bucket with `analyze` and `commit`
+(one request per file, the one that reserves memory). `chunk`, `finish` and
+`abort` count in the general bucket: a 100,000-row file is 38 requests, and in the
+import bucket (30 a minute by default) it would allow one upload a minute.
+
 ### API rate limit
 
 Every request under `/api/v1` counts against a per-user limit, **on by default**.
@@ -232,7 +322,7 @@ had limits of their own, and nothing else did.
 |---|---|---|
 | `API_RATE_LIMIT_ENABLED` | `true` | `false` turns the whole limit off. The sign-in limits (`AUTH_RATE_LIMIT_*`) are separate and stay on. |
 | `API_RATE_LIMIT_MAX` | `600` | Requests per user per window, everything except import and export. |
-| `API_RATE_LIMIT_IMPORT_MAX` | `30` | CSV import requests per user per window: `analyze` (each page of flagged rows is one) and `commit` together. |
+| `API_RATE_LIMIT_IMPORT_MAX` | `30` | CSV import requests per user per window: `analyze` (each page of flagged rows is one), `commit` and `upload/begin` (one per staged file) together. |
 | `API_RATE_LIMIT_EXPORT_MAX` | `5` | Data export downloads per user per window. Each also needs a password ticket. |
 | `API_RATE_LIMIT_WINDOW_SECONDS` | `60` | Length of the window, 1 to 86400. |
 
@@ -247,8 +337,8 @@ only the sign-in and refresh calls. The token is checked for its signature only
 (no database query), so a revoked session still names a bucket but is refused by
 the route's own authentication, and it can only spend its own user's allowance.
 
-**Which bucket.** A request counts against exactly one bucket: `POST` `analyze`
-and `commit` of the Import CSV plugin in the import bucket, `GET
+**Which bucket.** A request counts against exactly one bucket: `POST` `analyze`,
+`commit` and `upload/begin` of the Import CSV plugin in the import bucket, `GET
 /settings/export` in the export bucket, everything else (the export ticket, the
 erase actions and the rest of the import plugin's routes included) in the general
 one. `/healthz`, `/readyz`, the web app's files and the plugin frame document are

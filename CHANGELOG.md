@@ -9,6 +9,20 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **Import CSV: staged upload (API).** A file can now be sent in pieces and
+  analyzed or committed by `uploadId`: `POST upload/begin`, `upload/chunk`
+  (about 200,000 characters each, any order, several at once), `upload/finish`
+  and `upload/abort` under the plugin's routes, with `uploadId` accepted by
+  `analyze` and `commit` in place of `csv`. This is what lets a sandboxed frame
+  import a file larger than the 256 KiB broker message. It is additive: the
+  `csv` body works as before and the Import CSV page does not change. Uploads
+  are held in the API process's memory (2 per user, 8 MB and 64 chunks each,
+  64 MB for all users, gone after 15 minutes or once imported), so there is no
+  migration; `upload/begin` counts in the import rate limit. See
+  [Staged CSV upload](DEVELOPMENT.md#staged-csv-upload).
+
 ## [0.7.0] - 2026-11-02
 
 Daily-use polish, load limits and more of the bundled plugins in sandboxed
