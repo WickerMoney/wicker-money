@@ -9,6 +9,13 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Changed
+
+- **Plugin frames download about 90 kB less.** The frame's start-up no longer
+  loads the SDK root and its Zod manifest schemas (they load only for a plugin
+  with an integrity pin), and the Spending Trends widget no longer bundles them
+  either. A test fails if either comes back.
+
 ## [0.7.0] - 2026-11-02
 
 Daily-use polish, load limits and more of the bundled plugins in sandboxed

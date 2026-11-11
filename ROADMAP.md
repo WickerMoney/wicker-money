@@ -120,8 +120,6 @@ Smaller things noticed during `v0.7.0`. These are not plans.
 - Publishing the toast banner's height from the app shell or the ui-kit, so the
   Transactions table does not have to measure it to keep a focused control
   clear of it.
-- The frame's startup downloads the SDK root (about 85 kB) for a plugin that
-  could import only what it uses.
 - A docs-site page for the `API_RATE_LIMIT_*` variables, and a closer look at an
   import of 25 MB or more under the new rate and concurrency limits.
 - Retake the README screenshots of Transactions, which still show the earlier

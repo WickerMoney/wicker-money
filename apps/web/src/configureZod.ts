@@ -11,9 +11,10 @@ import { z } from 'zod'
  *
  * Imported for its side effect, and first in each entry, so it runs before any
  * module has a chance to build a schema: zod makes the `new Function` probe
- * when it builds the first object schema, not when it first parses. The entries
- * are `main.tsx` (the app's page) and `frame/main.tsx` (the sandboxed plugin
- * frame, which serves the same policy minus anything a page may do).
+ * when it builds the first object schema, not when it first parses. The app's
+ * entry is `main.tsx`. The sandboxed plugin frame (same policy minus anything a
+ * page may do) does not load zod at start: it imports this on demand, right before
+ * the SDK root, when a plugin has an integrity pin (`frame/fragment.ts`).
  *
  * zod 4.4 and later keep this setting on `globalThis`, so a plugin built with
  * its own copy of one of those, and loaded into the frame after this has run,

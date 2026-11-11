@@ -1,9 +1,9 @@
 import { init, loadRemote, registerRemotes } from '@module-federation/runtime'
 import { version as reactVersion } from 'react'
 import { version as reactDomVersion } from 'react-dom'
-import { REMOTE_ENTRY_TYPE, federationName } from '@wickermoney/plugin-sdk'
 import type { ComponentType } from 'react'
 import type { FrameParams } from './fragment.js'
+import { REMOTE_ENTRY_TYPE, federationName } from './federation.js'
 import { verifyPinnedFiles } from './verifyPinnedFiles.js'
 
 /**
