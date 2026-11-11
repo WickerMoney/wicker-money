@@ -11,14 +11,15 @@ import { readIdempotencyKey } from './readIdempotencyKey.js'
  * the column width.
  *
  * @param body - The parsed JSON body, unvalidated.
+ * @param staged - The text of the staged upload the body's `uploadId` names, when it has one.
  * @returns The analyze fields plus the file name, the accepted row numbers and, when sent, the idempotency key.
  * @throws {ImportError} `400` for an invalid account id, mapping, CSV or idempotency key.
  */
-export function readCommitRequest(body: unknown): CommitInput {
+export function readCommitRequest(body: unknown, staged?: string): CommitInput {
   const b = (body ?? {}) as CommitBody
   const idempotencyKey = readIdempotencyKey(b.idempotencyKey)
   return {
-    ...readAnalyzeRequest(b),
+    ...readAnalyzeRequest(b, staged),
     fileName: typeof b.fileName === 'string' ? b.fileName.slice(0, 300) : 'upload.csv',
     acceptRowNumbers: Array.isArray(b.acceptRowNumbers)
       ? b.acceptRowNumbers.filter((n): n is number => typeof n === 'number')

@@ -26,6 +26,7 @@ import { selectRowsToImport } from './selectRowsToImport.js'
 import { toAnalyzedRow } from './toAnalyzedRow.js'
 import { toLedgerRows } from './toLedgerRows.js'
 import { toReplayedResult } from './toReplayedResult.js'
+import { uploadNotFound } from '../staging/uploadErrors.js'
 
 /**
  * The CSV import use cases: preview a file, write it as one batch, undo a
@@ -146,6 +147,23 @@ export class ImportService {
   commit(userId: string, input: CommitInput): Promise<CommitResult> {
     const gate = this.gates.commit
     return gate === undefined ? this.commitNow(userId, input) : gate.run(() => this.commitNow(userId, input))
+  }
+
+  /**
+   * Answers a repeat of a commit from the batch its key was recorded on,
+   * without the file. Used when the commit's staged upload was already imported
+   * and freed, so the file is no longer there to classify.
+   *
+   * @param userId - The authenticated user.
+   * @param key - The idempotency key of the first commit.
+   * @param failed - Rows that could not be mapped, as the first commit counted them.
+   * @returns The first commit's outcome, marked as replayed.
+   * @throws {ImportError} `404` (`upload_not_found`) when no batch of this user carries the key.
+   */
+  async replayCommit(userId: string, key: string, failed: number): Promise<CommitResult> {
+    const original = await this.uow.run(userId, (repos) => repos.batches.findByIdempotencyKey(key))
+    if (original === undefined) throw uploadNotFound()
+    return toReplayedResult(original, failed)
   }
 
   /** {@link commit}, once it has its turn. */
