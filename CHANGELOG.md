@@ -9,6 +9,14 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A table wider than its room can be scrolled with the keyboard.** The shared
+  table's horizontal scroller (for example Insights' "Show as table" on a phone)
+  could only be scrolled with a pointer. While it overflows it is now a Tab stop
+  with a visible focus ring, named by the table's caption when it has one. A
+  table that fits adds no Tab stop.
+
 ## [0.7.0] - 2026-11-02
 
 Daily-use polish, load limits and more of the bundled plugins in sandboxed

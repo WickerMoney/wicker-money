@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 
 /** Describes one column of a {@link Table}. */
 export interface Column<T> {
@@ -64,9 +64,28 @@ export interface TableProps<T> {
  * that the label is clipped with the table instead of widening the page.
  */
 export function Table<T>({ columns, rows, rowKey, empty, className, caption, rowDetail }: TableProps<T>) {
+  const scroller = useRef<HTMLDivElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  // A scroller whose table is wider than its room can only be scrolled with a pointer unless the keyboard can reach
+  // it, and cells with no control in them give the keyboard nothing to land on. Make the scroller itself a stop, but
+  // only while it really overflows, so a table that fits adds no Tab stop.
+  useEffect(() => {
+    const el = scroller.current
+    if (el === null || typeof ResizeObserver === 'undefined') return undefined
+    const measure = (): void => { setOverflowing(el.scrollWidth > el.clientWidth) }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    if (el.firstElementChild !== null) observer.observe(el.firstElementChild)
+    return () => { observer.disconnect() }
+  })
   if (rows.length === 0 && empty !== undefined) return <>{empty}</>
   return (
-    <div className={className === undefined ? 'wm-table__scroll' : `wm-table__scroll ${className}`}>
+    <div
+      ref={scroller}
+      className={className === undefined ? 'wm-table__scroll' : `wm-table__scroll ${className}`}
+      {...(overflowing ? { tabIndex: 0, ...(caption === undefined ? {} : { role: 'region', 'aria-label': caption }) } : {})}
+    >
       <table className="wm-table">
         {caption === undefined ? null : <caption className="wm-visually-hidden">{caption}</caption>}
         <thead>
