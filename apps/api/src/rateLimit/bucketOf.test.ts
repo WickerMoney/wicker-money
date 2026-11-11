@@ -19,11 +19,12 @@ describe('bucketOf', () => {
     expect(bucketOf('POST', '/api/v1/p/wickermoney.import-csv/commit', '/api/v1/p/wickermoney.import-csv/commit')).toBe('import')
   })
 
-  it('puts opening a staged upload in the import bucket, and its chunks and finish in the general one', () => {
+  it('puts opening a staged upload in the import bucket, and its chunks, finish and abort in the general one', () => {
     const base = '/api/v1/p/wickermoney.import-csv/upload'
     expect(bucketOf('POST', `${base}/begin`, `${base}/begin`)).toBe('import')
     expect(bucketOf('POST', `${base}/chunk`, `${base}/chunk`)).toBe('general')
     expect(bucketOf('POST', `${base}/finish`, `${base}/finish`)).toBe('general')
+    expect(bucketOf('POST', `${base}/abort`, `${base}/abort`)).toBe('general')
   })
 
   it('leaves the rest of the import plugin in the general bucket', () => {

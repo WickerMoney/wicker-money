@@ -237,6 +237,22 @@ export class UploadStore {
   }
 
   /**
+   * Discards a live upload the caller no longer wants, freeing its quota and
+   * reserved bytes at once instead of at expiry.
+   *
+   * Says nothing about whether the id existed or was the caller's, so it
+   * cannot be used to probe ids. A receipt of an imported upload is left alone.
+   *
+   * @param userId - The authenticated user.
+   * @param uploadId - The id `begin` returned.
+   */
+  abort(userId: string, uploadId: string): void {
+    this.sweep()
+    const upload = this.users.get(userId)?.get(uploadId)
+    if (upload !== undefined && upload.state !== 'committed') this.remove(userId, uploadId)
+  }
+
+  /**
    * Records that a commit of this upload succeeded, and frees its text.
    *
    * With a receipt the entry stays, without text, for one more expiry period,

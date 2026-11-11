@@ -80,6 +80,25 @@ describe('UploadStore', () => {
     expect(() => s.begin(U1, 1, 3)).not.toThrow()
   })
 
+  it('frees a live upload at once on abort, says nothing about other ids, and leaves a receipt alone', () => {
+    const s = new UploadStore({ maxTotalBytes: 100 })
+    const a = s.begin(U1, 1, 100)
+    s.abort(U2, a.uploadId) // another user's id: nothing happens
+    expect(s.liveCount(U1)).toBe(1)
+    expect(() => s.abort(U1, '0b9a2f4e-7c1d-4e0a-9d63-5a1f2c3b4d5e')).not.toThrow()
+    s.abort(U1, a.uploadId)
+    expect(s.liveCount(U1)).toBe(0)
+    expect(s.reservedBytes()).toBe(0)
+    expect(codeOf(() => s.addChunk(U1, a.uploadId, 0, 'x'))).toBe('upload_not_found')
+
+    const b = s.begin(U1, 1, 3)
+    s.addChunk(U1, b.uploadId, 0, 'abc')
+    s.finish(U1, b.uploadId)
+    s.markCommitted(U1, b.uploadId, { idempotencyKey: 'k', failed: 0 })
+    s.abort(U1, b.uploadId)
+    expect(s.lookup(U1, b.uploadId).state).toBe('committed')
+  })
+
   it('refuses finish with a missing chunk, names it, and lets the upload be completed', () => {
     const s = new UploadStore()
     const { uploadId } = s.begin(U1, 3, 6)

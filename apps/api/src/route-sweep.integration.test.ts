@@ -112,6 +112,7 @@ const PROTECTED_ROUTES: readonly string[] = [
   'POST /api/v1/p/wickermoney.import-csv/upload/begin',
   'POST /api/v1/p/wickermoney.import-csv/upload/chunk',
   'POST /api/v1/p/wickermoney.import-csv/upload/finish',
+  'POST /api/v1/p/wickermoney.import-csv/upload/abort',
   'GET /api/v1/p/wickermoney.import-csv/batches',
   'POST /api/v1/p/wickermoney.import-csv/batches/:id/revert',
 

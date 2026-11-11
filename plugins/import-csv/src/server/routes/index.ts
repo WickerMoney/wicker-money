@@ -7,6 +7,7 @@ import { registerListBatches } from './handlers/listBatches.js'
 import { registerListMappings } from './handlers/listMappings.js'
 import { registerRevertBatch } from './handlers/revertBatch.js'
 import { registerSaveMapping } from './handlers/saveMapping.js'
+import { registerUploadAbort } from './handlers/uploadAbort.js'
 import { registerUploadBegin } from './handlers/uploadBegin.js'
 import { registerUploadChunk } from './handlers/uploadChunk.js'
 import { registerUploadFinish } from './handlers/uploadFinish.js'
@@ -22,7 +23,7 @@ export type { ImportRouteDeps } from './helpers/ImportRouteDeps.js'
  * Registers every CSV import endpoint through the host-supplied route registrar.
  *
  * Also creates the in-memory store for staged uploads (`/upload/begin`,
- * `/upload/chunk`, `/upload/finish`; `analyze` and `commit` accept its ids).
+ * `/upload/chunk`, `/upload/finish`, `/upload/abort`; `analyze` and `commit` accept its ids).
  *
  * @param deps - The host's `route` registrar, `runAsPlugin` runner, the
  *   category rule loader and resolver used when committing an import, and its
@@ -40,6 +41,7 @@ export function registerImportRoutes(deps: ImportRouteDeps): void {
   registerUploadBegin(deps, uploads)
   registerUploadChunk(deps, uploads)
   registerUploadFinish(deps, uploads)
+  registerUploadAbort(deps, uploads)
   registerAnalyzeImport(deps, service, uploads)
   registerCommitImport(deps, service, uploads)
   registerListBatches(deps, service)

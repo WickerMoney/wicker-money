@@ -54,6 +54,7 @@ async function newAccount(u: TestUser, name: string): Promise<string> {
 const begin = (u: TestUser, chunks: number, bytes: number) => post('/upload/begin', { chunks, bytes }, u)
 const chunk = (u: TestUser, uploadId: string, index: number, text: string) => post('/upload/chunk', { uploadId, index, text }, u)
 const finish = (u: TestUser, uploadId: string) => post('/upload/finish', { uploadId }, u)
+const abort = (u: TestUser, uploadId: string) => post('/upload/abort', { uploadId }, u)
 
 /** Splits `text` into pieces of `size` characters. */
 function pieces(text: string, size: number): string[] {
@@ -216,6 +217,30 @@ describe('chunk and finish', () => {
     const b = (await begin(u, 1, 2)).json() as { uploadId: string }
     expect((await chunk(u, b.uploadId, 0, '\ud83d')).statusCode).toBe(200)
     expect((await finish(u, b.uploadId)).json()).toMatchObject({ code: 'upload_not_text' })
+  })
+})
+
+describe('abort', () => {
+  it('frees the quota at once, and answers alike for an unknown id and another user\'s', async () => {
+    const u = await createUser(h)
+    const a = (await begin(u, 1, 5)).json() as { uploadId: string }
+    const b = (await begin(u, 1, 5)).json() as { uploadId: string }
+    expect((await begin(u, 1, 5)).statusCode).toBe(409)
+
+    const theirs = await createUser(h)
+    const stranger = await abort(theirs, a.uploadId)
+    const unknown = await abort(theirs, '0b9a2f4e-7c1d-4e0a-9d63-5a1f2c3b4d5e')
+    expect(stranger.statusCode).toBe(200)
+    expect(stranger.json()).toEqual(unknown.json())
+    expect((await chunk(u, a.uploadId, 0, 'abcde')).statusCode).toBe(200) // not removed by the stranger
+
+    const mine = await abort(u, a.uploadId)
+    expect(mine.statusCode).toBe(200)
+    expect(mine.json()).toEqual(unknown.json())
+    expect((await chunk(u, a.uploadId, 0, 'abcde')).json()).toMatchObject(NOT_FOUND)
+    expect((await begin(u, 1, 5)).statusCode).toBe(200)
+    expect((await abort(u, 'nope')).statusCode).toBe(400)
+    await abort(u, b.uploadId)
   })
 })
 
