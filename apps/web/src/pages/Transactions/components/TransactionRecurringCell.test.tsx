@@ -116,6 +116,16 @@ async function rowOf(merchant: string): Promise<HTMLElement> {
   const cell = await screen.findByText(merchant)
   return cell.closest('tr') as HTMLElement
 }
+/**
+ * The row of a transaction the server reports as linked. The recurring chip only
+ * renders once the page's matches request has resolved, which is later than the
+ * merchant text, so wait for the chip before a test reads or clicks anything in it.
+ */
+async function linkedRowOf(merchant: string): Promise<HTMLElement> {
+  const r = await rowOf(merchant)
+  await waitFor(() => { expect(r.querySelector('td[data-col="recur"] .recur2__chip')).not.toBeNull() })
+  return r
+}
 const recurCell = (r: HTMLElement) => r.querySelector('td[data-col="recur"]') as HTMLElement
 const linkIn = (r: HTMLElement) => within(r).getByRole('button', { name: /^(Link|Change recurring item for) / })
 const pickerOf = (merchant: string) => screen.getByRole('group', { name: `Recurring items for ${merchant}` })
@@ -160,7 +170,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('shows the pill with its remove button, and no date when it is the transaction date', async () => {
       serve()
       renderWithToasts(<Harness />)
-      const r = await rowOf('Oakwood Phone')
+      const r = await linkedRowOf('Oakwood Phone')
       const cell = within(recurCell(r))
       expect(cell.getByText('Phone')).toBeTruthy()
       expect(cell.getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' })).toBeTruthy()
@@ -171,7 +181,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('shows the occurrence date after the pill when it differs, with a hidden label for screen readers', async () => {
       serve()
       renderWithToasts(<Harness />)
-      const r = await rowOf('Oakwood Rent')
+      const r = await linkedRowOf('Oakwood Rent')
       const date = recurCell(r).querySelector('.recur2__date') as HTMLElement
       expect(date.textContent).toBe('Occurrence date: 10/1/2026')
       expect(date.querySelector('.wm-visually-hidden')?.textContent).toBe('Occurrence date: ')
@@ -183,7 +193,7 @@ describe('recurring column and picker on the Transactions page', () => {
     it('keeps a long item name whole in the title and the remove button name, and cuts it in CSS', async () => {
       serve()
       renderWithToasts(<Harness />)
-      const r = await rowOf('IRS Payment')
+      const r = await linkedRowOf('IRS Payment')
       const chip = recurCell(r).querySelector('.recur2__chip') as HTMLElement
       expect(chip.getAttribute('title')).toBe(LONG)
       expect(chip.querySelector('.recur2__chip-name')?.textContent).toBe(LONG)
@@ -195,7 +205,7 @@ describe('recurring column and picker on the Transactions page', () => {
       const del = vi.spyOn(api, 'del').mockImplementation(async () => { world.summaries.delete('same') })
       const user = userEvent.setup()
       renderWithToasts(<Harness />)
-      const r = await rowOf('Oakwood Phone')
+      const r = await linkedRowOf('Oakwood Phone')
       await user.click(within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }))
       expect(del).toHaveBeenCalledWith('/recurring-items/phone/occurrences/2026-10-01/matches/same')
       await waitFor(() => { expect(recurCell(r).childNodes).toHaveLength(0) })
@@ -213,7 +223,7 @@ describe('recurring column and picker on the Transactions page', () => {
       vi.spyOn(api, 'del').mockReturnValue(gate.promise as Promise<void>)
       const user = userEvent.setup()
       renderWithToasts(<Harness />)
-      const r = await rowOf('Oakwood Phone')
+      const r = await linkedRowOf('Oakwood Phone')
       await user.click(within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }))
       await waitFor(() => { expect((linkIn(r) as HTMLButtonElement).disabled).toBe(true) })
       expect((within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }) as HTMLButtonElement).disabled).toBe(true)
@@ -388,7 +398,7 @@ describe('recurring column and picker on the Transactions page', () => {
       expect(linkIn(r).className).not.toContain('--suggest')
       expect(r.nextElementSibling?.className).toBe('wm-table__detail')
       // The toast did not close the picker or move focus out of it.
-      expect(shownToasts()).toEqual(["Marked 'CHECK #1042' as not Rent."])
+      await waitFor(() => { expect(shownToasts()).toEqual(["Marked 'CHECK #1042' as not Rent."]) })
       expect(pickerOf('CHECK #1042').contains(document.activeElement)).toBe(true)
     })
 
@@ -406,7 +416,7 @@ describe('recurring column and picker on the Transactions page', () => {
       expect(del).toHaveBeenCalledWith('/recurring-items/lawn/occurrences/2026-10-21/dismissals/garden')
       await waitFor(() => { expect(within(pickerOf('Garden Centre')).getAllByRole('button', { name: /^Restore / })).toHaveLength(1) })
       await waitFor(() => { expect(document.activeElement).toBe(within(pickerOf('Garden Centre')).getByRole('button', { name: /^Restore Pool/ })) })
-      expect(shownToasts()).toEqual(["'Garden Centre' can be suggested for Lawn Service again."])
+      await waitFor(() => { expect(shownToasts()).toEqual(["'Garden Centre' can be suggested for Lawn Service again."]) })
     })
 
     it('replaces the toast of the last match action instead of stacking them', async () => {
@@ -446,7 +456,7 @@ describe('recurring column and picker on the Transactions page', () => {
       })
       const user = userEvent.setup()
       renderWithToasts(<Harness />)
-      const r = await rowOf('Oakwood Phone')
+      const r = await linkedRowOf('Oakwood Phone')
       await user.click(linkIn(r))
       const picker = await waitFor(() => pickerOf('Oakwood Phone'))
       expect(within(picker).getByText('Unmatch it to choose a different item.')).toBeTruthy()
