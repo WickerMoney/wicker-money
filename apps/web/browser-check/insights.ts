@@ -297,14 +297,31 @@ function widgetFrame(page: Playwright.Page, mode: Mode, which: 'trend' | 'donut'
 /** Rules about a whole page (one main landmark, an h1, all content in landmarks). A widget frame is one component of a page, so they do not apply to it. */
 const PAGE_LEVEL_RULES = ['landmark-one-main', 'page-has-heading-one', 'region']
 
-async function axeRun(frame: Playwright.Frame, include?: string[][]): Promise<Array<{ id: string; impact: string | null | undefined; nodes: number; target: string }>> {
+async function axeRun(frame: Playwright.Frame, include?: string[][]): Promise<Array<{ id: string; impact: string | null | undefined; nodes: number; target: string; data?: unknown }>> {
   await frame.evaluate(AXE)
+  // A widget frame's document is transparent: the host's card shows through it. Axe cannot see through an iframe, so it
+  // measures the frame's text against the default white canvas and reports light dark-theme text as unreadable. Give
+  // the frame's root the colour the host paints behind it for the run, which is what a person sees, and put it back.
+  const behind = frame === frame.page().mainFrame() ? null : await (await frame.frameElement()).evaluate((el) => {
+    for (let n: Element | null = el; n !== null; n = n.parentElement) {
+      const c = getComputedStyle(n).backgroundColor
+      if (c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') return c
+    }
+    return null
+  })
+  const root = await frame.evaluate((c) => {
+    const el = document.documentElement
+    const was = el.style.backgroundColor
+    if (c !== null && getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0)') el.style.backgroundColor = c
+    return was
+  }, behind)
   const pageRules = frame === frame.page().mainFrame() ? [] : PAGE_LEVEL_RULES
   const res = await frame.evaluate(async ([inc, pageRules]) => {
-    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<{ violations: Array<{ id: string; impact?: string; nodes: Array<{ target: unknown[] }> }> }> } }).axe
+    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<{ violations: Array<{ id: string; impact?: string; nodes: Array<{ target: unknown[]; any: Array<{ data?: unknown }> }> }> }> } }).axe
     const r = await axe.run(inc === undefined ? document : { include: inc }, { resultTypes: ['violations'], rules: Object.fromEntries(pageRules.map((id) => [id, { enabled: false }])) })
-    return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, target: JSON.stringify(v.nodes[0]?.target) }))
+    return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, target: JSON.stringify(v.nodes[0]?.target), data: v.nodes[0]?.any[0]?.data }))
   }, [include, pageRules] as const)
+  await frame.evaluate((was) => { document.documentElement.style.backgroundColor = was }, root)
   return res
 }
 
@@ -540,7 +557,9 @@ async function behaviourChecks(pw: typeof Playwright, mode: Mode, report: Record
         report[`tab-start-${mode}`] = await describeFocus(page)
         console.log(`  ${mode} forward Tab: ${forward.slice(0, 40).join(' | ')}`)
         // Backwards, from the control just after the trend widget: the way back into the widget.
-        await page.locator('.slot-item', { hasText: 'Spending trends' }).locator('button').first().focus()
+        // The trend widget's first control: in the page it is in the card, in a frame it is inside the iframe.
+        const trendRoot = mode === 'isolated' ? page.frameLocator('iframe[title^="Insights"]').first() : page.locator('.slot-item', { hasText: 'Money in and out' })
+        await trendRoot.locator('button').first().focus()
         const backward = await tabSequence(page, 'Shift+Tab', 16)
         report[`tab-backward-${mode}`] = backward
         console.log(`  ${mode} backward Tab: ${backward.slice(0, 16).map((x) => x.slice(0, 40)).join(' | ')}`)

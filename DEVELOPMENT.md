@@ -1234,7 +1234,12 @@ draws.
 
 - Import from `/runtime`, `/money` and `/date`, never the SDK root. Every frame
   downloads and parses its plugin's chunk on its own, so the root's Zod schemas
-  (about 85 kB) cost once per frame, not once per page.
+  (about 85 kB) cost once per frame, not once per page. A plugin whose UI
+  imports a value from the root fails `apps/web/src/frame/frameBundle.test.ts`,
+  which also fails if the frame's own start-up pulls in the root or zod, or
+  grows past its size budget. Use `import type`, a sub-path, or a small local
+  copy with a test that keeps it in step (Insights and Spending Trends do this
+  for `monthsInRange`).
 - Keep tooltips, menus and popovers inside the widget's own rectangle. A frame
   cannot draw outside it and protocol 1 has no host-rendered overlay, so an
   overlay that crosses the edge is cut off. Measure the overlay and clamp it

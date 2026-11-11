@@ -12,6 +12,18 @@ curated, human-readable version.
 ### Changed
 
 - **Budgets runs in a sandboxed plugin frame.** The "Budgets" page and the "Budget breakdown" widget no longer run in the app's own page; they read and write through the host's broker with only the plugin's own routes and read grants, so Import CSV is the one bundled plugin left in the page. The page loads its categories and accounts once and waits a moment before loading a month, so holding Enter on "Previous" no longer ends in "This plugin is sending requests too fast". The result of "Start this month", and a failed remove, now appear at the top of the section they belong to and scroll into view, instead of at the top of the page. A page frame now reports the whole height of its document, so the last card is no longer 19 px short of where it sits in the app.
+- **Plugin frames download about 90 kB less.** The frame's start-up no longer
+  loads the SDK root and its Zod manifest schemas (they load only for a plugin
+  with an integrity pin), and the Spending Trends widget no longer bundles them
+  either. A test fails if either comes back.
+  
+### Fixed
+
+- **A table wider than its room can be scrolled with the keyboard.** The shared
+  table's horizontal scroller (for example Insights' "Show as table" on a phone)
+  could only be scrolled with a pointer. While it overflows it is now a Tab stop
+  with a visible focus ring, named by the table's caption when it has one. A
+  table that fits adds no Tab stop.
 
 ## [0.7.0] - 2026-11-02
 

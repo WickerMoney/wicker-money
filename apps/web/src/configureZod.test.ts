@@ -16,10 +16,17 @@ describe('configureZod', () => {
 
   // zod probes `new Function` when the first object schema is built, so this has to run before every other
   // module of the entry. Import order is the only thing that guarantees it, and a sorter or an editor can change it.
-  it.each([
-    ['the app entry', './main.tsx', './configureZod.js'],
-    ['the plugin frame entry', './frame/main.tsx', '../configureZod.js'],
-  ])('is the first import of %s', (_name, entry, expected) => {
-    expect(firstImport(read(entry))).toBe(expected)
+  it('is the first import of the app entry', () => {
+    expect(firstImport(read('./main.tsx'))).toBe('./configureZod.js')
+  })
+
+  // The frame entry has no zod at start (frameBundle.test.ts keeps it out); the pin check loads it on demand.
+  // `await import()` is sequential, so configuring first is a matter of order in one function.
+  it('is awaited before the SDK root in the frame pin check', () => {
+    const source = read('./frame/fragment.ts')
+    const configure = source.indexOf("await import('../configureZod.js')")
+    const root = source.indexOf("await import('@wickermoney/plugin-sdk')")
+    expect(configure).toBeGreaterThan(-1)
+    expect(root).toBeGreaterThan(configure)
   })
 })
