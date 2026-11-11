@@ -15,6 +15,9 @@
   color: var(--wm-text-muted);
 }
 
+/* A result or failure, at the top of the section it is about (see SectionNotice). */
+.bud__notice { margin-bottom: 12px; }
+
 .bud__totals {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 12px; margin-bottom: 14px;

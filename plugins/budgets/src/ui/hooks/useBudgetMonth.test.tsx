@@ -438,6 +438,21 @@ describe('useBudgetMonth actions', () => {
 
     expect(api.post).toHaveBeenCalledWith(`${BUDGETS_API_BASE}/month/adopt`, { month: '2026-06' })
     expect(hook.result.current.message).toBe('3 lines carried over from May 2026.')
+    expect(hook.result.current.messageSection).toBe('month')
+  })
+
+  it('says a removal failed in the section the removed row is in', async () => {
+    const { api, hook } = await loaded()
+    api.del.mockRejectedValue(new Error('Could not remove that line.'))
+
+    await act(() => hook.result.current.remove(line))
+    expect(hook.result.current.message).toBe('Could not remove that line.')
+    expect(hook.result.current.messageSection).toBe('lines')
+
+    api.del.mockRejectedValue(new Error('No allowance.'))
+    await act(() => hook.result.current.removeAccountLine({ accountId: 'a1' } as never))
+    expect(hook.result.current.message).toBe('No allowance.')
+    expect(hook.result.current.messageSection).toBe('allowances')
   })
 
   it('clears the message when the next action starts', async () => {

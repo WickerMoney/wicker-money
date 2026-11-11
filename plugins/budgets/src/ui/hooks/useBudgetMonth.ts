@@ -18,6 +18,9 @@ import type {
  */
 export const MONTH_LOAD_DEBOUNCE_MS = 150
 
+/** The part of the page a message belongs to, so the page can show it next to what the person just did. */
+export type MessageSection = 'month' | 'lines' | 'allowances'
+
 /** What {@link useBudgetMonth} returns. */
 export interface BudgetMonth {
   readonly monthKey: string
@@ -33,6 +36,11 @@ export interface BudgetMonth {
   readonly accounts: readonly AccountOption[]
   /** The message currently shown: a failure, or a notice after carrying lines over. */
   readonly message: string | null
+  /**
+   * Where on the page `message` belongs: `month` (loading, and carrying lines over), `lines` (removing a line or a
+   * window) or `allowances` (removing an allowance). Meaningless while `message` is `null`.
+   */
+  readonly messageSection: MessageSection
   readonly busy: boolean
   /** Plans being typed and not yet saved, keyed by category id. */
   readonly edits: Readonly<Record<string, string>>
@@ -104,12 +112,17 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   const [month, setMonth] = useState<MonthResponse | null>(null)
   const [categories, setCategories] = useState<readonly Category[]>([])
   const [accounts, setAccounts] = useState<readonly AccountOption[]>([])
-  const [message, setMessage] = useState<string | null>(null)
-  /** Why the categories could not be loaded. Kept apart from `message`, which every month load clears. */
+  const [notice, setNotice] = useState<{ readonly text: string; readonly section: MessageSection } | null>(null)
+  /** Why the categories could not be loaded. Kept apart from `notice`, which every month load clears. */
   const [listError, setListError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({})
+
+  /** Shows a message next to the part of the page it is about, or none. */
+  const setMessage = useCallback((text: string | null, section: MessageSection = 'month') => {
+    setNotice(text === null ? null : { text, section })
+  }, [])
 
   const shownKey = useRef(monthKey)
   const inFlight = useRef<AbortController | null>(null)
@@ -136,7 +149,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       // A superseded load is not a failure: whoever superseded it reports on the month now shown.
       if (!signal.aborted) throw e
     }
-  }, [api, timezone])
+  }, [api, timezone, setMessage])
 
   // Reloads after a change, unless the user has since moved to another month:
   // that month has its own load, and this one would replace it.
@@ -182,7 +195,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       clearTimeout(timer)
       inFlight.current?.abort()
     }
-  }, [load, monthKey])
+  }, [load, monthKey, setMessage])
 
   const showPlanError = useCallback((categoryId: string, message: string | null) => {
     setPlanErrors((current) => {
@@ -221,7 +234,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       )
       await reload(monthKey)
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not remove that line.')
+      setMessage(e instanceof Error ? e.message : 'Could not remove that line.', 'lines')
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
@@ -231,7 +244,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       const r = await api.post<{ created: number }>(`${BUDGETS_API_BASE}/month/adopt`, { month: monthKey })
       await reload(monthKey)
       if (monthKey === shownKey.current) {
-        setMessage(`${r.created} lines carried over from ${monthLabel(shiftMonth(monthKey, -1))}.`)
+        setMessage(`${r.created} lines carried over from ${monthLabel(shiftMonth(monthKey, -1))}.`, 'month')
       }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Could not start this month.')
@@ -301,7 +314,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       await api.del(`${BUDGETS_API_BASE}/account-line?month=${monthKey}&accountId=${line.accountId}`)
       await reload(monthKey)
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not remove that allowance.')
+      setMessage(e instanceof Error ? e.message : 'Could not remove that allowance.', 'allowances')
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
@@ -317,7 +330,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   )
 
   return {
-    monthKey, month, categories, accounts, message: message ?? listError,
+    monthKey, month, categories, accounts, message: notice?.text ?? listError, messageSection: notice?.section ?? 'month',
     busy, edits, planErrors,
     previousMonth, nextMonth, thisMonth, editPlan,
     save, remove, adopt, addLine, saveWindow, saveAccountLine, removeAccountLine,
