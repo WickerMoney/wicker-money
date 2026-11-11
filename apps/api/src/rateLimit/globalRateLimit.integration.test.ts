@@ -16,6 +16,7 @@ const PLUGIN = 'wickermoney.import-csv'
 const ACCOUNTS = '/api/v1/accounts'
 const ANALYZE = `/api/v1/p/${PLUGIN}/analyze`
 const COMMIT = `/api/v1/p/${PLUGIN}/commit`
+const UPLOAD = `/api/v1/p/${PLUGIN}/upload`
 const EXPORT = '/api/v1/settings/export'
 
 const get = (h: Harness, url: string, user?: TestUser, headers: Record<string, string> = {}) =>
@@ -138,6 +139,21 @@ describe('the import and export buckets', () => {
     // Everything else, including the rest of the import plugin's routes, still answers.
     expect(await statuses(10, () => get(h, ACCOUNTS, user))).toEqual(Array(10).fill(200))
     expect((await get(h, `/api/v1/p/${PLUGIN}/batches`, user, { 'x-wickermoney-plugin': PLUGIN })).statusCode).toBe(200)
+  })
+
+  it('counts opening a staged upload in the import bucket, and leaves its chunks and finish to the general one', async () => {
+    const user = await createUser(h)
+    // An empty body is a 400 from the handler; what is under test is that `begin` was counted with analyze.
+    expect((await postImport(h, ANALYZE, user)).statusCode).toBe(400)
+    expect(await statuses(2, () => postImport(h, `${UPLOAD}/begin`, user))).toEqual([400, 400])
+    const refused = await postImport(h, `${UPLOAD}/begin`, user)
+    expect(refused.statusCode).toBe(429)
+    expect(refused.json()).toMatchObject({ code: 'rate_limited', message: expect.stringMatching(/^Too many imports\./) as string })
+    expect((await postImport(h, ANALYZE, user)).statusCode).toBe(429)
+
+    // Chunks and finish are not in the import bucket: 10 of them answer from the handler (400, no valid id), none is 429.
+    expect(await statuses(5, () => postImport(h, `${UPLOAD}/chunk`, user))).toEqual(Array(5).fill(400))
+    expect(await statuses(5, () => postImport(h, `${UPLOAD}/finish`, user))).toEqual(Array(5).fill(400))
   })
 
   it('gives each user an import bucket of their own', async () => {
