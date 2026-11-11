@@ -163,8 +163,9 @@ async function currentMonthKey(base: string): Promise<string> {
 }
 
 /**
- * Removes what an earlier run left (windows, lines and allowances carry the mark in their note) and every stored line of the
- * month after this one, which the check fills by starting that month from this one.
+ * Removes what an earlier run left (windows, lines and allowances carry the mark in their note) and every stored line and
+ * allowance of the month after this one: "Start this month" for it stores a copy of this month's lines and allowances
+ * without the mark, so a run that clicks it would otherwise leave the persona's next month stored instead of a draft.
  */
 async function sweep(base: string): Promise<void> {
   const s = await login(base)
@@ -177,7 +178,7 @@ async function sweep(base: string): Promise<void> {
       else if (l.window == null && (l.note === MARK || key === shiftMonthKey(now, 1))) await plugin(base, s, 'DELETE', `/line?month=${key}&categoryId=${l.categoryId}`)
     }
     for (const a of m.accountLines ?? []) {
-      if (!a.draft && a.note === MARK) await plugin(base, s, 'DELETE', `/account-line?month=${key}&accountId=${a.accountId}`)
+      if (!a.draft && (a.note === MARK || key === shiftMonthKey(now, 1))) await plugin(base, s, 'DELETE', `/account-line?month=${key}&accountId=${a.accountId}`)
     }
   }
 }
