@@ -657,14 +657,13 @@
   .recur2__picker .wm-btn { min-height: 40px; }
 }
 /* A control scrolled into view (Tab, Shift+Tab) clears what is stuck to the top of the screen: the phone bar
-   (--wm-toast-offset-top, set by the shell) and the toast banner. The margin has to be on the control, not the
-   row: the browser scrolls the focused element, and a margin on its ancestor does nothing. The banner's height
-   is set by useToastClearance (0px with no toast); a fixed number was either too small for a full stack or
-   wasted a third of a phone screen when there was none. */
-.txn-list { --txn-toast-clear: 0px; }
+   (--wm-toast-offset-top, set by the shell) and the toast banner (--wm-toast-height, published by the ui-kit's
+   ToastViewport on <main>, absent with no toast). The margin has to be on the control, not the row: the browser
+   scrolls the focused element, and a margin on its ancestor does nothing. A fixed number was either too small for a
+   full stack or wasted a third of a phone screen when there was none. */
 .txn-list :is(button, select, input, a, [tabindex]),
 .txn-table tbody tr {
-  scroll-margin-top: calc(var(--wm-toast-offset-top, 0px) + var(--txn-toast-clear, 0px) + 8px);
+  scroll-margin-top: calc(var(--wm-toast-offset-top, 0px) + var(--wm-toast-height, 0px) + 8px);
 }
 
 /* Matched: pill, then the date, on one line. The pill gives way (ellipsis), the date never wraps. */

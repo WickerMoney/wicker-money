@@ -147,6 +147,12 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         await sleep(350)
         check(`${tag}: ${vp.limit} toasts show, the rest wait`, (await count()) === vp.limit, await count())
         check(`${tag}: Dismiss all appears`, await page.getByRole('button', { name: 'Dismiss all' }).isVisible())
+        // The ui-kit publishes the banner's height on <main>, so a page does not have to measure it (ADR 0009).
+        const published = await page.evaluate(() => ({
+          banner: Math.ceil(document.querySelector('[aria-label="Notifications"]')!.getBoundingClientRect().height),
+          css: document.querySelector('main')!.style.getPropertyValue('--wm-toast-height'),
+        }))
+        check(`${tag}: --wm-toast-height on <main> is the banner's height`, published.banner > 40 && published.css === `${published.banner}px`, published)
         v = await axeOf(page)
         check(`${tag}: axe, ${vp.limit} toasts showing`, v.length === 0, v)
         await shot('toast-stack')
@@ -176,6 +182,7 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         await page.getByRole('button', { name: 'Dismiss all' }).click().catch(() => undefined)
         for (let i = 0; i < 4 && (await count()) > 0; i++) { await page.getByRole('button', { name: 'Dismiss all' }).click().catch(async () => { await page.locator('.wm-toast__close').first().click() }); await sleep(100) }
         check(`${tag}: everything can be dismissed`, (await count()) === 0, await count())
+        check(`${tag}: --wm-toast-height is gone with the last toast`, await page.evaluate(() => document.querySelector('main')!.style.getPropertyValue('--wm-toast-height') === ''))
 
         // Dialog: a toast raised while it is open is held until it closes. The announcer is emptied
         // 1.5 s after its last update, so let the earlier ones clear before reading it as "nothing delivered".

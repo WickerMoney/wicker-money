@@ -281,3 +281,70 @@ describe('exports', () => {
     expect(Object.keys(kit).filter((k) => /toast/i.test(k)).sort()).toEqual(['ToastProvider', 'ToastViewport', 'useToast'])
   })
 })
+
+describe('banner height', () => {
+  /** A ResizeObserver the test can fire, and a banner whose height the test sets. */
+  let fire: Array<() => void> = []
+  let height = 54
+  class FakeResizeObserver {
+    private readonly callback: () => void
+    constructor(callback: () => void) { this.callback = callback }
+    observe(): void { fire.push(this.callback) }
+    disconnect(): void { fire = fire.filter((c) => c !== this.callback) }
+    unobserve(): void {}
+  }
+  const published = (): string => screen.getByRole('main').style.getPropertyValue('--wm-toast-height')
+
+  beforeEach(() => {
+    fire = []
+    height = 54
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return { height: this.classList.contains('wm-toast-viewport') ? height : 0 } as DOMRect
+    })
+  })
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('is not set while no toast shows', () => {
+    setup()
+    expect(published()).toBe('')
+  })
+
+  it('is set on the parent of the banner as soon as a toast shows, rounded up', async () => {
+    height = 53.2
+    setup()
+    await show('Saved.')
+    expect(published()).toBe('54px')
+  })
+
+  it('follows the banner as it grows and shrinks', async () => {
+    setup()
+    await show('One')
+    expect(published()).toBe('54px')
+    height = 161
+    act(() => { fire.forEach((f) => { f() }) })
+    expect(published()).toBe('161px')
+    height = 82.5
+    act(() => { fire.forEach((f) => { f() }) })
+    expect(published()).toBe('83px')
+  })
+
+  it('is removed when the last toast goes, and the observer with it', async () => {
+    setup()
+    const id = await show('One')
+    expect(published()).toBe('54px')
+    act(() => { api.dismiss(id) })
+    await frame()
+    expect(stack()).toBeNull()
+    expect(published()).toBe('')
+    expect(fire).toHaveLength(0)
+  })
+
+  it('is set without a ResizeObserver, once', async () => {
+    vi.unstubAllGlobals()
+    vi.stubGlobal('ResizeObserver', undefined)
+    setup()
+    await show('Saved.')
+    expect(published()).toBe('54px')
+  })
+})
