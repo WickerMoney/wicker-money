@@ -33,18 +33,22 @@ export function FrameApp({ connection, Plugin }: FrameAppProps) {
   )
   const rootRef = useRef<HTMLDivElement>(null)
 
+  // A widget reports its root's height. A page reports the whole document's: anything outside the root (a trailing
+  // margin, the body's own) is part of what the page needs, and without it the last card sat 19 px nearer the window's
+  // bottom than the same page in the app. The document element's height is its content's (it is `auto`), so it
+  // shrinks as well as grows, unlike `scrollHeight`, which never reads less than the frame itself.
+  const isPage = state.kind === 'page'
   useEffect(() => {
     const root = rootRef.current
     if (root === null) return undefined
-    return connection.observeSize(root)
-  }, [connection])
+    return connection.observeSize(isPage ? document.documentElement : root)
+  }, [connection, isPage])
 
   // The sandbox has no allow-forms, so the browser never submits a form; the runtime sends the submit event itself.
   useEffect(() => startFormSubmit(), [])
 
   // A modal dialog in a page asks the host to lift the frame over the window while it is open (ADR 0015). A widget
   // frame has nothing to lift: the host would ignore the message, so it is not sent.
-  const isPage = state.kind === 'page'
   useEffect(() => (isPage ? new ModalLift(connection).start() : undefined), [connection, isPage])
 
   // The host takes focus in from either side.
