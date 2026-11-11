@@ -20,25 +20,26 @@ describe('pluginRuntimeFor', () => {
 
   // Not derived from the set: these are the ports that have landed, and a plugin leaving the set by
   // mistake (or returning to it) should fail here.
-  it('runs the ported plugins in a frame, the Forecast and Debt payoff pages included', () => {
+  it('runs the ported plugins in a frame, the Forecast, Debt payoff and Budgets pages included', () => {
     const byId = (id: string): PluginManifest => BUNDLED_PLUGINS.find((m) => m.id === id)!
     for (const id of [
       'wickermoney.insights', 'wickermoney.spending-trends', 'wickermoney.upcoming', 'wickermoney.forecast',
-      'wickermoney.debt-payoff',
+      'wickermoney.debt-payoff', 'wickermoney.budgets',
     ]) {
       expect(pluginRuntimeFor(byId(id), true), id).toBe('isolated')
     }
     expect(byId('wickermoney.forecast').contributes.pages).toHaveLength(1)
     expect(byId('wickermoney.debt-payoff').contributes.pages).toHaveLength(1)
     expect(byId('wickermoney.debt-payoff').contributes.widgets).toHaveLength(1)
+    // One plugin id, so the page and its widget move together.
+    expect(byId('wickermoney.budgets').contributes.pages).toHaveLength(1)
+    expect(byId('wickermoney.budgets').contributes.widgets).toHaveLength(1)
   })
 
-  it('keeps the plugins that are not ported in-realm', () => {
+  it('keeps the plugin that is not ported in-realm', () => {
     const byId = (id: string): PluginManifest => BUNDLED_PLUGINS.find((m) => m.id === id)!
-    for (const id of ['wickermoney.budgets', 'wickermoney.import-csv']) {
-      expect(pluginRuntimeFor(byId(id), true), id).toBe('in-realm')
-    }
-    expect([...IN_REALM_PLUGIN_IDS].sort()).toEqual(['wickermoney.budgets', 'wickermoney.import-csv'])
+    expect(pluginRuntimeFor(byId('wickermoney.import-csv'), true)).toBe('in-realm')
+    expect([...IN_REALM_PLUGIN_IDS]).toEqual(['wickermoney.import-csv'])
   })
 
   it('lists only plugins that are actually bundled', () => {
@@ -49,8 +50,8 @@ describe('pluginRuntimeFor', () => {
   it('isolates every plugin the image did not ship, whatever its id', () => {
     expect(pluginRuntimeFor(manifest('acme.thing'), false)).toBe('isolated')
     // Same id as a listed bundled plugin: the registry row says it is not bundled.
-    expect(pluginRuntimeFor(manifest('wickermoney.budgets'), false)).toBe('isolated')
-    expect(pluginRuntimeFor(manifest('wickermoney.budgets', { isolated: false }), false)).toBe('isolated')
+    expect(pluginRuntimeFor(manifest('wickermoney.import-csv'), false)).toBe('isolated')
+    expect(pluginRuntimeFor(manifest('wickermoney.import-csv', { isolated: false }), false)).toBe('isolated')
   })
 
   it('isolates a bundled plugin that is not listed', () => {
@@ -58,8 +59,8 @@ describe('pluginRuntimeFor', () => {
   })
 
   it('lets the isolated flag move a listed plugin towards isolation, never away', () => {
-    expect(pluginRuntimeFor(manifest('wickermoney.budgets', { isolated: true }), true)).toBe('isolated')
-    expect(pluginRuntimeFor(manifest('wickermoney.budgets', { isolated: false }), true)).toBe('in-realm')
+    expect(pluginRuntimeFor(manifest('wickermoney.import-csv', { isolated: true }), true)).toBe('isolated')
+    expect(pluginRuntimeFor(manifest('wickermoney.import-csv', { isolated: false }), true)).toBe('in-realm')
     // A ported plugin is isolated whatever its manifest says.
     expect(pluginRuntimeFor(manifest('wickermoney.insights', { isolated: false }), true)).toBe('isolated')
   })
@@ -74,7 +75,7 @@ describe('pluginRuntimeFor', () => {
     })
 
     it('is isolated with the flag set to false, which is the most a manifest can ask for', () => {
-      expect(pluginRuntimeFor(manifest('wickermoney.budgets', { remoteEntry: remote, isolated: false }), true)).toBe('isolated')
+      expect(pluginRuntimeFor(manifest('wickermoney.import-csv', { remoteEntry: remote, isolated: false }), true)).toBe('isolated')
     })
 
     it('is isolated for a plugin the image did not ship', () => {
@@ -89,11 +90,11 @@ describe('pluginRuntimeFor', () => {
       ['an empty string', ''],
     ])('treats %s as not served by the host, so it is isolated', (_what, remoteEntry) => {
       // A crafted value the schema would refuse: this is what is left if one ever got past it.
-      expect(pluginRuntimeFor(manifest('wickermoney.budgets', { remoteEntry }), true)).toBe('isolated')
+      expect(pluginRuntimeFor(manifest('wickermoney.import-csv', { remoteEntry }), true)).toBe('isolated')
     })
 
     it('does not change a same-origin entry', () => {
-      expect(pluginRuntimeFor(manifest('wickermoney.budgets'), true)).toBe('in-realm')
+      expect(pluginRuntimeFor(manifest('wickermoney.import-csv'), true)).toBe('in-realm')
     })
   })
 })

@@ -231,7 +231,7 @@ describe('the rule: a plugin the image did not ship loads only against a pin', (
   })
 
   it('refuses a bundled manifest whose entry is on another origin and unpinned, and loads it pinned (isolated)', async () => {
-    const crafted = bundledManifest('wickermoney.budgets', { remoteEntry: REMOTE })
+    const crafted = bundledManifest('wickermoney.import-csv', { remoteEntry: REMOTE })
     const run = async (m: PluginManifest) => {
       uow = new InMemoryPluginUnitOfWork()
       const s = new PluginService(uow, { bundled: [m], remoteOrigins: ['https://plugins.example.com'], now: () => 1 })

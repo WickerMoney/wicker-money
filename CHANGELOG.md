@@ -9,6 +9,10 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Changed
+
+- **Budgets runs in a sandboxed plugin frame.** The "Budgets" page and the "Budget breakdown" widget no longer run in the app's own page; they read and write through the host's broker with only the plugin's own routes and read grants, so Import CSV is the one bundled plugin left in the page. The page loads its categories and accounts once and waits a moment before loading a month, so holding Enter on "Previous" no longer ends in "This plugin is sending requests too fast". The result of "Start this month", and a failed remove, now appear at the top of the section they belong to and scroll into view, instead of at the top of the page. A page frame now reports the whole height of its document, so the last card is no longer 19 px short of where it sits in the app.
+
 ## [0.7.0] - 2026-11-02
 
 Daily-use polish, load limits and more of the bundled plugins in sandboxed

@@ -68,6 +68,17 @@ test.describe('sign-in and the pages that matter', () => {
     await page.waitForLoadState('networkidle')
     expectNoProblems(seen)
   })
+
+  test('hero reaches the budgets page, which runs in a frame', async ({ page, signIn, watch }) => {
+    await signIn('hero')
+    const seen = watch()
+    await page.locator('nav a[href="/p/wickermoney.budgets/budgets"]').first().click()
+    // Budgets is an isolated plugin too: its heading is inside the sandboxed frame.
+    const frame = page.frameLocator('iframe[title="Budgets · Budgets"]')
+    await expect(frame.getByRole('heading', { level: 1, name: 'Budgets' })).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    expectNoProblems(seen)
+  })
 })
 
 test.describe('bundled plugins', () => {
@@ -96,7 +107,7 @@ test.describe('bundled plugins', () => {
     const widgets = plugins.flatMap((p) => p.contributes.widgets.map((w) => ({ plugin: p, widget: w })))
     const isolated = widgets.filter((w) => w.plugin.runtime === 'isolated')
     expect(isolated.map((w) => w.plugin.id), 'bundled plugins whose widgets are isolated').toEqual(
-      expect.arrayContaining(['wickermoney.insights', 'wickermoney.spending-trends']),
+      expect.arrayContaining(['wickermoney.insights', 'wickermoney.spending-trends', 'wickermoney.budgets']),
     )
 
     await signIn('hero')
