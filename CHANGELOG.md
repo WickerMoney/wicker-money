@@ -15,6 +15,14 @@ curated, human-readable version.
   loads the SDK root and its Zod manifest schemas (they load only for a plugin
   with an integrity pin), and the Spending Trends widget no longer bundles them
   either. A test fails if either comes back.
+  
+### Fixed
+
+- **A table wider than its room can be scrolled with the keyboard.** The shared
+  table's horizontal scroller (for example Insights' "Show as table" on a phone)
+  could only be scrolled with a pointer. While it overflows it is now a Tab stop
+  with a visible focus ring, named by the table's caption when it has one. A
+  table that fits adds no Tab stop.
 
 ## [0.7.0] - 2026-11-02
 

@@ -76,13 +76,20 @@ async function startServer() {
 }
 
 async function login(base: string, email = 'hero@seed.wickermoney.test', password = 'SeedHero!2026'): Promise<string> {
+  return (await loginSession(base, email, password)).refresh
+}
+
+/** Signs in and returns the refresh cookie value and an access token (for calling the API from the check itself). */
+async function loginSession(base: string, email: string, password: string): Promise<{ refresh: string; access: string }> {
   const res = await fetch(`${base}/api/v1/auth/login`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password }),
   })
   if (res.status !== 200) throw new Error(`login failed: ${res.status} ${await res.text()}`)
   const cookie = res.headers.getSetCookie().find((c) => c.startsWith('wickermoney_refresh='))
   if (cookie === undefined) throw new Error('no refresh cookie')
-  return cookie.split(';')[0]!.split('=')[1]!
+  const body = await res.json() as { accessToken?: string }
+  if (body.accessToken === undefined) throw new Error('no access token')
+  return { refresh: cookie.split(';')[0]!.split('=')[1]!, access: body.accessToken }
 }
 
 interface Axe { violations: { id: string; impact: string | null; nodes: { target: unknown[] }[] }[] }
@@ -134,7 +141,8 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         const page = await ctx.newPage()
         const errors: string[] = []
         page.on('pageerror', (e) => errors.push(String(e)))
-        page.on('dialog', (d) => { void d.accept() })
+        let lastConfirm = ''
+        page.on('dialog', (d) => { lastConfirm = d.message(); void d.accept() })
         const shot = async (name: string): Promise<void> => { if (SHOTS !== undefined) await page.screenshot({ path: join(SHOTS, `${name}-${vp.name}-${scheme}.png`) }) }
 
         await page.goto(`${base}/transactions`)
@@ -186,8 +194,16 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         check(`${tag}: everything can be closed`, (await page.locator('.wm-toast').count()) === 0)
         const third = rows().nth(2)
         const merchant3 = (await third.locator('td[data-col="merchant"]').innerText()).trim()
+        lastConfirm = ''
         await third.getByRole('button', { name: 'Delete' }).click()
-        check(`${tag}: a delete names what was deleted`, await waitToast(page, new RegExp(`^Deleted '${merchant3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}' \\(.+\\)\\.$`)), await toastTexts(page))
+        for (let i = 0; i < 40 && lastConfirm === ''; i++) await sleep(50) // the dialog event arrives separately from the click
+        // A transfer has its own wording (both legs go), so the page's own confirm dialog says which kind this row is,
+        // and the seeded order of rows (the dates move with the day) does not matter.
+        const isTransfer = lastConfirm.startsWith('Delete this transfer of ')
+        const deletedText = isTransfer
+          ? /^Deleted transfer of .+\. Both sides were removed\.$/
+          : new RegExp(`^Deleted '${merchant3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}' \\(.+\\)\\.$`)
+        check(`${tag}: a delete names what was deleted`, await waitToast(page, deletedText), { confirm: lastConfirm, toasts: await toastTexts(page) })
         check(`${tag}: nothing offers Undo`, (await page.getByRole('button', { name: /undo/i }).count()) === 0)
         await sleep(350)
         measure(`${tag}: one delete toast`, await bannerHeights(page))
@@ -270,9 +286,33 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
 /** The recurring picker, as `household` (who has suggestions): what a toast does to its focus and open state. */
 async function pickerFlow(browser: Playwright.Browser, base: string, vp: { name: string; width: number; height: number }): Promise<void> {
   const tag = `${vp.name}/light picker`
+  const session = await loginSession(base, 'household@seed.wickermoney.test', 'SeedHousehold!2026')
   const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, colorScheme: 'light' })
-  await ctx.addCookies([{ name: 'wickermoney_refresh', value: await login(base, 'household@seed.wickermoney.test', 'SeedHousehold!2026'), url: base }])
+  await ctx.addCookies([{ name: 'wickermoney_refresh', value: session.refresh, url: base }])
   const page = await ctx.newPage()
+  // Not this and Match change the seeded household for good: a dismissal takes the suggestion away and a match
+  // uses the occurrence up. The next context (another width) would find no suggestion to open. So each context
+  // records what it changed and puts it back when it is done, whether or not its checks passed.
+  const changes: string[] = []
+  page.on('response', (res) => {
+    const m = /^(https?:\/\/[^/]+\/api\/v1\/recurring-items\/[^/]+\/occurrences\/[^/]+\/(?:dismissals|matches))$/.exec(res.url())
+    if (m !== null && res.request().method() === 'POST' && res.ok()) {
+      const body = res.request().postDataJSON() as { transactionId?: string } | null
+      if (typeof body?.transactionId === 'string') changes.push(`${m[1]!}/${body.transactionId}`)
+    }
+  })
+  try {
+    await pickerChecks(page, tag, base)
+  } finally {
+    await ctx.close()
+    for (const url of changes.reverse()) {
+      const res = await fetch(url, { method: 'DELETE', headers: { authorization: `Bearer ${session.access}` } })
+      if (!res.ok) check(`${tag}: put back what the check changed (${url.replace(base, '')})`, false, res.status)
+    }
+  }
+}
+
+async function pickerChecks(page: Playwright.Page, tag: string, base: string): Promise<void> {
   await page.goto(`${base}/transactions`)
   await page.locator('.txn-table tbody tr').first().waitFor()
   await page.locator('.recur-linkbtn').first().waitFor()
@@ -283,7 +323,6 @@ async function pickerFlow(browser: Playwright.Browser, base: string, vp: { name:
   await suggest.first().waitFor({ timeout: 5000 }).catch(() => undefined)
   if ((await suggest.count()) === 0) {
     check(`${tag}: the seeded household has a suggestion on the first page`, false, 'no suggestion to open')
-    await ctx.close()
     return
   }
 
@@ -293,7 +332,13 @@ async function pickerFlow(browser: Playwright.Browser, base: string, vp: { name:
   await page.getByRole('button', { name: / is not / }).first().click()
   check(`${tag}: Not this says what it did`, await waitToast(page, /^Marked '.+' as not .+\.$/), await toastTexts(page))
   check(`${tag}: the picker is still open after the toast`, (await picker().count()) === 1)
-  check(`${tag}: focus is still inside the picker`, await picker().evaluate((el) => el.contains(document.activeElement)))
+  // The controls are disabled while the request runs and the picker is read again afterwards, so focus is back
+  // inside it a moment after the toast, not at the same instant: wait for it to settle rather than sample once.
+  const focusInside = await page.waitForFunction(() => {
+    const el = document.querySelector('[role="group"][aria-label^="Recurring items for"]')
+    return el !== null && el.contains(document.activeElement)
+  }, undefined, { timeout: 3000 }).then(() => true, () => false)
+  check(`${tag}: focus is still inside the picker`, focusInside, await page.evaluate(() => document.activeElement?.tagName ?? ''))
 
   // Close: focus goes to Link, and the toast is still there.
   await picker().getByRole('button', { name: 'Close' }).click()
@@ -322,7 +367,6 @@ async function pickerFlow(browser: Playwright.Browser, base: string, vp: { name:
     check(`${tag}: the toast raised after the picker closed left focus on Link`, (await activeId()).startsWith('recur-link-'), await activeId())
   }
   if (!matched) check(`${tag}: a picker with a Match button to try`, false, 'none of the first 15 rows offers one')
-  await ctx.close()
 }
 
 async function main(): Promise<void> {

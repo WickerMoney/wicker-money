@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Button, EmptyState, Field, IconButton, Stat, Surface, Table } from './index.js'
 
 describe('Surface', () => {
@@ -116,6 +116,31 @@ describe('Table', () => {
     const cells = Array.from(container.querySelectorAll('tbody td'))
     expect(cells.map((c) => c.getAttribute('data-col'))).toEqual(['name', 'sel', 'act'])
     expect(cells.map((c) => c.getAttribute('data-label'))).toEqual(['Name', null, null])
+  })
+
+  describe('keyboard access to a scroller that overflows', () => {
+    const rows = [{ name: 'A' }]
+    afterEach(() => { vi.unstubAllGlobals(); delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth })
+    const stub = (scrollWidth: number): void => {
+      vi.stubGlobal('ResizeObserver', class { observe(): void {} disconnect(): void {} })
+      Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => scrollWidth })
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 100 })
+    }
+    it('is a named, focusable region only while the table is wider than its room', () => {
+      stub(300)
+      const { container } = render(<Table caption="Months" columns={columns} rows={rows} rowKey={(r) => r.name} />)
+      const scroller = container.querySelector('.wm-table__scroll')!
+      expect(scroller.getAttribute('tabindex')).toBe('0')
+      expect(scroller.getAttribute('role')).toBe('region')
+      expect(scroller.getAttribute('aria-label')).toBe('Months')
+    })
+    it('adds no Tab stop when the table fits', () => {
+      stub(100)
+      const { container } = render(<Table caption="Months" columns={columns} rows={rows} rowKey={(r) => r.name} />)
+      const scroller = container.querySelector('.wm-table__scroll')!
+      expect(scroller.hasAttribute('tabindex')).toBe(false)
+      expect(scroller.hasAttribute('role')).toBe(false)
+    })
   })
 
   describe('rowDetail', () => {
