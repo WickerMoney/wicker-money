@@ -235,7 +235,7 @@ export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemo
         <div className="wm-dialog__actions">
           <FormError message={errors.form} />
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" type="submit" disabled={busy}>
+          <Button variant="primary" type="submit" busy={busy}>
             {editing === null ? 'Add debt' : 'Save changes'}
           </Button>
         </div>
@@ -247,7 +247,7 @@ export function DebtDialog({ editing, initial, suggestions, busy, onSave, onRemo
                 Remove {editing.name} for good? To keep a record of it, archive it instead.
               </p>
               <div className="dp-confirm__actions">
-                <Button variant="danger" disabled={busy} onClick={() => void remove()}>Yes, remove it</Button>
+                <Button variant="danger" busy={busy} onClick={() => void remove()}>Yes, remove it</Button>
                 <Button onClick={() => setConfirming(false)}>Keep it</Button>
               </div>
             </div>
