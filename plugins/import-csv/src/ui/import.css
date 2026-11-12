@@ -85,3 +85,14 @@
 }
 
 .imp__done { margin: 0 0 14px; font-size: 14px; }
+
+/* A message for one section, scrolled into view when it appears. */
+.imp__notice { margin-bottom: 12px; }
+
+.imp__progress {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: 8px;
+  margin-top: 6px;
+}

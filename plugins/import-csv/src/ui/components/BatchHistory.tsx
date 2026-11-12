@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
-import { Alert, Button, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
+import { Button, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
 import { IMPORT_API_BASE } from '../../server/constants.js'
 import type { Batch } from '../models/index.js'
+import { SectionNotice } from './SectionNotice.js'
 
 /** Props for {@link BatchHistory}. */
 export interface BatchHistoryProps {
@@ -70,8 +71,8 @@ export function BatchHistory({ ctx, refreshKey, onReverted }: BatchHistoryProps)
 
   return (
     <Surface title="Recent imports">
-      {error !== null ? <Alert>{error}</Alert> : null}
-      {notice !== null ? <p className="imp__hint">{notice}</p> : null}
+      <SectionNotice message={error} />
+      <SectionNotice message={notice} kind="status" />
       {batches === null ? (
         <Spinner label="Loading import history" />
       ) : batches.length === 0 ? (
