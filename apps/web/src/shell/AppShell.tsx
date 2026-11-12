@@ -75,17 +75,29 @@ export function AppShell({ plugins }: AppShellProps) {
 
   useDocumentTitle(pageTitleFor(pathname, plugins))
 
+  // Escape and a tap on the scrim close the drawer and hand focus back to the
+  // menu button that opened it. The button sits in the bar, which is `inert`
+  // for as long as the drawer is open, so it cannot take focus in the same
+  // task as the state change: the effect below runs once the drawer is shut and
+  // the bar is live again.
+  const restoreMenuFocus = useRef(false)
   const closeNav = useCallback(() => {
+    restoreMenuFocus.current = true
     setNavOpen(false)
-    menuButtonRef.current?.focus()
   }, [])
+  useEffect(() => {
+    if (navOpen || !restoreMenuFocus.current) return
+    restoreMenuFocus.current = false
+    menuButtonRef.current?.focus()
+  }, [navOpen])
   useEscapeKey(navOpen, closeNav)
   // Tab wraps inside the open drawer (the skip link sits outside the inert
-  // regions). Focus return is handled by closeNav, which targets the menu button.
+  // regions). Focus return is handled above, which targets the menu button.
   useFocusTrap(navRef, navOpen, { restoreFocus: false })
 
   // Following a link closes the drawer. Focus is left where the navigation put
-  // it (the new page) rather than pulled back to the menu button. The route
+  // it (the new page) rather than pulled back to the menu button (so this does
+  // not go through closeNav). The route
   // effect covers navigation from anywhere; the click handler covers a tap on
   // the link for the page you are already on, which changes no route.
   useEffect(() => { setNavOpen(false) }, [pathname])

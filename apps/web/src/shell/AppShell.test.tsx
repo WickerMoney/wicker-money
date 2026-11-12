@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { ToastProvider, useToast } from '@wickermoney/ui-kit'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from './AppShell.js'
 
 vi.mock('./AccountMenu.js', () => ({ AccountMenu: () => <div>account</div> }))
@@ -113,6 +113,45 @@ describe('AppShell accessibility', () => {
     await userEvent.click(menuButton())
     await userEvent.keyboard('{Escape}')
     expect(document.activeElement).toBe(menuButton())
+  })
+})
+
+describe('AppShell phone drawer, in a browser that enforces inert', () => {
+  // jsdom ignores `inert`; a browser does not focus anything inside an inert subtree. The menu button is in the bar,
+  // which is inert while the drawer is open, so closing must wait for it to be live again before moving focus there.
+  const realFocus = HTMLElement.prototype.focus
+  afterEach(() => { HTMLElement.prototype.focus = realFocus })
+  function enforceInert(): void {
+    HTMLElement.prototype.focus = function focus(this: HTMLElement, ...args: Parameters<HTMLElement['focus']>) {
+      if (this.closest('[inert]') !== null) return
+      realFocus.apply(this, args)
+    }
+  }
+
+  it('returns focus to the menu button after Escape', async () => {
+    enforceInert()
+    renderShell()
+    await userEvent.click(menuButton())
+    expect(document.activeElement).toBe(document.getElementById('shell-nav'))
+    await userEvent.keyboard('{Escape}')
+    expect(document.activeElement).toBe(menuButton())
+  })
+
+  it('returns focus to the menu button after a tap on the scrim', async () => {
+    enforceInert()
+    const { container } = renderShell()
+    await userEvent.click(menuButton())
+    await userEvent.click(container.querySelector('.shell__scrim')!)
+    expect(menuButton().getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(menuButton())
+  })
+
+  it('leaves focus on the new page, not the menu button, after following a link', async () => {
+    enforceInert()
+    renderShell()
+    await userEvent.click(menuButton())
+    await userEvent.click(screen.getByRole('link', { name: 'Accounts' }))
+    expect(document.activeElement).toBe(main())
   })
 })
 
