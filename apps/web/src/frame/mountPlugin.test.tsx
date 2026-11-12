@@ -41,6 +41,26 @@ describe('mountPlugin', () => {
     expect(connection.observeSize).toHaveBeenCalled()
   })
 
+  it('reports the height of the root for a widget and of the whole document for a page', async () => {
+    const Plugin = () => <p>x</p>
+    const widgetRoot = document.createElement('div')
+    document.body.append(widgetRoot)
+    const widget = fakeConnection()
+    await act(async () => { await mountPlugin(widgetRoot, hash, base, { connect: async () => widget.connection, load: async () => Plugin }) })
+    const widgetTarget = (widget.connection.observeSize as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Element
+    expect(widgetTarget).not.toBe(document.documentElement)
+    expect(widgetRoot.contains(widgetTarget)).toBe(true)
+
+    const pageRoot = document.createElement('div')
+    document.body.append(pageRoot)
+    const page = fakeConnection({ kind: 'page', path: '/' })
+    await act(async () => {
+      await mountPlugin(pageRoot, hash.replace('kind=widget', 'kind=page'), base, { connect: async () => page.connection, load: async () => Plugin })
+    })
+    expect((page.connection.observeSize as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe(document.documentElement)
+    document.documentElement.removeAttribute('data-wm-frame')
+  })
+
   it('marks the document with the frame kind, for the stylesheet', async () => {
     const root = document.createElement('div')
     document.body.append(root)

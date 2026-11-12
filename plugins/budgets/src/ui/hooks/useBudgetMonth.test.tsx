@@ -34,6 +34,9 @@ function serve(api: MockApi, months: Record<string, Promise<MonthResponse>>): vo
 const monthCalls = (api: MockApi): string[] =>
   api.get.mock.calls.map((c) => String(c[0])).filter((p) => p.includes('/month?'))
 
+const callsTo = (api: MockApi, prefix: string): number =>
+  api.get.mock.calls.filter((c) => String(c[0]).startsWith(prefix)).length
+
 const monthUrl = (key: string, tz = 'UTC'): string =>
   `${BUDGETS_API_BASE}/month?month=${key}&tz=${encodeURIComponent(tz)}`
 
@@ -81,7 +84,9 @@ describe('useBudgetMonth loading', () => {
 
   it('reports a failed load and shows no month', async () => {
     const api = makeApi()
-    serve(api, { '2026-06': Promise.reject(new Error('boom')) })
+    // Rejected when asked, not before: the month is asked for a moment after the page opens.
+    api.get.mockImplementation((path: string) =>
+      path.startsWith('/core/categories') ? Promise.resolve(CATEGORIES) : Promise.reject(new Error('boom')))
 
     const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
 
@@ -127,6 +132,91 @@ describe('useBudgetMonth loading', () => {
     unmount()
 
     expect(init.signal?.aborted).toBe(true)
+  })
+})
+
+describe('useBudgetMonth request volume', () => {
+  /** Answers every month with a month of its own, and categories and accounts immediately. */
+  function serveAnyMonth(api: MockApi): void {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/core/categories')) return Promise.resolve(CATEGORIES)
+      if (path.startsWith('/core/accounts')) return Promise.resolve({ accounts: [] })
+      return Promise.resolve(monthResponse(/month=(\d{4}-\d{2})/.exec(path)?.[1] ?? ''))
+    })
+  }
+
+  it('loads the categories and the accounts once, not with every month', async () => {
+    const api = makeApi()
+    serveAnyMonth(api)
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+    await waitFor(() => expect(result.current.month?.monthKey).toBe('2026-06'))
+
+    act(() => result.current.previousMonth())
+    await waitFor(() => expect(result.current.month?.monthKey).toBe('2026-05'))
+    act(() => result.current.nextMonth())
+    await waitFor(() => expect(result.current.month?.monthKey).toBe('2026-06'))
+
+    expect(monthCalls(api)).toHaveLength(3)
+    expect(callsTo(api, '/core/categories')).toBe(1)
+    expect(callsTo(api, '/core/accounts')).toBe(1)
+    expect(result.current.categories).toEqual(CATEGORIES)
+  })
+
+  it('does not load the categories again after a save', async () => {
+    const api = makeApi()
+    serveAnyMonth(api)
+    api.put.mockResolvedValue({})
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+    await waitFor(() => expect(result.current.month).not.toBeNull())
+
+    await act(() => result.current.save(line, '10', false))
+
+    expect(monthCalls(api)).toHaveLength(2)
+    expect(callsTo(api, '/core/categories')).toBe(1)
+  })
+
+  it('asks only for the month a burst of changes ends on', async () => {
+    const api = makeApi()
+    serveAnyMonth(api)
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+    await waitFor(() => expect(result.current.month?.monthKey).toBe('2026-06'))
+
+    // 20 clicks on Previous, 30 ms apart, as a held Enter repeats.
+    for (let i = 0; i < 20; i++) {
+      act(() => result.current.previousMonth())
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    }
+
+    expect(result.current.monthKey).toBe('2024-10')
+    // The label moved with every click, the load did not.
+    expect(monthCalls(api)).toEqual([monthUrl('2026-06')])
+    await waitFor(() => expect(result.current.month?.monthKey).toBe('2024-10'))
+    expect(monthCalls(api)).toEqual([monthUrl('2026-06'), monthUrl('2024-10')])
+  })
+
+  it('shows nothing for a month while it waits to load', async () => {
+    const api = makeApi()
+    serveAnyMonth(api)
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+    await waitFor(() => expect(result.current.month).not.toBeNull())
+
+    act(() => result.current.nextMonth())
+
+    expect(result.current.month).toBeNull()
+    await waitFor(() => expect(result.current.month?.monthKey).toBe('2026-07'))
+  })
+
+  it('reports categories that could not be loaded, and still loads the month', async () => {
+    const api = makeApi()
+    api.get.mockImplementation((path: string) =>
+      path.startsWith('/core/categories')
+        ? Promise.reject(new Error('no categories'))
+        : Promise.resolve(path.startsWith('/core/accounts') ? { accounts: [] } : monthResponse('2026-06')))
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+
+    await waitFor(() => expect(result.current.month?.monthKey).toBe('2026-06'))
+    await waitFor(() => expect(result.current.message).toBe('no categories'))
+    expect(result.current.categories).toEqual([])
   })
 })
 
@@ -348,6 +438,33 @@ describe('useBudgetMonth actions', () => {
 
     expect(api.post).toHaveBeenCalledWith(`${BUDGETS_API_BASE}/month/adopt`, { month: '2026-06' })
     expect(hook.result.current.message).toBe('3 lines carried over from May 2026.')
+    expect(hook.result.current.messageSection).toBe('month')
+  })
+
+  it('says a removal failed in the section the removed row is in', async () => {
+    const { api, hook } = await loaded()
+    api.del.mockRejectedValue(new Error('Could not remove that line.'))
+
+    await act(() => hook.result.current.remove(line))
+    expect(hook.result.current.message).toBe('Could not remove that line.')
+    expect(hook.result.current.messageSection).toBe('lines')
+
+    api.del.mockRejectedValue(new Error('No allowance.'))
+    await act(() => hook.result.current.removeAccountLine({ accountId: 'a1' } as never))
+    expect(hook.result.current.message).toBe('No allowance.')
+    expect(hook.result.current.messageSection).toBe('allowances')
+  })
+
+  it('clears the message when the next action starts', async () => {
+    const { api, hook } = await loaded()
+    api.post.mockResolvedValue({ created: 1 })
+    await act(() => hook.result.current.adopt())
+    expect(hook.result.current.message).not.toBeNull()
+    api.del.mockResolvedValue({ removed: 1 })
+
+    await act(() => hook.result.current.remove(line))
+
+    expect(hook.result.current.message).toBeNull()
   })
 
   it('adds a zero-plan line, and ignores an empty category choice', async () => {

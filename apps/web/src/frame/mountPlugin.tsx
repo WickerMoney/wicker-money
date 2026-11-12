@@ -36,7 +36,7 @@ function showError(root: HTMLElement, message: string): void {
 export async function mountPlugin(
   root: HTMLElement, hash: string, base: string, deps: MountDeps = {},
 ): Promise<() => void> {
-  const params = parseFrameFragment(hash, base)
+  const params = await parseFrameFragment(hash, base)
   if ('error' in params) {
     showError(root, params.error)
     return () => {}

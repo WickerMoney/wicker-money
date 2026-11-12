@@ -1084,9 +1084,9 @@ Consequences for contributors:
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
   (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights`,
-  `spending-trends`, `upcoming`, `forecast` and `debt-payoff` have been ported and
-  run in frames. The other two bundled plugins (`budgets`, `import-csv`) are still
-  listed and run in the page, fully trusted. The list shrinks as plugins are
+  `spending-trends`, `upcoming`, `forecast`, `debt-payoff` and `budgets` have been
+  ported and run in frames. The other bundled plugin, `import-csv`, is still
+  listed and runs in the page, fully trusted. The list shrinks as plugins are
   ported.
 
 ### Isolated plugin frames
@@ -1301,7 +1301,7 @@ sequenceDiagram
   What this costs you: a frame runs the **built** copy of its code, so there is no
   hot reload inside it. After changing the frame (`apps/web/src/frame`), the
   SDK's isolated entry or a plugin that runs in a frame (`insights`,
-  `spending-trends`, `upcoming`, `forecast`, `debt-payoff`), run the `build` line again and reload. Plugins that run in
+  `spending-trends`, `upcoming`, `forecast`, `debt-payoff`, `budgets`), run the `build` line again and reload. Plugins that run in
   the page are unchanged: Vite serves them from `apps/web/public/plugins`, which
   their watch builds rewrite. If the frame fails to start, the browser console
   names the likely cause (no built frame, API not running, something other than
@@ -1324,7 +1324,12 @@ draws.
 
 - Import from `/runtime`, `/money` and `/date`, never the SDK root. Every frame
   downloads and parses its plugin's chunk on its own, so the root's Zod schemas
-  (about 85 kB) cost once per frame, not once per page.
+  (about 85 kB) cost once per frame, not once per page. A plugin whose UI
+  imports a value from the root fails `apps/web/src/frame/frameBundle.test.ts`,
+  which also fails if the frame's own start-up pulls in the root or zod, or
+  grows past its size budget. Use `import type`, a sub-path, or a small local
+  copy with a test that keeps it in step (Insights and Spending Trends do this
+  for `monthsInRange`).
 - Keep tooltips, menus and popovers inside the widget's own rectangle. A frame
   cannot draw outside it and protocol 1 has no host-rendered overlay, so an
   overlay that crosses the edge is cut off. Measure the overlay and clamp it
@@ -1639,11 +1644,12 @@ for the API.
 ### End-to-end tests
 
 `e2e/` holds browser tests that run against the **built image**, the way someone
-who pulls it runs it, rather than against the source tree. Seven smoke specs
+who pulls it runs it, rather than against the source tree. Nine smoke specs
 (`e2e/tests/smoke.spec.ts`, about 25 seconds once the stack is up) cover: the
 stack is healthy, migrated and seeded (all four seed personas sign in, the
 bundled plugins registered with no load failures); `hero` signs in and reaches the
-dashboard; `household` reaches the forecast page; every in-realm bundled plugin
+dashboard and the budgets page (through its frame); `household` reaches the
+forecast and debt payoff pages (through their frames); every in-realm bundled plugin
 page loads with no console error or failed request; every dashboard widget
 loads, and the isolated ones (everything not in `IN_REALM_PLUGIN_IDS`) run in frames with
 no console error and no Content Security Policy violation; `hero` cannot read

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { PluginPageProps } from '@wickermoney/plugin-sdk'
-import { Alert, Spinner, Surface } from '@wickermoney/ui-kit'
+import { Spinner, Surface } from '@wickermoney/ui-kit'
 import './styles.js'
 import { AccountLineForm } from './components/AccountLineForm.js'
 import { AccountLinesTable } from './components/AccountLinesTable.js'
@@ -9,10 +9,11 @@ import { AdoptDraftBanner } from './components/AdoptDraftBanner.js'
 import { BudgetLinesTable } from './components/BudgetLinesTable.js'
 import { MonthNavigator } from './components/MonthNavigator.js'
 import { MonthTotals } from './components/MonthTotals.js'
+import { SectionNotice } from './components/SectionNotice.js'
 import { UnbudgetedPanel } from './components/UnbudgetedPanel.js'
 import { WindowForm } from './components/WindowForm.js'
 import { monthLabel } from './helpers/monthLabel.js'
-import { useBudgetMonth } from './hooks/useBudgetMonth.js'
+import { useBudgetMonth, type MessageSection } from './hooks/useBudgetMonth.js'
 import type { AccountLine, MonthLine } from './models/index.js'
 
 /**
@@ -40,13 +41,16 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
   const [editingAccountLine, setEditingAccountLine] = useState<AccountLine | null>(null)
   const accountLines = month?.accountLines ?? []
   const categoryNames = new Map(budget.categories.map((c) => [c.id, c.name]))
+  // A message is shown in the section it is about, so it is next to what the person just did.
+  const noticeFor = (section: MessageSection): string | null =>
+    budget.messageSection === section ? budget.message : null
 
   return (
     <div className="page bud">
       <h1 className="page__title">Budgets</h1>
-      {budget.message !== null ? <Alert>{budget.message}</Alert> : null}
 
       <Surface title={monthLabel(monthKey)}>
+        <SectionNotice message={noticeFor('month')} />
         <MonthNavigator
           monthKey={monthKey}
           draft={month?.draft === true}
@@ -71,6 +75,7 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
 
       {month !== null ? (
         <Surface title="Lines">
+          <SectionNotice message={noticeFor('lines')} />
           <BudgetLinesTable
             month={month}
             edits={budget.edits}
@@ -119,6 +124,7 @@ export default function BudgetsPage({ ctx }: PluginPageProps) {
 
       {month !== null ? (
         <Surface title="Account allowances">
+          <SectionNotice message={noticeFor('allowances')} />
           <p className="bud__note">
             An allowance is money set aside to spend from one account, like $150 a month of
             spending money. It counts everything that leaves the account, whatever the category,
