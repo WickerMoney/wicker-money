@@ -29,7 +29,6 @@ import { KyselyUnitOfWork } from '../../../api/src/data/KyselyUnitOfWork.js'
 import { configureTenantContext } from '../../../api/src/db/configureTenantContext.js'
 import { createDb } from '../../../api/src/db/client.js'
 import { BUNDLED_PLUGINS } from '../../../api/src/plugins/bundled.js'
-import { pluginRuntimeFor } from '../../../api/src/plugins/pluginRuntime.js'
 import { PluginService } from '../../../api/src/plugins/service/PluginService.js'
 import { HOSTILE_PLUGIN_ID, hostileManifest } from '../../../api/src/testing/hostilePlugin.js'
 import { TEST_ADMIN_DATABASE_URL, TEST_AUTH_SECRET, TEST_DATABASE_URL, migrateTestDatabase } from '../../../api/src/testing/harness.js'
@@ -84,8 +83,9 @@ async function startServer(dist: string, apiLog: ApiLog) {
   configureTenantContext(config.AUTH_SECRET)
   const db = createDb(config.DATABASE_URL, { max: config.DB_POOL_MAX, statementTimeoutMillis: config.DB_STATEMENT_TIMEOUT })
   const manifest = hostileManifest([{ module: './Hostile', title: 'Attack' }, { module: './Victim', title: VICTIM_NAME }], true)
-  // The only other plugin installed here is an in-realm one (Import CSV), so it is the "another plugin" the probes name.
-  const bundled = [...BUNDLED_PLUGINS.filter((m) => pluginRuntimeFor(m, true) === 'in-realm'), manifest]
+  // The only other plugin installed here is Budgets, so it is the "another plugin" the probes name. (Every bundled plugin
+  // runs in a frame now, so the server installs it by name; it used to install the in-realm ones.)
+  const bundled = [...BUNDLED_PLUGINS.filter((m) => m.id === 'wickermoney.budgets'), manifest]
   const app = buildApp({ db, config, pluginOptions: { bundled } })
   apiLog.install(app)
   await app.ready()
@@ -294,11 +294,11 @@ const BROKER_REFUSED: readonly BrokerCase[] = [
   { id: 'b-plugin-disable-post', title: 'setPluginEnabled spelled as a POST', method: 'POST', path: `/plugins/${HOSTILE_PLUGIN_ID}`, body: { enabled: false }, codes: REFUSAL },
   { id: 'b-plugin-disable-patch', title: 'setPluginEnabled as PATCH (a method the protocol does not carry)', method: 'PATCH', path: `/plugins/${HOSTILE_PLUGIN_ID}`, body: { enabled: false }, codes: ['invalid_request', 'silence'] },
   { id: 'b-mint-self', title: 'mint a token for itself', method: 'POST', path: `/plugins/${HOSTILE_PLUGIN_ID}/token`, body: {}, codes: REFUSAL },
-  { id: 'b-mint-other', title: 'mint a token for another plugin', method: 'POST', path: '/plugins/wickermoney.import-csv/token', body: {}, codes: REFUSAL },
+  { id: 'b-mint-other', title: 'mint a token for another plugin', method: 'POST', path: '/plugins/wickermoney.budgets/token', body: {}, codes: REFUSAL },
   { id: 'b-users', title: 'GET /users (owner role management)', method: 'GET', path: '/users', codes: REFUSAL },
   { id: 'b-role', title: 'make itself an owner (PUT /users/:id/role)', method: 'PUT', path: `/users/${ZERO}/role`, body: { role: 'owner' }, codes: REFUSAL },
-  { id: 'b-other-plugin-get', title: "another plugin's /p/ route (GET)", method: 'GET', path: '/p/wickermoney.import-csv/anything', codes: REFUSAL },
-  { id: 'b-other-plugin-post', title: "another plugin's /p/ route (POST)", method: 'POST', path: '/p/wickermoney.import-csv/anything', body: {}, codes: REFUSAL },
+  { id: 'b-other-plugin-get', title: "another plugin's /p/ route (GET)", method: 'GET', path: '/p/wickermoney.budgets/anything', codes: REFUSAL },
+  { id: 'b-other-plugin-post', title: "another plugin's /p/ route (POST)", method: 'POST', path: '/p/wickermoney.budgets/anything', body: {}, codes: REFUSAL },
   { id: 'b-prefix-collision', title: "a namespace that merely starts with its own id (/p/acme.hostile.evil)", method: 'GET', path: `/p/${HOSTILE_PLUGIN_ID}.evil/x`, codes: REFUSAL },
   { id: 'b-bare-namespace', title: 'the bare /p/<id> with no trailing path', method: 'GET', path: `/p/${HOSTILE_PLUGIN_ID}`, codes: [...REFUSAL, 'not_found'] },
   { id: 'b-accounts', title: 'host screen: GET /accounts', method: 'GET', path: '/accounts', codes: REFUSAL },
@@ -355,7 +355,7 @@ async function phaseBroker(w: World): Promise<void> {
   // C. What a request that does go through looks like on the wire, and what a plugin cannot add to it.
   const forged = await call<Array<{ sent: Json; reply: unknown }>>(w, 'raw', [{
     method: 'GET', path: withMarker('/core/transactions/monthly-summary?months=1', 'forge'), cache: 'no-store',
-    extra: { headers: { authorization: 'Bearer forged.forged.forged', 'x-wickermoney-plugin': 'wickermoney.import-csv', 'x-forged': '1', cookie: 'wickermoney_refresh=x' }, credentials: 'include', mode: 'cors', pluginId: 'wickermoney.import-csv', plg: 'wickermoney.import-csv', token: 'forged', url: `${w.attacker.origin}/forge?hx=forge-url` },
+    extra: { headers: { authorization: 'Bearer forged.forged.forged', 'x-wickermoney-plugin': 'wickermoney.budgets', 'x-forged': '1', cookie: 'wickermoney_refresh=x' }, credentials: 'include', mode: 'cors', pluginId: 'wickermoney.budgets', plg: 'wickermoney.budgets', token: 'forged', url: `${w.attacker.origin}/forge?hx=forge-url` },
   }], 0)
   await sleep(300)
   const onWire = w.log.requestUrls.find((r) => r.url.includes('hx=forge'))
@@ -366,7 +366,7 @@ async function phaseBroker(w: World): Promise<void> {
     id: 'forged-identity', group: 'broker', title: 'extra fields on a request (headers, credentials, plugin id, token, url) cannot change who the request is from',
     expected: 'contained', reason: `request went out as plg=${String(c['plg'])} aud=${String(c['aud'])}; API saw auth=${logged?.auth ?? 'none'} plugin=${logged?.pluginId ?? ''}`,
     pass: code(forged[0]?.reply) === 'ok' && c['plg'] === HOSTILE_PLUGIN_ID && String(c['aud']).endsWith(':plugin') && hostHeader(onWire ?? { headers: {} }, 'x-forged') === undefined
-      && hostHeader(onWire ?? { headers: {} }, 'cookie') === undefined && auth !== 'Bearer forged.forged.forged' && hostHeader(onWire ?? { headers: {} }, 'x-wickermoney-plugin') !== 'wickermoney.import-csv'
+      && hostHeader(onWire ?? { headers: {} }, 'cookie') === undefined && auth !== 'Bearer forged.forged.forged' && hostHeader(onWire ?? { headers: {} }, 'x-wickermoney-plugin') !== 'wickermoney.budgets'
       && logged?.auth === 'plugin' && logged.pluginId === HOSTILE_PLUGIN_ID && logged.status === 200 && w.attacker.hitsFor('forge-url').length === 0,
     detail: { onWire: onWire === undefined ? null : { ...onWire.headers, authorization: auth.slice(0, 20) + '…' }, logged },
   })
@@ -456,7 +456,7 @@ async function phaseSpoof(w: World): Promise<void> {
   })
   const taken = await call(w, 'takePort')
   const init = (await w.hostile.evaluate(() => (window as unknown as { __hostile: { portInits: Json[] } }).__hostile.portInits))[0] as { pluginId?: string; session?: { email?: string } } | undefined
-  add({ id: 'spoof-hello-identity', group: 'spoofing', title: 'a handshake that claims pluginId=wickermoney.import-csv and a forged session', expected: 'contained', reason: `init says plugin ${String(init?.pluginId)}, session ${String(init?.session?.email)}`, pass: taken['port'] === true && init?.pluginId === HOSTILE_PLUGIN_ID && init.session?.email === w.user.email, detail: init })
+  add({ id: 'spoof-hello-identity', group: 'spoofing', title: 'a handshake that claims pluginId=wickermoney.budgets and a forged session', expected: 'contained', reason: `init says plugin ${String(init?.pluginId)}, session ${String(init?.session?.email)}`, pass: taken['port'] === true && init?.pluginId === HOSTILE_PLUGIN_ID && init.session?.email === w.user.email, detail: init })
 }
 
 async function phaseNavigation(w: World): Promise<void> {
@@ -548,7 +548,7 @@ async function phasePageFrame(w: World): Promise<void> {
   const url0 = w.page.url()
   const themeBefore = await w.page.evaluate(() => document.documentElement.getAttribute('data-theme'))
   const odd = await call<Array<{ sent: unknown; reply: unknown }>>(w, 'rawMessages', [
-    { type: 'route', path: '/accounts?hx=page-route' }, { type: 'init', protocol: 1, pluginId: 'wickermoney.import-csv', kind: 'page', path: '/accounts' },
+    { type: 'route', path: '/accounts?hx=page-route' }, { type: 'init', protocol: 1, pluginId: 'wickermoney.budgets', kind: 'page', path: '/accounts' },
     { type: 'theme', theme: { scheme: 'dark', tokens: { '--wm-bg': 'red' } } }, { type: 'focus-in', direction: 'first' }, { type: 'props', size: 'full' },
   ])
   await sleep(500)
@@ -693,7 +693,7 @@ async function phaseTokens(w: World): Promise<void> {
   const pluginToken = (hostHeader(wire('tok-control') ?? { headers: {} }, 'authorization') ?? '').replace(/^Bearer /, '')
   const hostToken = (hostHeader(w.log.requestUrls.find((r) => r.url.endsWith(`/api/v1/plugins/${HOSTILE_PLUGIN_ID}/token`)) ?? { headers: {} }, 'authorization') ?? '').replace(/^Bearer /, '')
   // The host mints a token for a different plugin, as it would for that plugin's own frame.
-  const mint = await fetch(`${w.base}/api/v1/plugins/wickermoney.import-csv/token`, { method: 'POST', headers: { authorization: `Bearer ${hostToken}`, 'x-wickermoney-csrf': '1', 'content-type': 'application/json' }, body: '{}' })
+  const mint = await fetch(`${w.base}/api/v1/plugins/wickermoney.budgets/token`, { method: 'POST', headers: { authorization: `Bearer ${hostToken}`, 'x-wickermoney-csrf': '1', 'content-type': 'application/json' }, body: '{}' })
   const otherToken = ((await mint.json().catch(() => ({}))) as { token?: string; accessToken?: string }).token ?? ''
   rec.check("control: the host's own token mints a token for another plugin (so the replay below is a real one)", mint.status === 200 && otherToken !== '', mint.status)
 
@@ -702,11 +702,11 @@ async function phaseTokens(w: World): Promise<void> {
   const probes: Probe[] = [
     { id: 'tok-refresh', title: 'stolen plugin token: POST /auth/refresh with the refresh cookie and CSRF header', method: 'POST', path: '/api/v1/auth/refresh', headers: withToken(pluginToken), body: {}, status: [403], errorCode: 'plugin_route_denied' },
     { id: 'tok-export', title: 'stolen plugin token: GET /settings/export', method: 'GET', path: '/api/v1/settings/export', headers: withToken(pluginToken), status: [403], errorCode: 'plugin_route_denied' },
-    { id: 'tok-mint', title: 'stolen plugin token: mint another plugin token', method: 'POST', path: '/api/v1/plugins/wickermoney.import-csv/token', headers: withToken(pluginToken), body: {}, status: [403], errorCode: 'plugin_route_denied' },
+    { id: 'tok-mint', title: 'stolen plugin token: mint another plugin token', method: 'POST', path: '/api/v1/plugins/wickermoney.budgets/token', headers: withToken(pluginToken), body: {}, status: [403], errorCode: 'plugin_route_denied' },
     { id: 'tok-disable', title: 'stolen plugin token: PATCH /plugins/<id> {enabled:false}', method: 'PATCH', path: `/api/v1/plugins/${HOSTILE_PLUGIN_ID}`, headers: withToken(pluginToken), body: { enabled: false }, status: [403], errorCode: 'plugin_route_denied' },
     { id: 'tok-ungranted', title: 'stolen plugin token: read an ungranted table', method: 'GET', path: '/api/v1/core/accounts/summary', headers: withToken(pluginToken), status: [403], errorCode: 'grant_denied' },
-    { id: 'tok-other-ns', title: "stolen plugin token: another plugin's /p/ route, with the plugin header forged to that plugin", method: 'GET', path: '/api/v1/p/wickermoney.import-csv/x', headers: withToken(pluginToken, { 'x-wickermoney-plugin': 'wickermoney.import-csv' }), status: [403, 404], errorCode: 'plugin_route_denied' },
-    { id: 'tok-other-ns-nohdr', title: "stolen plugin token: another plugin's /p/ route, plugin header omitted", method: 'GET', path: '/api/v1/p/wickermoney.import-csv/x', headers: withToken(pluginToken), status: [403, 404], errorCode: 'plugin_route_denied' },
+    { id: 'tok-other-ns', title: "stolen plugin token: another plugin's /p/ route, with the plugin header forged to that plugin", method: 'GET', path: '/api/v1/p/wickermoney.budgets/x', headers: withToken(pluginToken, { 'x-wickermoney-plugin': 'wickermoney.budgets' }), status: [403, 404], errorCode: 'plugin_route_denied' },
+    { id: 'tok-other-ns-nohdr', title: "stolen plugin token: another plugin's /p/ route, plugin header omitted", method: 'GET', path: '/api/v1/p/wickermoney.budgets/x', headers: withToken(pluginToken), status: [403, 404], errorCode: 'plugin_route_denied' },
     { id: 'tok-replay-other', title: "another plugin's token replayed in this plugin's namespace", method: 'GET', path: `/api/v1/p/${HOSTILE_PLUGIN_ID}/x`, headers: withToken(otherToken), status: [403, 404], errorCode: 'plugin_route_denied' },
     { id: 'tok-replay-other-core', title: "control: another plugin's token is that plugin, within that plugin's grants (the token is the identity; no header changes it)", method: 'GET', path: '/api/v1/core/transactions/monthly-summary?months=1', headers: withToken(otherToken), status: [200, 403] },
     { id: 'tok-forged', title: 'a token with the plugin claims edited (alg none)', method: 'GET', path: '/api/v1/core/transactions/monthly-summary?months=1', headers: withToken(`${Buffer.from('{"alg":"none","typ":"JWT"}').toString('base64url')}.${Buffer.from(JSON.stringify({ ...claims(pluginToken), tbl: ['transactions:write', 'accounts:read'] })).toString('base64url')}.`), status: [401] },
