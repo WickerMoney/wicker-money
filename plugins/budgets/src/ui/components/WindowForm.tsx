@@ -118,10 +118,10 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
         <div className="wm-field bud__add-action">
           <span className="wm-field__label" aria-hidden="true">&nbsp;</span>
           <div className="bud__add-buttons">
-            <Button variant="primary" disabled={busy || !ready} onClick={() => void submit()}>
+            <Button variant="primary" busy={busy} disabled={!ready} onClick={() => void submit()}>
               {editing !== null ? 'Save window' : 'Add window'}
             </Button>
-            {editing !== null ? <Button disabled={busy} onClick={onCancel}>Cancel</Button> : null}
+            {editing !== null ? <Button busy={busy} onClick={onCancel}>Cancel</Button> : null}
           </div>
         </div>
       </div>

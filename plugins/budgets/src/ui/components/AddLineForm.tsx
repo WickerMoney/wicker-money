@@ -46,7 +46,7 @@ export function AddLineForm({ categories, lines, busy, onAdd }: AddLineFormProps
         <CategoryOptions categories={categories} exclude={taken} />
       </SelectField>
       <Button
-        disabled={busy || addCategoryId === ''}
+        busy={busy} disabled={addCategoryId === ''}
         onClick={() => { void onAdd(addCategoryId).then(form.show) }}
       >
         Add line
