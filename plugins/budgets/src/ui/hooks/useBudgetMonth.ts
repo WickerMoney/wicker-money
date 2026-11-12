@@ -11,6 +11,16 @@ import type {
   AccountLine, AccountLineDraft, AccountOption, Category, MonthLine, MonthResponse, WindowDraft,
 } from '../models/index.js'
 
+/**
+ * How long a month change waits before it loads, in milliseconds. A held Enter on "Previous" repeats about 30 times
+ * a second, and in a plugin frame every load is messages through the host's broker, which refuses a burst: only the
+ * month the person stops on is worth asking for.
+ */
+export const MONTH_LOAD_DEBOUNCE_MS = 150
+
+/** The part of the page a message belongs to, so the page can show it next to what the person just did. */
+export type MessageSection = 'month' | 'lines' | 'allowances'
+
 /** What {@link useBudgetMonth} returns. */
 export interface BudgetMonth {
   readonly monthKey: string
@@ -26,6 +36,11 @@ export interface BudgetMonth {
   readonly accounts: readonly AccountOption[]
   /** The message currently shown: a failure, or a notice after carrying lines over. */
   readonly message: string | null
+  /**
+   * Where on the page `message` belongs: `month` (loading, and carrying lines over), `lines` (removing a line or a
+   * window) or `allowances` (removing an allowance). Meaningless while `message` is `null`.
+   */
+  readonly messageSection: MessageSection
   readonly busy: boolean
   /** Plans being typed and not yet saved, keyed by category id. */
   readonly edits: Readonly<Record<string, string>>
@@ -78,6 +93,11 @@ export interface BudgetMonth {
  * user is now looking at. A save that finishes after the user has moved on does
  * not reload the month they left.
  *
+ * Categories and accounts do not depend on the month, so they load once, when
+ * the page opens, and not with every month. A change of month waits
+ * {@link MONTH_LOAD_DEBOUNCE_MS} before it loads (the first load does not wait),
+ * so stepping through months quickly asks for the one the user stops on.
+ *
  * The hook depends on the API client and the time zone, not on the identity of
  * the context object, so a host that rebuilds the context on every render does
  * not cause a refetch.
@@ -92,13 +112,22 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   const [month, setMonth] = useState<MonthResponse | null>(null)
   const [categories, setCategories] = useState<readonly Category[]>([])
   const [accounts, setAccounts] = useState<readonly AccountOption[]>([])
-  const [message, setMessage] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ readonly text: string; readonly section: MessageSection } | null>(null)
+  /** Why the categories could not be loaded. Kept apart from `notice`, which every month load clears. */
+  const [listError, setListError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({})
 
+  /** Shows a message next to the part of the page it is about, or none. */
+  const setMessage = useCallback((text: string | null, section: MessageSection = 'month') => {
+    setNotice(text === null ? null : { text, section })
+  }, [])
+
   const shownKey = useRef(monthKey)
   const inFlight = useRef<AbortController | null>(null)
+  /** Set once the first month load has started: later loads are debounced. */
+  const startedOnce = useRef(false)
 
   const load = useCallback(async (key: string) => {
     inFlight.current?.abort()
@@ -108,31 +137,19 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
 
     setMessage(null)
     try {
-      const [loaded, cats, accountList] = await Promise.all([
-        api.get<MonthResponse>(
-          `${BUDGETS_API_BASE}/month?month=${key}&tz=${encodeURIComponent(timezone)}`,
-          { signal },
-        ),
-        api.get<Category[]>('/core/categories/list', { signal }),
-        // The account listing only adds the allowance form's picker. A host
-        // that does not offer it must not stop the month from loading.
-        api.get<{ accounts?: AccountOption[] }>('/core/accounts/list', { signal }).catch((e: unknown) => {
-          if (signal.aborted) throw e
-          return null
-        }),
-      ])
+      const loaded = await api.get<MonthResponse>(
+        `${BUDGETS_API_BASE}/month?month=${key}&tz=${encodeURIComponent(timezone)}`,
+        { signal },
+      )
       if (signal.aborted) return
       setMonth(loaded)
-      // Only categories a budget can count; income and transfers would always read zero.
-      setCategories(cats.filter(isBudgetable))
-      setAccounts((accountList?.accounts ?? []).filter((a) => ACCOUNT_LINE_TYPES.includes(a.type)))
       setEdits({})
       setPlanErrors({})
     } catch (e) {
       // A superseded load is not a failure: whoever superseded it reports on the month now shown.
       if (!signal.aborted) throw e
     }
-  }, [api, timezone])
+  }, [api, timezone, setMessage])
 
   // Reloads after a change, unless the user has since moved to another month:
   // that month has its own load, and this one would replace it.
@@ -141,14 +158,44 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
     [load],
   )
 
+  // Categories and accounts are the same whichever month is shown, so they are asked for once, not with each month.
+  useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+    Promise.all([
+      api.get<Category[]>('/core/categories/list', { signal }),
+      // The account listing only adds the allowance form's picker. A host
+      // that does not offer it must not stop the month from loading.
+      api.get<{ accounts?: AccountOption[] }>('/core/accounts/list', { signal }).catch((e: unknown) => {
+        if (signal.aborted) throw e
+        return null
+      }),
+    ]).then(([cats, accountList]) => {
+      if (signal.aborted) return
+      // Only categories a budget can count; income and transfers would always read zero.
+      setCategories(cats.filter(isBudgetable))
+      setAccounts((accountList?.accounts ?? []).filter((a) => ACCOUNT_LINE_TYPES.includes(a.type)))
+    }).catch((e: unknown) => {
+      if (!signal.aborted) setListError(e instanceof Error ? e.message : 'Could not load the categories.')
+    })
+    return () => controller.abort()
+  }, [api])
+
+  // The month: at once the first time, then after a pause, so a burst of month changes loads only the last.
   useEffect(() => {
     shownKey.current = monthKey
     setMonth(null)
-    load(monthKey).catch((e: unknown) => {
-      setMessage(e instanceof Error ? e.message : 'Could not load this month.')
-    })
-    return () => inFlight.current?.abort()
-  }, [load, monthKey])
+    const timer = setTimeout(() => {
+      startedOnce.current = true
+      load(monthKey).catch((e: unknown) => {
+        setMessage(e instanceof Error ? e.message : 'Could not load this month.')
+      })
+    }, startedOnce.current ? MONTH_LOAD_DEBOUNCE_MS : 0)
+    return () => {
+      clearTimeout(timer)
+      inFlight.current?.abort()
+    }
+  }, [load, monthKey, setMessage])
 
   const showPlanError = useCallback((categoryId: string, message: string | null) => {
     setPlanErrors((current) => {
@@ -187,7 +234,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       )
       await reload(monthKey)
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not remove that line.')
+      setMessage(e instanceof Error ? e.message : 'Could not remove that line.', 'lines')
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
@@ -197,7 +244,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       const r = await api.post<{ created: number }>(`${BUDGETS_API_BASE}/month/adopt`, { month: monthKey })
       await reload(monthKey)
       if (monthKey === shownKey.current) {
-        setMessage(`${r.created} lines carried over from ${monthLabel(shiftMonth(monthKey, -1))}.`)
+        setMessage(`${r.created} lines carried over from ${monthLabel(shiftMonth(monthKey, -1))}.`, 'month')
       }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Could not start this month.')
@@ -267,7 +314,7 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       await api.del(`${BUDGETS_API_BASE}/account-line?month=${monthKey}&accountId=${line.accountId}`)
       await reload(monthKey)
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Could not remove that allowance.')
+      setMessage(e instanceof Error ? e.message : 'Could not remove that allowance.', 'allowances')
     } finally { setBusy(false) }
   }, [api, monthKey, reload])
 
@@ -283,7 +330,8 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
   )
 
   return {
-    monthKey, month, categories, accounts, message, busy, edits, planErrors,
+    monthKey, month, categories, accounts, message: notice?.text ?? listError, messageSection: notice?.section ?? 'month',
+    busy, edits, planErrors,
     previousMonth, nextMonth, thisMonth, editPlan,
     save, remove, adopt, addLine, saveWindow, saveAccountLine, removeAccountLine,
   }

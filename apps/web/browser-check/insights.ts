@@ -160,7 +160,9 @@ async function waitForCharts(page: Playwright.Page): Promise<Record<string, numb
     if (Date.now() - t0 > 30_000) throw new Error(`charts did not draw: ${JSON.stringify(m)}`)
     // A widget frame below the fold is only created when its card nears the viewport: once the first chart
     // has drawn, scroll to the bottom so the other one starts too (the time to the last chart includes that).
-    if (m['trend'] !== undefined) await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)).catch(() => undefined)
+    // At phone width the cards above Insights (Upcoming, Budgets) can push its first frame below the fold too, and then
+    // no chart ever draws: after 2 s without one, scroll as well (a first chart that draws unaided is timed as before).
+    if (m['trend'] !== undefined || Date.now() - t0 > 2_000) await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)).catch(() => undefined)
     await sleep(40)
   }
 }
