@@ -56,7 +56,7 @@ describe('plugin registry endpoint', () => {
     expect(body.plugins.find((p) => p.id === 'wickermoney.spending-trends')?.runtime).toBe('isolated')
     expect(body.plugins.find((p) => p.id === 'wickermoney.upcoming')?.runtime).toBe('isolated')
     expect(body.plugins.find((p) => p.id === 'wickermoney.budgets')?.runtime).toBe('isolated')
-    expect(body.plugins.find((p) => p.id === 'wickermoney.import-csv')?.runtime).toBe('in-realm')
+    expect(body.plugins.find((p) => p.id === 'wickermoney.import-csv')?.runtime).toBe('isolated')
   })
 })
 
