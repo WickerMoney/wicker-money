@@ -49,10 +49,10 @@ A federated remote's emitted stylesheet is never requested.
 | Component | Purpose |
 |---|---|
 | `Surface` | Card/panel with an optional title and header action |
-| `Button` | `variant`: `default`, `primary` or `danger` |
-| `IconButton` | Square icon-only button for table rows. `icon` is one of `edit`, `delete`, `disable`, `enable`, `archive`, `history`, `end`, `balance` or `link`; `label` is required and is both the accessible name and the hover tooltip; `variant`: `default` or `danger`. Takes any other native `<button>` attribute |
+| `Button` | `variant`: `default`, `primary` or `danger`. `busy` for a request in flight (see [Busy controls](#busy-controls)) |
+| `IconButton` | Square icon-only button for table rows. `icon` is one of `edit`, `delete`, `disable`, `enable`, `archive`, `history`, `end`, `balance` or `link`; `label` is required and is both the accessible name and the hover tooltip; `variant`: `default` or `danger`; `busy` as for `Button`. Takes any other native `<button>` attribute |
 | `Dialog` | Modal built on the native `<dialog>` (`showModal()`): a side drawer on a desktop window, a full-screen sheet on a phone. `title` is the heading and the accessible name; `describedBy` (optional) is the id of an element in the body that gives its accessible description; `onClose` is called on Escape, the close button or a click on the backdrop. The page behind is inert, Tab stays inside, the first input in the body gets focus, and focus returns to what opened it when it unmounts. Render it only while it is wanted |
-| `Field`, `SelectField` | Labelled form inputs; optional `hint` and `error` (wires `aria-invalid` and `aria-describedby`) |
+| `Field`, `SelectField` | Labelled form inputs; optional `hint` and `error` (wires `aria-invalid` and `aria-describedby`); `busy` while a request that uses the field runs (see [Busy controls](#busy-controls)) |
 | `FormError` | A form-level error, shown beside the form's submit button |
 | `Table` | Typed table: `columns`, `rows`, `rowKey`; `numeric` columns right-align. `empty` is rendered instead of the table when `rows` is empty; `className` adds a class to the table's scroller. Optional `caption` names the table: it is rendered as a visually hidden `<caption>` that a screen reader announces. Header cells carry `scope="col"`, and a column whose `header` is an empty string (a column of row buttons) gets a visually hidden "Actions" label in its header cell, so no header cell is empty. Optional `rowDetail(row)` adds a full-width detail row under a row (experimental, see [Table row detail](#table-row-detail)) |
 | `Stat` | Label + value; `tone="auto"` colours by sign |
@@ -202,6 +202,28 @@ export function Menu({ onClose }: { onClose: () => void }) {
 It is for hand-rolled modals that are not a native `<dialog>`. A native `<dialog>`
 opened with `showModal()` already keeps focus inside, and the kit's own `Dialog`
 is one.
+
+### Busy controls
+
+A control that is `disabled` while its request runs loses keyboard focus, and a
+screen reader's cursor with it, the moment it is set. `Button`, `IconButton`,
+`Field` and `SelectField` take `busy` instead: the control stays focusable and
+looks disabled; a button or select is `aria-disabled="true"` and ignores a click
+or a change (so a submit button submits nothing and a controlled select keeps its
+value), and a field is `readOnly`. Ignoring an activation says "Still working. Try
+again in a moment." in the toast provider's live region when one is mounted, or in
+a hidden `role="status"` region of its own (as in a plugin frame). Use `disabled`
+for a control that cannot be used for another reason, such as an empty required
+field; both can be set.
+
+For a plain element (a checkbox, a switch) set `aria-disabled={busy || undefined}`
+and wrap its handler in `guardBusy(busy, handler)`, which returns the handler
+unchanged when not busy and otherwise cancels the event and says so.
+
+```tsx
+<Button variant="primary" busy={saving} onClick={save}>Save</Button>
+<input type="checkbox" checked={on} aria-disabled={saving || undefined} onChange={guardBusy(saving, toggle)} />
+```
 
 ## Design tokens
 
