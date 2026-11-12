@@ -259,6 +259,8 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       if (other !== null) throw other
       if (!isUploadGone(e)) throw e
     }
+    // Give the lost upload back first: when the 404 was a mistake or a race, it would otherwise keep one of the person's two places.
+    staging.current.abort()
     staging.current = startUpload(text)
     const second = await staging.current.ready
     try {
