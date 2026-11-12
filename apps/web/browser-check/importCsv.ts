@@ -67,7 +67,8 @@ if (SHOTS !== undefined) mkdirSync(SHOTS, { recursive: true })
 const FILES = process.env['IMPORT_CHECK_DIR'] ?? join(tmpdir(), 'wm-import-check')
 mkdirSync(FILES, { recursive: true })
 const ONLY = (process.env['ONLY'] ?? '').split(',').filter((s) => s !== '')
-const wants = (group: string): boolean => ONLY.length === 0 || ONLY.includes(group)
+/** `measure` takes about half an hour, so it runs only when asked for (`ONLY=measure`). */
+const wants = (group: string): boolean => (ONLY.length === 0 && group !== 'measure') || ONLY.includes(group)
 
 const IMPORT = 'wickermoney.import-csv'
 const PAGE_PATH = `/p/${IMPORT}/import`
@@ -450,7 +451,7 @@ async function pickerChecks(pw: typeof Playwright, base: string, small: TestFile
     const f2 = await waitForPage(o.page, 'isolated')
     await f2.locator('#imp-file').focus()
     for (const key of ['Enter', 'Space']) {
-      const [c2] = await Promise.all([o.page.waitForEvent('filechooser', { timeout: 3000 }).catch(() => null), o.page.keyboard.press(key)])
+      const [c2] = await Promise.all([o.page.waitForEvent('filechooser', { timeout: 6000 }).catch(() => null), (async () => { await sleep(150); await o.page.keyboard.press(key) })()])
       check(`picker: ${key} on the focused file input asks for a chooser`, c2 !== null)
     }
 
@@ -622,6 +623,8 @@ async function midwayChecks(pw: typeof Playwright, base: string, mid: TestFile):
     try {
       const frame = await gotoPage(o, base, 'isolated')
       const calls = trackCalls(o.page)
+      // The scenario before this one left its reviewed upload staged: what is held now is the baseline.
+      const heldBefore = await liveUploads(base)
       await o.page.route(chunkUrl, (route) => {
         const body = route.request().postDataJSON() as { index?: number }
         if (body.index === 2) void route.fulfill(refusal(500, 'request_failed', 'Request failed (500)'))
@@ -639,7 +642,7 @@ async function midwayChecks(pw: typeof Playwright, base: string, mid: TestFile):
       const vh = await o.page.evaluate(() => window.innerHeight)
       check('midway: the message is brought into the window though the person had scrolled to the bottom', rect.top >= 0 && rect.bottom <= vh + 1, { ...rect, vh })
       await eventually(async () => to(calls, '/upload/abort').length, (n) => n >= 1)
-      check('midway: the half-sent upload was given back (upload/abort), so it does not count against the limit of two', to(calls, '/upload/abort').length === 1 && (await liveUploads(base)) === 0, { aborts: to(calls, '/upload/abort').length })
+      check('midway: the half-sent upload was given back (upload/abort), so it does not count against the limit of two', to(calls, '/upload/abort').length === 1 && (await liveUploads(base)) === heldBefore, { aborts: to(calls, '/upload/abort').length, heldBefore })
       check('midway: the failing chunk was tried 3 times (once and twice more)', to(calls, '/upload/chunk').filter((c) => c.body['index'] === 2).length === 3)
       await o.page.unroute(chunkUrl)
       await clickCheck(frame)
@@ -966,7 +969,7 @@ interface Sample {
 }
 
 /** One run of the big file, chosen and imported the way a person would, without waiting for them to look at the columns. */
-async function sampleOnce(pw: typeof Playwright, base: string, mode: Mode, big: TestFile, think: number, commit: boolean): Promise<Sample> {
+async function sampleOnce(pw: typeof Playwright, base: string, mode: Mode, big: TestFile, think: number, commit: boolean, onlyPattern: RegExp = /^big/): Promise<Sample> {
   setMode(mode)
   const o = await open(pw, base, { width: 1280, height: 900 })
   try {
@@ -983,6 +986,7 @@ async function sampleOnce(pw: typeof Playwright, base: string, mode: Mode, big: 
     await clickCheck(frame)
     const btn = await importButton(frame)
     const tReview = Date.now()
+    if (tReview - tClick > 60_000) console.log(`  NO REVIEW after ${tReview - tClick} ms (${mode}): ${(await text(frame)).slice(0, 400).replace(/\n/g, ' | ')} ${JSON.stringify(calls.map((c) => `${c.path} ${c.status}`))}`)
     const memoryAtReview = stop()
     const finish = to(calls, '/upload/finish')[0]
     let heapOf = async (s: Playwright.CDPSession): Promise<number> => {
@@ -1020,7 +1024,7 @@ async function sampleOnce(pw: typeof Playwright, base: string, mode: Mode, big: 
     return sample
   } finally {
     await o.browser.close()
-    if (commit) await undoAll(base, /^big/)
+    if (commit) await undoAll(base, onlyPattern)
   }
 }
 
@@ -1031,19 +1035,22 @@ async function measure(pw: typeof Playwright, big: TestFile): Promise<void> {
     ...(BASE_DIST === undefined ? [] : [{ label: 'before: in-realm, sends csv', mode: 'in-realm' as Mode, distDir: BASE_DIST }]),
     { label: 'after: in-realm, staged', mode: 'in-realm', distDir: dist },
     { label: 'after: isolated, staged', mode: 'isolated', distDir: dist },
-  ]
+  ].filter((c) => (process.env['MEASURE_ONLY'] ?? '') === '' || c.label.includes(process.env['MEASURE_ONLY']!))
   const servers = new Map<string, Awaited<ReturnType<typeof startServer>>>()
   try {
     for (const c of configs) servers.set(c.label, await startServer(c.mode, c.distDir))
     const rows: Record<string, unknown> = {}
-    for (const think of [0, 3000]) {
+    for (const think of (process.env['MEASURE_THINK'] ?? '0,3000').split(',').map(Number)) {
       const samples = new Map<string, Sample[]>(configs.map((c) => [c.label, []]))
       for (let i = 0; i < SAMPLES; i++) {
         const order = i % 2 === 0 ? configs : [...configs].reverse()
         for (const c of order) {
           setMode(c.mode)
           // The commit is timed in the runs that do not wait; the runs that wait stop at the review.
-          const s = await sampleOnce(pw, servers.get(c.label)!.base, c.mode, big, think, think === 0)
+          // A run that stops at the review leaves its upload staged when the browser closes, and a person holds two: it gets its own API process.
+          const own = think === 0 ? null : await startServer(c.mode, c.distDir)
+          let s: Sample
+          try { s = await sampleOnce(pw, own?.base ?? servers.get(c.label)!.base, c.mode, big, think, think === 0) } finally { await own?.close() }
           samples.get(c.label)!.push(s)
           console.log(`  think ${think} ms, ${c.label} #${i + 1}: ${JSON.stringify(s)}`)
         }
@@ -1077,6 +1084,41 @@ async function measure(pw: typeof Playwright, big: TestFile): Promise<void> {
   }
 }
 
+/** The same three runs for a 30-row file: what staging costs when one request would have done (the decision to keep one code path). */
+async function measureSmall(pw: typeof Playwright, small: TestFile): Promise<void> {
+  const configs: Config[] = [
+    ...(BASE_DIST === undefined ? [] : [{ label: 'before: in-realm, sends csv', mode: 'in-realm' as Mode, distDir: BASE_DIST }]),
+    { label: 'after: in-realm, staged', mode: 'in-realm', distDir: dist },
+    { label: 'after: isolated, staged', mode: 'isolated', distDir: dist },
+  ]
+  const servers = new Map<string, Awaited<ReturnType<typeof startServer>>>()
+  try {
+    for (const c of configs) servers.set(c.label, await startServer(c.mode, c.distDir))
+    const rows: Record<string, unknown> = {}
+    const samples = new Map<string, Sample[]>(configs.map((c) => [c.label, []]))
+    for (let i = 0; i < SAMPLES; i++) {
+      for (const c of i % 2 === 0 ? configs : [...configs].reverse()) {
+        const s = await sampleOnce(pw, servers.get(c.label)!.base, c.mode, small, 0, true, /^small/)
+        samples.get(c.label)!.push(s)
+        console.log(`  small, ${c.label} #${i + 1}: ${JSON.stringify(s)}`)
+      }
+    }
+    for (const c of configs) {
+      const s = samples.get(c.label)!
+      rows[c.label] = {
+        n: s.length,
+        'choose to review, click at once (ms)': spread(s.map((x) => x.reviewMs)),
+        'click to review (ms)': spread(s.map((x) => x.clickToReviewMs)),
+        'import click to done (ms)': spread(s.map((x) => x.commitMs ?? NaN)),
+        'requests (all, uploads)': [median(s.map((x) => x.requests)), median(s.map((x) => x.uploadRequests))],
+      }
+    }
+    report['measure-small'] = rows
+    console.log('\nMEASURE small file (median of n, alternating order):')
+    console.log(JSON.stringify(rows, null, 2))
+  } finally { for (const sv of servers.values()) await sv.close() }
+}
+
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
@@ -1096,7 +1138,7 @@ async function main(): Promise<void> {
     const server = await startServer(mode)
     try { await undoAll(server.base); await run(server.base) } finally { await undoAll(server.base).catch(() => undefined); await server.close() }
   }
-  if (wants('big') || wants('measure')) {
+  if (wants('big')) {
     const seed = await startServer('isolated')
     try { await undoAll(seed.base) } finally { await seed.close() }
   }
@@ -1118,6 +1160,7 @@ async function main(): Promise<void> {
     const server = await startServer('isolated')
     try { await importDirect(server.base, 0, KNOWN_ROWS, 'known-rows-2.csv').catch(() => undefined) } finally { await server.close() }
     await measure(pw, big)
+    await measureSmall(pw, small)
     const cleanup = await startServer('isolated')
     try { await undoAll(cleanup.base) } finally { await cleanup.close() }
   }
