@@ -284,8 +284,13 @@ describe('Erase my data', () => {
     await user.type(screen.getByLabelText('Your password'), 'pw')
     await user.click(confirmButton('Erase my data'))
 
-    expect(within(dialog()).getByRole<HTMLButtonElement>('button', { name: 'Cancel' }).disabled).toBe(true)
-    expect(screen.getByLabelText('Your password').hasAttribute('disabled')).toBe(true)
+    const cancel = within(dialog()).getByRole<HTMLButtonElement>('button', { name: 'Cancel' })
+    // Busy, not `disabled`: a disabled control would drop keyboard focus to <body>.
+    expect(cancel.getAttribute('aria-disabled')).toBe('true')
+    expect(cancel.disabled).toBe(false)
+    expect((screen.getByLabelText('Your password') as HTMLInputElement).readOnly).toBe(true)
+    await user.click(cancel)
+    expect(screen.queryByRole('dialog')).not.toBeNull()
     await user.keyboard('{Enter}')
     expect(post).toHaveBeenCalledTimes(1)
     gate.resolve(undefined)

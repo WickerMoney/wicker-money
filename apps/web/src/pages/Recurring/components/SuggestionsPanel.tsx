@@ -1,4 +1,4 @@
-import { Button, Surface } from '@wickermoney/ui-kit'
+import { Button, Surface, guardBusy } from '@wickermoney/ui-kit'
 import { formatDate } from '../../../lib/formatDate.js'
 import { formatMoney } from '../../../lib/formatMoney.js'
 import type { DismissedSuggestion, MatchSuggestion } from '../../../models/index.js'
@@ -53,9 +53,9 @@ export function SuggestionsPanel({
                   </div>
                   <div className="recur-actions">
                     {onDismiss !== undefined
-                      ? <Button disabled={busy} onClick={() => onDismiss(s)} aria-label={`Not ${s.occurrence.name}: ${s.candidate.merchant}`}>Not this</Button>
+                      ? <Button busy={busy} onClick={() => onDismiss(s)} aria-label={`Not ${s.occurrence.name}: ${s.candidate.merchant}`}>Not this</Button>
                       : null}
-                    <Button variant="primary" disabled={busy} onClick={() => onConfirm(s)}>Match</Button>
+                    <Button variant="primary" busy={busy} onClick={() => onConfirm(s)}>Match</Button>
                   </div>
                 </li>
               )
@@ -74,7 +74,7 @@ export function SuggestionsPanel({
                   <span className="wm-muted"> is not {d.occurrence.name} ({formatDate(d.occurrence.expectedDate)})</span>
                 </span>
                 {onUndismiss !== undefined ? (
-                  <button type="button" className="recur-link" disabled={busy} onClick={() => onUndismiss(d)}
+                  <button type="button" className="recur-link" aria-disabled={busy ? true : undefined} onClick={guardBusy(busy, () => onUndismiss(d))}
                           aria-label={`Undo: ${d.transaction.merchant} is not ${d.occurrence.name}`}>Undo</button>
                 ) : null}
               </li>

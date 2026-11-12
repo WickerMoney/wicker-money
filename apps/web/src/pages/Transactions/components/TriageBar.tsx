@@ -71,7 +71,7 @@ export function TriageBar({
               placeholder={{ value: '', label: '— clear category —' }}
             />
           </SelectField>
-          <Button variant="primary" disabled={status.busy} onClick={() => void assignSelected()}>
+          <Button variant="primary" busy={status.busy} onClick={() => void assignSelected()}>
             {status.busy ? 'Applying…' : 'Apply'}
           </Button>
           <FormError message={errors.form} />

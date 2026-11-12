@@ -578,6 +578,8 @@
   padding: 0; border: 0; background: none; font: inherit; font-size: 12px; cursor: pointer;
   color: var(--wm-accent); text-decoration: underline; text-underline-offset: 2px;
 }
+/* A text button that is busy keeps focus (aria-disabled, not disabled) and looks disabled. */
+.recur-link[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 /* Text-style buttons in table rows: a taller hit area without a taller look. This
    sits after the base rule on purpose: inside the 560px block further up it was
    cancelled by the base `padding: 0` (same specificity, later wins) while its
@@ -682,7 +684,7 @@
   color: inherit; background: transparent; border: 0; border-radius: 999px;
 }
 .recur2__chip-x:hover:not(:disabled) { background: var(--wm-surface-alt); }
-.recur2__chip-x:disabled { opacity: .55; cursor: not-allowed; }
+.recur2__chip-x:disabled, .recur2__chip-x[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 .recur2__chip.is-busy { opacity: .7; }
 
 /* The Link button: same family as Edit and Delete (wm-btn wm-icon-btn: 32px, 40px on phones).
@@ -829,7 +831,7 @@
 .plugin-switch.is-on { background: var(--wm-accent); border-color: var(--wm-accent); }
 .plugin-switch.is-on .plugin-switch__thumb { transform: translateX(16px); background: var(--wm-accent-text); }
 .plugin-switch:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 2px; }
-.plugin-switch:disabled { opacity: .55; cursor: progress; }
+.plugin-switch:disabled, .plugin-switch[aria-disabled="true"] { opacity: .55; cursor: progress; }
 @media (prefers-reduced-motion: reduce) {
   .plugin-switch, .plugin-switch__thumb { transition: none; }
 }

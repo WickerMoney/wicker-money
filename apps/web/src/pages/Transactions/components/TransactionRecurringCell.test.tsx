@@ -217,19 +217,26 @@ describe('recurring column and picker on the Transactions page', () => {
       expect(screen.queryByRole('button', { name: /undo/i })).toBeNull()
     })
 
-    it('disables the pill and the Link button while a request is in flight', async () => {
+    it('marks the pill and the Link button busy, and keeps focus on the one pressed, while a request is in flight', async () => {
       serve()
       const gate = deferred<unknown>()
       vi.spyOn(api, 'del').mockReturnValue(gate.promise as Promise<void>)
       const user = userEvent.setup()
       renderWithToasts(<Harness />)
       const r = await linkedRowOf('Oakwood Phone')
-      await user.click(within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }))
-      await waitFor(() => { expect((linkIn(r) as HTMLButtonElement).disabled).toBe(true) })
-      expect((within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }) as HTMLButtonElement).disabled).toBe(true)
-      expect((within(r).getByRole('button', { name: 'Edit' }) as HTMLButtonElement).disabled).toBe(true)
+      const unmatch = within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' })
+      await user.click(unmatch)
+      const isBusy = (b: HTMLElement): boolean => b.getAttribute('aria-disabled') === 'true' && !(b as HTMLButtonElement).disabled
+      await waitFor(() => { expect(isBusy(linkIn(r))).toBe(true) })
+      expect(isBusy(within(r).getByRole('button', { name: 'Unmatch Oakwood Phone from Phone' }))).toBe(true)
+      expect(isBusy(within(r).getByRole('button', { name: 'Edit' }))).toBe(true)
+      // Busy, not `disabled`: focus stays on the control that was pressed instead of dropping to <body>.
+      expect(document.activeElement).toBe(unmatch)
+      const calls = vi.mocked(api.del).mock.calls.length
+      await user.click(unmatch)
+      expect(vi.mocked(api.del).mock.calls.length).toBe(calls)
       gate.resolve(undefined)
-      await waitFor(() => { expect((linkIn(r) as HTMLButtonElement).disabled).toBe(false) })
+      await waitFor(() => { expect(linkIn(r).hasAttribute('aria-disabled')).toBe(false) })
     })
   })
 
@@ -503,10 +510,13 @@ describe('recurring column and picker on the Transactions page', () => {
       await user.click(linkIn(r))
       await user.click(await screen.findByRole('button', { name: 'CHECK #1042 is not Rent' }))
       const picker = pickerOf('CHECK #1042')
-      await waitFor(() => { expect((linkIn(r) as HTMLButtonElement).disabled).toBe(true) })
-      for (const b of within(picker).getAllByRole('button')) expect((b as HTMLButtonElement).disabled).toBe(true)
+      await waitFor(() => { expect(linkIn(r).getAttribute('aria-disabled')).toBe('true') })
+      for (const b of within(picker).getAllByRole('button')) {
+        expect(b.getAttribute('aria-disabled')).toBe('true')
+        expect((b as HTMLButtonElement).disabled).toBe(false)
+      }
       gate.resolve({})
-      await waitFor(() => { expect((linkIn(r) as HTMLButtonElement).disabled).toBe(false) })
+      await waitFor(() => { expect(linkIn(r).hasAttribute('aria-disabled')).toBe(false) })
     })
 
     it('shows the API message when a match is refused, and leaves the picker open', async () => {

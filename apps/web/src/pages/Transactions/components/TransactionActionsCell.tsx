@@ -60,13 +60,13 @@ export const TransactionActionsCell = memo(function TransactionActionsCell(
   return (
     <div className="wm-row-actions">
       {onToggleLink === undefined ? null : (
-        <IconButton id={linkButtonId(t.id)} icon="link" label={linkLabel(t, summary)} disabled={busy}
+        <IconButton id={linkButtonId(t.id)} icon="link" label={linkLabel(t, summary)} busy={busy}
                     className={suggest ? 'recur-linkbtn recur-linkbtn--suggest' : 'recur-linkbtn'}
                     aria-expanded={pickerOpen} aria-controls={pickerId(t.id)}
                     onClick={() => onToggleLink(t, !pickerOpen)} />
       )}
-      <IconButton icon="edit" label="Edit" disabled={busy} onClick={() => onEdit(t)} />
-      <IconButton icon="delete" label="Delete" variant="danger" disabled={busy} onClick={() => void onDelete(t)} />
+      <IconButton icon="edit" label="Edit" busy={busy} onClick={() => onEdit(t)} />
+      <IconButton icon="delete" label="Delete" variant="danger" busy={busy} onClick={() => void onDelete(t)} />
     </div>
   )
 })
