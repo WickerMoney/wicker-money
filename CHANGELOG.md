@@ -9,6 +9,20 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **Import CSV: staged upload (API).** A file can now be sent in pieces and
+  analyzed or committed by `uploadId`: `POST upload/begin`, `upload/chunk`
+  (about 200,000 characters each, any order, several at once), `upload/finish`
+  and `upload/abort` under the plugin's routes, with `uploadId` accepted by
+  `analyze` and `commit` in place of `csv`. This is what lets a sandboxed frame
+  import a file larger than the 256 KiB broker message. It is additive: the
+  `csv` body works as before and the Import CSV page does not change. Uploads
+  are held in the API process's memory (2 per user, 8 MB and 64 chunks each,
+  64 MB for all users, gone after 15 minutes or once imported), so there is no
+  migration; `upload/begin` counts in the import rate limit. See
+  [Staged CSV upload](DEVELOPMENT.md#staged-csv-upload).
+  
 ### Changed
 
 - **Budgets runs in a sandboxed plugin frame.** The "Budgets" page and the "Budget breakdown" widget no longer run in the app's own page; they read and write through the host's broker with only the plugin's own routes and read grants, so Import CSV is the one bundled plugin left in the page. The page loads its categories and accounts once and waits a moment before loading a month, so holding Enter on "Previous" no longer ends in "This plugin is sending requests too fast". The result of "Start this month", and a failed remove, now appear at the top of the section they belong to and scroll into view, instead of at the top of the page. A page frame now reports the whole height of its document, so the last card is no longer 19 px short of where it sits in the app.

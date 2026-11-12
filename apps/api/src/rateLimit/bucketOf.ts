@@ -5,6 +5,8 @@ export type RateLimitBucket = 'general' | 'import' | 'export'
 const STRICT: Readonly<Record<string, RateLimitBucket>> = {
   'POST /api/v1/p/wickermoney.import-csv/analyze': 'import',
   'POST /api/v1/p/wickermoney.import-csv/commit': 'import',
+  // One request per staged upload. Its chunks and `finish` stay in the general bucket.
+  'POST /api/v1/p/wickermoney.import-csv/upload/begin': 'import',
   'GET /api/v1/settings/export': 'export',
 }
 

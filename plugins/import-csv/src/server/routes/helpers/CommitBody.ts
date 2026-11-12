@@ -4,6 +4,7 @@ import type { MappingBody } from './MappingBody.js'
 export type CommitBody = {
   accountId?: unknown
   csv?: unknown
+  uploadId?: unknown
   fileName?: unknown
   acceptRowNumbers?: unknown
   idempotencyKey?: unknown
