@@ -5,7 +5,7 @@ import { Alert, Button, Spinner } from '@wickermoney/ui-kit'
 import { activeUserId } from '../../api/client.js'
 import { responseCache } from '../../api/responseCache.js'
 import { hostBrokerApi, type BrokerApi } from './brokerApi.js'
-import { focusAround } from './focusAround.js'
+import { focusAround, registerFrameFocus } from './focusAround.js'
 import { FrameController, HEIGHT_LIMITS, PLACEHOLDER_HEIGHT, type FrameState } from './FrameController.js'
 import { frameUrl } from './frameUrl.js'
 import { PageFrameLift } from './pageFrameLift.js'
@@ -107,9 +107,12 @@ export function IsolatedPluginFrame({
       },
     })
     controllerRef.current = controller
+    // Focus handed on by a neighbouring frame goes into this one's controls, not onto the iframe element.
+    const unregisterFocus = registerFrameFocus(iframe, { focusIn: (direction) => controller.focusIn(direction) })
     // The listener exists before the frame can say hello: the source is set last.
     iframe.src = frameUrl({ pluginId: manifest.id, remoteEntry: manifest.remoteEntry, module, kind, integrity: manifest.integrity })
     return () => {
+      unregisterFocus()
       lift?.dispose()
       controller.dispose()
       controllerRef.current = null

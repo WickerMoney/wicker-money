@@ -223,7 +223,8 @@ async function behaviour(pw: typeof Playwright): Promise<void> {
       check('a placeholder is not a live region, not focusable and holds no control',
         (await page.locator('.plugin-frame[data-status="waiting"]').evaluateAll((els) => els.every((e) => e.querySelector('[role="status"],[role="alert"],[tabindex],button,a,input,iframe') === null))))
 
-      // Tab through the page from the top. It must get past every frame and out the other end,
+      // Tab through the page from the top. It must get past every frame and out the other end (the end of the page is
+      // the skip link again, because the host wraps round instead of going through the browser's own interface),
       // and never rest on a placeholder.
       await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); window.scrollTo(0, 0) })
       const seen: string[] = []
@@ -236,9 +237,9 @@ async function behaviour(pw: typeof Playwright): Promise<void> {
           return `${el.tagName}:${el.getAttribute('title') ?? el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 20)}`
         }))
         if (await page.evaluate(() => document.activeElement?.closest('.plugin-frame[data-status="waiting"]') != null)) onPlaceholder = true
-        if (seen.at(-1) === 'body') break
+        if (seen.at(-1) === 'body' || (seen.length > 1 && seen.at(-1) === 'A:Skip to content')) break
       }
-      check('Tab gets past the frames to the end of the page (and then leaves it)', seen.at(-1) === 'body' && seen.some((x) => x.startsWith('IFRAME:')), [...new Set(seen)])
+      check('Tab gets past the frames to the end of the page (and then leaves it)', (seen.at(-1) === 'body' || seen.at(-1) === 'A:Skip to content') && seen.some((x) => x.startsWith('IFRAME:')), [...new Set(seen)])
       check('focus never rests on a placeholder', !onPlaceholder)
 
       // Scroll to the bottom: every frame gets created and connects.

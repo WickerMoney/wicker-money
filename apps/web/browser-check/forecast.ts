@@ -69,6 +69,19 @@ const check = (name: string, pass: boolean, detail?: unknown): void => {
 const note = (name: string, value: unknown): void => { console.log(`INFO  ${name}: ${JSON.stringify(value)}`) }
 const report: Record<string, unknown> = {}
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+/**
+ * Polls until the condition holds or the time is up, and reports which. The address changes before the page does: the router
+ * commits the URL first and React renders the new route in a transition after it, so a check made the moment `waitForURL`
+ * returns can still see the old page (it did, about one run in three, on a busy machine). The condition is the evidence.
+ */
+async function eventually(condition: () => Promise<boolean>, ms = 8000): Promise<boolean> {
+  const t0 = Date.now()
+  for (;;) {
+    if (await condition().catch(() => false)) return true
+    if (Date.now() - t0 > ms) return false
+    await sleep(25)
+  }
+}
 const median = (xs: number[]): number => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? NaN
 
 /** The bundled manifests, with Forecast in the page or in a frame. The allowlist is the host's, not the manifest's. */
@@ -336,16 +349,16 @@ async function routeChecks(pw: typeof Playwright, base: string): Promise<void> {
     await waitForChart(o.page, 'isolated')
     await o.page.locator('nav a[href="/transactions"]').first().click()
     await o.page.waitForURL('**/transactions')
-    check('route: leaving the page removes the frame', (await o.page.locator('iframe').count()) === 0)
-    check('route: the title follows the host route', (await o.page.title()) === 'Transactions - Wicker Money', await o.page.title())
+    check('route: leaving the page removes the frame', await eventually(async () => (await o.page.locator('iframe').count()) === 0), await o.page.locator('iframe').count())
+    check('route: the title follows the host route', await eventually(async () => (await o.page.title()) === 'Transactions - Wicker Money'), await o.page.title())
     await o.page.goBack()
     await o.page.waitForURL(`**${PAGE_PATH}`)
     const back = await waitForChart(o.page, 'isolated')
     check('route: back returns to the page with a fresh frame', (await back.locator('h1').allTextContents()).join() === 'Forecast')
-    check('route: the title is back', (await o.page.title()) === 'Forecast - Wicker Money')
+    check('route: the title is back', await eventually(async () => (await o.page.title()) === 'Forecast - Wicker Money'), await o.page.title())
     await o.page.goForward()
     await o.page.waitForURL('**/transactions')
-    check('route: forward leaves again', (await o.page.locator('iframe').count()) === 0)
+    check('route: forward leaves again', await eventually(async () => (await o.page.locator('iframe').count()) === 0))
     // Clicking the nav link for the page you are on keeps the frame.
     await o.page.goBack()
     await waitForChart(o.page, 'isolated')
@@ -405,11 +418,39 @@ async function describeFocus(page: Playwright.Page): Promise<string> {
   return inner === null || inner === undefined ? 'iframe(nothing inside)' : inner
 }
 
+/** How long a key press may take to move focus (host to frame and back, a message hop each way) before "it did not move" is the answer. */
+const FOCUS_SETTLE_CAP_MS = 600
+
+/**
+ * Presses a key and returns where focus is once it has moved and stayed put (two identical reads in a row), or where it is
+ * when the cap runs out because it did not move. This replaces a fixed sleep: it waits as long as the move takes and no
+ * longer, and it cannot read a half-finished hand-off from the frame to the host.
+ */
+async function press(page: Playwright.Page, key: 'Tab' | 'Shift+Tab'): Promise<string> {
+  const before = await describeFocus(page)
+  await page.keyboard.press(key)
+  const t0 = Date.now()
+  let last = ''
+  let same = 0
+  for (;;) {
+    const now = await describeFocus(page)
+    same = now === last ? same + 1 : 0
+    last = now
+    // Nothing focused (`body`, an empty iframe) is not a place focus has settled: crossing into or out of a frame passes
+    // through it for a moment, and the browser's own interface is a real stop that shows up as the cap running out.
+    if (same >= 2 && now !== before && now !== 'body' && !now.startsWith('iframe(')) return now
+    if (Date.now() - t0 > FOCUS_SETTLE_CAP_MS) return now
+  }
+}
+
 async function tabs(page: Playwright.Page, key: 'Tab' | 'Shift+Tab', n: number): Promise<string[]> {
   const seen: string[] = []
-  for (let i = 0; i < n; i++) { await page.keyboard.press(key); await sleep(90); seen.push(await describeFocus(page)) }
+  for (let i = 0; i < n; i++) seen.push(await press(page, key))
   return seen
 }
+
+/** What the browser's own interface looks like to the page: nothing focused. Only the in-realm page ever shows it. */
+const isLimbo = (s: string): boolean => s === 'body' || s.startsWith('iframe(')
 
 async function focusChecks(pw: typeof Playwright, base: string, modes: Mode[]): Promise<void> {
   const sequences: Record<string, string[]> = {}
@@ -424,10 +465,10 @@ async function focusChecks(pw: typeof Playwright, base: string, modes: Mode[]): 
         const first = (await tabs(o.page, 'Tab', 1))[0]
         check(`focus [${mode}]: the first Tab stop is the skip link`, first?.startsWith('a') === true && first.includes('Skip to content'), first)
         await o.page.keyboard.press('Enter')
-        await sleep(100)
         const afterSkip = await describeFocus(o.page)
         check(`focus [${mode}]: the skip link puts focus on <main>`, afterSkip.startsWith('main#main'), afterSkip)
-        const inMain = await tabs(o.page, 'Tab', 14)
+        // 14 presses in the page (its 14th is the 13th control: the browser's interface takes one), 13 in the frame (it does not).
+        const inMain = await tabs(o.page, 'Tab', mode === 'in-realm' ? 14 : 13)
         sequences[`${mode} forward`] = inMain
         const back = await tabs(o.page, 'Shift+Tab', 8)
         sequences[`${mode} backward`] = back
@@ -437,19 +478,58 @@ async function focusChecks(pw: typeof Playwright, base: string, modes: Mode[]): 
         await o.page.evaluate(() => document.getElementById('main')!.focus())
         const long = await tabs(o.page, 'Tab', 40)
         sequences[`${mode} long`] = long
-        const lastIdx = long.findIndex((s, i) => i > 3 && (s === 'body' || s.startsWith('iframe(')))
+        const lastIdx = long.findIndex((s, i) => i > 3 && isLimbo(s))
         note(`where focus goes after the last control (${mode})`, { firstBodyOrEmptyAt: lastIdx, sequenceTail: long.slice(Math.max(0, lastIdx - 3), lastIdx + 3) })
         report[`tabEnd-${mode}`] = { lastIdx, tail: long.slice(Math.max(0, lastIdx - 3), lastIdx + 4) }
+
+        // The edges of the page, repeated: the hand-off from the last control to the page and from the first back out must
+        // land in the same place every time (this is what failed about half of the full runs before the hand-off was explicit).
+        const lastControl = inMain[6]!
+        const outcomes: string[] = []
+        const outcomesBack: string[] = []
+        for (let rep = 0; rep < 6; rep++) {
+          await o.page.evaluate(() => document.getElementById('main')!.focus())
+          const forward = await tabs(o.page, 'Tab', 7)
+          if (forward.at(-1) !== lastControl) { outcomes.push(`never reached the last control: ${forward.at(-1)}`); continue }
+          outcomes.push(...await tabs(o.page, 'Tab', 2))
+          await o.page.evaluate(() => document.getElementById('main')!.focus())
+          await tabs(o.page, 'Tab', 1) // the frame's first control
+          outcomesBack.push(...await tabs(o.page, 'Shift+Tab', 1))
+        }
+        sequences[`${mode} edge forward`] = outcomes
+        sequences[`${mode} edge backward`] = outcomesBack
+        note(`after the last control, then one more Tab, six times (${mode})`, outcomes)
+        note(`Shift+Tab from the first control, six times (${mode})`, outcomesBack)
+        if (mode === 'isolated') {
+          // One press from the last control reaches the skip link (the browser's own interface is not a stop here), the next
+          // reaches Dashboard, never the frame's first control again and never nothing.
+          const want = ['a "Skip to content"', 'a "Dashboard"']
+          check('focus [isolated]: Tab from the last control goes to the skip link, then on to the navigation, six times out of six',
+            outcomes.length === 12 && outcomes.every((s, i) => s === want[i % 2]), outcomes)
+          check('focus [isolated]: Shift+Tab from the first control goes to the same control before the frame, six times out of six',
+            outcomesBack.length === 6 && new Set(outcomesBack).size === 1 && !isLimbo(outcomesBack[0]!), outcomesBack)
+        }
       } finally { await o.browser.close() }
     } finally { await server.close() }
   }
   if (modes.length === 2) {
-    const a = sequences['in-realm forward']!
+    // In the page the browser's own interface takes one stop between the last control and the skip link (`body`: nothing in the
+    // page is focused). A frame has no way to give that stop to the browser, and hands focus round to the skip link instead.
+    // Everything else, control for control, is the same.
+    const a = sequences['in-realm forward']!.filter((s) => s !== 'body')
     const b = sequences['isolated forward']!
-    check('focus: Tab from <main> visits the same controls, in the same order, in the frame as in the page', JSON.stringify(a) === JSON.stringify(b), { inRealm: a, isolated: b })
-    const ab = sequences['in-realm backward']!
-    const bb = sequences['isolated backward']!
-    check('focus: Shift+Tab visits the same controls in the same order', JSON.stringify(ab) === JSON.stringify(bb), { inRealm: ab, isolated: bb })
+    check('focus: Tab from <main> visits the same controls, in the same order, in the frame as in the page', JSON.stringify(a) === JSON.stringify(b) && !b.some(isLimbo), { inRealm: a, isolated: b })
+    // Going back past the first control of the page the browser's interface is a stop too, and where it shows depends on the
+    // engine (the Chromium here has none of its own, and wraps to the last control with or without a pause by process). It is
+    // the browser's stop, not the page's, so it is left out of both, as it is going forward; what is compared is the controls.
+    const ab = sequences['in-realm backward']!.filter((s) => s !== 'body')
+    const bb = sequences['isolated backward']!.filter((s) => s !== 'body')
+    const n = Math.min(ab.length, bb.length)
+    check('focus: Shift+Tab visits the same controls in the same order', n >= 6 && JSON.stringify(ab.slice(0, n)) === JSON.stringify(bb.slice(0, n)), { inRealm: ab, isolated: bb })
+    check('focus: Shift+Tab from the first control goes where it goes in the page',
+      new Set(sequences['in-realm edge backward']).size === 1 && new Set(sequences['isolated edge backward']).size === 1
+      && sequences['in-realm edge backward']![0] === sequences['isolated edge backward']![0],
+      { inRealm: sequences['in-realm edge backward'], isolated: sequences['isolated edge backward'] })
   }
   report['tabSequences'] = sequences
 }
@@ -486,6 +566,7 @@ async function drawerChecks(pw: typeof Playwright, base: string): Promise<void> 
     note('after Escape on the open drawer: focus on the Forecast page, and on a core page (Accounts)', { forecast: afterEscape, core })
     report['drawerEscapeFocus'] = { forecast: afterEscape, core }
     check('drawer: Escape puts focus in the same place on the Forecast page as on a core page', afterEscape.label === core.label && afterEscape.active === core.active, { forecast: afterEscape, core })
+    check('drawer: Escape puts focus back on the Menu button that opened the drawer, on the Forecast page and on a core page', afterEscape.label === 'Menu' && core.label === 'Menu', { forecast: afterEscape, core })
     await o.page.goBack()
     await waitForChart(o.page, 'isolated')
     const afterClose = await tabs(o.page, 'Tab', 3)
@@ -495,7 +576,7 @@ async function drawerChecks(pw: typeof Playwright, base: string): Promise<void> 
     await sleep(300)
     await o.page.locator('nav a[href="/accounts"]').first().click()
     await o.page.waitForURL('**/accounts')
-    check('drawer: following a link closes the drawer and removes the frame', (await o.page.locator('iframe').count()) === 0 && !(await o.page.evaluate(() => document.querySelector('.shell')!.classList.contains('is-nav-open'))))
+    check('drawer: following a link closes the drawer and removes the frame', await eventually(async () => (await o.page.locator('iframe').count()) === 0 && !(await o.page.evaluate(() => document.querySelector('.shell')!.classList.contains('is-nav-open')))))
     await shot(o.page, 'drawer-after')
   } finally { await o.browser.close() }
 }
