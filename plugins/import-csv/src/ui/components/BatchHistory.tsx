@@ -4,6 +4,7 @@ import { Button, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
 import { IMPORT_API_BASE } from '../../server/constants.js'
 import type { Batch } from '../models/index.js'
 import { SectionNotice } from './SectionNotice.js'
+import { TableScroll } from './TableScroll.js'
 
 /** Props for {@link BatchHistory}. */
 export interface BatchHistoryProps {
@@ -78,41 +79,43 @@ export function BatchHistory({ ctx, refreshKey, onReverted }: BatchHistoryProps)
       ) : batches.length === 0 ? (
         <EmptyState title="No imports yet" hint="Imported files appear here and can be undone." />
       ) : (
-        <table className="imp__table">
-          <thead>
-            <tr>
-              <th scope="col">When</th><th scope="col">Source</th><th scope="col">Account</th>
-              <th scope="col" className="num">Imported</th><th scope="col" className="num">Skipped</th>
-              <th scope="col"><span className="wm-visually-hidden">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {batches.map((b) => (
-              <tr key={b.id} className={b.revertedAt !== null ? 'imp__reverted' : undefined}>
-                <td>{ctx.formatDate(b.createdAt)}</td>
-                <td>
-                  {b.sourceName}
-                  <span className="imp__muted"> · {b.fileName}</span>
-                </td>
-                <td>{b.accountName}</td>
-                <td className="num">{b.rowsImported}</td>
-                <td className="num">{b.rowsSkipped}</td>
-                <td>
-                  {b.revertedAt !== null ? (
-                    <span className="imp__muted">Undone</span>
-                  ) : (
-                    <Button
-                      disabled={reverting === b.id}
-                      onClick={() => void revert(b.id)}
-                    >
-                      {reverting === b.id ? 'Undoing…' : 'Undo'}
-                    </Button>
-                  )}
-                </td>
+        <TableScroll label="Recent imports">
+          <table className="imp__table">
+            <thead>
+              <tr>
+                <th scope="col">When</th><th scope="col">Source</th><th scope="col">Account</th>
+                <th scope="col" className="num">Imported</th><th scope="col" className="num">Skipped</th>
+                <th scope="col"><span className="wm-visually-hidden">Actions</span></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {batches.map((b) => (
+                <tr key={b.id} className={b.revertedAt !== null ? 'imp__reverted' : undefined}>
+                  <td>{ctx.formatDate(b.createdAt)}</td>
+                  <td>
+                    {b.sourceName}
+                    <span className="imp__muted"> · {b.fileName}</span>
+                  </td>
+                  <td>{b.accountName}</td>
+                  <td className="num">{b.rowsImported}</td>
+                  <td className="num">{b.rowsSkipped}</td>
+                  <td>
+                    {b.revertedAt !== null ? (
+                      <span className="imp__muted">Undone</span>
+                    ) : (
+                      <Button
+                        disabled={reverting === b.id}
+                        onClick={() => void revert(b.id)}
+                      >
+                        {reverting === b.id ? 'Undoing…' : 'Undo'}
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
       )}
     </Surface>
   )
