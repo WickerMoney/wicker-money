@@ -36,6 +36,7 @@ import { TEST_ADMIN_DATABASE_URL, TEST_AUTH_SECRET, TEST_DATABASE_URL, migrateTe
 import { Attacker } from './attacker.js'
 import { ApiLog, BrowserLog, Recorder, sleep, snippet, type AttackResult, type Stopped } from './lib.js'
 import { BLOCKED, type BlockSpec } from './specs.js'
+import { runStaging } from './staging.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const webRoot = join(here, '../..')
@@ -798,7 +799,9 @@ async function main(): Promise<void> {
     const w = { base: server.base, attacker, apiLog, log, ctx, user, admin, frameDocs: [], page: undefined as unknown as Playwright.Page, hostile: undefined as unknown as Playwright.Frame, victim: null } as World
     const phases: Array<[string, (w: World) => Promise<void>]> = [
       ['setup', phaseSetup], ['credentials', phaseCredentials], ['blocked', phaseBlocked], ['broker', phaseBroker], ['malformed', phaseMalformed],
-      ['flood', phaseFlood], ['spoof', phaseSpoof], ['navigation', phaseNavigation], ['pageframe', phasePageFrame], ['residual', phaseResidual], ['tokens', phaseTokens], ['lifecycle', phaseLifecycle],
+      ['flood', phaseFlood], ['spoof', phaseSpoof], ['navigation', phaseNavigation], ['pageframe', phasePageFrame], ['residual', phaseResidual], ['tokens', phaseTokens],
+      ['staging', (world) => runStaging({ world, rec, boot: () => boot(world), call: (name, ...args) => call(world, name, ...args), register })],
+      ['lifecycle', phaseLifecycle],
     ]
     await boot(w)
     for (const [name, fn] of phases) {
