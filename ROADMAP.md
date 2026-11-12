@@ -109,14 +109,6 @@ After `v0.7.0`:
 
 Smaller things noticed during `v0.7.0`. These are not plans.
 
-- Tab order between frames: there is an extra Tab stop between two adjacent
-  frames, and the focus hand-off out of a frame (the host steps in 60 ms after
-  the frame) is timing dependent, which makes the Forecast Tab-order check fail
-  about half the time.
-- A control that disables itself while its request runs (`disabled` on table
-  buttons and checkboxes) drops keyboard focus to the page; the time zone Save
-  is the only one fixed.
-- Pressing Escape in the open phone navigation drawer drops focus.
 - A docs-site page for the `API_RATE_LIMIT_*` variables, and a closer look at an
   import of 25 MB or more under the new rate and concurrency limits.
 - Retake the README screenshots of Transactions, which still show the earlier

@@ -33,6 +33,24 @@ curated, human-readable version.
   
 ### Fixed
 
+- **Focus and Tab order in plugin frames.** Tab at the last control of a plugin
+  page or widget, and Shift+Tab at its first, now moves focus to the next or
+  previous control on the page at once, instead of leaving it to the browser and
+  stepping in 60 ms later. There is no extra stop between two adjacent frames,
+  and at the end of a page whose last thing is a frame, focus goes round to the
+  skip link (the browser's own interface is not a stop there). Before, in 2 of 10
+  runs of the Forecast Tab-order check, the next Tab after the last control went
+  back into the frame's first control; after, 0 of 10.
+- **Buttons, switches and checkboxes keep focus while a request runs.** A table
+  action (Edit, Delete, Archive, Match, ...), a form's Save, the plugin switches,
+  the safe-to-spend and rollover checkboxes and the Debt payoff strategy buttons
+  were `disabled` while their request ran, which dropped keyboard focus to the
+  page. They are now `aria-disabled` and keep focus, look disabled, ignore a
+  click and say "Still working. Try again in a moment." to a screen reader.
+  `Button`, `IconButton`, `Field` and `SelectField` in `@wickermoney/ui-kit` gain
+  a `busy` prop for this, and `guardBusy` is exported for plain elements.
+- **Escape in the open phone navigation drawer** (and a tap on its backdrop)
+  returns focus to the Menu button, which it did not on any page.
 - **A table wider than its room can be scrolled with the keyboard.** The shared
   table's horizontal scroller (for example Insights' "Show as table" on a phone)
   could only be scrolled with a pointer. While it overflows it is now a Tab stop
