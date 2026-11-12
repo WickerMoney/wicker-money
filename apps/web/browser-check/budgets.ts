@@ -487,8 +487,31 @@ async function formChecks(pw: typeof Playwright, base: string): Promise<void> {
     const pick = options.find((x) => x.value === throwawayId) ?? options[0]!
     await addSelect.selectOption(pick.value)
     check('forms: the add-line picker is a native select and takes a choice', (await addSelect.inputValue()) === pick.value, pick)
-    await frame.getByRole('button', { name: 'Add line' }).click()
+    // The PUT is held open while the button is read: the pressed button keeps focus in the frame (`aria-disabled`, not
+    // `disabled`, which would drop focus to <body>), the other buttons of the form are busy the same way, a second press
+    // sends nothing, and the request is sent once.
+    let releaseLine: () => void = () => undefined
+    const lineHeld = new Promise<void>((resolve) => { releaseLine = resolve })
+    let linePuts = 0
+    const lineUrl = `**/api/v1/p/${BUDGETS}/line`
+    await o.page.route(lineUrl, async (route) => {
+      if (route.request().method() === 'PUT') { linePuts += 1; await lineHeld }
+      await route.continue().catch(() => undefined)
+    })
+    const addButton = frame.getByRole('button', { name: 'Add line' })
+    await addButton.click()
+    await eventually(async () => linePuts, (n) => n === 1)
+    const busy = await addButton.evaluate((el) => ({ focused: el === document.activeElement, aria: el.getAttribute('aria-disabled'), disabled: (el as HTMLButtonElement).disabled, active: document.activeElement?.tagName }))
+    check('busy: while the request runs, focus stays on the Add line button in the frame', busy.focused, busy)
+    check('busy: and it is aria-disabled, not disabled', busy.aria === 'true' && !busy.disabled, busy)
+    await addButton.click({ force: true })
+    await o.page.keyboard.press('Enter')
+    await sleep(250)
+    check('busy: pressing it again sends nothing', linePuts === 1, linePuts)
+    releaseLine()
     await eventually(async () => lastWrite(calls)?.status, (s) => s !== undefined && s !== 0)
+    await o.page.unroute(lineUrl)
+    check('busy: when it is over the button is usable again and still has focus', await addButton.evaluate((el) => el === document.activeElement && !el.hasAttribute('aria-disabled')))
     const put = lastWrite(calls)
     addedLines.push({ month: now, categoryId: pick.value })
     check('forms: add line is PUT /line with a zero plan, through the broker, answered 200', put?.method === 'PUT' && put.path === '/line' && put.status === 200 && (put.body as Record<string, unknown>)['categoryId'] === pick.value && (put.body as Record<string, unknown>)['planned'] === '0.0000', put)
@@ -907,6 +930,67 @@ async function a11yChecks(pw: typeof Playwright, base: string): Promise<void> {
       const hostAxe = await axeRun(o.page.mainFrame(), ['page-has-heading-one'])
       check(`a11y ${scheme}: axe on the host document with the page frame in it, page-has-heading-one excluded: 0 violations`, hostAxe.length === 0, hostAxe)
       check(`a11y ${scheme}: no console error or CSP violation`, o.problems.length === 0, o.problems)
+    } finally { await o.browser.close() }
+  }
+
+  // Tab order through the page frame: every stop is a control (never nothing), the hand-off at the end of the page lands on the
+  // skip link, and the same walk three times gives the same stops. Shift+Tab from the first control goes to the control before
+  // the frame, every time.
+  {
+    const o = await open(pw, base, { width: 1280, height: 900 })
+    try {
+      const frame = await gotoPage(o, base, 'isolated')
+      await sleep(500)
+      void frame
+      const describe = async (): Promise<string> => {
+        const host = await o.page.evaluate(() => {
+          const el = document.activeElement
+          if (el === null || el === document.body) return { kind: 'body' as const }
+          if (el.tagName === 'IFRAME') return { kind: 'iframe' as const }
+          return { kind: 'el' as const, text: `${el.tagName.toLowerCase()}${el.id === 'main' ? '#main' : ''} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30)}"` }
+        })
+        if (host.kind === 'body') return 'body'
+        if (host.kind === 'el') return host.text
+        return (await pageFrame(o.page)?.evaluate(() => {
+          const el = document.activeElement
+          if (el === null || el === document.body) return null
+          return `${el.tagName.toLowerCase()} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30)}"`
+        }).catch(() => null)) ?? 'iframe(nothing inside)'
+      }
+      // Waits as long as the move takes (host to frame and back is a message hop each way), not a fixed sleep.
+      const press = async (key: 'Tab' | 'Shift+Tab'): Promise<string> => {
+        const before = await describe()
+        await o.page.keyboard.press(key)
+        const t0 = Date.now()
+        let last = ''
+        let same = 0
+        for (;;) {
+          const now = await describe()
+          same = now === last ? same + 1 : 0
+          last = now
+          if (same >= 2 && now !== before && now !== 'body' && !now.startsWith('iframe(')) return now // `body` is crossing a frame boundary, or the browser's interface: wait for the cap
+          if (Date.now() - t0 > 600) return now
+        }
+      }
+      const walks: string[][] = []
+      for (let rep = 0; rep < 3; rep++) {
+        await o.page.evaluate(() => document.getElementById('main')!.focus())
+        const stops: string[] = []
+        for (let i = 0; i < 400; i++) { stops.push(await press('Tab')); if (stops.at(-1)?.includes('Skip to content') === true) break }
+        walks.push(stops)
+      }
+      const own = walks[0]!.slice(0, -1)
+      note('Tab stops from <main> to the end of the Budgets page', { count: own.length, first: own.slice(0, 4), last: own.slice(-3) })
+      check('a11y: Tab walks the whole Budgets page frame and ends on the skip link (not trapped, not nothing)', walks.every((w) => w.at(-1)?.includes('Skip to content') === true) && own.length > 5, { counts: walks.map((w) => w.length), tail: walks[0]!.slice(-3) })
+      check('a11y: no stop on the way is nothing (`body`, an empty iframe)', own.every((st) => st !== 'body' && !st.startsWith('iframe(')), own.filter((st) => st === 'body' || st.startsWith('iframe(')))
+      check('a11y: the same walk three times gives the same stops', walks.every((w) => JSON.stringify(w) === JSON.stringify(walks[0])), walks.map((w) => w.length))
+      const outs: string[] = []
+      for (let rep = 0; rep < 3; rep++) {
+        await o.page.evaluate(() => document.getElementById('main')!.focus())
+        await press('Tab')
+        outs.push(await press('Shift+Tab'))
+      }
+      check('a11y: Shift+Tab from the first control goes to the same control before the frame, three times out of three', new Set(outs).size === 1 && outs[0] !== 'body' && !outs[0]!.startsWith('iframe('), outs)
     } finally { await o.browser.close() }
   }
 

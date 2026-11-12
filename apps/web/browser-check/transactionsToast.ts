@@ -195,14 +195,48 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         const third = rows().nth(2)
         const merchant3 = (await third.locator('td[data-col="merchant"]').innerText()).trim()
         lastConfirm = ''
-        await third.getByRole('button', { name: 'Delete' }).click()
+        // Hold the DELETE open, so what the controls do while a request runs can be read (a request this size is over in
+        // milliseconds otherwise): the control that was pressed keeps focus (`aria-disabled`, not `disabled`, which would
+        // drop focus to <body>), every other control in the row is busy too, a second activation sends nothing, and the
+        // announcer says why.
+        let release: () => void = () => undefined
+        const held = new Promise<void>((resolve) => { release = resolve })
+        let deleteRequests = 0
+        await page.route('**/api/v1/transactions/*', async (route) => {
+          if (route.request().method() === 'DELETE') { deleteRequests += 1; await held }
+          // `unroute` below can tear this route down while the released request is still being continued.
+          await route.continue().catch(() => undefined)
+        })
+        const deleteButton = third.getByRole('button', { name: 'Delete' })
+        await deleteButton.click()
         for (let i = 0; i < 40 && lastConfirm === ''; i++) await sleep(50) // the dialog event arrives separately from the click
+        for (let i = 0; i < 40 && deleteRequests === 0; i++) await sleep(50)
+        const during = await deleteButton.evaluate((el) => {
+          const row = el.closest('tr')!
+          return {
+            focused: el === document.activeElement,
+            ariaDisabled: el.getAttribute('aria-disabled'),
+            disabled: (el as HTMLButtonElement).disabled,
+            rowButtons: [...row.querySelectorAll('button')].map((b) => ({ label: b.getAttribute('aria-label') ?? b.textContent ?? '', aria: b.getAttribute('aria-disabled'), disabled: b.disabled })),
+            activeTag: document.activeElement?.tagName ?? '',
+          }
+        })
+        check(`${tag}: while a delete runs, focus stays on the Delete button`, during.focused, during)
+        check(`${tag}: and it is aria-disabled, not disabled`, during.ariaDisabled === 'true' && !during.disabled, during)
+        check(`${tag}: every other button in the row is busy the same way`, during.rowButtons.length >= 2 && during.rowButtons.every((b) => b.aria === 'true' && !b.disabled), during.rowButtons)
+        await page.keyboard.press('Enter')
+        await sleep(250)
+        check(`${tag}: pressing it again sends nothing`, deleteRequests === 1, deleteRequests)
+        const said = await page.evaluate(() => [...document.querySelectorAll('[role="status"]')].map((e) => e.textContent ?? '').join(' | '))
+        check(`${tag}: and the announcer says it is still working`, said.includes('Still working'), said)
+        release()
         // A transfer has its own wording (both legs go), so the page's own confirm dialog says which kind this row is,
         // and the seeded order of rows (the dates move with the day) does not matter.
         const isTransfer = lastConfirm.startsWith('Delete this transfer of ')
         const deletedText = isTransfer
           ? /^Deleted transfer of .+\. Both sides were removed\.$/
           : new RegExp(`^Deleted '${merchant3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}' \\(.+\\)\\.$`)
+        await page.unroute('**/api/v1/transactions/*')
         check(`${tag}: a delete names what was deleted`, await waitToast(page, deletedText), { confirm: lastConfirm, toasts: await toastTexts(page) })
         check(`${tag}: nothing offers Undo`, (await page.getByRole('button', { name: /undo/i }).count()) === 0)
         await sleep(350)
