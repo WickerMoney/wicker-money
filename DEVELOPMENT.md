@@ -1379,6 +1379,11 @@ four parts, and CI runs them as the required check **Hostile plugin suite**.
   disabled while open. Each is judged by what a server on another origin, the
   API and the browser report, never by the plugin's own account. See
   `apps/web/browser-check/README.md`.
+  `hostile/staging.ts` adds the staged CSV upload: another plugin's token and
+  another user's upload id on every `/upload/*` route, chunks over the caps, a
+  flood of `begin` beside chunks, and chunk-shaped messages at the broker's
+  body cap and rate. It starts its own API with Import CSV registered, so it
+  does not depend on which plugins `run.ts` mounts.
 - **Remote-origin half** (`apps/web/browser-check/hostile/remote.ts`, Chromium,
   needs `openssl` for a throwaway certificate). A real federated build is served
   over https from a second origin and listed with a pin: a matching build loads in
