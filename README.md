@@ -36,7 +36,7 @@ is not supported yet.
 <strong>Transactions</strong><br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/transactions-dark.png">
-  <img alt="Transactions page with the Recurring column showing matched paychecks and a suggested match" src="docs/screenshots/transactions-light.png">
+  <img alt="Transactions page with the Recurring column showing a pill for each matched paycheck, and the Link button marked on a row with a suggested match" src="docs/screenshots/transactions-light.png">
 </picture>
 </td>
 <td width="50%">

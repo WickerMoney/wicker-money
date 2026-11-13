@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { guardBusy } from '@wickermoney/ui-kit'
 import { formatDate } from '../../../lib/formatDate.js'
 import type { Transaction } from '../../../models/index.js'
 import type { TransactionMatches } from '../hooks/useTransactionMatches.js'
@@ -40,9 +41,9 @@ export const TransactionRecurringCell = memo(function TransactionRecurringCell(
       <div className="recur2__line">
         <span className={busy ? 'recur2__chip is-busy' : 'recur2__chip'} title={linked.name}>
           <span className="recur2__chip-name">{linked.name}</span>
-          <button type="button" className="recur2__chip-x" disabled={busy}
+          <button type="button" className="recur2__chip-x" aria-disabled={busy ? true : undefined}
                   aria-label={`Unmatch ${t.merchant} from ${linked.name}`}
-                  onClick={() => void matches.unmatch(t, linked)}>{X}</button>
+                  onClick={guardBusy(busy, () => void matches.unmatch(t, linked))}>{X}</button>
         </span>
         {linked.nominalDate !== t.transaction_date ? (
           <span className="wm-muted recur2__date">

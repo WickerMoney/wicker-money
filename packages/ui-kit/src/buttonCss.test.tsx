@@ -40,3 +40,26 @@ describe('button hover cascade in components.css', () => {
     expect(rules('.wm-btn--danger:hover:not(:disabled)')).toHaveLength(0)
   })
 })
+
+describe('busy buttons in components.css', () => {
+  it('look disabled without being :disabled (they keep focus)', () => {
+    const rule = rules('.wm-btn[aria-disabled="true"]')
+    expect(rule).toHaveLength(1)
+    expect(rule[0]!.body).toMatch(/opacity:\s*\.55/)
+    expect(rule[0]!.body).toMatch(/cursor:\s*not-allowed/)
+  })
+
+  it('do not take the hover colour, in rules after the hover rules they must beat', () => {
+    const neutral = rules('.wm-btn:hover:not(:disabled)')[0]!
+    const primary = rules('.wm-btn--primary:hover:not(:disabled)')[0]!
+    const busyNeutral = rules('.wm-btn[aria-disabled="true"]:hover')
+    const busyPrimary = rules('.wm-btn--primary[aria-disabled="true"]:hover')
+    expect(busyNeutral).toHaveLength(1)
+    expect(busyNeutral[0]!.body).toMatch(/background:\s*var\(--wm-surface\)/)
+    expect(busyNeutral[0]!.at).toBeGreaterThan(neutral.at)
+    expect(busyPrimary).toHaveLength(1)
+    expect(busyPrimary[0]!.body).toMatch(/background:\s*var\(--wm-accent\)/)
+    expect(busyPrimary[0]!.body).toMatch(/filter:\s*none/)
+    expect(busyPrimary[0]!.at).toBeGreaterThan(primary.at)
+  })
+})

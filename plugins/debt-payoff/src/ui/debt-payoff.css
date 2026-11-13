@@ -45,7 +45,7 @@
   background: var(--wm-surface); color: var(--wm-text); font-weight: 600; box-shadow: var(--wm-shadow);
 }
 .dp-seg__btn:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 1px; }
-.dp-seg__btn:disabled { cursor: progress; opacity: .7; }
+.dp-seg__btn:disabled, .dp-seg__btn[aria-disabled="true"] { cursor: progress; opacity: .7; }
 
 .dp-extra { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-start; flex: 1 1 320px; min-width: 0; }
 .dp-extra .wm-field { flex: 1 1 200px; min-width: 0; margin-bottom: 0; }

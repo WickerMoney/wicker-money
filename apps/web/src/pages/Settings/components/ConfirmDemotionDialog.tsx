@@ -42,8 +42,8 @@ export function ConfirmDemotionDialog({ person, isSelf, busy, onConfirm, onCance
         </p>
       )}
       <div className="wm-dialog__actions">
-        <Button onClick={onCancel} disabled={busy}>Cancel</Button>
-        <Button variant="danger" onClick={onConfirm} disabled={busy}>
+        <Button onClick={onCancel} busy={busy}>Cancel</Button>
+        <Button variant="danger" onClick={onConfirm} busy={busy}>
           {busy ? 'Saving…' : isSelf ? 'Remove my owner access' : 'Make member'}
         </Button>
       </div>

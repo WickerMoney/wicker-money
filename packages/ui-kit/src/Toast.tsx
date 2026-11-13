@@ -2,6 +2,7 @@ import {
   useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
   type KeyboardEvent, type ReactNode,
 } from 'react'
+import { registerAnnouncer } from './busy.js'
 import {
   ToastApiContext, ToastViewContext,
   type ToastApi, type ToastItem, type ToastKind, type ToastView,
@@ -113,6 +114,9 @@ export function ToastProvider({ children, routeKey }: ToastProviderProps) {
     if (clearTimer.current !== null) clearTimeout(clearTimer.current)
     clearTimer.current = setTimeout(() => { clearTimer.current = null; el.replaceChildren() }, ANNOUNCER_CLEAR_MS)
   }, [])
+
+  // Busy controls (`guardBusy`) speak through this region too, so there is one announcer in the host.
+  useEffect(() => registerAnnouncer(announce), [announce])
 
   const tick = useCallback(() => {
     frame.current = null

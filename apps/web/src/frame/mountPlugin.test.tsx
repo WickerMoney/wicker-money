@@ -2,7 +2,6 @@ import { act } from '@testing-library/react'
 import type { PluginContext } from '@wickermoney/plugin-sdk'
 import type { HostChange, HostConnection, IsolatedState } from '@wickermoney/plugin-sdk/isolated'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FOCUS_OUT_GRACE_MS } from './FrameApp.js'
 import { mountPlugin } from './mountPlugin.js'
 
 const hash = '#id=acme.report&entry=%2Fp%2Fremote.js&module=.%2FWidget&kind=widget'
@@ -123,43 +122,83 @@ describe('mountPlugin', () => {
       expect(document.activeElement).toBe(one)
     })
 
-    it('lets the browser carry Tab out, and does not ask the host when focus did leave', async () => {
+    it('takes Tab at the last control and Shift+Tab at the first, and hands them to the host in the same task', async () => {
+      const { connection, one, two } = await mountTwoButtons()
+      two.focus()
+      const forward = tab(two)
+      expect(forward.defaultPrevented).toBe(true)
+      expect(connection.focusOut).toHaveBeenCalledTimes(1)
+      expect(connection.focusOut).toHaveBeenLastCalledWith('next')
+      one.focus()
+      const backward = tab(one, true)
+      expect(backward.defaultPrevented).toBe(true)
+      expect(connection.focusOut).toHaveBeenCalledTimes(2)
+      expect(connection.focusOut).toHaveBeenLastCalledWith('previous')
+    })
+
+    it('uses no timer for the hand-off', async () => {
       vi.useFakeTimers()
       try {
         const { connection, two } = await mountTwoButtons()
         two.focus()
-        const event = tab(two)
-        expect(event.defaultPrevented).toBe(false)
-        two.blur() // what the browser does with the key: focus moves on
-        vi.advanceTimersByTime(FOCUS_OUT_GRACE_MS + 5)
-        expect(connection.focusOut).not.toHaveBeenCalled()
-      } finally { vi.useRealTimers() }
-    })
-
-    it('asks the host to take focus when the browser left it in the frame, at the last control and the first', async () => {
-      vi.useFakeTimers()
-      try {
-        const { connection, one, two } = await mountTwoButtons()
-        two.focus()
+        const pending = vi.getTimerCount()
         tab(two)
-        vi.advanceTimersByTime(FOCUS_OUT_GRACE_MS + 5)
-        expect(connection.focusOut).toHaveBeenCalledWith('next')
-        one.focus()
-        tab(one, true)
-        vi.advanceTimersByTime(FOCUS_OUT_GRACE_MS + 5)
-        expect(connection.focusOut).toHaveBeenCalledWith('previous')
+        // Asked before any time has passed, and the key left no timer behind to ask again.
+        expect(connection.focusOut).toHaveBeenCalledTimes(1)
+        expect(vi.getTimerCount()).toBe(pending)
+        vi.advanceTimersByTime(1000)
+        expect(connection.focusOut).toHaveBeenCalledTimes(1)
       } finally { vi.useRealTimers() }
     })
 
-    it('does nothing for Tab between two controls inside the frame', async () => {
-      vi.useFakeTimers()
-      try {
-        const { connection, one } = await mountTwoButtons()
-        one.focus()
-        tab(one)
-        vi.advanceTimersByTime(FOCUS_OUT_GRACE_MS + 5)
-        expect(connection.focusOut).not.toHaveBeenCalled()
-      } finally { vi.useRealTimers() }
+    it('leaves Tab between two controls inside the frame to the browser', async () => {
+      const { connection, one, two } = await mountTwoButtons()
+      one.focus()
+      expect(tab(one).defaultPrevented).toBe(false)
+      two.focus()
+      expect(tab(two, true).defaultPrevented).toBe(false)
+      expect(connection.focusOut).not.toHaveBeenCalled()
+    })
+
+    it('leaves Tab to the browser while a modal dialog is open, so its own trap holds', async () => {
+      const { connection, one, two } = await mountTwoButtons()
+      const real = document.querySelector.bind(document)
+      vi.spyOn(document, 'querySelector').mockImplementation((selector: string) => selector === 'dialog:modal' ? document.body : real(selector))
+      two.focus()
+      expect(tab(two).defaultPrevented).toBe(false)
+      one.focus()
+      expect(tab(one, true).defaultPrevented).toBe(false)
+      expect(connection.focusOut).not.toHaveBeenCalled()
+    })
+
+    it('leaves other keys, modified Tab and Tab that something else already handled alone', async () => {
+      const { connection, two } = await mountTwoButtons()
+      two.focus()
+      two.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+      expect(tab(two, false).defaultPrevented).toBe(true) // the one that does count, to be sure the handler is live
+      connection.focusOut = vi.fn()
+      for (const init of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }]) {
+        const e = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true, ...init })
+        two.dispatchEvent(e)
+        expect(e.defaultPrevented).toBe(false)
+      }
+      const handled = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+      two.addEventListener('keydown', (e) => { e.preventDefault() }, { once: true })
+      two.dispatchEvent(handled)
+      expect(connection.focusOut).not.toHaveBeenCalled()
+    })
+
+    it('counts an aria-disabled control as a tab stop and a disabled one as not', async () => {
+      const root = document.createElement('div')
+      document.body.append(root)
+      const { connection } = fakeConnection()
+      const Plugin = () => <div><button>one</button><button aria-disabled="true">busy</button><button disabled>off</button></div>
+      await act(async () => { await mountPlugin(root, hash, base, { connect: async () => connection, load: async () => Plugin }) })
+      for (const b of root.querySelectorAll('button')) b.getClientRects = () => [{}] as unknown as DOMRectList
+      const [, busy] = root.querySelectorAll('button') as unknown as HTMLButtonElement[]
+      busy!.focus()
+      expect(tab(busy!).defaultPrevented).toBe(true) // the last control the keyboard can reach
+      expect(connection.focusOut).toHaveBeenCalledWith('next')
     })
   })
 

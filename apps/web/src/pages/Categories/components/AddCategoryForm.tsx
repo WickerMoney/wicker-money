@@ -87,7 +87,7 @@ export function AddCategoryForm({ parents, status, onChanged, onCreated }: AddCa
           <option value="transfer">Transfer — excluded from both</option>
         </SelectField>
         {name.trim() !== '' ? <p className="form-hint">Saved as {slugify(name)}</p> : null}
-        <Button type="submit" variant="primary" disabled={status.busy || name.trim() === ''}>
+        <Button type="submit" variant="primary" busy={status.busy} disabled={name.trim() === ''}>
           {status.busy ? 'Saving…' : 'Add category'}
         </Button>
         <FormError message={form.errors.form} />

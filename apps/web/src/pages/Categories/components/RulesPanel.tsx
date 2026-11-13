@@ -103,7 +103,7 @@ export function RulesPanel({ rules, categories, status, onChanged }: RulesPanelP
                             render: (r: Rule) => (
                               <div className="wm-row-actions">
                                 <IconButton
-                                  icon="delete" label="Delete" variant="danger" disabled={status.busy}
+                                  icon="delete" label="Delete" variant="danger" busy={status.busy}
                                   onClick={() => void removeRule(r.id, g.name)}
                                 />
                               </div>

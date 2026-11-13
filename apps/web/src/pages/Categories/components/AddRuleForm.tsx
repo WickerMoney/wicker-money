@@ -164,10 +164,10 @@ export function AddRuleForm({ categories, status, onChanged }: AddRuleFormProps)
           </label>
 
           <div className="page__actions">
-            <Button disabled={busy || !conditionsReady} onClick={() => void runPreview()}>
+            <Button busy={busy} disabled={!conditionsReady} onClick={() => void runPreview()}>
               {busy ? 'Checking…' : 'Preview'}
             </Button>
-            <Button type="submit" variant="primary" disabled={busy || !conditionsReady}>
+            <Button type="submit" variant="primary" busy={busy} disabled={!conditionsReady}>
               Save rule
             </Button>
           </div>

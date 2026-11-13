@@ -1,3 +1,4 @@
+import { guardBusy } from '@wickermoney/ui-kit'
 import type { Account } from '../../../models/index.js'
 import { SPENDABLE_TYPES } from '../helpers/accountTypes.js'
 import type { AccountEditing } from '../state/AccountEditing.js'
@@ -16,7 +17,7 @@ export interface AccountSpendableCellProps {
  * Whether the account counts toward safe to spend: a checkbox for checking and
  * savings, saved as soon as it changes, and a dash for types that never can.
  * An archived account is never listed by "Until payday", so its box is shown
- * but disabled.
+ * but disabled. While another change is in flight the box is `aria-disabled`, not `disabled`, so it keeps focus.
  */
 export function AccountSpendableCell({ account: a, row, busy }: AccountSpendableCellProps) {
   if (!SPENDABLE_TYPES.includes(a.accountType)) {
@@ -27,8 +28,9 @@ export function AccountSpendableCell({ account: a, row, busy }: AccountSpendable
       type="checkbox"
       aria-label={`Count ${a.name} toward safe to spend`}
       checked={a.spendable}
-      disabled={busy || a.archivedAt !== null}
-      onChange={(e) => { void row.setSpendable(a, e.target.checked) }}
+      disabled={a.archivedAt !== null}
+      aria-disabled={busy ? true : undefined}
+      onChange={guardBusy(busy, (e) => { void row.setSpendable(a, e.target.checked) })}
     />
   )
 }

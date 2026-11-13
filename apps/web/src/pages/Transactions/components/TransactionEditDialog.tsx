@@ -37,10 +37,10 @@ export function TransactionEditDialog({ row, busy }: TransactionEditDialogProps)
                onChange={(e) => row.change({ ...editing, notes: e.target.value })} />
         <FormError message={errors.form} />
         <div className="wm-dialog__actions">
-          <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
+          <Button busy={busy} onClick={row.cancel}>Cancel</Button>
           <Button
             type="submit" variant="primary"
-            disabled={busy || editing.merchant.trim() === '' || editing.amount.trim() === ''}
+            busy={busy} disabled={editing.merchant.trim() === '' || editing.amount.trim() === ''}
           >
             {busy ? 'Saving…' : 'Save'}
           </Button>

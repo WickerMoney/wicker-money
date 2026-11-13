@@ -70,7 +70,7 @@ export function AuthPage() {
             ) : null}
             <FormError message={form.errors.form} />
             <div className="auth__actions">
-              <Button type="submit" variant="primary" disabled={busy}>
+              <Button type="submit" variant="primary" busy={busy}>
                 {busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}
               </Button>
               <Button onClick={() => { setMode(mode === 'signin' ? 'register' : 'signin'); form.clear() }}>

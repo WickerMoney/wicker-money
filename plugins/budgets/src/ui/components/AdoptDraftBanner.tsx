@@ -13,7 +13,7 @@ export interface AdoptDraftBannerProps {
 export function AdoptDraftBanner({ monthKey, busy, onAdopt }: AdoptDraftBannerProps) {
   return (
     <div className="bud__actions">
-      <Button variant="primary" disabled={busy} onClick={onAdopt}>
+      <Button variant="primary" busy={busy} onClick={onAdopt}>
         {busy ? 'Starting…' : `Start ${monthLabel(monthKey)} from these`}
       </Button>
       <p className="bud__note">
