@@ -89,6 +89,22 @@ resize. `a11y` runs axe on the host, the page frame and the widget frame, light 
 the first table row, memory and bytes. `WEB_DIST_DIR` runs the same checks against an earlier build, which is how the 429, the
 19 px and the off-screen alert were shown on the build before this change.
 
+## Import CSV check
+
+`importCsv.ts` drives the Import CSV page through its frame against the real API (a fresh API process per group, so the
+staging store starts empty), and measures it against the page as it shipped. It generates its files (a 30-row file, a
+10,000-row file and a 100,000-row, 7.1 MB file) and undoes every import it makes. `ONLY=load,picker,small,big,midway,expiry,
+switch,size,a11y,visual,measure` runs some groups. `picker` clicks the file input inside the frame (the chooser event), uses
+the keyboard on it, and drops a file with Chromium's drag events on and beside the input. `big` chooses the file, maps while
+it uploads, checks, pages the flagged rows and commits, and asserts the chunk sizes, at most 6 in flight, and no broker
+refusal. `midway` and `expiry` fail a chunk once and for good, make the server lose the upload before the check and before
+the import, and lose a commit's answer. `switch` chooses another file during an upload and leaves the page (in the frame the
+abandoned upload is **not** given back; the check asserts that known gap so it flags when it is fixed). `size` checks the
+frame height against the document at 1440, 1024 and 390 px, `a11y` runs axe (light and dark, four states, the frame without
+ADR 0014's three rules), and `measure` alternates the page as it shipped (`BASE_DIST_DIR`, a build of the earlier tree), the new
+page in the page and the new page in a frame for the time to the review and to the import being done, API heap, and frame
+memory. Run it from `apps/api` on a freshly migrated and seeded database, with `NODE_OPTIONS=--expose-gc`.
+
 ## Toast check
 
 `toast.ts` checks the notification toast (ADR 0009) with no API or database: it

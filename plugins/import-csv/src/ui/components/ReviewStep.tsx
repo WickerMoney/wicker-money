@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, FormError, Stat, Surface } from '@wickermoney/ui-kit'
 import type { AnalyzeResult } from '../models/index.js'
 import { REVIEW_PAGE_SIZE } from './REVIEW_PAGE_SIZE.js'
+import { TableScroll } from './TableScroll.js'
 
 /** Props for {@link ReviewStep}. */
 export interface ReviewStepProps {
@@ -86,35 +87,37 @@ export function ReviewStep({
           <h3 className="imp__subhead">
             Possible duplicates — tick any that are genuinely new
           </h3>
-          <table className="imp__table">
-            <thead>
-              <tr>
-                <th scope="col">Import</th><th scope="col">Row</th><th scope="col">Date</th><th scope="col">Description</th>
-                <th scope="col" className="num">Amount</th><th scope="col">Matches</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((r) => (
-                <tr key={r.rowNumber}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={accepted.has(r.rowNumber)}
-                      onChange={() => toggle(r.rowNumber)}
-                      aria-label={`Import row ${r.rowNumber}: ${r.merchant}`}
-                    />
-                  </td>
-                  <td className="imp__muted">{r.rowNumber}</td>
-                  <td>{r.date}</td>
-                  <td>{r.merchant}</td>
-                  <td className={`num ${r.amount.startsWith('-') ? 'imp__out' : 'imp__in'}`}>
-                    {formatMoney(r.amount)}
-                  </td>
-                  <td className="imp__muted">{r.reason}</td>
+          <TableScroll label="Possible duplicates">
+            <table className="imp__table">
+              <thead>
+                <tr>
+                  <th scope="col">Import</th><th scope="col">Row</th><th scope="col">Date</th><th scope="col">Description</th>
+                  <th scope="col" className="num">Amount</th><th scope="col">Matches</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visible.map((r) => (
+                  <tr key={r.rowNumber}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={accepted.has(r.rowNumber)}
+                        onChange={() => toggle(r.rowNumber)}
+                        aria-label={`Import row ${r.rowNumber}: ${r.merchant}`}
+                      />
+                    </td>
+                    <td className="imp__muted">{r.rowNumber}</td>
+                    <td>{r.date}</td>
+                    <td>{r.merchant}</td>
+                    <td className={`num ${r.amount.startsWith('-') ? 'imp__out' : 'imp__in'}`}>
+                      {formatMoney(r.amount)}
+                    </td>
+                    <td className="imp__muted">{r.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
           {total > visible.length ? (
             <div className="imp__actions">
               <Button disabled={loadingMore} onClick={() => void showMore()}>

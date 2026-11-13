@@ -245,8 +245,14 @@ describe('the rule: a plugin the image did not ship loads only against a pin', (
     const pinned = await run({ ...crafted, integrity: PIN } as PluginManifest)
     expect(pinned.plugins).toHaveLength(1)
     const loaded = pinned.plugins[0]!
-    expect(IN_REALM_PLUGIN_IDS.has(loaded.manifest.id)).toBe(true)
-    expect(pluginRuntimeFor(loaded.manifest, loaded.bundled)).toBe('isolated')
+    // Listed for this run only: the set is empty, and the point is that a listed id still ends up isolated.
+    const set = IN_REALM_PLUGIN_IDS as Set<string>
+    set.add(loaded.manifest.id)
+    try {
+      expect(pluginRuntimeFor(loaded.manifest, loaded.bundled)).toBe('isolated')
+    } finally {
+      set.delete(loaded.manifest.id)
+    }
   })
 
   it('does not ask a bundled plugin served from the image for a pin', async () => {

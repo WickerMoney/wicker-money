@@ -1,5 +1,8 @@
 import { EmptyState, SelectField, Surface, type FormErrors } from '@wickermoney/ui-kit'
+import type { UploadStatus } from '../hooks/useImportFlow.js'
 import type { ImportAccount } from '../models/index.js'
+import { SectionNotice } from './SectionNotice.js'
+import { UploadNote } from './UploadNote.js'
 
 /** Props for {@link FileAccountStep}. */
 export interface FileAccountStepProps {
@@ -14,15 +17,20 @@ export interface FileAccountStepProps {
   readonly onFile: (file: File) => void
   /** Why the account or the file was refused, keyed `accountId` or `csv`. */
   readonly errors?: FormErrors
+  /** Where sending the file to the server stands. */
+  readonly upload: UploadStatus
+  /** Something wrong with this step as a whole (the accounts did not load, the file could not be sent). */
+  readonly notice: string | null
 }
 
 /** Step one of the import: choose the destination account and the CSV file. */
 export function FileAccountStep({
-  accounts, accountId, onAccountChange, fileName, matchedSource, onFile, errors,
+  accounts, accountId, onAccountChange, fileName, matchedSource, onFile, errors, upload, notice,
 }: FileAccountStepProps) {
   const fileError = errors?.fields['csv']
   return (
     <Surface title="1 · File and account">
+      <SectionNotice message={notice} />
       {accounts.length === 0 ? (
         <EmptyState
           title="No accounts yet"
@@ -56,6 +64,7 @@ export function FileAccountStep({
               }}
             />
             {fileName !== '' ? <span className="imp__hint">{fileName}</span> : null}
+            <UploadNote upload={upload} />
             {fileError !== undefined ? <span className="wm-field__error" id="imp-file-error">{fileError}</span> : null}
             {matchedSource !== null ? (
               <span className="imp__hint">

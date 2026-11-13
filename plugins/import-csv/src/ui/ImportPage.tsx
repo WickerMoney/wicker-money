@@ -1,5 +1,4 @@
 import type { PluginPageProps } from '@wickermoney/plugin-sdk'
-import { Alert } from '@wickermoney/ui-kit'
 import './styles.js'
 import { DATE_FORMATS } from '../shared/index.js'
 import { BatchHistory } from './components/BatchHistory.js'
@@ -29,8 +28,6 @@ export default function ImportPage({ ctx }: PluginPageProps) {
     <div className="page imp" ref={flow.formRef}>
       <h1 className="page__title">Import transactions</h1>
 
-      {flow.error !== null ? <Alert>{flow.error}</Alert> : null}
-
       <FileAccountStep
         accounts={flow.accounts}
         accountId={flow.accountId}
@@ -39,6 +36,8 @@ export default function ImportPage({ ctx }: PluginPageProps) {
         matchedSource={flow.matchedSource}
         onFile={(file) => void flow.onFile(file)}
         errors={flow.errors}
+        upload={flow.upload}
+        notice={flow.error ?? flow.upload.message}
       />
 
       {inProgress && flow.csv !== '' ? (

@@ -1,6 +1,7 @@
 import { Alert, Field, SelectField, Surface, type FormErrors } from '@wickermoney/ui-kit'
 import type { AmountStyle, ColumnMap, DateFormat, MapResult } from '../../shared/index.js'
 import { ColumnSelect } from './ColumnSelect.js'
+import { TableScroll } from './TableScroll.js'
 
 /** Props for {@link MappingStep}. */
 export interface MappingStepProps {
@@ -111,23 +112,25 @@ export function MappingStep(p: MappingStepProps) {
           <h3 className="imp__subhead">
             Preview — first {rows.length} of {p.preview.rows.length} readable rows
           </h3>
-          <table className="imp__table">
-            <thead>
-              <tr><th scope="col">Row</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col" className="num">Amount</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.rowNumber}>
-                  <td className="imp__muted">{r.rowNumber}</td>
-                  <td>{r.date}</td>
-                  <td>{r.merchant}</td>
-                  <td className={`num ${r.amount.startsWith('-') ? 'imp__out' : 'imp__in'}`}>
-                    {p.formatMoney(r.amount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TableScroll label="Preview of the first rows">
+            <table className="imp__table">
+              <thead>
+                <tr><th scope="col">Row</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col" className="num">Amount</th></tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.rowNumber}>
+                    <td className="imp__muted">{r.rowNumber}</td>
+                    <td>{r.date}</td>
+                    <td>{r.merchant}</td>
+                    <td className={`num ${r.amount.startsWith('-') ? 'imp__out' : 'imp__in'}`}>
+                      {p.formatMoney(r.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
 
           {errors.length > 0 ? (
             <Alert>

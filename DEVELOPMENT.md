@@ -228,8 +228,8 @@ to 8 MB, as before) or `uploadId`, the id of a file sent earlier in pieces. The
 pieces exist because the sandboxed plugin frames reach the API through a broker
 whose messages stop at 256 KiB; a frame cannot send an 8 MB body. Send exactly
 one of the two: both is a `400`. The `csv` body is unchanged and stays the way
-for small files, scripts and the API; the Import CSV page still uses it until it
-moves into a frame. Everything after the file is read is the same code either way
+for scripts and the API. The Import CSV page always stages (see below).
+Everything after the file is read is the same code either way
 (`readCsv`, the mapping, the analysis, the commit), so a staged file gives the
 same rows and the same summary as the same text in a body.
 
@@ -251,6 +251,38 @@ arrive in any order and several at a time (the page plans 6 in flight, about
 same text is accepted and changes nothing, so a lost answer can be retried; other
 text for a stored index is `409 chunk_conflict`. A chunk may end between the two
 halves of a character that needs a surrogate pair; the byte count accounts for it.
+
+**How the Import CSV page uses it.** The page runs in a sandboxed frame, so every
+file goes through these routes, small ones too (one chunk): there is one code path,
+and a one-chunk upload costs three small requests (`begin`, the chunk, `finish`)
+more than a `csv` body; the browser check measures that difference for a 30-row
+file (`measure`, "small file"). The pieces are in
+`plugins/import-csv/src/ui/staging/`:
+
+- **Begin when the file is chosen**, before the person has mapped a column. The
+  upload runs while they map, so by the time they press "Check for duplicates" the
+  file is usually on the server. `begin` carries the exact UTF-8 byte length
+  (`TextEncoder`, not `File.size`).
+- **Chunks** are cut by the bytes of their JSON text (at most 240,000, about
+  200,000 characters of ASCII), not by characters: quotes and line breaks are
+  escaped and non-ASCII text takes up to three bytes a character, and a body over the
+  broker's 256 KiB is a refusal and a strike against the frame.
+- **Pacing:** 6 chunks in flight, and a request bucket of 15 a second (burst 30)
+  under the broker's 20 a second (burst 40, 12 in flight), because a 100,000-row
+  file is about 40 requests. A `429`, a `5xx` or a failed connection is sent again
+  twice (400 ms, then 1.2 s); a `503 staging_full` is not retried, the page tells
+  the person to try again in a moment.
+- **`analyze`, the flagged-row pages and `commit`** name the upload and send about
+  300 bytes. A `404 upload_not_found` (expired, or the API restarted) sends the file
+  again once, with the old upload given back first, and repeats the request; a
+  second `404` is a message in the file step. `409` on `finish` sends the missing
+  chunk. `400` on `finish` starts over with a message. A `commit` retry keeps its
+  idempotency key, so a lost answer is replayed, not imported twice.
+- **Choosing another file** gives the first upload back (`upload/abort`). **Leaving
+  the page does not, from a frame:** the host disposes the broker and removes the
+  frame before the frame can send anything, so an upload staged and abandoned stays
+  until its 15 minutes pass, and a person who does this twice is told "You already
+  have 2 uploads waiting" until then. The in-page build of the page does give it back.
 
 **What `finish` checks**, in this order: every index from 0 to `chunks - 1` has
 arrived (`409 upload_incomplete`, naming the first missing; the upload stays
@@ -1043,10 +1075,10 @@ What a bundled plugin still does not get:
 
 ### Plugin trust model
 
-Five of the seven bundled UI plugins (Insights, Spending Trends, Upcoming,
-Forecast, Debt payoff) and every third-party plugin run in a sandboxed frame. The
-other two bundled plugins (Budgets and Import CSV: widgets and pages loaded over
-Module Federation) still run **fully trusted, in the host's origin**. Read this before writing or reviewing anything
+Every bundled UI plugin (Insights, Spending Trends, Upcoming, Forecast, Debt payoff,
+Budgets, Import CSV) and every third-party plugin runs in a sandboxed frame. No
+bundled plugin runs **fully trusted, in the host's origin** any more, and the list
+that would put one there (`IN_REALM_PLUGIN_IDS`) is empty. Read this before writing or reviewing anything
 that talks about plugin "permissions", "scoping" or "sandboxing".
 
 | Layer | What it does | Boundary against plugin code? |
@@ -1084,10 +1116,10 @@ Consequences for contributors:
   Which plugins run where is decided by the API (`pluginRuntimeFor`): a plugin
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
   (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights`,
-  `spending-trends`, `upcoming`, `forecast`, `debt-payoff` and `budgets` have been
-  ported and run in frames. The other bundled plugin, `import-csv`, is still
-  listed and runs in the page, fully trusted. The list shrinks as plugins are
-  ported.
+  `spending-trends`, `upcoming`, `forecast`, `debt-payoff`, `budgets` and
+  `import-csv` have been ported and run in frames. The list is empty; it stays as
+  the host's one allowlist, and the browser checks add an id to it to measure the
+  in-page baseline.
 
 ### Isolated plugin frames
 
@@ -1659,8 +1691,8 @@ who pulls it runs it, rather than against the source tree. Nine smoke specs
 stack is healthy, migrated and seeded (all four seed personas sign in, the
 bundled plugins registered with no load failures); `hero` signs in and reaches the
 dashboard and the budgets page (through its frame); `household` reaches the
-forecast and debt payoff pages (through their frames); every in-realm bundled plugin
-page loads with no console error or failed request; every dashboard widget
+forecast and debt payoff pages (through their frames); the Import CSV page loads through its
+frame, and no bundled plugin is in-realm; every bundled plugin page loads with no console error or failed request; every dashboard widget
 loads, and the isolated ones (everything not in `IN_REALM_PLUGIN_IDS`) run in frames with
 no console error and no Content Security Policy violation; `hero` cannot read
 `household` data through the API or the UI; and a transaction added in the

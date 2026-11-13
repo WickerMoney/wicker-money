@@ -29,7 +29,6 @@ import { KyselyUnitOfWork } from '../../../api/src/data/KyselyUnitOfWork.js'
 import { configureTenantContext } from '../../../api/src/db/configureTenantContext.js'
 import { createDb } from '../../../api/src/db/client.js'
 import { BUNDLED_PLUGINS } from '../../../api/src/plugins/bundled.js'
-import { pluginRuntimeFor } from '../../../api/src/plugins/pluginRuntime.js'
 import { PluginService } from '../../../api/src/plugins/service/PluginService.js'
 import { HOSTILE_PLUGIN_ID, hostileManifest } from '../../../api/src/testing/hostilePlugin.js'
 import { TEST_ADMIN_DATABASE_URL, TEST_AUTH_SECRET, TEST_DATABASE_URL, migrateTestDatabase } from '../../../api/src/testing/harness.js'
@@ -84,8 +83,9 @@ async function startServer(dist: string, apiLog: ApiLog) {
   configureTenantContext(config.AUTH_SECRET)
   const db = createDb(config.DATABASE_URL, { max: config.DB_POOL_MAX, statementTimeoutMillis: config.DB_STATEMENT_TIMEOUT })
   const manifest = hostileManifest([{ module: './Hostile', title: 'Attack' }, { module: './Victim', title: VICTIM_NAME }], true)
-  // The only other plugin installed here is an in-realm one (Import CSV), so it is the "another plugin" the probes name.
-  const bundled = [...BUNDLED_PLUGINS.filter((m) => pluginRuntimeFor(m, true) === 'in-realm'), manifest]
+  // The only other plugin installed here is Import CSV, so it is the "another plugin" the probes name. It is chosen by id: it no
+  // longer runs in the page (no bundled plugin does), and it contributes no dashboard widget, so the frame count below holds.
+  const bundled = [...BUNDLED_PLUGINS.filter((m) => m.id === 'wickermoney.import-csv'), manifest]
   const app = buildApp({ db, config, pluginOptions: { bundled } })
   apiLog.install(app)
   await app.ready()
