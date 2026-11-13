@@ -98,8 +98,8 @@ export function AccountLinesTable({
           header: '',
           render: (l: AccountLine) => (
             <span className="bud__row-actions">
-              <Button disabled={busy} onClick={() => onEdit(l)}>Edit</Button>
-              {l.draft ? null : <Button disabled={busy} onClick={() => onRemove(l)}>Remove</Button>}
+              <Button busy={busy} onClick={() => onEdit(l)}>Edit</Button>
+              {l.draft ? null : <Button busy={busy} onClick={() => onRemove(l)}>Remove</Button>}
             </span>
           ),
         },

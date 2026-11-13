@@ -1147,13 +1147,23 @@ sequenceDiagram
   the host page; a new `theme` message follows any change of `data-theme`, the
   root's style or the operating system preference. The frame applies them with
   `applyHostTheme`.
-- **Focus.** At its first or last control the frame does not cancel Tab: the
-  browser carries focus out to the next or previous control on the page, or at the
-  end of the page to its own interface, as it does for content in the page. If
-  focus is still in the frame 60 ms later, the frame reports `focus-out` and the
-  host moves focus past the iframe (`focusAround`). (Cancelling the key and always
-  asking the host, as this did first, traps a keyboard user when the frame is the
-  last thing on the page, as a page frame is.) `focus-in` goes the other way.
+- **Focus.** Tab at the frame's last control, and Shift+Tab at its first, is
+  cancelled in the frame and reported as `focus-out`, in the same task: no timer.
+  The host (`focusAround`) moves focus to the next or previous tab stop outside the
+  iframe. When that is another plugin frame it goes into that frame's first (or
+  last) control with `focus-in`, so two adjacent frames have no stop between them,
+  and a frame that has not connected yet is passed over. When nothing is left in
+  that direction (a page frame is the last thing on the page) focus goes round to
+  the other end of the page, the skip link going forward, so a keyboard user is
+  never trapped. The browser's own step out of a frame is not used any more: at
+  the end of a page it hands focus to the browser's interface, and where there is
+  none (the Chromium the checks run in) focus could come back into the frame's
+  first control instead of the page's, which the host used to repair 60 ms later
+  and the Forecast Tab-order check caught about one run in five. The one
+  difference from content in the page is that the browser's own interface is not
+  a stop between the last control and the skip link. The tab stops are worked out
+  in script (`apps/web/src/focus/tabbable.ts`); a control that is `aria-disabled`
+  counts as one. `focus-in` goes the other way.
 - **Dialogs and overlays.** Protocol 1 has no host-rendered dialog. A dialog
   inside a widget frame is clipped by the frame, so a widget that needs one
   navigates to a page (`navigate`). A page frame is as tall as the page, so a

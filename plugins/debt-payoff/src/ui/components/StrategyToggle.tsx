@@ -1,10 +1,12 @@
+import { guardBusy } from '@wickermoney/ui-kit'
 import type { Strategy } from '../../shared/index.js'
 import { STRATEGY_INFO } from '../helpers/STRATEGY_INFO.js'
 
 /** Props for {@link StrategyToggle}. */
 export interface StrategyToggleProps {
   readonly value: Strategy
-  readonly disabled: boolean
+  /** A request is running: the buttons stay focusable and ignore a click. */
+  readonly busy: boolean
   readonly onChange: (value: Strategy) => void
 }
 
@@ -16,7 +18,7 @@ const ORDER: readonly Strategy[] = ['avalanche', 'snowball']
  * The group and each button's pressed state are announced; the sentence under
  * them says what the chosen one does, so the choice is never a bare label.
  */
-export function StrategyToggle({ value, disabled, onChange }: StrategyToggleProps) {
+export function StrategyToggle({ value, busy, onChange }: StrategyToggleProps) {
   return (
     <div className="dp-strategy">
       <div className="dp-seg" role="group" aria-label="Payoff strategy">
@@ -26,8 +28,8 @@ export function StrategyToggle({ value, disabled, onChange }: StrategyToggleProp
             type="button"
             className="dp-seg__btn"
             aria-pressed={s === value}
-            disabled={disabled}
-            onClick={() => onChange(s)}
+            aria-disabled={busy ? true : undefined}
+            onClick={guardBusy(busy, () => onChange(s))}
           >
             {STRATEGY_INFO[s].label}
           </button>

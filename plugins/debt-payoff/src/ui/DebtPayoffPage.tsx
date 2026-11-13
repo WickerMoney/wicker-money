@@ -137,7 +137,7 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
           action={payoff.planLoading && plan !== null ? <span className="dp-muted" role="status">Updating…</span> : undefined}
         >
           <div className="dp-controls">
-            <StrategyToggle value={settings.strategy} disabled={payoff.busy} onChange={(s) => void payoff.chooseStrategy(s)} />
+            <StrategyToggle value={settings.strategy} busy={payoff.busy} onChange={(s) => void payoff.chooseStrategy(s)} />
             <ExtraPaymentForm saved={settings.extraPayment} busy={payoff.busy} onApply={payoff.applyExtra} />
           </div>
 

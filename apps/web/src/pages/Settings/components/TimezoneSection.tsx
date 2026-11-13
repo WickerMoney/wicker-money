@@ -53,8 +53,8 @@ export function TimezoneSection() {
     } finally {
       setBusy(false)
       // Save disables itself on success (the choice now equals the saved zone),
-      // and the picker is disabled while saving, so a keyboard user's focus
-      // would fall to the page. The picker is the section's own control.
+      // which drops focus when it was on Save. The picker is the section's own
+      // control, so focus goes there.
       if (hadFocus) refocus.current = true
     }
   }
@@ -78,7 +78,7 @@ export function TimezoneSection() {
             This browser is on <strong>{browser.replaceAll('_', ' ')}</strong>, but your account
             uses <strong>{current.replaceAll('_', ' ')}</strong>.
           </span>
-          <Button onClick={() => { void save(browser) }} disabled={busy}>Use {browser.replaceAll('_', ' ')}</Button>
+          <Button onClick={() => { void save(browser) }} busy={busy}>Use {browser.replaceAll('_', ' ')}</Button>
         </p>
       ) : null}
       <form className="tz-form" onSubmit={onSubmit} ref={formRef}>
@@ -87,11 +87,11 @@ export function TimezoneSection() {
           value={choice}
           error={errors.fields['timezone']}
           onChange={(e) => { setChoice(e.target.value); setErrors(NO_FORM_ERRORS) }}
-          disabled={busy}
+          busy={busy}
         >
           {zones.map((z) => <option key={z} value={z}>{z.replaceAll('_', ' ')}</option>)}
         </SelectField>
-        <Button type="submit" variant="primary" disabled={busy || choice === current}>
+        <Button type="submit" variant="primary" busy={busy} disabled={choice === current}>
           {busy ? 'Saving…' : 'Save'}
         </Button>
       </form>

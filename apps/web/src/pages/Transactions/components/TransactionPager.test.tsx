@@ -81,11 +81,18 @@ describe('TransactionPager', () => {
     expect(props.onNext).toHaveBeenCalledTimes(1)
   })
 
-  it('disables both buttons while busy', () => {
-    mount({ busy: true, hasPrevious: true, hasNext: true })
+  it('marks both buttons busy while busy: focusable, ignoring clicks', async () => {
+    const { props, user } = mount({ busy: true, hasPrevious: true, hasNext: true })
+    const previous = screen.getByRole('button', { name: /Previous/ }) as HTMLButtonElement
+    const next = screen.getByRole('button', { name: /Next/ }) as HTMLButtonElement
 
-    expect((screen.getByRole('button', { name: /Previous/ }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: /Next/ }) as HTMLButtonElement).disabled).toBe(true)
+    for (const b of [previous, next]) { expect(b.getAttribute('aria-disabled')).toBe('true'); expect(b.disabled).toBe(false) }
+    await user.click(previous)
+    expect(document.activeElement).toBe(previous)
+    await user.click(next)
+    expect(document.activeElement).toBe(next)
+    expect(props.onNext).not.toHaveBeenCalled()
+    expect(props.onPrevious).not.toHaveBeenCalled()
   })
 
   it('reports a new page size', async () => {

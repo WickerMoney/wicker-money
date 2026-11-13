@@ -281,8 +281,12 @@ describe('making an owner a member', () => {
 
     expect(setPersonRole).toHaveBeenCalledWith('cat', 'member')
     const dialog = screen.getByRole('dialog')
-    expect((within(dialog).getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((within(dialog).getByRole('button', { name: 'Saving…' }) as HTMLButtonElement).disabled).toBe(true)
+    // Busy, not `disabled`: a disabled control would drop keyboard focus to <body>.
+    expect(within(dialog).getByRole('button', { name: 'Cancel' }).getAttribute('aria-disabled')).toBe('true')
+    expect(within(dialog).getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeNull()
+    expect(setPersonRole).toHaveBeenCalledTimes(1)
 
     await act(async () => { pending.resolve(changeOf(cat, 'member')) })
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })

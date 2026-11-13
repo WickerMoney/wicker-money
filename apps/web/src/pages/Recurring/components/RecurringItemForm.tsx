@@ -160,8 +160,8 @@ export function RecurringItemForm({
         </div>
 
         <div className="wm-dialog__actions">
-          <Button disabled={busy} onClick={onCancel}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={busy}>
+          <Button busy={busy} onClick={onCancel}>Cancel</Button>
+          <Button type="submit" variant="primary" busy={busy}>
             {busy ? 'Saving…' : editing === null ? 'Add item' : 'Save changes'}
           </Button>
         </div>

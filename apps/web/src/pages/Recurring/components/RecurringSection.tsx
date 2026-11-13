@@ -72,12 +72,12 @@ export function RecurringSection({
               : <AmountCell value={i.monthlyEquivalent} kind={i.kind} currency={currency} /> },
           { key: 'actions', header: '', render: (i: RecurringItem) => (
             <div className="wm-row-actions">
-              <IconButton icon="history" label="History" disabled={busy} onClick={() => onHistory(i)} />
-              <IconButton icon="edit" label="Edit" disabled={busy} onClick={() => onEdit(i)} />
+              <IconButton icon="history" label="History" busy={busy} onClick={() => onHistory(i)} />
+              <IconButton icon="edit" label="Edit" busy={busy} onClick={() => onEdit(i)} />
               {i.nextDue !== null && i.frequency !== 'once'
-                ? <IconButton icon="end" label="End" disabled={busy} onClick={() => onEnd(i)} />
+                ? <IconButton icon="end" label="End" busy={busy} onClick={() => onEnd(i)} />
                 : <span className="wm-icon-slot" aria-hidden="true" />}
-              <IconButton icon="delete" label="Delete" variant="danger" disabled={busy} onClick={() => onDelete(i)} />
+              <IconButton icon="delete" label="Delete" variant="danger" busy={busy} onClick={() => onDelete(i)} />
             </div>
           ) },
         ]}

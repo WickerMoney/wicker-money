@@ -26,6 +26,14 @@ describe('startFormSubmit', () => {
     expect(onSubmit).not.toHaveBeenCalled()
     stop()
   })
+  it('ignores an aria-disabled submit button: a busy control that keeps focus must not submit (click and Enter)', () => {
+    const { onSubmit, stop } = setup('<form><input name="a"><button type="submit" aria-disabled="true">Go</button></form>')
+    document.querySelector('button')!.click()
+    const e = enter(document.querySelector('input')!)
+    expect(e.defaultPrevented).toBe(true)
+    expect(onSubmit).not.toHaveBeenCalled()
+    stop()
+  })
   it('submits on Enter in a field, through the default button', () => {
     const { onSubmit, stop } = setup('<form><input name="a"><input name="b"><button type="submit">Go</button></form>')
     const e = enter(document.querySelector('input')!)

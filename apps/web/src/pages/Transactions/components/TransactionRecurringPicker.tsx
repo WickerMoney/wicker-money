@@ -83,7 +83,7 @@ export function TransactionRecurringPicker({ transaction: t, matches, busy }: Tr
             <li className="recur2__item">
               <span className="recur2__item-text"><strong>{linked.name}</strong>, {formatDate(linked.nominalDate)}</span>
               <span className="recur2__item-actions">
-                <Button disabled={busy} aria-label={`Unmatch ${t.merchant} from ${linked.name}`}
+                <Button busy={busy} aria-label={`Unmatch ${t.merchant} from ${linked.name}`}
                         onClick={stay(() => matches.unmatch(t, linked))}>Unmatch</Button>
               </span>
             </li>
@@ -105,9 +105,9 @@ export function TransactionRecurringPicker({ transaction: t, matches, busy }: Tr
                 </span>
               </span>
               <span className="recur2__item-actions">
-                <Button variant="primary" disabled={busy} aria-label={`Match ${t.merchant} to ${suggestion.occurrence.name}`}
+                <Button variant="primary" busy={busy} aria-label={`Match ${t.merchant} to ${suggestion.occurrence.name}`}
                         onClick={leave(() => matches.confirm(t, suggestion))}>Match</Button>
-                <Button disabled={busy} aria-label={`${t.merchant} is not ${suggestion.occurrence.name}`}
+                <Button busy={busy} aria-label={`${t.merchant} is not ${suggestion.occurrence.name}`}
                         onClick={stay(() => matches.dismiss(t, suggestion.occurrence))}>Not this</Button>
               </span>
             </li>
@@ -129,7 +129,7 @@ export function TransactionRecurringPicker({ transaction: t, matches, busy }: Tr
                   </span>
                 </span>
                 <span className="recur2__item-actions">
-                  <Button disabled={busy} aria-label={`Match to ${c.occurrence.name} ${c.occurrence.nominalDate}`}
+                  <Button busy={busy} aria-label={`Match to ${c.occurrence.name} ${c.occurrence.nominalDate}`}
                           onClick={leave(() => matches.match(t, c.occurrence))}>Match</Button>
                 </span>
               </li>
@@ -146,7 +146,7 @@ export function TransactionRecurringPicker({ transaction: t, matches, busy }: Tr
               <li key={keyOf(o)} className="recur2__item">
                 <span className="recur2__item-text wm-muted">Not {o.name} ({formatDate(o.nominalDate)})</span>
                 <span className="recur2__item-actions">
-                  <Button disabled={busy} aria-label={`Restore ${o.name} ${o.nominalDate} as a suggestion for ${t.merchant}`}
+                  <Button busy={busy} aria-label={`Restore ${o.name} ${o.nominalDate} as a suggestion for ${t.merchant}`}
                           onClick={stay(() => matches.undismiss(t, o))}>Restore</Button>
                 </span>
               </li>
@@ -160,7 +160,7 @@ export function TransactionRecurringPicker({ transaction: t, matches, busy }: Tr
       ) : null}
 
       <div className="recur2__footer">
-        <Button disabled={busy} onClick={close}>Close</Button>
+        <Button busy={busy} onClick={close}>Close</Button>
       </div>
     </div>
   )

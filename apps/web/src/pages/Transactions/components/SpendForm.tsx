@@ -42,7 +42,7 @@ export function SpendForm({ accounts, enabledCategories, fields, entry, busy }: 
           placeholder={{ value: '', label: 'Auto (apply rules)' }}
         />
       </SelectField>
-      <Button type="submit" variant="primary" disabled={busy || fields.merchant.trim() === ''}>
+      <Button type="submit" variant="primary" busy={busy} disabled={fields.merchant.trim() === ''}>
         {busy ? 'Saving…' : 'Record'}
       </Button>
       <FormError message={entry.errors.form} />

@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { guardBusy } from './busy.js'
 
 /** The icons an {@link IconButton} can draw. */
 export type IconName = 'edit' | 'delete' | 'disable' | 'enable' | 'archive' | 'history' | 'end' | 'balance' | 'link'
@@ -88,6 +89,8 @@ export interface IconButtonProps
   readonly label: string
   /** Visual emphasis. Defaults to `"default"`. */
   readonly variant?: 'default' | 'danger'
+  /** As {@link ButtonProps.busy}: focusable, looks disabled, ignores a click and says so. */
+  readonly busy?: boolean
 }
 
 /**
@@ -97,12 +100,12 @@ export interface IconButtonProps
  * danger colour behave identically; it only swaps the text for a drawn icon and
  * pins the size so a column of them lines up.
  */
-export function IconButton({ icon, label, variant = 'default', className, ...rest }: IconButtonProps) {
+export function IconButton({ icon, label, variant = 'default', busy = false, className, onClick, ...rest }: IconButtonProps) {
   const classes = ['wm-btn', 'wm-icon-btn', variant === 'danger' ? 'wm-btn--danger' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
   return (
-    <button type="button" {...rest} className={classes} aria-label={label} title={label}>
+    <button type="button" {...rest} {...(busy ? { 'aria-disabled': true } : {})} className={classes} aria-label={label} title={label} onClick={guardBusy(busy, onClick)}>
       <svg
         viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"

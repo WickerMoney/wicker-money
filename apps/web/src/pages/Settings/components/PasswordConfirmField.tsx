@@ -8,8 +8,8 @@ export interface PasswordConfirmFieldProps {
   readonly onChange: (value: string) => void
   /** The server's message about this field, shown beneath it and linked to it for screen readers. */
   readonly error: string | undefined
-  /** `true` while a request is in flight. */
-  readonly disabled?: boolean
+  /** `true` while a request is in flight: the box stays focusable but cannot be edited. */
+  readonly busy?: boolean
 }
 
 /**
@@ -19,7 +19,7 @@ export interface PasswordConfirmFieldProps {
  * error attaches to the field are the same wherever the question is asked.
  * The server's `password` issue goes in `error`.
  */
-export function PasswordConfirmField({ value, onChange, error, disabled }: PasswordConfirmFieldProps) {
+export function PasswordConfirmField({ value, onChange, error, busy }: PasswordConfirmFieldProps) {
   return (
     <Field
       label="Your password"
@@ -29,7 +29,7 @@ export function PasswordConfirmField({ value, onChange, error, disabled }: Passw
       autoComplete="current-password"
       error={error}
       onChange={(e) => { onChange(e.target.value) }}
-      disabled={disabled}
+      busy={busy}
     />
   )
 }

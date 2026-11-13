@@ -55,8 +55,8 @@ export function FixOpeningBalancePanel({
         </div>
       ) : null}
       <div className="wm-dialog__actions">
-        <Button disabled={busy} onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" disabled={busy || preview === null} onClick={onApply}>
+        <Button busy={busy} onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" busy={busy} disabled={preview === null} onClick={onApply}>
           {busy ? 'Applying…' : 'Apply'}
         </Button>
       </div>

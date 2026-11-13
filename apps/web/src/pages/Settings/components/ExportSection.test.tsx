@@ -180,9 +180,14 @@ describe('the export section', () => {
     await user.click(submit())
 
     expect(submit().textContent).toBe('Preparing export…')
-    expect(submit().disabled).toBe(true)
-    expect(within(dialog()).getByRole<HTMLButtonElement>('button', { name: 'Cancel' }).disabled).toBe(true)
-    expect(password().hasAttribute('disabled')).toBe(true)
+    expect(submit().getAttribute('aria-disabled')).toBe('true')
+    const cancel = within(dialog()).getByRole<HTMLButtonElement>('button', { name: 'Cancel' })
+    // Busy, not `disabled`: a disabled control would drop keyboard focus to <body>.
+    expect(cancel.getAttribute('aria-disabled')).toBe('true')
+    expect(cancel.disabled).toBe(false)
+    expect(password().readOnly).toBe(true)
+    await user.click(cancel)
+    expect(screen.queryByRole('dialog')).not.toBeNull()
     await user.keyboard('{Enter}')
     expect(post).toHaveBeenCalledTimes(1)
     gate.resolve({ ticket: 'tkt-3' })

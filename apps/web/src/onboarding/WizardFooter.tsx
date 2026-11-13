@@ -24,13 +24,13 @@ export function WizardFooter({ summary, first, last, busy, onBack, onNext, onFin
     <footer className="wiz__foot">
       <span className="wiz__count">{summary ?? ' '}</span>
       <div className="wiz__nav">
-        <Button disabled={first || busy} onClick={onBack}>Back</Button>
+        <Button busy={busy} disabled={first} onClick={onBack}>Back</Button>
         {last ? (
-          <Button variant="primary" disabled={busy} onClick={onFinish}>
+          <Button variant="primary" busy={busy} onClick={onFinish}>
             {busy ? 'Creating…' : 'Create categories'}
           </Button>
         ) : (
-          <Button variant="primary" disabled={busy} onClick={onNext}>Next</Button>
+          <Button variant="primary" busy={busy} onClick={onNext}>Next</Button>
         )}
       </div>
     </footer>

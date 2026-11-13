@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Button, Field, FormError, NO_FORM_ERRORS, Spinner, Surface, formErrorsFrom, type FormErrors,
+  Button, Field, FormError, NO_FORM_ERRORS, Spinner, Surface, formErrorsFrom, guardBusy, type FormErrors,
 } from '@wickermoney/ui-kit'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { formatDate } from '../../../lib/formatDate.js'
@@ -83,8 +83,8 @@ export function OccurrencesPanel({ item, today, currency, accountName, status, a
                         {l.transaction === null ? <span className="wm-muted">not matched</span> : (
                           <>
                             {l.transaction.merchant}, {formatDate(l.transaction.date)}, {formatMoney(l.transaction.amount, currency)}{' '}
-                            <button type="button" className="recur-link" disabled={busy}
-                                    onClick={() => void occ.unmatch(o, (l.transaction as { id: string }).id)}>Unmatch</button>
+                            <button type="button" className="recur-link" aria-disabled={busy ? true : undefined}
+                                    onClick={guardBusy(busy, () => void occ.unmatch(o, (l.transaction as { id: string }).id))}>Unmatch</button>
                           </>
                         )}
                       </li>
@@ -110,7 +110,7 @@ export function OccurrencesPanel({ item, today, currency, accountName, status, a
                                   {c.dismissed === true ? <span className="wm-muted recur-sub"> dismissed</span> : null}
                                 </span>
                                 <span>{formatMoney(c.amount, currency)}</span>
-                                <Button disabled={busy} onClick={() => void occ.match(o, c.transactionId)}>Match</Button>
+                                <Button busy={busy} onClick={() => void occ.match(o, c.transactionId)}>Match</Button>
                               </li>
                             ))}
                           </ul>
@@ -132,8 +132,8 @@ export function OccurrencesPanel({ item, today, currency, accountName, status, a
                              onChange={(e) => setDraft({ ...editing, amounts: { ...editing.amounts, [key]: e.target.value } })} />
                     ))}
                     <div className="recur-actions">
-                      <Button type="submit" variant="primary" disabled={busy}>Save</Button>
-                      <Button disabled={busy} onClick={() => setDraft(null)}>Cancel</Button>
+                      <Button type="submit" variant="primary" busy={busy}>Save</Button>
+                      <Button busy={busy} onClick={() => setDraft(null)}>Cancel</Button>
                     </div>
                     <FormError message={errors.form} />
                   </form>
@@ -141,17 +141,17 @@ export function OccurrencesPanel({ item, today, currency, accountName, status, a
 
                 <div className="recur-actions recur-occurrence__actions">
                   {o.status === 'skipped' ? (
-                    <Button disabled={busy} onClick={() => void occ.record(o, { skipped: false })}>Un-skip</Button>
+                    <Button busy={busy} onClick={() => void occ.record(o, { skipped: false })}>Un-skip</Button>
                   ) : (
                     <>
                       {unsettled && open === null
-                        ? <Button disabled={busy} onClick={() => void occ.findMatches(o)}>Find payment</Button>
+                        ? <Button busy={busy} onClick={() => void occ.findMatches(o)}>Find payment</Button>
                         : null}
                       {editing === null && o.status !== 'cleared'
-                        ? <Button disabled={busy} onClick={() => setDraft(overrideDraftFrom(item, o))}>Change</Button>
+                        ? <Button busy={busy} onClick={() => setDraft(overrideDraftFrom(item, o))}>Change</Button>
                         : null}
                       {o.legs.every((l) => l.transaction === null)
-                        ? <Button disabled={busy} onClick={() => void occ.record(o, { skipped: true })}>Skip</Button>
+                        ? <Button busy={busy} onClick={() => void occ.record(o, { skipped: true })}>Skip</Button>
                         : null}
                     </>
                   )}

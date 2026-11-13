@@ -46,7 +46,7 @@ export function TransferForm({ accounts, fields, entry, busy }: TransferFormProp
       <Button
         type="submit"
         variant="primary"
-        disabled={busy || entry.toAccountId === '' || entry.amount.trim() === ''}
+        busy={busy} disabled={entry.toAccountId === '' || entry.amount.trim() === ''}
       >
         {busy ? 'Moving…' : 'Move money'}
       </Button>

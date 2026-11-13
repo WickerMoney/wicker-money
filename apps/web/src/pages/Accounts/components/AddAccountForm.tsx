@@ -72,7 +72,7 @@ export function AddAccountForm({ status, onCreated }: AddAccountFormProps) {
             </p>
           </>
         ) : null}
-        <Button type="submit" variant="primary" disabled={status.busy || name.trim() === ''}>
+        <Button type="submit" variant="primary" busy={status.busy} disabled={name.trim() === ''}>
           {status.busy ? 'Adding…' : 'Add account'}
         </Button>
         <FormError message={form.errors.form} />

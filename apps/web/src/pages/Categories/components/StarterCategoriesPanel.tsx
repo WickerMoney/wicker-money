@@ -90,10 +90,10 @@ export function StarterCategoriesPanel({ status, onChanged }: StarterCategoriesP
       )}
 
       <div className="page__actions">
-        <Button variant="primary" disabled={status.busy} onClick={start}>
+        <Button variant="primary" busy={status.busy} onClick={start}>
           {onboarding !== null && onboarding.onboardedAt === null ? 'Run setup' : 'Run setup again'}
         </Button>
-        <Button disabled={status.busy} onClick={() => void resetSetup()}>
+        <Button busy={status.busy} onClick={() => void resetSetup()}>
           {status.busy ? 'Working…' : 'Reset setup'}
         </Button>
       </div>
