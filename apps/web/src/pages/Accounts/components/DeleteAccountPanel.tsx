@@ -40,7 +40,7 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
       <div className="page__row">
         <div>
           <p className="form-hint"><strong>Archive</strong> -- hide it, keep everything exactly as it is.</p>
-          <Button disabled={busy} onClick={() => void deletion.archive(resolving.account)}>Archive instead</Button>
+          <Button busy={busy} onClick={() => void deletion.archive(resolving.account)}>Archive instead</Button>
         </div>
 
         <div>
@@ -49,7 +49,7 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
             account. If any of that history is a transfer, the other leg (even on a different account)
             is removed with it. This cannot be undone.
           </p>
-          <Button variant="danger" disabled={busy} onClick={() => void deletion.deleteWithHistory()}>
+          <Button variant="danger" busy={busy} onClick={() => void deletion.deleteWithHistory()}>
             Delete account and history
           </Button>
         </div>
@@ -73,11 +73,11 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
                 {migrateTargets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </SelectField>
               <div className="page__actions page__actions--tight">
-                <Button disabled={busy || migrateTargetId === ''} onClick={() => void deletion.previewMigrate()}>
+                <Button busy={busy} disabled={migrateTargetId === ''} onClick={() => void deletion.previewMigrate()}>
                   Preview move
                 </Button>
                 <Button
-                  variant="primary" disabled={busy || migratePlan === null}
+                  variant="primary" busy={busy} disabled={migratePlan === null}
                   onClick={() => void deletion.commitMigrate()}
                 >
                   Confirm move
@@ -91,7 +91,7 @@ export function DeleteAccountPanel({ deletion, busy }: DeleteAccountPanelProps) 
 
       <FormError message={errors.form} />
       <div className="wm-dialog__actions">
-        <Button disabled={busy} onClick={deletion.dismiss}>Cancel</Button>
+        <Button busy={busy} onClick={deletion.dismiss}>Cancel</Button>
       </div>
     </Dialog>
   )

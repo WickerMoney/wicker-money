@@ -1,10 +1,12 @@
+import { guardBusy } from '@wickermoney/ui-kit'
+
 /** Props for {@link PluginSwitch}. */
 export interface PluginSwitchProps {
   /** The plugin's display name, for the accessible label. */
   readonly name: string
   /** Whether the plugin is on, as currently shown. */
   readonly on: boolean
-  /** True while a change is being saved; the switch cannot be used meanwhile. */
+  /** True while a change is being saved; the switch keeps focus and ignores a press meanwhile. */
   readonly saving: boolean
   /** Called with the requested state and the switch itself, so a caller that asks first can return focus to it. */
   readonly onChange: (next: boolean, switchElement: HTMLButtonElement) => void
@@ -26,9 +28,9 @@ export function PluginSwitch({ name, on, saving, onChange }: PluginSwitchProps) 
         aria-checked={on}
         aria-label={`Enable ${name}`}
         aria-busy={saving}
-        disabled={saving}
+        aria-disabled={saving ? true : undefined}
         className={`plugin-switch${on ? ' is-on' : ''}`}
-        onClick={(e) => { onChange(!on, e.currentTarget) }}
+        onClick={guardBusy(saving, (e) => { onChange(!on, e.currentTarget) })}
       >
         <span className="plugin-switch__thumb" aria-hidden="true" />
       </button>

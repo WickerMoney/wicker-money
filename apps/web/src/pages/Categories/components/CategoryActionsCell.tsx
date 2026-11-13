@@ -22,8 +22,8 @@ export function CategoryActionsCell({ category: c, row, busy }: CategoryActionsC
     return (
       <>
         <div className="wm-row-actions">
-          <Button variant="primary" disabled={busy} onClick={() => void row.save()}>Save</Button>
-          <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
+          <Button variant="primary" busy={busy} onClick={() => void row.save()}>Save</Button>
+          <Button busy={busy} onClick={row.cancel}>Cancel</Button>
         </div>
         <FormError message={row.errors.form} />
       </>
@@ -31,14 +31,14 @@ export function CategoryActionsCell({ category: c, row, busy }: CategoryActionsC
   }
   return (
     <div className="wm-row-actions">
-      <IconButton icon="edit" label="Edit" disabled={busy} onClick={() => row.start(c)} />
+      <IconButton icon="edit" label="Edit" busy={busy} onClick={() => row.start(c)} />
       <IconButton
         icon={c.is_enabled ? 'disable' : 'enable'}
         label={c.is_enabled ? 'Disable' : 'Enable'}
-        disabled={busy}
+        busy={busy}
         onClick={() => void row.setEnabled(c, !c.is_enabled)}
       />
-      <IconButton icon="delete" label="Delete" variant="danger" disabled={busy} onClick={() => void row.remove(c)} />
+      <IconButton icon="delete" label="Delete" variant="danger" busy={busy} onClick={() => void row.remove(c)} />
     </div>
   )
 }

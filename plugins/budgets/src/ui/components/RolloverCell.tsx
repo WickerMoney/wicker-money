@@ -1,3 +1,4 @@
+import { guardBusy } from '@wickermoney/ui-kit'
 import type { MonthLine } from '../models/index.js'
 
 /** Props for {@link RolloverCell}. */
@@ -25,8 +26,8 @@ export function RolloverCell({ line, draftValue, busy, onSave }: RolloverCellPro
         type="checkbox"
         aria-label={`${line.categoryName} rolls over`}
         checked={line.rollover}
-        disabled={busy}
-        onChange={(e) => onSave(line, draftValue ?? line.planned, e.target.checked)}
+        aria-disabled={busy ? true : undefined}
+        onChange={guardBusy(busy, (e) => onSave(line, draftValue ?? line.planned, e.target.checked))}
       />
     </label>
   )

@@ -26,8 +26,8 @@ export function AccountActionsCell({
     return (
       <>
         <div className="wm-row-actions">
-          <Button variant="primary" disabled={busy} onClick={() => void row.save()}>Save</Button>
-          <Button disabled={busy} onClick={row.cancel}>Cancel</Button>
+          <Button variant="primary" busy={busy} onClick={() => void row.save()}>Save</Button>
+          <Button busy={busy} onClick={row.cancel}>Cancel</Button>
         </div>
         <FormError message={row.errors.form} />
       </>
@@ -35,12 +35,12 @@ export function AccountActionsCell({
   }
   return (
     <div className="wm-row-actions">
-      <IconButton icon="edit" label="Edit" disabled={busy} onClick={() => row.start(a)} />
-      <IconButton icon="balance" label="Fix opening balance" disabled={busy} onClick={() => onFixOpeningBalance(a)} />
+      <IconButton icon="edit" label="Edit" busy={busy} onClick={() => row.start(a)} />
+      <IconButton icon="balance" label="Fix opening balance" busy={busy} onClick={() => onFixOpeningBalance(a)} />
       {a.archivedAt === null ? (
-        <IconButton icon="archive" label="Archive" disabled={busy} onClick={() => onArchive(a)} />
+        <IconButton icon="archive" label="Archive" busy={busy} onClick={() => onArchive(a)} />
       ) : <span className="wm-icon-slot" aria-hidden="true" />}
-      <IconButton icon="delete" label="Delete" variant="danger" disabled={busy} onClick={() => onDelete(a)} />
+      <IconButton icon="delete" label="Delete" variant="danger" busy={busy} onClick={() => onDelete(a)} />
     </div>
   )
 }

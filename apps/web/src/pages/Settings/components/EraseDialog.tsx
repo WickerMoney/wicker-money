@@ -77,17 +77,17 @@ export function EraseDialog({ title, phrase, confirmLabel, onClose, submit, onEr
           spellCheck={false}
           error={errors.fields['confirmation']}
           onChange={(e) => { setTyped(e.target.value); setErrors(NO_FORM_ERRORS) }}
-          disabled={busy}
+          busy={busy}
         />
         <PasswordConfirmField
           value={password}
           error={errors.fields['password']}
           onChange={(next) => { setPassword(next); setErrors(NO_FORM_ERRORS) }}
-          disabled={busy}
+          busy={busy}
         />
         <FormError message={errors.form} />
         <div className="wm-dialog__actions">
-          <Button onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button onClick={onClose} busy={busy}>Cancel</Button>
           <Button type="submit" variant="danger" disabled={!canSubmit}>
             {busy ? 'Erasing…' : confirmLabel}
           </Button>

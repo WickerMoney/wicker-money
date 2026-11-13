@@ -106,16 +106,22 @@ describe('PluginsSection, for an owner', () => {
 
     expect(setPluginEnabled).toHaveBeenCalledWith('wickermoney.budgets', false)
     expect(switchOf('Budgets').getAttribute('aria-checked')).toBe('false')
-    expect(switchOf('Budgets').disabled).toBe(true)
+    expect(switchOf('Budgets').getAttribute('aria-disabled')).toBe('true')
     expect(within(card('Budgets')).getByText('Saving…')).toBeTruthy()
     expect(within(card('Budgets')).getByRole('status').textContent).toBe('Saving…')
+    // The switch keeps focus while it saves (a `disabled` one would drop it to <body>) and ignores another press.
+    switchOf('Budgets').focus()
+    expect(switchOf('Budgets').disabled).toBe(false)
+    await userEvent.keyboard(' ')
+    expect(document.activeElement).toBe(switchOf('Budgets'))
+    expect(setPluginEnabled).toHaveBeenCalledTimes(1)
 
     saved.resolve(changeOf(budgets, false))
     await waitFor(() => { expect(refresh).toHaveBeenCalledTimes(1) })
-    expect(switchOf('Budgets').disabled).toBe(true)
+    expect(switchOf('Budgets').getAttribute('aria-disabled')).toBe('true')
 
     refreshed.resolve(undefined)
-    await waitFor(() => { expect(switchOf('Budgets').disabled).toBe(false) })
+    await waitFor(() => { expect(switchOf('Budgets').hasAttribute('aria-disabled')).toBe(false) })
     expect(switchOf('Budgets').getAttribute('aria-checked')).toBe('false')
     expect(within(card('Budgets')).getByText('Disabled')).toBeTruthy()
     expect(screen.getByText('0 of 1 on')).toBeTruthy()
@@ -257,10 +263,10 @@ describe('PluginsSection, switching a plugin on that is not bundled', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(setPluginEnabled).toHaveBeenCalledExactlyOnceWith('acme.report', true)
     expect(switchOf('Report').getAttribute('aria-checked')).toBe('true')
-    expect(switchOf('Report').disabled).toBe(true)
+    expect(switchOf('Report').getAttribute('aria-disabled')).toBe('true')
 
     saved.resolve(changeOf(acme, true))
-    await waitFor(() => { expect(switchOf('Report').disabled).toBe(false) })
+    await waitFor(() => { expect(switchOf('Report').hasAttribute('aria-disabled')).toBe(false) })
     expect(setPluginEnabled).toHaveBeenCalledTimes(1)
     expect(switchOf('Report').getAttribute('aria-checked')).toBe('true')
     expect(document.activeElement).toBe(switchOf('Report'))

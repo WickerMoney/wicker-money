@@ -15,6 +15,9 @@
  * by a script still does nothing, as it did before.
  */
 
+/** A control that cannot be used: natively disabled, or `aria-disabled` (a busy control that stays focusable). */
+const isDisabled = (el: HTMLElement): boolean => (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true'
+
 function isSubmitter(el: Element | null): el is HTMLButtonElement | HTMLInputElement {
   if (el === null) return false
   if (el instanceof HTMLButtonElement) return el.type === 'submit'
@@ -37,8 +40,10 @@ export function startFormSubmit(doc: Document = document): () => void {
     if (event.defaultPrevented) return
     const target = event.target as Element | null
     const button = target?.closest('button, input') ?? null
-    if (!isSubmitter(button) || button.disabled || button.form === null) return
+    if (!isSubmitter(button) || button.form === null) return
+    // A busy (`aria-disabled`) submit button is not disabled, so the browser would act on it; it must do nothing.
     event.preventDefault()
+    if (isDisabled(button)) return
     submitForm(button.form, button)
   }
   const onKeydown = (event: Event): void => {
@@ -50,7 +55,7 @@ export function startFormSubmit(doc: Document = document): () => void {
     if (['button', 'submit', 'reset', 'image', 'file', 'range', 'color'].includes(target.type)) return
     const form = target.form
     const def = [...form.elements].find((el) => isSubmitter(el)) as HTMLButtonElement | HTMLInputElement | undefined
-    if (def !== undefined && def.disabled) { e.preventDefault(); return }
+    if (def !== undefined && isDisabled(def)) { e.preventDefault(); return }
     // With no submit button, the browser submits only when one field could be edited.
     if (def === undefined && [...form.elements].filter((el) => el instanceof HTMLInputElement && !['checkbox', 'radio', 'hidden', 'button', 'reset'].includes(el.type)).length > 1) return
     e.preventDefault()

@@ -55,11 +55,11 @@ export function TransactionPager({
         >
           {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
         </SelectField>
-        <Button disabled={busy || !hasPrevious} onClick={onPrevious}>‹ Previous</Button>
+        <Button busy={busy} disabled={!hasPrevious} onClick={onPrevious}>‹ Previous</Button>
         <span className="txn__page">
           {pageCount === null ? `Page ${pageNumber}` : `Page ${pageNumber} of ${pageCount.toLocaleString()}`}
         </span>
-        <Button disabled={busy || !hasNext} onClick={onNext}>Next ›</Button>
+        <Button busy={busy} disabled={!hasNext} onClick={onNext}>Next ›</Button>
       </div>
     </div>
   )

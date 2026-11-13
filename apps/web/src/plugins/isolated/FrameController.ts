@@ -319,11 +319,16 @@ export class FrameController {
     this.broker.send({ type: 'modal-layout', ...layout })
   }
 
-  /** Moves keyboard focus into the frame: its `first` or `last` focusable element. */
-  focusIn(direction: 'first' | 'last'): void {
-    if (!this.ready) return
+  /**
+   * Moves keyboard focus into the frame: its `first` or `last` focusable element.
+   *
+   * @returns `false` when the frame has not connected yet (or has failed), and so cannot take focus.
+   */
+  focusIn(direction: 'first' | 'last'): boolean {
+    if (!this.ready) return false
     this.options.iframe.focus()
     this.broker.send({ type: 'focus-in', direction })
+    return true
   }
 
   /** Stops listening, cancels everything in flight and drops the token. Safe to call twice. */

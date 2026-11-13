@@ -61,12 +61,12 @@ export function ExportPasswordDialog({ onClose, onExported }: ExportPasswordDial
             value={password}
             error={errors.fields['password']}
             onChange={(next) => { setPassword(next); clear() }}
-            disabled={busy}
+            busy={busy}
           />
           <FormError message={errors.form} />
           <div className="wm-dialog__actions">
-            <Button onClick={onClose} disabled={busy}>Cancel</Button>
-            <Button type="submit" variant="primary" disabled={busy || password === ''}>
+            <Button onClick={onClose} busy={busy}>Cancel</Button>
+            <Button type="submit" variant="primary" busy={busy} disabled={password === ''}>
               {busy ? 'Preparing export…' : 'Download my data'}
             </Button>
           </div>

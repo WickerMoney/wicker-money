@@ -26,6 +26,17 @@ curated, human-readable version.
 ### Changed
 
 - **Budgets runs in a sandboxed plugin frame.** The "Budgets" page and the "Budget breakdown" widget no longer run in the app's own page; they read and write through the host's broker with only the plugin's own routes and read grants, so Import CSV is the one bundled plugin left in the page. The page loads its categories and accounts once and waits a moment before loading a month, so holding Enter on "Previous" no longer ends in "This plugin is sending requests too fast". The result of "Start this month", and a failed remove, now appear at the top of the section they belong to and scroll into view, instead of at the top of the page. A page frame now reports the whole height of its document, so the last card is no longer 19 px short of where it sits in the app.
+- **Import CSV runs in a sandboxed plugin frame.** The page now uploads the file
+  in pieces through the staged-upload routes as soon as it is chosen, while the
+  person maps columns, and checks and imports by upload id, so the last bundled
+  plugin leaves the app's own page and the in-page list (`IN_REALM_PLUGIN_IDS`) is
+  empty. Large files work as before (100,000 rows, 7 MB). A file that cannot be
+  sent, an expired upload and a lost answer each have a message in the file step
+  and a retry; choosing another file gives the first upload back. Wide tables on
+  the page scroll inside their section on a phone, and undone rows in the history
+  are readable in both themes. Leaving the page mid-upload does not free the upload
+  until it expires (15 minutes), which counts against the limit of two. See
+  [Staged CSV upload](DEVELOPMENT.md#staged-csv-upload).
 - **Plugin frames download about 90 kB less.** The frame's start-up no longer
   loads the SDK root and its Zod manifest schemas (they load only for a plugin
   with an integrity pin), and the Spending Trends widget no longer bundles them
@@ -33,6 +44,24 @@ curated, human-readable version.
   
 ### Fixed
 
+- **Focus and Tab order in plugin frames.** Tab at the last control of a plugin
+  page or widget, and Shift+Tab at its first, now moves focus to the next or
+  previous control on the page at once, instead of leaving it to the browser and
+  stepping in 60 ms later. There is no extra stop between two adjacent frames,
+  and at the end of a page whose last thing is a frame, focus goes round to the
+  skip link (the browser's own interface is not a stop there). Before, in 2 of 10
+  runs of the Forecast Tab-order check, the next Tab after the last control went
+  back into the frame's first control; after, 0 of 10.
+- **Buttons, switches and checkboxes keep focus while a request runs.** A table
+  action (Edit, Delete, Archive, Match, ...), a form's Save, the plugin switches,
+  the safe-to-spend and rollover checkboxes and the Debt payoff strategy buttons
+  were `disabled` while their request ran, which dropped keyboard focus to the
+  page. They are now `aria-disabled` and keep focus, look disabled, ignore a
+  click and say "Still working. Try again in a moment." to a screen reader.
+  `Button`, `IconButton`, `Field` and `SelectField` in `@wickermoney/ui-kit` gain
+  a `busy` prop for this, and `guardBusy` is exported for plain elements.
+- **Escape in the open phone navigation drawer** (and a tap on its backdrop)
+  returns focus to the Menu button, which it did not on any page.
 - **A table wider than its room can be scrolled with the keyboard.** The shared
   table's horizontal scroller (for example Insights' "Show as table" on a phone)
   could only be scrolled with a pointer. While it overflows it is now a Tab stop

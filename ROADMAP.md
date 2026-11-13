@@ -117,7 +117,5 @@ Smaller things noticed during `v0.7.0`. These are not plans.
   buttons and checkboxes) drops keyboard focus to the page; the time zone Save
   is the only one fixed.
 - Pressing Escape in the open phone navigation drawer drops focus.
-- A docs-site page for the `API_RATE_LIMIT_*` variables, and a closer look at an
-  import of 25 MB or more under the new rate and concurrency limits.
-- Retake the README screenshots of Transactions, which still show the earlier
-  recurring column.
+- A closer look at an import of 25 MB or more under the new rate and concurrency
+  limits.

@@ -412,9 +412,35 @@ async function writeChecks(pw: typeof Playwright, base: string): Promise<void> {
     const toggleBytes = off?.bytes ?? 0
 
     // 6. Strategy and the extra for all debts (the settings), and the field problem there.
+    // The PUT is held open while the toggle is read: the pressed button keeps focus (`aria-disabled`, not `disabled`,
+    // which would drop focus to <body> inside the frame), its sibling is busy the same way and ignores a click, and
+    // the request is sent once.
+    let releaseSettings: () => void = () => undefined
+    const settingsHeld = new Promise<void>((resolve) => { releaseSettings = resolve })
+    let settingsPuts = 0
+    const settingsUrl = `**${API_BASE}/settings`
+    await o.page.route(settingsUrl, async (route) => {
+      if (route.request().method() === 'PUT') { settingsPuts += 1; await settingsHeld }
+      await route.continue().catch(() => undefined)
+    })
     await frame.getByRole('button', { name: 'Snowball' }).click()
+    await eventually(async () => settingsPuts, (n) => n === 1)
+    const held = await frame.evaluate(() => {
+      const a = document.activeElement as HTMLButtonElement | null
+      return { label: a?.textContent ?? '', aria: a?.getAttribute('aria-disabled') ?? null, disabled: a?.disabled ?? null, all: [...document.querySelectorAll<HTMLButtonElement>('.dp-seg__btn')].map((b) => ({ aria: b.getAttribute('aria-disabled'), disabled: b.disabled })) }
+    })
+    check('busy: while the strategy request runs, focus stays on the Snowball button in the frame', held.label.trim() === 'Snowball', held)
+    check('busy: both strategy buttons are aria-disabled and neither is disabled', held.all.length === 2 && held.all.every((b) => b.aria === 'true' && b.disabled === false), held)
+    await frame.getByRole('button', { name: 'Avalanche' }).click({ force: true })
+    await sleep(250)
+    check('busy: a click on the other strategy meanwhile sends nothing', settingsPuts === 1, settingsPuts)
+    releaseSettings()
     await eventually(async () => lastWrite(calls)?.path, (p) => p === '/settings')
     await landed(calls)
+    await o.page.unroute(settingsUrl)
+    // (The forced click on Avalanche moved focus there, as any press on a button does; what matters is that focus is still
+    // on a strategy button, not on <body>.)
+    check('busy: when it is over the buttons are usable again and focus is still on a strategy button', await frame.evaluate(() => { const a = document.activeElement; return a?.classList.contains('dp-seg__btn') === true && [...document.querySelectorAll('.dp-seg__btn')].every((b) => !b.hasAttribute('aria-disabled')) }))
     check('writes: choosing Snowball is PUT /settings {"strategy":"snowball"}', lastWrite(calls)?.path === '/settings' && JSON.stringify(lastWrite(calls)?.body) === '{"strategy":"snowball"}' && lastWrite(calls)?.status === 200, lastWrite(calls))
     const extraField = frame.getByLabel('Extra for all debts (follows the strategy)')
     check('writes: the shared extra is labelled "Extra for all debts (follows the strategy)"', (await extraField.count()) === 1)
@@ -774,6 +800,31 @@ async function describeFocus(page: Playwright.Page): Promise<string> {
   return inner === null || inner === undefined ? 'iframe(nothing inside)' : inner
 }
 
+/** How long a key press may take to move focus (host to frame and back, a message hop each way) before "it did not move" is the answer. */
+const FOCUS_SETTLE_CAP_MS = 600
+
+/**
+ * Presses a key and returns where focus is once it has moved and stayed put (two identical reads in a row), or where it is
+ * when the cap runs out because it did not move. Replaces a fixed sleep: it waits as long as the move takes and no longer,
+ * and cannot read a half-finished hand-off from the frame to the host.
+ */
+async function press(page: Playwright.Page, key: 'Tab' | 'Shift+Tab', describe: (p: Playwright.Page) => Promise<string>): Promise<string> {
+  const before = await describe(page)
+  await page.keyboard.press(key)
+  const t0 = Date.now()
+  let last = ''
+  let same = 0
+  for (;;) {
+    const now = await describe(page)
+    same = now === last ? same + 1 : 0
+    last = now
+    // Nothing focused (`body`, an empty iframe) is not a place focus has settled: crossing into or out of a frame passes
+    // through it for a moment, and the browser's own interface is a real stop that shows up as the cap running out.
+    if (same >= 2 && now !== before && now !== 'body' && !now.startsWith('iframe(')) return now
+    if (Date.now() - t0 > FOCUS_SETTLE_CAP_MS) return now
+  }
+}
+
 async function a11yChecks(pw: typeof Playwright, base: string): Promise<void> {
   await seedDebts(base, 4)
   for (const scheme of ['light', 'dark'] as const) {
@@ -839,29 +890,41 @@ async function a11yChecks(pw: typeof Playwright, base: string): Promise<void> {
         await sleep(500)
         const describe = mode === 'isolated' ? describeFocus : async (p: Playwright.Page) => p.evaluate(() => { const el = document.activeElement; if (el === null || el === document.body) return 'body'; const text = (el.getAttribute('aria-label') ?? el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30); return `${el.tagName.toLowerCase()}${el.id === 'main' ? '#main' : ''} "${text}"` })
         void frame
-        const first = async (): Promise<string[]> => { const out: string[] = []; for (let i = 0; i < 1; i++) { await o.page.keyboard.press('Tab'); await sleep(90); out.push(await describe(o.page)) } return out }
-        const firstStop = (await first())[0]
+        const firstStop = await press(o.page, 'Tab', describe)
         check(`a11y [${mode}]: the first Tab stop is the skip link`, firstStop?.includes('Skip to content') === true, firstStop)
         await o.page.keyboard.press('Enter')
         await sleep(100)
         const stops: string[] = []
-        for (let i = 0; i < 30; i++) { await o.page.keyboard.press('Tab'); await sleep(90); stops.push(await describe(o.page)) }
-        // The page's own stops are those up to the first 'body' (focus leaving the page); the order back is the reverse.
-        const own = stops.slice(0, stops.indexOf('body'))
+        for (let i = 0; i < 30; i++) stops.push(await press(o.page, 'Tab', describe))
+        // The page's own stops are those up to where focus leaves it: the first 'body' in the page (the browser's own interface
+        // takes a stop), the skip link in the frame (which hands focus round to it; it has no way to give the stop to the browser).
+        const own = stops.slice(0, stops.findIndex((s) => s === 'body' || s.includes('Skip to content')))
         await o.page.evaluate(() => document.getElementById('main')!.focus())
-        for (let i = 0; i < own.length; i++) await o.page.keyboard.press('Tab')
-        await sleep(150)
+        for (let i = 0; i < own.length; i++) await press(o.page, 'Tab', describe)
         const backs: string[] = [await describe(o.page)]
-        for (let i = 0; i < own.length - 1; i++) { await o.page.keyboard.press('Shift+Tab'); await sleep(90); backs.push(await describe(o.page)) }
+        for (let i = 0; i < own.length - 1; i++) backs.push(await press(o.page, 'Shift+Tab', describe))
         sequences[`${mode} forward`] = own
         sequences[`${mode} backward`] = backs
         note(`Tab from <main> (${mode})`, stops)
         // The end of the page: where focus goes after the last control.
         await o.page.evaluate(() => document.getElementById('main')!.focus())
         const long: string[] = []
-        for (let i = 0; i < 90; i++) { await o.page.keyboard.press('Tab'); await sleep(40); long.push(await describe(o.page)); if (long.at(-1) === 'body') break }
+        for (let i = 0; i < 90; i++) { long.push(await press(o.page, 'Tab', describe)); if (long.at(-1) === 'body' || long.at(-1)?.includes('Skip to content') === true) break }
         sequences[`${mode} long`] = long
-        check(`a11y [${mode}]: Tab leaves the page at its end (focus is not trapped in the last control)`, long.at(-1) === 'body' || long.at(-1)?.startsWith('iframe(') === true, long.slice(-4))
+        // In the page: the browser's own interface (`body`). In the frame: round to the skip link, in the one press after the last
+        // control, never the frame's first control again and never nothing.
+        check(`a11y [${mode}]: Tab leaves the page at its end (focus is not trapped in the last control)`,
+          mode === 'in-realm' ? long.at(-1) === 'body' : long.at(-1)?.includes('Skip to content') === true && long.at(-2) === own.at(-1), long.slice(-4))
+        if (mode === 'isolated') {
+          // The same hand-off, repeated: it must land in the same place every time.
+          const repeats: string[] = []
+          for (let rep = 0; rep < 5; rep++) {
+            await o.page.evaluate(() => document.getElementById('main')!.focus())
+            for (let i = 0; i < own.length; i++) await press(o.page, 'Tab', describe)
+            repeats.push(await press(o.page, 'Tab', describe))
+          }
+          check('a11y [isolated]: Tab from the last control goes to the skip link, five times out of five', repeats.every((r) => r.includes('Skip to content')), repeats)
+        }
       } finally { await o.browser.close() }
     } finally { await server.close() }
   }

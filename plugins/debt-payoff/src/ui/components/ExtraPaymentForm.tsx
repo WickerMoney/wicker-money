@@ -45,7 +45,7 @@ export function ExtraPaymentForm({ saved, busy, onApply }: ExtraPaymentFormProps
         onChange={(e) => { setText(e.target.value); clearField('extraPayment') }}
       />
       <div className="dp-extra__action">
-        <Button type="submit" disabled={busy}>Update plan</Button>
+        <Button type="submit" busy={busy}>Update plan</Button>
         <FormError message={errors.form} />
       </div>
     </form>

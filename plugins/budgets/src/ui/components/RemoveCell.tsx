@@ -20,10 +20,10 @@ export function RemoveCell({ line, busy, onRemove, onEdit }: RemoveCellProps) {
   if (line.window != null) {
     return (
       <span className="bud__row-actions">
-        {onEdit !== undefined ? <Button disabled={busy} onClick={() => onEdit(line)}>Edit</Button> : null}
-        <Button disabled={busy} onClick={() => onRemove(line)}>Remove window</Button>
+        {onEdit !== undefined ? <Button busy={busy} onClick={() => onEdit(line)}>Edit</Button> : null}
+        <Button busy={busy} onClick={() => onRemove(line)}>Remove window</Button>
       </span>
     )
   }
-  return <Button disabled={busy} onClick={() => onRemove(line)}>Remove</Button>
+  return <Button busy={busy} onClick={() => onRemove(line)}>Remove</Button>
 }

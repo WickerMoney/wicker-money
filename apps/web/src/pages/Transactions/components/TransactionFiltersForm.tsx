@@ -90,10 +90,10 @@ export function TransactionFiltersForm({
         <option value="merchant:asc">Merchant A–Z</option>
       </SelectField>
       <div className="txn__filter-actions">
-        <Button type="submit" disabled={busy}>Search</Button>
+        <Button type="submit" busy={busy}>Search</Button>
         <Button
           type="button"
-          disabled={busy}
+          busy={busy}
           onClick={() => { setSearch(''); setSearchError(undefined); onClear() }}
         >
           Clear

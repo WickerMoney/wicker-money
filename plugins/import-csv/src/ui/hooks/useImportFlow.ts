@@ -9,7 +9,33 @@ import { IMPORT_API_BASE } from '../../server/constants.js'
 import type {
   AnalyzeResult, ImportAccount, ImportResult, SavedMapping, Stage,
 } from '../models/index.js'
+import { planUpload, type UploadPlan } from '../staging/planUpload.js'
+import { RequestPacer } from '../staging/RequestPacer.js'
+import { StagingFailure } from '../staging/StagingFailure.js'
+import { stageUpload, type StagingHandle } from '../staging/stageUpload.js'
 import { newIdempotencyKey } from './newIdempotencyKey.js'
+
+/**
+ * Where the upload of the chosen file stands. The file goes to the server while
+ * the person maps columns, so by the time they ask for the check it is usually
+ * already there.
+ */
+export interface UploadStatus {
+  readonly phase: 'idle' | 'uploading' | 'ready' | 'failed'
+  /** Chunks the server has accepted, and how many there are. */
+  readonly sent: number
+  readonly total: number
+  /** Why it failed, for the person; `null` unless `phase` is `failed`. */
+  readonly message: string | null
+}
+
+const IDLE: UploadStatus = { phase: 'idle', sent: 0, total: 0, message: null }
+
+/** Whether a request failed because the server no longer has the staged file. */
+function isUploadGone(e: unknown): boolean {
+  const f = e as { status?: unknown; code?: unknown }
+  return f?.status === 404 && f.code === 'upload_not_found'
+}
 
 /** What {@link useImportFlow} returns. */
 export interface ImportFlow {
@@ -19,7 +45,9 @@ export interface ImportFlow {
   readonly fileName: string
   readonly csv: string
   readonly stage: Stage
-  /** A failure to load the page itself (the account list); shown at the top. */
+  /** The upload of the chosen file to the server's staging area. */
+  readonly upload: UploadStatus
+  /** A failure to load the page itself (the account list); shown with the file and account. */
   readonly error: string | null
   /**
    * Why the file, the mapping or a step was refused: `fields` keyed by the
@@ -53,7 +81,7 @@ export interface ImportFlow {
   readonly historyKey: number
   /** The name of the saved mapping applied to the current file, if any. */
   readonly matchedSource: string | null
-  /** Reads a chosen file and moves to the mapping step. */
+  /** Reads a chosen file, starts sending it to the server, and moves to the mapping step. */
   readonly onFile: (file: File) => Promise<void>
   /** Checks the file for duplicates and moves to the review step. */
   readonly analyze: () => Promise<void>
@@ -121,6 +149,15 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
   const [historyKey, setHistoryKey] = useState(0)
   const [saved, setSaved] = useState<readonly SavedMapping[]>([])
   const [matchedSource, setMatchedSource] = useState<string | null>(null)
+  const [upload, setUpload] = useState<UploadStatus>(IDLE)
+
+  // The chosen file as the server is sent it, and the upload of it that is running or done.
+  const plan = useRef<UploadPlan | null>(null)
+  const staging = useRef<StagingHandle | null>(null)
+  // One pacer for the page: an upload that is being replaced and its successor still share the frame's limit.
+  const pacer = useRef<RequestPacer | null>(null)
+  // Counts the files chosen, and resets. An answer that belongs to an earlier one is dropped.
+  const epoch = useRef(0)
 
   // Names one commit intent. It is created on the first commit attempt and
   // kept, so a retry after a network error or a second click sends the same
@@ -154,6 +191,89 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       live = false
     }
   }, [ctx])
+
+  /** Starts sending the planned file. Replaces nothing: the caller has already dealt with the previous upload. */
+  const startUpload = useCallback((next: UploadPlan): StagingHandle => {
+    pacer.current ??= new RequestPacer()
+    const mine = epoch.current
+    const live = (): boolean => epoch.current === mine
+    setUpload({ phase: 'uploading', sent: 0, total: next.chunks.length, message: null })
+    const handle = stageUpload(ctx.api, next, {
+      pacer: pacer.current,
+      onProgress: (sent, total) => {
+        if (live()) setUpload({ phase: 'uploading', sent, total, message: null })
+      },
+    })
+    handle.ready.then(
+      () => { if (live()) setUpload((u) => ({ ...u, phase: 'ready', sent: u.total })) },
+      (e: unknown) => {
+        if (!live() || (e instanceof StagingFailure && e.kind === 'cancelled')) return
+        setUpload((u) => ({ ...u, phase: 'failed', message: e instanceof Error ? e.message : 'Your file could not be sent to the server.' }))
+      },
+    )
+    return handle
+  }, [ctx])
+
+  /** Stops the current upload and has the server discard it. */
+  const dropUpload = useCallback(() => {
+    staging.current?.abort()
+    staging.current = null
+    setUpload(IDLE)
+  }, [])
+
+  // Leaving the page or the frame: give the staged file back, so the person is not held at the server's limit of two.
+  useEffect(() => {
+    const leave = (): void => { staging.current?.abort() }
+    window.addEventListener('pagehide', leave)
+    return () => {
+      window.removeEventListener('pagehide', leave)
+      leave()
+    }
+  }, [])
+
+  /**
+   * Runs one request that names the staged file, and sends the file again when
+   * the server has lost it.
+   *
+   * A staged file expires 15 minutes after its last new chunk, and `analyze`
+   * does not extend that, so a person who maps for a long time finds it gone.
+   * The text is still here, so it is sent again (once) and the request is
+   * repeated with the new id. A failed upload is started again the same way when
+   * the person asks for the next step.
+   */
+  const withUpload = useCallback(async <T,>(run: (uploadId: string) => Promise<T>): Promise<T> => {
+    const mine = epoch.current
+    // Another file was chosen, or the page was reset, while this was waiting: it is not this request's file any more.
+    const stale = (): StagingFailure | null =>
+      epoch.current === mine ? null : new StagingFailure('cancelled', 'Another file was chosen.')
+    const text = plan.current
+    if (text === null) throw new StagingFailure('gone', 'Choose the file again.')
+    if (staging.current === null || staging.current.state() === 'failed') staging.current = startUpload(text)
+    const first = await staging.current.ready
+    const gone = stale()
+    if (gone !== null) throw gone
+    try {
+      return await run(first)
+    } catch (e) {
+      const other = stale()
+      if (other !== null) throw other
+      if (!isUploadGone(e)) throw e
+    }
+    // Give the lost upload back first: when the 404 was a mistake or a race, it would otherwise keep one of the person's two places.
+    staging.current.abort()
+    staging.current = startUpload(text)
+    const second = await staging.current.ready
+    try {
+      return await run(second)
+    } catch (e) {
+      const other = stale()
+      if (other !== null) throw other
+      if (isUploadGone(e)) {
+        throw new StagingFailure('gone', 'The server no longer has your file, and sending it again did not help. Choose the file again.')
+      }
+      throw e
+    }
+  }, [startUpload])
 
   /**
    * Applies a saved mapping to the file just picked.
@@ -195,14 +315,41 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
   }, [parsed, columns, dateFormat, amountStyle, invertAmount])
 
   const onFile = useCallback(async (file: File) => {
+    const mine = (epoch.current += 1)
+    dropUpload()
+    plan.current = null
+    // An answer for the previous file is dropped from here on, and so is the "busy" it would have cleared.
+    setBusy(false)
     clearErrors()
     commitKey.current = null
     const text = await file.text()
+    // Another file was chosen while this one was being read.
+    if (epoch.current !== mine) return
+
+    if (text.length > 0) {
+      let planned: UploadPlan
+      try {
+        planned = planUpload(text)
+      } catch (e) {
+        setCsv('')
+        setParsed(null)
+        setFileName(file.name)
+        setStage('choose')
+        showErrors({ fields: { csv: e instanceof Error ? e.message : 'That file cannot be imported.' }, form: null })
+        return
+      }
+      // Sending starts now and goes on while the file is parsed and the columns are mapped.
+      plan.current = planned
+      staging.current = startUpload(planned)
+    }
+
     const parsedFile = parseCsv(text)
     setCsv(text)
     setParsed(parsedFile)
     setFileName(file.name)
     if (parsedFile.headers.length === 0) {
+      dropUpload()
+      plan.current = null
       showErrors({ fields: { csv: 'That file has no header row. Export it again with column names.' }, form: null })
       return
     }
@@ -226,7 +373,7 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       setSourceName((current) => (current === '' ? file.name.replace(/\.csv$/i, '') : current))
     }
     setStage('map')
-  }, [applySaved, clearErrors, showErrors])
+  }, [applySaved, clearErrors, showErrors, dropUpload, startUpload])
 
   /** Checks what the person chose with the server's own rules; shows and returns whether anything is wrong. */
   const refuse = useCallback((): boolean => {
@@ -243,31 +390,35 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
 
   const analyze = useCallback(async () => {
     if (refuse()) return
+    const mine = epoch.current
     setBusy(true)
     try {
-      const r = await ctx.api.post<AnalyzeResult>(`${IMPORT_API_BASE}/analyze`, {
-        accountId, csv, ...mapping,
-      })
+      const r = await withUpload((uploadId) => ctx.api.post<AnalyzeResult>(`${IMPORT_API_BASE}/analyze`, {
+        accountId, uploadId, ...mapping,
+      }))
+      if (epoch.current !== mine) return
       setAnalysis(r)
       analyzedWith.current = { accountId, mapping }
       setAccepted(new Set())
       commitKey.current = null
       setStage('review')
     } catch (e) {
-      showErrors(formErrorsFrom(e, FIELDS, 'Could not analyze that file.'))
+      if (epoch.current === mine) showErrors(formErrorsFrom(e, FIELDS, 'Could not analyze that file.'))
     } finally {
-      setBusy(false)
+      if (epoch.current === mine) setBusy(false)
     }
-  }, [ctx, accountId, csv, mapping, refuse, showErrors])
+  }, [ctx, accountId, mapping, refuse, showErrors, withUpload])
 
   const loadMoreFlagged = useCallback(async (): Promise<boolean> => {
     const basis = analyzedWith.current
     if (analysis === null || basis === null) return false
+    const mine = epoch.current
     try {
-      const r = await ctx.api.post<AnalyzeResult>(`${IMPORT_API_BASE}/analyze`, {
-        accountId: basis.accountId, csv, ...basis.mapping,
+      const r = await withUpload((uploadId) => ctx.api.post<AnalyzeResult>(`${IMPORT_API_BASE}/analyze`, {
+        accountId: basis.accountId, uploadId, ...basis.mapping,
         flaggedOffset: analysis.flagged.offset + analysis.flagged.rows.length,
-      })
+      }))
+      if (epoch.current !== mine) return false
       setAnalysis((current) => {
         if (current === null) return current
         // Keep a row once, by its place in the file, so a page that overlaps
@@ -278,34 +429,43 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
       })
       return true
     } catch (e) {
-      showErrors(formErrorsFrom(e, FIELDS, 'Could not load more rows.'))
+      if (epoch.current === mine) showErrors(formErrorsFrom(e, FIELDS, 'Could not load more rows.'))
       return false
     }
-  }, [ctx, analysis, csv, showErrors])
+  }, [ctx, analysis, showErrors, withUpload])
 
   const commit = useCallback(async () => {
     if (refuse()) return
+    const mine = epoch.current
     setBusy(true)
     try {
       // Saving the mapping is part of committing, not a separate button: the
       // mapping that produced a successful import is the one worth keeping.
       await ctx.api.post(`${IMPORT_API_BASE}/mappings`, { ...mapping })
       commitKey.current ??= newIdempotencyKey()
-      const r = await ctx.api.post<ImportResult>(
+      const key = commitKey.current
+      const r = await withUpload((uploadId) => ctx.api.post<ImportResult>(
         `${IMPORT_API_BASE}/commit`,
-        { accountId, csv, fileName, acceptRowNumbers: [...accepted], idempotencyKey: commitKey.current, ...mapping },
-      )
+        { accountId, uploadId, fileName, acceptRowNumbers: [...accepted], idempotencyKey: key, ...mapping },
+      ))
+      // The server frees the staged text when a commit succeeds: there is nothing left to give back.
+      staging.current = null
+      setUpload(IDLE)
       setResult(r)
       setStage('done')
       setHistoryKey((k) => k + 1)
     } catch (e) {
-      showErrors(formErrorsFrom(e, FIELDS, 'Could not import that file.'))
+      if (epoch.current === mine) showErrors(formErrorsFrom(e, FIELDS, 'Could not import that file.'))
     } finally {
-      setBusy(false)
+      if (epoch.current === mine) setBusy(false)
     }
-  }, [ctx, accountId, csv, fileName, accepted, mapping, refuse, showErrors])
+  }, [ctx, accountId, fileName, accepted, mapping, refuse, showErrors, withUpload])
 
   const reset = useCallback(() => {
+    epoch.current += 1
+    dropUpload()
+    plan.current = null
+    setBusy(false)
     commitKey.current = null
     setCsv('')
     setParsed(null)
@@ -317,7 +477,7 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
     setMatchedSource(null)
     setStage('choose')
     clearErrors()
-  }, [clearErrors])
+  }, [clearErrors, dropUpload])
 
   const refreshHistory = useCallback(() => setHistoryKey((k) => k + 1), [])
 
@@ -325,7 +485,7 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
     accounts,
     accountId,
     setAccountId: (id: string) => { setAccountId(id); clearField('accountId') },
-    fileName, csv, stage, error, errors: form.errors, formRef: form.ref, busy,
+    fileName, csv, stage, upload, error, errors: form.errors, formRef: form.ref, busy,
     headers,
     columns,
     setColumns: (next: ColumnMap) => {

@@ -63,11 +63,19 @@ describe('TransactionEditDialog', () => {
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('disables Save and Cancel while a request is running', () => {
-    mount({ busy: true })
+  it('marks Save and Cancel busy, still focusable and ignoring clicks, while a request is running', async () => {
+    const { row } = mount({ busy: true })
+    const saving = screen.getByRole('button', { name: 'Saving…' }) as HTMLButtonElement
+    const cancel = screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement
 
-    expect((screen.getByRole('button', { name: 'Saving…' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(true)
+    // Busy, not `disabled`: a disabled control would drop keyboard focus to <body>.
+    for (const b of [saving, cancel]) { expect(b.getAttribute('aria-disabled')).toBe('true'); expect(b.disabled).toBe(false) }
+    cancel.focus()
+    expect(document.activeElement).toBe(cancel)
+    await userEvent.click(cancel)
+    await userEvent.click(saving)
+    expect(row.cancel).not.toHaveBeenCalled()
+    expect(row.save).not.toHaveBeenCalled()
   })
 
   it('shows field errors under their fields and a form error beside Save', () => {

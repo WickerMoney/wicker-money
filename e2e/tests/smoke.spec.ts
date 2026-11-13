@@ -69,6 +69,17 @@ test.describe('sign-in and the pages that matter', () => {
     expectNoProblems(seen)
   })
 
+  test('hero reaches the Import CSV page, which runs in a frame, and its file input is there', async ({ page, signIn, watch }) => {
+    await signIn('hero')
+    const seen = watch()
+    await page.locator('nav a[href="/p/wickermoney.import-csv/import"]').first().click()
+    const frame = page.frameLocator('iframe[title="CSV Import · Import"]')
+    await expect(frame.getByRole('heading', { level: 1, name: 'Import transactions' })).toBeVisible()
+    await expect(frame.locator('#imp-file')).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    expectNoProblems(seen)
+  })
+
   test('hero reaches the budgets page, which runs in a frame', async ({ page, signIn, watch }) => {
     await signIn('hero')
     const seen = watch()
@@ -82,12 +93,13 @@ test.describe('sign-in and the pages that matter', () => {
 })
 
 test.describe('bundled plugins', () => {
-  test('every in-realm plugin page loads without console errors or failed requests', async ({ page, signIn, api, watch }) => {
+  test('no bundled plugin runs in the host page, and every bundled plugin page loads without console errors or failed requests', async ({ page, signIn, api, watch }) => {
     // The list comes from the running app (bundled.ts through the API), not from
     // this file: plugins move between runtimes from release to release.
-    const plugins = (await listPlugins(await api('hero'))).filter((p) => p.bundled && p.runtime === 'in-realm')
-    const pages = plugins.flatMap((p) => p.contributes.pages.map((pg) => ({ plugin: p, page: pg })))
-    expect(pages.length, 'in-realm plugin pages found').toBeGreaterThan(0)
+    const bundled = (await listPlugins(await api('hero'))).filter((p) => p.bundled)
+    expect(bundled.filter((p) => p.runtime === 'in-realm').map((p) => p.id), 'bundled plugins in the host page').toEqual([])
+    const pages = bundled.flatMap((p) => p.contributes.pages.map((pg) => ({ plugin: p, page: pg })))
+    expect(pages.length, 'bundled plugin pages found').toBeGreaterThan(0)
 
     await signIn('hero')
     const seen = watch()
@@ -96,7 +108,9 @@ test.describe('bundled plugins', () => {
       // In-app navigation, not page.goto: a full load spends a refresh-token
       // request and the auth rate limit is shared by every spec.
       await page.locator(`nav a[href="${href}"]`).first().click()
-      await expect(page.getByRole('heading', { name: pluginPage.title }).first(), `${plugin.id} page "${pluginPage.title}"`).toBeVisible()
+      // Every bundled page is in a frame, so the heading is inside it.
+      const frame = page.frameLocator(`iframe[title="${plugin.name} · ${pluginPage.title}"]`)
+      await expect(frame.getByRole('heading').first(), `${plugin.id} page "${pluginPage.title}"`).toBeVisible()
       await page.waitForLoadState('networkidle')
     }
     expectNoProblems(seen)
