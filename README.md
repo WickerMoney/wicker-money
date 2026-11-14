@@ -100,8 +100,9 @@ is not supported yet.
   income or a transfer, so a refund or a card payment doesn't skew your charts.
 - **Transfers.** Money moving between your own accounts is recorded as a linked
   pair, so it is neither income nor spending and every balance stays right.
-- **CSV import.** Bank and card statements, with a column mapping saved per
-  source, a live date-format preview, duplicate detection and batch undo.
+- **CSV import.** Bank and card statements up to 8 MB, with a column mapping
+  saved per source, a live date-format preview, duplicate detection and batch
+  undo. The file is sent to the server in pieces while you map the columns.
 - **Budgets.** One plan per category per month, with optional rollover per
   line (a sinking fund) and a pace marker for today. A *window* covers one
   amount across a date range, such as holiday gifts from October 1 to
@@ -285,6 +286,7 @@ previous image without restoring that backup depends on the release:
 
 | Release | Migrations | Going back to the previous image |
 |---|---|---|
+| `v0.8.0` | none | Run the old image as it is |
 | `v0.7.0` | 034, 035 (both have a `down`) | Run `node dist/db/cli.js down` twice with the new image, then start the old one (this deletes the debt payoff plugin's per-debt "In plan" switches, extra amounts, repayment start dates, promotions and compounding choices; the debts themselves stay) |
 | `v0.6.1` | 033 (has a `down` that changes nothing) | Run `node dist/db/cli.js down` once with the new image, then start the old one (the policy rewrite stays; it returns the same rows) |
 | `v0.6.0` | 029, 030, 031, 032 (all have a `down`) | Run `node dist/db/cli.js down` four times with the new image, then start the old one (this deletes everything in the debt payoff plugin, and the owner-role and erase functions) |
@@ -322,7 +324,12 @@ that calls the API in a loop may get `429 rate_limited`. Raise `API_RATE_LIMIT_M
 or be refused with `503 import_busy` when others are committing (see
 `IMPORT_MAX_CONCURRENT` and `IMPORT_QUEUE_WAIT_SECONDS` in `.env.example`), and the
 upgrade runs two more migrations (034 and 035), which add columns to the debt
-payoff plugin's table.
+payoff plugin's table. After upgrading to `v0.8.0`, nothing changes for existing
+accounts and there is no migration. The Import CSV page now sends the file to the
+API in pieces, held in the API process's memory (two uploads per user, gone after
+15 minutes or once imported); each upload counts once in the import rate limit
+and its pieces in the general one. A script that posts `csv` to `analyze` and
+`commit` works as before.
 Per-release
 notes are also on the docs site under [Upgrading](https://wickermoney.dev/docs/self-hosting/upgrading).
 
@@ -430,12 +437,16 @@ Argon2id digest with the application's own parameters by hand.
 
 ## Status
 
-**`v0.7.0`** is the current release. Every action on the core pages now says what
-it did in a notification, Upcoming, Forecast and Debt payoff run in sandboxed
-frames (Budgets and Import CSV are the two plugins left in the app's own page),
-Debt payoff can leave a debt out of the plan and handle deferred loans,
-promotional rates and daily interest, and the API has a per-user rate limit (on
-by default) and a limit on concurrent CSV imports. `v0.6.1` was a small patch on
+**`v0.8.0`** is the current release. Budgets and Import CSV now run in
+sandboxed frames, and Import CSV sends its file to the API in pieces while you
+map the columns. Keyboard focus moves across plugin frames at once and stays on a
+button or checkbox while its request runs, Escape in the phone navigation drawer
+returns focus to the Menu button, and plugin frames download about 90 kB less.
+It has no migration. `v0.7.0` made every action on the core pages say what it did
+in a notification, moved Upcoming, Forecast and Debt payoff into sandboxed
+frames, let Debt payoff leave a debt out of the plan and handle deferred loans,
+promotional rates and daily interest, and added a per-user API rate limit (on by
+default) and a limit on concurrent CSV imports. `v0.6.1` was a small patch on
 `v0.6.0`: Settings asks an owner to confirm before switching on a third-party
 plugin, the Transactions table fits narrower windows, the browser console and
 DevTools no longer warn about the plugin frame, and one policy gets the
