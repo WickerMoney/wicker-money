@@ -20,10 +20,9 @@ The core owns identity, money movement and the app shell. Everything that
 *interprets* money — budgets, forecasting, net worth, FIRE, importers — is a
 plugin built against `@wickermoney/plugin-sdk`. A fresh install is useful on its
 own; bundled plugins ship enabled and are built against the same SDK a
-third-party plugin would use. Two bundled plugins still run fully trusted in the
-app's own page, and the sandbox the others run in has known gaps and has not been
-independently reviewed (see [Plugins](#plugins)), so third-party plugin install
-is not supported yet.
+third-party plugin would use. Every bundled plugin's UI runs in a sandboxed
+frame, which has known gaps and has not been independently reviewed (see
+[Plugins](#plugins)), so third-party plugin install is not supported yet.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
@@ -404,17 +403,19 @@ focus. Turning a plugin off deletes nothing. Its tables, rows and database
 role stay, and turning it back on brings everything back. Plugins in the same
 area, such as two budgeting approaches, can be on together.
 
-**Where a plugin runs decides how far it is trusted.** Insights, Spending
-Trends, Upcoming, Forecast and Debt payoff run in a sandboxed frame and reach your
-data only through the host, with the grants their manifest lists. The other two
-bundled plugins, Budgets and Import CSV, still run inside the app, in its own
-origin, with the same access to your data as you have; they ship in the image and
-are reviewed with it. There is no install flow or catalog for
+**Where a plugin runs decides how far it is trusted.** Today no bundled plugin
+runs in the app's own page: Insights, Spending Trends, Upcoming, Forecast, Debt
+payoff, Budgets and Import CSV all run in a sandboxed frame and reach your data
+only through the host, with the grants their manifest lists and their own
+routes. A plugin still keeps full say over its own data (Budgets can change
+budgets, Import CSV can import and undo imports), and the bundled plugins ship in
+the image and are reviewed with it. There is no install flow or catalog for
 third-party plugins: an operator can add one by hand (a manifest with an
 integrity pin in `PLUGIN_MANIFEST_DIR`, its origin in `PLUGIN_REMOTE_ORIGINS`),
 and it then runs only in a frame, with no server-side code. The sandbox has known
-gaps and is not independently reviewed, so only add a plugin you have read. See
-[SECURITY.md](SECURITY.md).
+gaps (in Chromium a plugin can still cause some requests that carry what it
+holds) and the broker and token path are not independently reviewed, so only add
+a plugin you have read. See [SECURITY.md](SECURITY.md).
 
 ### Forgotten password
 
