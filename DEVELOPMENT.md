@@ -1779,7 +1779,7 @@ run `playwright install` in a cloud clone that ships a Chromium.
 The hostile plugin suite ([above](#hostile-plugin-suite)) has its own driver
 (`apps/web/browser-check/hostile/`, `playwright-core` with its own server and
 fixture plugin) and stays as it is. The two share a Playwright version and a
-Chromium choice: both pin the exact same version (1.64.1; `pnpm typecheck` in
+Chromium choice: both pin the exact same version (1.65.0; `pnpm typecheck` in
 `e2e/` fails if `e2e/package.json`, `apps/web/package.json` or the compose image
 tag disagree, so bump them together) and both use Playwright's **full**
 Chromium (`channel: 'chromium'`), never the headless shell, because the frame
