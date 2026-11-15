@@ -26,6 +26,13 @@ describe('rankCandidates', () => {
     expect(rankCandidates(rent, '2026-10-01', rows).map((c) => c.transactionId)).toEqual(['ok', 'edge'])
   })
 
+  it('looks further either side when the caller widens the reach', () => {
+    const rows = [tx('late', '2026-10-18', '-1500.00'), tx('way-late', '2026-11-05', '-1500.00')]
+    expect(rankCandidates(rent, '2026-10-01', rows)).toEqual([])
+    expect(rankParsedCandidates(rent, '2026-10-01', parseCandidates(rows), null, 30).map((c) => c.transactionId))
+      .toEqual(['late'])
+  })
+
   it('keeps a row already on this occurrence', () => {
     const rows = [tx('mine', '2026-10-01', '-1500.00', { recurring_occurrence_id: 'occ' })]
     expect(rankCandidates(rent, '2026-10-01', rows, 'occ')).toHaveLength(1)

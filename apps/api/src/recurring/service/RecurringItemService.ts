@@ -14,7 +14,7 @@ import type { ForecastAccount, ForecastEntry, ForecastView } from './ForecastVie
 import { headlineAmount } from './headlineAmount.js'
 import { toOccurrenceView } from './toOccurrenceView.js'
 import { horizonEnd } from './horizonEnd.js'
-import { LATE_DAYS, MAX_MOVE_DAYS } from './OCCURRENCE_RULES.js'
+import { LATE_DAYS, MAX_MOVE_DAYS, MISSED_DAYS } from './OCCURRENCE_RULES.js'
 import {
   describeOccurrence, groupHistories, projectedItem, type ItemHistory,
 } from './occurrenceState.js'
@@ -481,10 +481,12 @@ function defaultForecastAccount<T extends { account_type: string; spendable: boo
 function view(row: RecurringItemRow, today: string, history: ItemHistory): RecurringItemView {
   const legs = row.legs.map((l) => ({ accountId: l.account_id, amount: l.amount }))
   const amount = headlineAmount(row.kind, legs)
-  const late = history.tracked
-    ? occurrences(toSchedule(row), addDays(today, -LATE_DAYS), today)
-      .filter((date) => describeOccurrence(row, history, date, today).status === 'late')
+  const statusesOf = (from: string, status: 'late' | 'missed') => history.tracked
+    ? occurrences(toSchedule(row), from, today)
+      .filter((date) => describeOccurrence(row, history, date, today).status === status)
     : []
+  const late = statusesOf(addDays(today, -LATE_DAYS), 'late')
+  const missed = statusesOf(addDays(today, -MISSED_DAYS), 'missed')
   return {
     id: row.id,
     name: row.name,
@@ -503,6 +505,7 @@ function view(row: RecurringItemRow, today: string, history: ItemHistory): Recur
     nextDue: nextScheduledOccurrence(projectedItem(row, history, today, null), today)?.date ?? null,
     tracked: history.tracked,
     late,
+    missed,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -533,12 +536,12 @@ function byNextDue(a: RecurringItemView, b: RecurringItemView): number {
 }
 
 /**
- * The earliest nominal date whose record can still matter today: a late
- * occurrence (up to {@link LATE_DAYS} ago) that was also moved by up to
+ * The earliest nominal date whose record can still matter today: a missed
+ * occurrence (up to {@link MISSED_DAYS} ago) that was also moved by up to
  * {@link MAX_MOVE_DAYS}.
  */
 function historyStart(today: string): string {
-  return addDays(today, -(LATE_DAYS + MAX_MOVE_DAYS))
+  return addDays(today, -(MISSED_DAYS + MAX_MOVE_DAYS))
 }
 
 /** Reads occurrence records and links and groups them by item. */

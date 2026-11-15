@@ -36,7 +36,8 @@ export interface MatchCandidate {
  *
  * A candidate is on the leg's account, has the leg's sign (money out for a
  * bill, in for a paycheck), is not already settling another occurrence, and
- * posted within {@link MATCH_WINDOW_DAYS} of the expected date. Ranking
+ * posted within {@link MATCH_WINDOW_DAYS} of the expected date (or `reach`,
+ * where the caller widens it). Ranking
  * weighs a day's distance against a tenth of the amount: a payment exactly
  * on the amount two days late beats one 30% off on the day.
  *
@@ -68,6 +69,7 @@ export function rankCandidates(
  * @param expectedDate - When the occurrence is expected.
  * @param candidates - Parsed transactions to choose from (any account, any date).
  * @param occurrenceId - The occurrence's own row, if it has one: transactions already on it stay candidates.
+ * @param reach - Days either side of the expected date a transaction can be offered; defaults to {@link MATCH_WINDOW_DAYS}.
  * @returns Candidates, best first.
  */
 export function rankParsedCandidates(
@@ -75,6 +77,7 @@ export function rankParsedCandidates(
   expectedDate: string,
   candidates: readonly ParsedCandidate[],
   occurrenceId: string | null = null,
+  reach: number = MATCH_WINDOW_DAYS,
 ): MatchCandidate[] {
   const expected = money(leg.amount)
   const negative = expected.isNegative()
@@ -84,7 +87,7 @@ export function rankParsedCandidates(
     if (row.account_id !== leg.accountId) continue
     if (row.recurring_occurrence_id !== null && row.recurring_occurrence_id !== occurrenceId) continue
     const dayDifference = Math.round((dateMs - expectedMs) / 86_400_000)
-    if (Math.abs(dayDifference) > MATCH_WINDOW_DAYS) continue
+    if (Math.abs(dayDifference) > reach) continue
     const actual = amount()
     if (actual.isZero() || actual.isNegative() !== negative) continue
 

@@ -34,6 +34,7 @@ function serviceOver(
   timezone: string,
   now: string,
   accounts: readonly { id: string; name: string; account_type: string; balance: string; buffer_amount: string; spendable: boolean }[] = [],
+  trackingStarts: ReadonlyMap<string, string> = new Map(),
 ): RecurringItemService {
   const recurringItems = {
     list: async () => [...rows],
@@ -41,7 +42,7 @@ function serviceOver(
   } as Partial<RecurringItemRepository> as RecurringItemRepository
   const repos = {
     recurringItems,
-    recurringOccurrences: { listRecords: async () => [], listLinks: async () => [], trackingStarts: async () => new Map() },
+    recurringOccurrences: { listRecords: async () => [], listLinks: async () => [], trackingStarts: async () => new Map(trackingStarts) },
     reports: { findTimezone: async () => timezone },
     accounts: { listWithBalances: async () => [...accounts], listBasic: async () => [...accounts] },
   } as unknown as Repositories
@@ -107,6 +108,17 @@ describe('RecurringItemService: derived fields', () => {
     const all = await serviceOver(rows, 'UTC', now).list('u', { includeEnded: true })
     expect(all.items.map((i) => i.id)).toEqual(['soon', 'later', 'ended', 'past'])
     expect(all.items.find((i) => i.id === 'ended')?.nextDue).toBeNull()
+  })
+
+  it('splits a tracked item\'s unsettled past into late (a week) and missed (a month)', async () => {
+    // Mondays: 08-17 and 08-24 are over 30 days ago; 08-31 to 09-14 are missed; 09-21 is late; today (09-28) is due.
+    const weekly = row({ id: 'car', name: 'Car payment', frequency: 'weekly', series_start_date: '2026-08-17' })
+    const tracked = new Map([['car', '2026-08-17']])
+    const r = await serviceOver([weekly], 'UTC', now, [], tracked).list('u')
+    expect(r.items[0]).toMatchObject({ tracked: true, late: ['2026-09-21'], missed: ['2026-08-31', '2026-09-07', '2026-09-14'] })
+
+    const untracked = await serviceOver([weekly], 'UTC', now).list('u')
+    expect(untracked.items[0]).toMatchObject({ tracked: false, late: [], missed: [] })
   })
 
   it('narrows to the items with a leg on one account, ended ones included on request', async () => {
