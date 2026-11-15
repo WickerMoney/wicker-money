@@ -209,8 +209,8 @@ granted exactly the tables its manifest lists. A query against any other table
 is refused.
 
 For your plugin's UI code, the broker and the server hold a plugin that runs in a
-frame to these grants; a plugin that still runs in the app's own page is not held
-to them. See [Trust model](#trust-model).
+frame to these grants. A plugin that ran in the app's own page (none does today)
+would not be held to them. See [Trust model](#trust-model).
 
 ### Widget
 
@@ -328,13 +328,15 @@ Where a plugin's UI runs decides what it can do.
 
 | Plugin | UI runs in | What contains it |
 | --- | --- | --- |
-| Bundled, ported (Insights, Spending Trends, Upcoming, Forecast, Debt payoff, Budgets, Import CSV) | A sandboxed frame | The sandbox and the host's broker (below) |
-| Bundled, not ported yet (none today) | **The app's own page** | Nothing: fully trusted, in the host's origin, with the signed-in user's session. `requiredTables`, the `x-wickermoney-plugin` header and the checks in `ctx.api` are developer feedback there, not a boundary |
+| Bundled (Insights, Spending Trends, Upcoming, Forecast, Debt payoff, Budgets, Import CSV: every one today) | A sandboxed frame | The sandbox and the host's broker (below) |
+| A bundled plugin the host lists for the page (**none today**) | **The app's own page** | Nothing: fully trusted, in the host's origin, with the signed-in user's session. `requiredTables`, the `x-wickermoney-plugin` header and the checks in `ctx.api` are developer feedback there, not a boundary |
 | Third-party (a manifest the operator added) | A sandboxed frame, **always** | The sandbox and the broker |
 
 Which row a plugin is in is decided by the host, never by the manifest. In-page
-mode is a host-internal list of bundled plugin ids. `isolated: true` can only
-move a plugin towards the frame. A manifest cannot ask for the page, and a
+mode is a host-internal list of bundled plugin ids, and it is empty today: no
+bundled plugin runs in the app's own page. The host still has the code to run a
+listed plugin there, so the row is not gone, only unused. `isolated: true` can
+only move a plugin towards the frame. A manifest cannot ask for the page, and a
 plugin whose `remoteEntry` is not served by the host has no path into it.
 
 ### What the frame gives you, and what it takes away
@@ -415,7 +417,15 @@ $hex = (Get-FileHash -Algorithm SHA384 'assets\RunwayWidget-1a2b3c.js').Hash
   [SECURITY.md](https://github.com/WickerMoney/wicker-money/blob/main/SECURITY.md)
   for the full statement. Admission control (the operator choosing what to pin)
   is the backstop, so only add a plugin you have read.
-- The broker and token path have not had an independent security review.
+- The broker and token path have not had an independent security review, and
+  every bundled plugin's UI uses them too.
+- The frame holds your plugin to its grants and its own routes, and nothing makes
+  that code harmless inside them. A bundled plugin's frame can call every route of
+  its own plugin, so it can change that plugin's data (Budgets its budgets, Import
+  CSV analyze, import and undo imports); a third-party plugin has no routes of its
+  own to call.
+- The owner's consent step before a third-party plugin is switched on is in the
+  Settings page only; a request sent straight to the API does not ask.
 - `requiredTables` is a **declaration** for your UI code, and what the grant
   holds the broker and server to. Declare it honestly.
 

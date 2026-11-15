@@ -22,19 +22,21 @@ import type { TableGrantGuard } from './TableGrantGuard.js'
  * - **The host's access token** is the host application. It is allowed, still
  *   constrained by row-level security to the user's own rows. If the request
  *   also carries `x-wickermoney-plugin`, the guard holds it to that plugin's
- *   manifest as before; that is a courtesy to first-party plugin code that
- *   still runs in the host page and sends the header, so a mistake in it fails
+ *   manifest as before; that is a courtesy to a plugin that runs in the host
+ *   page (none does today) and sends the header, so a mistake in it fails
  *   fast. It is advisory only: it can narrow a host request, never widen one,
  *   and a caller holding the host token can omit it.
  *
  * **What this does not do.** A UI plugin that runs in the host's page and
- * origin can reach the host's own access token, and with it every route the
- * signed-in user can, whatever its manifest says. Plugin tokens give the server
- * an identity it can verify and enforce, but they protect nothing until the
- * plugin's code is kept from the host token, which is the job of the isolated
- * plugin runtime. Until then UI plugin code is trusted code, which is why
- * third-party install is not supported and `PLUGIN_REMOTE_ORIGINS` must stay
- * empty unless you trust the origin completely. The boundary that holds for
+ * origin (none does today: `IN_REALM_PLUGIN_IDS` is empty) can reach the host's
+ * own access token, and with it every route the signed-in user can, whatever its
+ * manifest says. Plugin tokens give the server an identity it can verify and
+ * enforce, but they protect nothing for such a plugin; what keeps plugin code
+ * from the host token is the isolated plugin runtime, which every bundled plugin
+ * uses today. That runtime has known gaps and has not been independently
+ * reviewed (see `SECURITY.md`), which is why third-party install is not supported
+ * and `PLUGIN_REMOTE_ORIGINS` must stay empty unless you trust the origin
+ * completely. The boundary that holds for
  * server-side plugin code is the per-plugin PostgreSQL role (bundled plugins'
  * `runAsPlugin`), not these routes, which run as the application role.
  *

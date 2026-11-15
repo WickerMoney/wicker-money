@@ -46,9 +46,8 @@ Particularly interesting, because the design leans on them:
   user's session token or refresh cookie; reaching authentication, the data
   export, the erase actions, plugin management or another plugin's routes; and
   getting the host to run a plugin file that does not match its integrity pin, or
-  to run a plugin served from another origin inside the app's own page. Plugins
-  that still run inside the app's own page are not behind this boundary (see
-  "Who runs where").
+  to run a plugin served from another origin inside the app's own page. Today
+  every bundled plugin's UI runs in that frame (see "Who runs where").
 - A bundled plugin's server-side code reaching a table its manifest never
   requested through its normal query path (guarded by a per-plugin PostgreSQL
   role; see "Things worth knowing" for what that does not cover).
@@ -78,15 +77,19 @@ Out of scope:
 
 | Plugin | Where its UI runs | Trust |
 | --- | --- | --- |
-| Insights, Spending Trends, Upcoming, Forecast, Debt payoff | A sandboxed frame | Confined to its grants (below) |
-| Budgets, Import CSV | **The app's own page** | **Fully trusted, not sandboxed** |
+| Insights, Spending Trends, Upcoming, Forecast, Debt payoff, Budgets, Import CSV | A sandboxed frame | Confined to its grants (below) |
 | A third-party plugin an operator has added | A sandboxed frame, always | Confined to its grants (below) |
 
-The two bundled plugins in the second row have not been moved into frames yet.
-Their front-end code runs in the app's own origin with the signed-in user's access to
-the whole API; their manifest's `requiredTables` and the `x-wickermoney-plugin`
-header are not a security boundary for that code. They ship in the image and
-are reviewed with the rest of the application.
+**Today no bundled plugin runs in the app's own page: all seven run in sandboxed
+frames.** Which plugins may run in the page is decided by the host, never by a
+manifest, through a list of bundled plugin ids (`IN_REALM_PLUGIN_IDS` in
+`apps/api/src/plugins/bundled.ts`), and that list is empty today. The code that
+would load a listed plugin into the page has not been removed; nothing in the
+image uses it, a manifest cannot ask for it, and a plugin served from another
+origin has no path into it. A plugin on that list would be fully trusted: in the
+app's own origin, with the signed-in user's access to the whole API, and neither
+its manifest's `requiredTables` nor the `x-wickermoney-plugin` header would be a
+boundary for it. A release that listed one would say so here.
 
 ### What the isolated runtime protects
 
@@ -100,9 +103,14 @@ each request against the plugin's grants and forwards it with a plugin-specific
 token. The server gives that token nothing but a few read-only aggregate routes
 for the tables the manifest lists, and the plugin's own `/p/<id>/` routes. Every
 other route, including sign-in, refresh, export, erase and plugin management, is
-refused for it. A hostile-plugin test suite attempts about 150 escapes, and a
-remote-origin test drives a real build through the integrity pin, in Chromium on
-every pull request.
+refused for it. A hostile-plugin test suite attempts about 170 escapes (it
+includes the staged CSV upload routes of Import CSV), and a remote-origin test
+drives a real build through the integrity pin, in Chromium on every pull request.
+
+This is the same frame and the same broker for every plugin, bundled or not: a
+bug or a compromised dependency in the front end of Budgets or Import CSV is held
+to that plugin's own routes and the table reads its manifest lists, not to the
+signed-in user's whole session.
 
 ### What it does not protect
 
@@ -123,6 +131,14 @@ every pull request.
   never covers the navigation or the phone's top bar, ends when the frame says it
   is done, goes away or the person leaves the page, and a widget frame's request is
   ignored. It gives the frame no new access to data.
+- **The host trusts a plugin's own frame-side code with that plugin's own data.**
+  A frame can call every route of its own plugin (`/api/v1/p/<id>/`) as well as
+  read the tables its manifest lists. For a bundled plugin that is real power:
+  the Budgets frame can change budgets, and the Import CSV frame can analyze,
+  import and undo imports for the signed-in user. The sandbox keeps a compromised
+  frame to those routes and reads and no further; it does not make the bundled
+  plugins' own code untrusted. They ship in the image and are reviewed with the
+  rest of the application.
 - **A plugin keeps what it is granted.** A plugin can read what its grants allow
   and what the host tells it about the session (the user's email and id). The
   grant, not the sandbox, limits what it can learn.
@@ -159,9 +175,9 @@ every pull request.
 
 ### Third-party plugins
 
-**Status: experimental.** The isolated runtime and loading a third-party plugin
-are opt-in and off by default, and the broker and token path behind them have not
-been independently reviewed.
+**Status: experimental.** Loading a third-party plugin is opt-in and off by
+default. The broker and token path behind it, which every bundled plugin's UI
+also uses, have not been independently reviewed.
 
 There is no install flow, no catalog and no signing. The only way to add a
 third-party plugin is for the operator to do it by hand:

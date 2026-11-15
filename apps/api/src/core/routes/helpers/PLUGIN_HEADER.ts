@@ -7,8 +7,9 @@
  * `auth/pluginTokens.ts`); this header is ignored on such a request. On a
  * request made with the host's own access token it can only narrow what the
  * request may do, by holding it to the named plugin's manifest, and a caller
- * can send any value or omit it. First-party plugin code that still runs in
- * the host page sends it so its own mistakes fail fast; it is not a security
+ * can send any value or omit it. The host's own scoped client sends it
+ * for a plugin that runs in the host page (none does today: `IN_REALM_PLUGIN_IDS`
+ * is empty), so that plugin's own mistakes fail fast; it is not a security
  * boundary.
  */
 export const PLUGIN_HEADER = 'x-wickermoney-plugin'

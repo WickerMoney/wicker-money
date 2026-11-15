@@ -282,7 +282,8 @@ file (`measure`, "small file"). The pieces are in
   the page does not, from a frame:** the host disposes the broker and removes the
   frame before the frame can send anything, so an upload staged and abandoned stays
   until its 15 minutes pass, and a person who does this twice is told "You already
-  have 2 uploads waiting" until then. The in-page build of the page does give it back.
+  have 2 uploads waiting" until then. The check's in-page baseline (it puts the plugin's id in `IN_REALM_PLUGIN_IDS`
+for one run) does give it back.
 
 **What `finish` checks**, in this order: every index from 0 to `chunks - 1` has
 arrived (`409 upload_incomplete`, naming the first missing; the upload stays
@@ -491,9 +492,10 @@ a plugin that can `RESET ROLE` regains the application role's table privileges
 for its own tenant, so untrusted third-party plugins need out-of-process
 isolation before they are installed.
 
-The same applies to plugin UI code, which has no isolation at all: it runs in
-the host's origin and can call any API route as the signed-in user. See
-[Plugin trust model](#plugin-trust-model).
+Plugin UI code is held by something else: it runs in a sandboxed frame and reaches
+the API only through the host's broker, with a plugin token, so these roles are not
+what contains it. The frame has known gaps and has not been independently reviewed.
+See [Plugin trust model](#plugin-trust-model).
 
 ### Running tests against the same server
 
@@ -1076,18 +1078,23 @@ What a bundled plugin still does not get:
 ### Plugin trust model
 
 Every bundled UI plugin (Insights, Spending Trends, Upcoming, Forecast, Debt payoff,
-Budgets, Import CSV) and every third-party plugin runs in a sandboxed frame. No
-bundled plugin runs **fully trusted, in the host's origin** any more, and the list
-that would put one there (`IN_REALM_PLUGIN_IDS`) is empty. Read this before writing or reviewing anything
-that talks about plugin "permissions", "scoping" or "sandboxing".
+Budgets, Import CSV) and every third-party plugin runs in a sandboxed frame. **Today**
+no bundled plugin runs fully trusted, in the host's origin, and the list that would
+put one there (`IN_REALM_PLUGIN_IDS`) is empty. The code path for it is still in the
+tree: `pluginRuntimeFor` can answer `in-realm` for a bundled plugin whose id is
+listed, and the web app still has `MountedPage`, `MountedWidget` and the Module
+Federation loader for it, so the empty list is what keeps a plugin out of the page,
+not the absence of code. Do not write that the in-page path is gone. Read this
+before writing or reviewing anything that talks about plugin "permissions",
+"scoping" or "sandboxing".
 
 | Layer | What it does | Boundary against plugin code? |
 | --- | --- | --- |
 | Per-plugin PostgreSQL role (`plugin-roles.ts`) | Refuses queries outside the manifest's `requiredTables` | For **server-side** plugin code (bundled plugins' `runAsPlugin`) that behaves: a guardrail, not a sandbox, because crafted SQL can leave the role |
 | `assertSafePluginSql` (the plugin query runner) | Refuses statement text that changes the role or session settings | **No.** It reads text, and a `DO` block with dynamic `EXECUTE` gets past it. It exists to catch mistakes |
 | Row-level security | Keeps every query inside the signed-in user's rows | Yes, for tenants, including after the SQL leaves the plugin role (the tenant context is signed) |
-| Plugin token + route classification (`auth/pluginTokens.ts`, `auth/pluginRouteAccess.ts`) | The server tells a plugin's request from the host's by a signed token, and gives that token only its plugin's granted `/core` reads and its own `/p/<id>/` routes | **Server side: yes.** The broker uses it for every plugin that runs in a frame. Plugins that run in the host page (the in-realm ones, below) do not use it, so for them: **no**. That code can still reach the host's own access token. See [Plugin tokens](#plugin-tokens) |
-| Sandboxed frame and its document (`IsolatedPluginFrame`, `GET /plugin-frame`) | The UI of a plugin that is not in-realm runs in `<iframe sandbox="allow-scripts">`, whose document the API serves with `sandbox allow-scripts; default-src 'none'; connect-src 'none'; ...`: an opaque origin, so no host cookies, storage or DOM, and no direct network from script | **Yes, for the code in the frame**, with the exceptions listed in ADR 0005's verification log (Chromium sends some requests that CSP does not govern, such as `<link rel=prerender>` and WebRTC). See [Isolated plugin frames](#isolated-plugin-frames) |
+| Plugin token + route classification (`auth/pluginTokens.ts`, `auth/pluginRouteAccess.ts`) | The server tells a plugin's request from the host's by a signed token, and gives that token only its plugin's granted `/core` reads and its own `/p/<id>/` routes | **Server side: yes.** The broker uses it for every plugin that runs in a frame, which is every plugin today. A plugin that ran in the host page (an in-realm one, below; none does today) would not use it, so for it: **no**. That code could still reach the host's own access token. See [Plugin tokens](#plugin-tokens) |
+| Sandboxed frame and its document (`IsolatedPluginFrame`, `GET /plugin-frame`) | The UI of a plugin that is not in-realm (every plugin today) runs in `<iframe sandbox="allow-scripts">`, whose document the API serves with `sandbox allow-scripts; default-src 'none'; connect-src 'none'; ...`: an opaque origin, so no host cookies, storage or DOM, and no direct network from script | **Yes, for the code in the frame**, with the exceptions listed in ADR 0005's verification log (Chromium sends some requests that CSP does not govern, such as `<link rel=prerender>` and WebRTC). See [Isolated plugin frames](#isolated-plugin-frames) |
 | Broker (`apps/web/src/plugins/isolated/broker.ts`) | The only code that holds a plugin token. Checks the manifest grants and a path allow-list, then the per-user response cache, then the network; rate-limits and validates every message | **Yes**, it is the single door out of the frame |
 | `x-wickermoney-plugin` header + `requireTableGrant` | Holds a host-token request that names a plugin to that plugin's manifest | **No.** Advisory: it can narrow a host request, never identify one, and a caller can omit it. A plugin token is never attributed by it |
 | Scoped `ctx.api` client in `apps/web/src/plugins/context.ts` | Fails fast on an ungranted path | **No.** Developer ergonomics; plugin code can call `fetch` |
@@ -1105,6 +1112,14 @@ Consequences for contributors:
 - Do not rely on the plugin header for access control. A route that must not
   be reachable by plugins is closed by classifying it as denied for plugin
   tokens (next section), which the header cannot undo.
+- The sandbox contains a frame, not a plugin's own data. A frame can call every
+  route of its own plugin and read the tables its manifest lists, so a bundled
+  plugin's frame can still change that plugin's data (Budgets its budgets, Import
+  CSV analyze, import and undo imports). Do not describe the frame as making the
+  bundled plugins' own code untrusted or harmless. The limits that exist are in
+  `SECURITY.md`: the Chromium egress gaps (prerender, WebRTC, a frame navigating
+  itself to the app's origin), no independent review of the broker and token path,
+  and an owner-consent step that is in the Settings page only.
 - There is still no install flow, catalog or signing for third-party plugins.
   `PLUGIN_REMOTE_ORIGINS` and `PLUGIN_MANIFEST_DIR` stay empty by default, and
   nothing about start-up changes when they are. Do not write docs that say
@@ -1117,9 +1132,9 @@ Consequences for contributors:
   runs in the page only if it is a bundled plugin listed in `IN_REALM_PLUGIN_IDS`
   (`apps/api/src/plugins/bundled.ts`), and in a frame otherwise. `insights`,
   `spending-trends`, `upcoming`, `forecast`, `debt-payoff`, `budgets` and
-  `import-csv` have been ported and run in frames. The list is empty; it stays as
-  the host's one allowlist, and the browser checks add an id to it to measure the
-  in-page baseline.
+  `import-csv` have been ported and run in frames. The list is empty today; it stays as
+  the host's one allowlist (a plugin added to it would run fully trusted in the page),
+  and the browser checks add an id to it to measure the in-page baseline.
 
 ### Isolated plugin frames
 
@@ -1413,7 +1428,7 @@ four parts, and CI runs them as the required check **Hostile plugin suite**.
   logout or a password change, minted for another plugin, and used after the
   plugin is disabled.
 - **Browser half** (`apps/web/browser-check/hostile/`, Chromium). A hostile
-  widget runs beside an honest neighbour frame and attempts about 150 things:
+  widget runs beside an honest neighbour frame and attempts about 170 things:
   reading the host token or cookies, `fetch`, XHR, WebSocket, `sendBeacon`, images,
   fonts, workers, nested frames, forms, popups, top navigation and `ctx.navigate`
   to hostile paths, every route above through the broker and with a stolen token,
@@ -1558,9 +1573,10 @@ the server can tell a plugin's request from the host's without trusting a
 header. It is the server half of plugin isolation: the host's broker (see
 [Isolated plugin frames](#isolated-plugin-frames)) holds it for a sandboxed
 plugin, so the plugin never sees the user's own access token. The web app mints
-and sends a plugin token only for plugins that run in a frame. A plugin running
-in the host page (the in-realm ones) does not use one, and can still reach the
-host's own access token, so these tokens do not make in-page plugin code safe.
+and sends a plugin token only for plugins that run in a frame, which is every
+plugin today. A plugin running in the host page (an in-realm one; none does today)
+would not use one, and could still reach the host's own access token, so these
+tokens would not make in-page plugin code safe.
 
 **Minting.** `POST /api/v1/plugins/:pluginId/token` needs the user's own access
 token (a plugin token cannot mint another) and returns
@@ -1691,7 +1707,7 @@ for the API.
 ### End-to-end tests
 
 `e2e/` holds browser tests that run against the **built image**, the way someone
-who pulls it runs it, rather than against the source tree. Nine smoke specs
+who pulls it runs it, rather than against the source tree. Ten smoke specs
 (`e2e/tests/smoke.spec.ts`, about 25 seconds once the stack is up) cover: the
 stack is healthy, migrated and seeded (all four seed personas sign in, the
 bundled plugins registered with no load failures); `hero` signs in and reaches the

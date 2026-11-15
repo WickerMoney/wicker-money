@@ -9,39 +9,107 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+## [0.8.0] - unreleased
+
+Budgets and Import CSV move into sandboxed frames, so no bundled plugin runs in
+the app's own page today. Import CSV sends its file to the API in pieces while
+you map the columns, which is what lets a frame import a file of up to 8 MB.
+Keyboard focus now moves across plugin frames at once and stays on a control
+while its request runs, Escape in the phone navigation drawer returns focus to
+the Menu button, and plugin frames download about 90 kB less.
+`@wickermoney/ui-kit` gains a `busy` prop and `guardBusy` (additive);
+`@wickermoney/plugin-sdk` has no code change (its README text only). The Import
+CSV plugin gains four routes, and `analyze` and `commit` accept an `uploadId` in
+place of `csv`; nothing is removed or renamed, so there is no Breaking section.
+There is no migration: staged uploads are held in the API process's memory.
+**Back up your database before upgrading** (`pg_dump -Fc`), as for any release.
+See [Upgrading](README.md#upgrading).
+
 ### Added
 
-- **Import CSV: staged upload (API).** A file can now be sent in pieces and
-  analyzed or committed by `uploadId`: `POST upload/begin`, `upload/chunk`
-  (about 200,000 characters each, any order, several at once), `upload/finish`
-  and `upload/abort` under the plugin's routes, with `uploadId` accepted by
-  `analyze` and `commit` in place of `csv`. This is what lets a sandboxed frame
-  import a file larger than the 256 KiB broker message. It is additive: the
-  `csv` body works as before and the Import CSV page does not change. Uploads
-  are held in the API process's memory (2 per user, 8 MB and 64 chunks each,
-  64 MB for all users, gone after 15 minutes or once imported), so there is no
-  migration; `upload/begin` counts in the import rate limit. See
+- **Import CSV: staged upload (API).** A file can be sent in pieces and analyzed
+  or committed by `uploadId`: `POST upload/begin`, `upload/chunk`, `upload/finish`
+  and `upload/abort` under the plugin's routes (`/api/v1/p/wickermoney.import-csv`),
+  with `uploadId` accepted by `analyze` and `commit` in place of `csv` (sending
+  both is a `400`). `begin` declares the number of chunks (1 to 64) and the exact
+  size of the text in bytes of UTF-8 (up to 8,000,000, the ceiling of a `csv`
+  body); a chunk is up to 256 KiB of text and chunks may arrive in any order and
+  several at once. This is what lets a sandboxed frame import a file larger than
+  the 256 KiB broker message. It is additive: the `csv` body works as before, for
+  scripts and the API. Uploads are held in the API process's memory (2 live per
+  user, 64,000,000 bytes for all users together, gone 15 minutes after their last
+  new chunk or once imported), so there is no migration and a restart empties
+  them; when the process is full, `begin` answers `503 staging_full` before any
+  data is sent. `upload/begin` counts in the import rate limit and the other
+  routes in the general one. An id that is unknown, expired, imported or another
+  user's gets the same `404 upload_not_found`, and `abort` answers `200` for any
+  id, so neither can be used to look ids up. A commit with an `uploadId` and an
+  idempotency key leaves a small receipt for 15 minutes, so a retry whose answer
+  was lost is answered with `replayed: true` instead of importing twice. See
   [Staged CSV upload](DEVELOPMENT.md#staged-csv-upload).
-  
+- **A `busy` prop and `guardBusy` in `@wickermoney/ui-kit`** (additive, public,
+  not experimental). `Button`, `IconButton`, `Field` and `SelectField` take
+  `busy` for a request in flight: the control stays focusable, looks disabled,
+  ignores a click or a change and says "Still working. Try again in a moment."
+  to a screen reader (a `Field` becomes read-only). `guardBusy(busy, handler)` is
+  the same guard for a plain element such as a checkbox. Nothing existing
+  changes: `busy` defaults to off. See "Busy controls" in the ui-kit README.
+- **`--wm-toast-height` in `@wickermoney/ui-kit`** (experimental, like the rest of
+  the toast). While a toast banner shows, `ToastViewport` sets the banner's
+  height in pixels on its parent element and removes it with the banner, so a
+  stylesheet can keep a control that is scrolled to out from behind it. The
+  Transactions table uses it instead of measuring the banner itself.
+- **Browser and hostile checks for the frame work.** `pnpm --filter @wickermoney/web test:hostile`
+  gains a staging phase: another plugin's token and another user's upload ids,
+  random ids (every one gets the same `404`), chunks over the size limits, the per-user
+  and process-wide limits, `begin` counted in the import bucket, and the uploader
+  going through the real broker at the broker's own limits. The suite grows from
+  149 attacks and 27 checks to 173 and 36. New browser checks drive the Budgets
+  page and the Import CSV page in their frames (a 100,000-row import, chunk
+  retries, an expired upload, a phone width), and the flaky unit and browser
+  checks found in 0.7.0 are steadier.
+
 ### Changed
 
-- **Budgets runs in a sandboxed plugin frame.** The "Budgets" page and the "Budget breakdown" widget no longer run in the app's own page; they read and write through the host's broker with only the plugin's own routes and read grants, so Import CSV is the one bundled plugin left in the page. The page loads its categories and accounts once and waits a moment before loading a month, so holding Enter on "Previous" no longer ends in "This plugin is sending requests too fast". The result of "Start this month", and a failed remove, now appear at the top of the section they belong to and scroll into view, instead of at the top of the page. A page frame now reports the whole height of its document, so the last card is no longer 19 px short of where it sits in the app.
-- **Import CSV runs in a sandboxed plugin frame.** The page now uploads the file
-  in pieces through the staged-upload routes as soon as it is chosen, while the
-  person maps columns, and checks and imports by upload id, so the last bundled
-  plugin leaves the app's own page and the in-page list (`IN_REALM_PLUGIN_IDS`) is
-  empty. Large files work as before (100,000 rows, 7 MB). A file that cannot be
-  sent, an expired upload and a lost answer each have a message in the file step
-  and a retry; choosing another file gives the first upload back. Wide tables on
-  the page scroll inside their section on a phone, and undone rows in the history
-  are readable in both themes. Leaving the page mid-upload does not free the upload
-  until it expires (15 minutes), which counts against the limit of two. See
+- **Budgets runs in a sandboxed plugin frame.** The "Budgets" page and the
+  "Budget breakdown" widget no longer run in the app's own page; they read and
+  write through the host's broker, with only the plugin's own routes and the table
+  reads its manifest lists (transactions, transaction splits, categories and
+  accounts). The page loads its categories and accounts once, when it opens, and
+  waits 150 ms before loading a month, so holding Enter on "Previous" no longer
+  ends in "This plugin is sending requests too fast"; a category or account added
+  elsewhere shows after a reload. The result of "Start this month", and a failed
+  remove, now appear in the section they belong to and scroll into view, instead
+  of at the top of the page. In a dashboard card that is stretched to match its
+  neighbour, the widget's tiles do not stretch with it, which leaves some empty
+  space under them.
+- **Import CSV runs in a sandboxed plugin frame.** The page no longer runs in the
+  app's own page, which leaves no bundled plugin there today. It sends the file
+  through the staged-upload routes as soon as it is chosen, while the person maps
+  columns (6 pieces in flight, at most 15 requests a second, each cut to at most
+  240,000 bytes of JSON so the broker accepts it, a failed piece sent again twice),
+  and then checks and imports by upload id, so `analyze`, each page of flagged
+  rows and `commit` send about 300 bytes instead of the file. Large files work as
+  before (100,000 rows, 7 MB). A chunk that keeps failing shows a message in the
+  file step, and "Check for duplicates" sends the file again; an expired or lost
+  upload is sent again once without a message, and only if that fails too does the
+  person see one ("Choose the file again"); choosing another
+  file gives the first upload back. Leaving the page mid-upload does not: the
+  host removes the frame before it can say so, so that upload is held until it
+  expires (15 minutes) and counts against the limit of two. A frame costs about
+  130 MiB more browser memory than the page did (one more renderer process, as
+  for Budgets), measured in headless Chromium. See
   [Staged CSV upload](DEVELOPMENT.md#staged-csv-upload).
 - **Plugin frames download about 90 kB less.** The frame's start-up no longer
   loads the SDK root and its Zod manifest schemas (they load only for a plugin
   with an integrity pin), and the Spending Trends widget no longer bundles them
-  either. A test fails if either comes back.
-  
+  either (106 kB to 15 kB). Measured when the change was made, the frame's
+  start-up JavaScript went from 447,151 to 356,459 bytes (uncompressed). A test fails if the SDK
+  root or Zod comes back, or the start-up size passes a budget.
+- **The README's Transactions screenshots show the current recurring column**
+  (light and dark). Six other screenshot pairs are still out of date; see the
+  roadmap.
+
 ### Fixed
 
 - **Focus and Tab order in plugin frames.** Tab at the last control of a plugin
@@ -49,24 +117,40 @@ curated, human-readable version.
   previous control on the page at once, instead of leaving it to the browser and
   stepping in 60 ms later. There is no extra stop between two adjacent frames,
   and at the end of a page whose last thing is a frame, focus goes round to the
-  skip link (the browser's own interface is not a stop there). Before, in 2 of 10
-  runs of the Forecast Tab-order check, the next Tab after the last control went
-  back into the frame's first control; after, 0 of 10.
+  skip link (the browser's own interface is not a stop there). Tab is left alone
+  while a modal dialog is open inside the frame. Before, in 2 of 10 runs of the
+  Forecast Tab-order check, the next Tab after the last control went back into
+  the frame's first control; after, 0 of 10.
 - **Buttons, switches and checkboxes keep focus while a request runs.** A table
   action (Edit, Delete, Archive, Match, ...), a form's Save, the plugin switches,
   the safe-to-spend and rollover checkboxes and the Debt payoff strategy buttons
   were `disabled` while their request ran, which dropped keyboard focus to the
-  page. They are now `aria-disabled` and keep focus, look disabled, ignore a
-  click and say "Still working. Try again in a moment." to a screen reader.
-  `Button`, `IconButton`, `Field` and `SelectField` in `@wickermoney/ui-kit` gain
-  a `busy` prop for this, and `guardBusy` is exported for plain elements.
+  page. They now use the new `busy` prop (or `aria-disabled` with `guardBusy`):
+  they keep focus, look disabled, ignore a click and say "Still working. Try
+  again in a moment." to a screen reader. Four Import CSV buttons still use
+  `disabled`; see the roadmap.
 - **Escape in the open phone navigation drawer** (and a tap on its backdrop)
-  returns focus to the Menu button, which it did not on any page.
+  returns focus to the Menu button, which it did not on any page. Following a
+  link in the drawer still leaves focus on the new page.
 - **A table wider than its room can be scrolled with the keyboard.** The shared
   table's horizontal scroller (for example Insights' "Show as table" on a phone)
   could only be scrolled with a pointer. While it overflows it is now a Tab stop
   with a visible focus ring, named by the table's caption when it has one. A
   table that fits adds no Tab stop.
+- **A plugin page frame is as tall as its page.** A page frame now reports the
+  height of its whole document, so the last card is no longer 19 px short of
+  where it sits in the app. This applies to every plugin page frame (Forecast,
+  Debt payoff, Budgets and Import CSV).
+- **Import CSV on a phone.** In the frame the page was 61 px wider than the
+  window; each table (mapping, review, history) now scrolls inside its own
+  keyboard-reachable region. Undone rows in the history are readable in both
+  themes (they were faded below the contrast limit).
+
+### Migrations
+
+None. Staged uploads are kept in the API process's memory, not the database, so
+there is nothing to run and nothing to undo: the previous image runs against the
+database as it is.
 
 ## [0.7.0] - 2026-11-02
 
@@ -1545,7 +1629,8 @@ workaround.
 - Migration 009: composite `(user_id, ...)` keys close a cross-user hole where a
   foreign key could attach a transaction to another user's account.
 
-[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/WickerMoney/wicker-money/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/WickerMoney/wicker-money/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/WickerMoney/wicker-money/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/WickerMoney/wicker-money/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/WickerMoney/wicker-money/compare/v0.5.0...v0.6.0
