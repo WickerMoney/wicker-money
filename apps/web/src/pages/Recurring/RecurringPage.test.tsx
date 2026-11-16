@@ -28,7 +28,7 @@ function item(over: Partial<RecurringItem>): RecurringItem {
   return {
     id: 'i', name: 'Mortgage', kind: 'bill', frequency: 'monthly', seriesStartDate: '2025-01-31', endDate: null,
     semimonthlyDays: null, categoryId: 'rent', legs: [{ accountId: 'chk', amount: '-2100.0000' }],
-    amount: '-2100.0000', monthlyEquivalent: '-2100.0000', nextDue: '2026-09-30', tracked: false, late: [], ...over,
+    amount: '-2100.0000', monthlyEquivalent: '-2100.0000', nextDue: '2026-09-30', tracked: false, late: [], missed: [], ...over,
   }
 }
 
@@ -327,7 +327,10 @@ describe('paid / landed matching', () => {
       '/recurring-items/mortgage/occurrences/2026-09-30/dismissals', { transactionId: 't-sep' },
     ))
 
-    expect(within(panel).getByText(/is not Vacation Fund/)).toBeTruthy()
+    // Dismissals are folded away until opened.
+    expect(within(panel).queryByRole('button', { name: /^Undo/ })).toBeNull()
+    await user.click(within(panel).getByRole('button', { name: /Dismissed \(1\)/ }))
+    expect(within(panel).getByRole('region', { name: 'Dismissed for Vacation Fund' })).toBeTruthy()
     await user.click(within(panel).getByRole('button', { name: 'Undo: Hardware Store is not Vacation Fund' }))
     await waitFor(() => expect(del).toHaveBeenCalledWith('/recurring-items/vac/occurrences/2026-09-30/dismissals/t-shop'))
     // One toast for the family: the later message replaced the earlier one.
@@ -354,6 +357,49 @@ describe('paid / landed matching', () => {
     renderWithToasts(<RecurringPage />)
     await screen.findByText('Vacation Fund')
     expect(screen.queryByText('Did these land?')).toBeNull()
+  })
+
+  it('lists late and missed occurrences with a way to find their payment', async () => {
+    serve({
+      ...full,
+      items: [
+        item({ id: 'mortgage', tracked: true, late: ['2026-09-25'], missed: ['2026-09-01'] }),
+        item({ id: 'car', name: 'Car payment', amount: '-410.0000', tracked: true, missed: ['2026-09-10'] }),
+        item({ id: 'vac', name: 'Vacation Fund' }),
+      ],
+    })
+    const user = userEvent.setup()
+    renderWithToasts(<RecurringPage />)
+    const panel = (await screen.findByText('Did these land?')).closest('section') as HTMLElement
+
+    const rows = within(panel).getAllByRole('listitem').map((li) => li.textContent ?? '')
+    expect(rows).toHaveLength(3)
+    // Late first, then missed, the oldest first.
+    expect(rows[0]).toContain('Mortgage')
+    expect(rows[0]).toContain('Late')
+    expect(rows[0]).toContain('3 days late')
+    expect(rows[1]).toContain('Mortgage')
+    expect(rows[1]).toContain('Missed')
+    expect(rows[1]).toContain('27 days late')
+    expect(rows[2]).toContain('Car payment')
+    expect(rows[2]).toContain('18 days late')
+    expect(within(panel).queryByText(/Dismissed/)).toBeNull()
+
+    await user.click(within(panel).getByRole('button', { name: `Find payment for Car payment, expected ${formatDate('2026-09-10')}` }))
+    expect(await screen.findByRole('button', { name: 'Back to form' })).toBeTruthy()
+  })
+
+  it('does not list a late occurrence twice when a payment is already suggested for it', async () => {
+    serve(
+      { ...full, items: [item({ id: 'mortgage', tracked: true, late: ['2026-09-25'] })] },
+      [{ occurrence: occurrence({ nominalDate: '2026-09-25', expectedDate: '2026-09-25', status: 'late' }), accountId: 'chk',
+        candidate: candidates.legs[0]!.candidates[0]! }],
+    )
+    renderWithToasts(<RecurringPage />)
+    const panel = (await screen.findByText('Did these land?')).closest('section') as HTMLElement
+    expect(within(panel).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(panel).getByRole('button', { name: 'Match' })).toBeTruthy()
+    expect(within(panel).queryByRole('button', { name: /Find payment/ })).toBeNull()
   })
 
   it('flags a late occurrence on the item', async () => {

@@ -640,7 +640,11 @@
 }
 
 /* Recurring matching on the Transactions page and dismissed suggestions on the Recurring page. */
-.recur-dismissed { margin-top: var(--wm-gap-sm); }
+.recur-dismissed, .recur-attention { margin-top: var(--wm-gap-sm); }
+.recur-status--muted { border-color: var(--wm-border); color: var(--wm-text-muted); }
+.recur-disclosure { font-size: 13px; min-height: 28px; }
+.recur-disclosure:focus-visible { outline: 2px solid var(--wm-accent); outline-offset: 2px; }
+.recur-dismissed__item { margin: var(--wm-gap-sm) 0 0; font-size: 12px; font-weight: 600; color: var(--wm-text-muted); }
 /* Transactions: the recurring column, the Link button in the row actions and the picker row.
 
    The column shows only the pill of a matched row (name, remove button, and the

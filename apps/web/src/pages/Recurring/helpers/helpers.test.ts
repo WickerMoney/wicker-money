@@ -3,6 +3,7 @@ import type { RecurringItem } from '../../../models/index.js'
 import { describeSchedule } from './describeSchedule.js'
 import type { RecurringDraft } from '../state/RecurringDraft.js'
 import { draftFromItem, emptyDraft, fieldForPath, payloadFromDraft } from './draft.js'
+import { attentionRows, daysBetween, groupDismissed } from './attentionRows.js'
 import { groupItems } from './groupItems.js'
 import { dayLabel } from './ordinal.js'
 import { previewDates } from './previewDates.js'
@@ -11,7 +12,7 @@ function item(over: Partial<RecurringItem>): RecurringItem {
   return {
     id: 'i', name: 'Rent', kind: 'bill', frequency: 'monthly', seriesStartDate: '2025-01-31', endDate: null,
     semimonthlyDays: null, categoryId: null, legs: [{ accountId: 'chk', amount: '-1550.0000' }],
-    amount: '-1550.0000', monthlyEquivalent: '-1550.0000', nextDue: '2026-09-30', tracked: false, late: [], ...over,
+    amount: '-1550.0000', monthlyEquivalent: '-1550.0000', nextDue: '2026-09-30', tracked: false, late: [], missed: [], ...over,
   }
 }
 
@@ -151,5 +152,41 @@ describe('previewDates', () => {
   it('is null while the schedule is invalid', () => {
     expect(previewDates({ ...emptyDraft(TODAY), frequency: 'semimonthly', day1: '28', day2: '31' }, TODAY)).toBeNull()
     expect(previewDates({ ...emptyDraft(TODAY), seriesStartDate: '' }, TODAY)).toBeNull()
+  })
+})
+
+describe('attentionRows', () => {
+  const car = item({ id: 'car', name: 'Car payment', late: ['2026-09-24'], missed: ['2026-08-31', '2026-09-10'] })
+  const gym = item({ id: 'gym', name: 'Gym', late: ['2026-09-26'] })
+
+  it('lists late before missed and the oldest first, with whole days late', () => {
+    expect(attentionRows([car, gym], TODAY, []).map((r) => [r.item.id, r.nominalDate, r.state, r.daysLate])).toEqual([
+      ['car', '2026-09-24', 'late', 4],
+      ['gym', '2026-09-26', 'late', 2],
+      ['car', '2026-08-31', 'missed', 28],
+      ['car', '2026-09-10', 'missed', 18],
+    ])
+  })
+
+  it('leaves out an occurrence that already has a suggested match', () => {
+    const suggestion = { occurrence: { itemId: 'car', nominalDate: '2026-09-10' } } as Parameters<typeof attentionRows>[2][number]
+    expect(attentionRows([car], TODAY, [suggestion]).map((r) => r.nominalDate)).toEqual(['2026-09-24', '2026-08-31'])
+  })
+
+  it('counts days across a month and a daylight-saving change', () => {
+    expect(daysBetween('2026-10-30', '2026-11-02')).toBe(3)
+    expect(daysBetween('2026-11-01', '2026-11-01')).toBe(0)
+  })
+})
+
+describe('groupDismissed', () => {
+  const dismissal = (itemId: string, name: string, txId: string) => ({
+    occurrence: { itemId, name, nominalDate: '2026-09-01', expectedDate: '2026-09-01' },
+    accountId: 'chk', transaction: { id: txId, date: '2026-09-02', amount: '-5.0000', merchant: txId },
+  }) as unknown as Parameters<typeof groupDismissed>[0][number]
+
+  it('groups by item, sorted by name, keeping the entries\' order', () => {
+    const groups = groupDismissed([dismissal('g', 'Gas', 'a'), dismissal('c', 'Car', 'b'), dismissal('g', 'Gas', 'c')])
+    expect(groups.map((g) => [g.name, g.entries.map((e) => e.transaction.id)])).toEqual([['Car', ['b']], ['Gas', ['a', 'c']]])
   })
 })

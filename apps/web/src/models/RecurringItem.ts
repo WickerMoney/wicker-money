@@ -33,4 +33,9 @@ export interface RecurringItem {
   readonly tracked: boolean
   /** Nominal dates of occurrences expected in the last week and not yet matched. */
   readonly late: readonly string[]
+  /**
+   * Nominal dates of occurrences expected more than a week and up to 30 days
+   * ago and not yet matched. Not counted as coming; still matchable.
+   */
+  readonly missed: readonly string[]
 }

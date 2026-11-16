@@ -9,6 +9,23 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **Recurring: missed occurrences, and a late and missed list in "Did these
+  land?".** `GET /api/v1/recurring-items` returns a `missed` list beside `late`
+  on each item: unmatched occurrences of a tracked item from more than a week
+  to 30 days ago (additive; missed ones are still not counted as coming). The
+  panel now lists what is late or missed, with a Find payment button, instead of
+  showing only dismissed suggestions. A payment that clears weeks after its due
+  date (a car payment, say) can now be found: Find payment looks 30 days either
+  side of the expected date, up from 10. Automatic suggestions keep their tighter
+  rules.
+
+### Changed
+
+- **Recurring: dismissed suggestions are folded away.** They sit behind a
+  "Dismissed (N)" button, grouped by item, with Undo for a misclick.
+
 ## [0.8.0] - unreleased
 
 Budgets and Import CSV move into sandboxed frames, so no bundled plugin runs in
