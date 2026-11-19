@@ -10,6 +10,8 @@ export interface Suggestions {
   readonly suggestions: readonly MatchSuggestion[]
   /** Suggestions the user dismissed, recent enough to undo. */
   readonly dismissed: readonly DismissedSuggestion[]
+  /** Whether the first load has finished (or failed), so a list that depends on it does not flash. */
+  readonly loaded: boolean
   /** Records the suggested match. */
   readonly confirm: (suggestion: MatchSuggestion) => Promise<void>
   /** Says the transaction is not this occurrence, so the pair is not suggested again. */
@@ -40,6 +42,7 @@ export function useSuggestions(
 ): Suggestions {
   const [suggestions, setSuggestions] = useState<readonly MatchSuggestion[]>([])
   const [dismissed, setDismissed] = useState<readonly DismissedSuggestion[]>([])
+  const [loaded, setLoaded] = useState(false)
   const latest = useLatestRequest()
   const { show } = status
   const toast = useToast().show
@@ -47,8 +50,8 @@ export function useSuggestions(
   const reload = useCallback(
     () => latest.run(
       (signal) => api.get<MatchSuggestionList>('/recurring-items/suggestions', { signal }),
-      (list) => { setSuggestions(list.suggestions); setDismissed(list.dismissed ?? []) },
-    ).catch((e: unknown) => show(e instanceof Error ? e.message : 'Could not load suggested matches.')),
+      (list) => { setSuggestions(list.suggestions); setDismissed(list.dismissed ?? []); setLoaded(true) },
+    ).catch((e: unknown) => { setLoaded(true); show(e instanceof Error ? e.message : 'Could not load suggested matches.') }),
     [latest, show],
   )
 
@@ -90,5 +93,5 @@ export function useSuggestions(
     false,
   )
 
-  return { suggestions, dismissed, confirm, dismiss, undismiss, reload }
+  return { suggestions, dismissed, loaded, confirm, dismiss, undismiss, reload }
 }

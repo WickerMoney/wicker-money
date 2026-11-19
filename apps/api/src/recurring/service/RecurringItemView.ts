@@ -32,6 +32,12 @@ export interface RecurringItemView {
   readonly tracked: boolean
   /** Nominal dates of occurrences that are late: expected in the last week, not yet settled. Oldest first. */
   readonly late: readonly string[]
+  /**
+   * Nominal dates of occurrences that are missed: expected more than a week
+   * ago (up to {@link MISSED_DAYS}) and still not settled. Not projected.
+   * Oldest first.
+   */
+  readonly missed: readonly string[]
   readonly createdAt: Date
   readonly updatedAt: Date
 }

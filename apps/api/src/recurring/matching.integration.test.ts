@@ -326,6 +326,26 @@ describe('late occurrences', () => {
       .toMatchObject([{ occurrence: { itemId: bill, nominalDate: lateDate }, candidate: { transactionId: arrived } }])
   })
 
+  it('lists a tracked item\'s old unsettled occurrences as missed, and still finds the late payment', async () => {
+    const { user, today, checking } = await household()
+    const start = addDays(today, -24) // weekly: 24, 17, 10 and 3 days ago, then in 4 days
+    const bill = await item(user, {
+      name: 'Car payment', kind: 'bill', frequency: 'weekly', seriesStartDate: start, legs: [{ accountId: checking, amount: '-200.00' }],
+    })
+    expect((await match(user, bill, start, await transaction(user, checking, '-200.00', start))).statusCode).toBe(200)
+
+    const items = await h.app.inject({ method: 'GET', url: '/api/v1/recurring-items', headers: auth(user) })
+    expect((items.json() as { items: { id: string; late: string[]; missed: string[] }[] }).items.find((i) => i.id === bill))
+      .toMatchObject({ late: [addDays(start, 21)], missed: [addDays(start, 7), addDays(start, 14)] })
+
+    // The car payment cleared 17 days after the first missed date: beyond the
+    // ten days a suggestion looks, inside the 30 "Find payment" does.
+    const cleared = await transaction(user, checking, '-200.00', today)
+    const found = await h.app.inject({ method: 'GET', url: `${occurrenceUrl(bill, addDays(start, 7))}/candidates`, headers: auth(user) })
+    expect(found.json().legs[0].candidates[0]).toMatchObject({ transactionId: cleared, dayDifference: 17, confident: false })
+    expect((await match(user, bill, addDays(start, 7), cleared)).statusCode).toBe(200)
+  })
+
   it('forecasts with the same rules', async () => {
     const { user, today, checking, bill, start } = await trackedWeekly()
     await match(user, bill, start, await transaction(user, checking, '-200.00', start))

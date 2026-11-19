@@ -22,7 +22,7 @@ import { parseCandidates } from './parseCandidates.js'
 import type {
   DismissalView, DismissedSuggestion, MatchSuggestion, MatchSuggestionList, OccurrenceCandidates,
 } from './MatchSuggestion.js'
-import { MAX_MOVE_DAYS } from './OCCURRENCE_RULES.js'
+import { MAX_MOVE_DAYS, MISSED_DAYS } from './OCCURRENCE_RULES.js'
 import type { OccurrenceOverrideInput } from './OccurrenceOverrideInput.js'
 import { describeOccurrence, groupHistories, type ItemHistory, type OccurrenceState } from './occurrenceState.js'
 import { occurrenceKey } from './occurrenceKey.js'
@@ -133,8 +133,8 @@ export class RecurringOccurrenceService {
       const open = state.legs.filter((l) => l.transaction === null)
       const search = await repos.recurringOccurrences.findCandidates(
         open.map((l) => l.accountId),
-        addDays(state.expectedDate, -MATCH_WINDOW_DAYS),
-        addDays(state.expectedDate, MATCH_WINDOW_DAYS),
+        addDays(state.expectedDate, -MISSED_DAYS),
+        addDays(state.expectedDate, MISSED_DAYS),
       )
       const dismissed = new Set((await repos.recurringOccurrences.listDismissals(
         { itemId, from: nominalDate, to: addDays(nominalDate, 1) },
@@ -146,7 +146,7 @@ export class RecurringOccurrenceService {
         legs: open.map((leg) => ({
           accountId: leg.accountId,
           amount: leg.amount,
-          candidates: rankParsedCandidates(leg, state.expectedDate, parsed)
+          candidates: rankParsedCandidates(leg, state.expectedDate, parsed, null, MISSED_DAYS)
             .map((c) => ({ ...c, dismissed: dismissed.has(c.transactionId) })),
           truncated: search.truncatedAccounts.includes(leg.accountId),
         })),

@@ -100,7 +100,7 @@ export function OccurrencesPanel({ item, today, currency, accountName, status, a
                           {accountName(leg.accountId)}, {formatMoney(leg.amount, currency)} expected:
                         </div>
                         {leg.candidates.length === 0 ? (
-                          <p className="wm-muted recur-sub">No transaction on this account within 10 days of {formatDate(o.expectedDate)}.</p>
+                          <p className="wm-muted recur-sub">No transaction on this account within 30 days of {formatDate(o.expectedDate)}.</p>
                         ) : (
                           <ul>
                             {leg.candidates.slice(0, 5).map((c) => (
