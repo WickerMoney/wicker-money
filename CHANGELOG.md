@@ -9,7 +9,7 @@ curated, human-readable version.
 
 ## [Unreleased]
 
-## [0.8.0] - unreleased
+## [0.8.0] - 2026-11-18
 
 Budgets and Import CSV move into sandboxed frames, so no bundled plugin runs in
 the app's own page today. Import CSV sends its file to the API in pieces while
