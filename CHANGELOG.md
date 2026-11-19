@@ -22,6 +22,9 @@ the Menu button, and plugin frames download about 90 kB less.
 CSV plugin gains four routes, and `analyze` and `commit` accept an `uploadId` in
 place of `csv`; nothing is removed or renamed, so there is no Breaking section.
 There is no migration: staged uploads are held in the API process's memory.
+The Recurring page's "Did these land?" panel now lists late and missed items with a
+Find payment button and folds dismissed suggestions away; Find payment reaches 30 days
+either side of a due date, and each recurring item gains a `missed` list (additive).
 **Back up your database before upgrading** (`pg_dump -Fc`), as for any release.
 See [Upgrading](README.md#upgrading).
 
@@ -69,6 +72,16 @@ See [Upgrading](README.md#upgrading).
   retries, an expired upload, a phone width), and the flaky unit and browser
   checks found in 0.7.0 are steadier.
 
+- **Recurring: missed occurrences, and a late and missed list in "Did these
+  land?".** `GET /api/v1/recurring-items` returns a `missed` list beside `late`
+  on each item: unmatched occurrences of a tracked item from more than a week
+  to 30 days ago (additive; missed ones are still not counted as coming). The
+  panel now lists what is late or missed, with a Find payment button, instead of
+  showing only dismissed suggestions. A payment that clears weeks after its due
+  date (a car payment, say) can now be found: Find payment looks 30 days either
+  side of the expected date, up from 10. Automatic suggestions keep their tighter
+  rules.
+
 ### Changed
 
 - **Budgets runs in a sandboxed plugin frame.** The "Budgets" page and the
@@ -109,6 +122,9 @@ See [Upgrading](README.md#upgrading).
 - **The README's Transactions screenshots show the current recurring column**
   (light and dark). Six other screenshot pairs are still out of date; see the
   roadmap.
+
+- **Recurring: dismissed suggestions are folded away.** They sit behind a
+  "Dismissed (N)" button, grouped by item, with Undo for a misclick.
 
 ### Fixed
 

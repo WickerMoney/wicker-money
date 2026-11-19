@@ -95,6 +95,7 @@ function Workspace({ list, accounts, categories, status, reload }: WorkspaceProp
       <RecurringSummary summary={list.summary} currency={currency} />
       <SuggestionsPanel
         suggestions={suggested.suggestions} dismissed={suggested.dismissed}
+        items={list.items} today={list.today} suggestionsLoaded={suggested.loaded} onFindPayment={(i) => setHistoryId(i.id)}
         currency={currency} accountName={accountName} busy={status.busy}
         onConfirm={(s) => void suggested.confirm(s)}
         onDismiss={(s) => void suggested.dismiss(s)}
