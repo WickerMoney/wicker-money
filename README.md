@@ -443,7 +443,8 @@ sandboxed frames, and Import CSV sends its file to the API in pieces while you
 map the columns. Keyboard focus moves across plugin frames at once and stays on a
 button or checkbox while its request runs, Escape in the phone navigation drawer
 returns focus to the Menu button, and plugin frames download about 90 kB less.
-It has no migration. `v0.7.0` made every action on the core pages say what it did
+The Recurring page's "Did these land?" panel lists late and missed items and folds
+dismissed suggestions away. It has no migration. `v0.7.0` made every action on the core pages say what it did
 in a notification, moved Upcoming, Forecast and Debt payoff into sandboxed
 frames, let Debt payoff leave a debt out of the plan and handle deferred loans,
 promotional rates and daily interest, and added a per-user API rate limit (on by
