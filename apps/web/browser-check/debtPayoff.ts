@@ -433,7 +433,7 @@ async function writeChecks(pw: typeof Playwright, base: string): Promise<void> {
       return { label: a?.textContent ?? '', aria: a?.getAttribute('aria-disabled') ?? null, disabled: a?.disabled ?? null, all: [...document.querySelectorAll<HTMLButtonElement>('.dp-seg__btn')].map((b) => ({ aria: b.getAttribute('aria-disabled'), disabled: b.disabled })) }
     })
     check('busy: while the strategy request runs, focus stays on the Snowball button in the frame', held.label.trim() === 'Snowball', held)
-    check('busy: both strategy buttons are aria-disabled and neither is disabled', held.all.length === 2 && held.all.every((b) => b.aria === 'true' && b.disabled === false), held)
+    check('busy: all three strategy buttons (Avalanche, Snowball, Custom order) are aria-disabled and none is disabled', held.all.length === 3 && held.all.every((b) => b.aria === 'true' && b.disabled === false), held)
     await frame.getByRole('button', { name: 'Avalanche' }).click({ force: true })
     await sleep(250)
     check('busy: a click on the other strategy meanwhile sends nothing', settingsPuts === 1, settingsPuts)
