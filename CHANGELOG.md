@@ -9,6 +9,11 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Fixed
+
+- Budgets: a refusal on the window or allowance form that belongs to no one field now takes focus and is
+  announced, as a field error already did.
+
 ## [0.8.0] - 2026-11-18
 
 Budgets and Import CSV move into sandboxed frames, so no bundled plugin runs in

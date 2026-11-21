@@ -568,6 +568,16 @@ async function formChecks(pw: typeof Playwright, base: string): Promise<void> {
       note('the same overlapping window sent directly to the plugin route (no frame)', direct.status)
       report['overlapRefusal'] = { status: dup?.status, direct: direct.status, shown, where }
       check('forms: a window the server refuses is shown on its form, and the frame and a direct call get the same answer', shown.length === 1 && dup?.status === direct.status && dup?.status !== undefined && dup.status >= 400, { dup, direct, shown, where })
+      // The refusal is the form's own (no field owns an overlap): focus goes to it, the host scrolls it into view, axe is clean.
+      if (dup?.status !== undefined && dup.status >= 400 && shown.length === 1) {
+        const onError = await frame.evaluate(() => { const a = document.activeElement; return { cls: a?.className ?? '', role: a?.getAttribute('role'), inForm: a?.closest('.bud__window-form') !== null } })
+        const errRect = await win('.bud__window-form .wm-form-error').catch(() => null)
+        check('forms: a refusal no field owns (the overlap) takes focus on the form\'s own error, an alert inside that form', onError.cls.includes('wm-form-error') && onError.role === 'alert' && onError.inForm, onError)
+        check('forms: and the host window shows that error (it is on screen)', errRect !== null && inView(errRect), errRect)
+        const errAxe = await axeRun(frame, FRAME_EXCLUDED_RULES)
+        check('forms: axe in the page frame with the form-level error showing: 0 violations', errAxe.length === 0, errAxe)
+        report['formErrorFocus'] = { onError, errRect, axe: errAxe.length }
+      }
     }
 
     // 4. An allowance: the account picker, the "Don't count" picker and the amount.

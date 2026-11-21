@@ -120,6 +120,15 @@ describe('AccountLineForm', () => {
     expect((screen.getByLabelText('Allowance') as HTMLInputElement).value).toBe('-5')
   })
 
+  it('moves focus to a refusal that no field owns', async () => {
+    const onSave = vi.fn().mockResolvedValue({ fields: {}, form: 'That account cannot take an allowance.' })
+    renderForm(null, onSave)
+    fireEvent.change(screen.getByLabelText('Allowance'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add allowance' }))
+    const alert = await screen.findByRole('alert')
+    await waitFor(() => expect(document.activeElement).toBe(alert))
+  })
+
   it('edits an allowance in place: account locked, fields filled, Cancel leaves', () => {
     const { onCancel } = renderForm(allowance)
     expect(screen.getByText('Edit the Joint Checking allowance')).toBeTruthy()

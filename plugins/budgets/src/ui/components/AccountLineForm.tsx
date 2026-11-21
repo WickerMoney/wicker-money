@@ -32,6 +32,7 @@ export function AccountLineForm({ accounts, categories, editing, busy, onSave, o
   const [excluded, setExcluded] = useState<readonly string[]>([])
   const [note, setNote] = useState('')
   const [pick, setPick] = useState('')
+  // The ref is on the outer element, so it holds the form-level error too and focus can reach it.
   const form = useFormErrors<HTMLDivElement>()
   const { clear: clearErrors, clearField } = form
 
@@ -86,11 +87,11 @@ export function AccountLineForm({ accounts, categories, editing, busy, onSave, o
   }
 
   return (
-    <div className="bud__window-form">
+    <div className="bud__window-form" ref={form.ref}>
       <h3 className="bud__window-title">
         {editing !== null ? `Edit the ${editing.accountName} allowance` : 'Add an allowance'}
       </h3>
-      <div className="bud__add bud__add--aligned" ref={form.ref}>
+      <div className="bud__add bud__add--aligned">
         <SelectField label="Account" value={accountId} error={form.errors.fields['accountId']}
                      disabled={editing !== null}
                      onChange={(e) => { setAccountId(e.target.value); clearField('accountId') }}>
