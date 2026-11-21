@@ -10,4 +10,8 @@ export const STRATEGY_INFO: Readonly<Record<Strategy, { readonly label: string; 
     label: 'Avalanche',
     summary: 'Extra money goes to the highest rate first, which costs the least interest.',
   },
+  custom: {
+    label: 'Custom order',
+    summary: 'Extra money goes to the debts in the order you set, skipping any that are paid off.',
+  },
 }

@@ -9,8 +9,12 @@ import type { Strategy } from './Strategy.js'
  * - `avalanche`: highest rate first. A tie goes to the smaller balance, which
  *   is the sooner win at no extra cost.
  *
+ * - `custom`: the caller's order, as given. The service lists a person's debts
+ *   in their own saved order, so this is the order they chose.
+ *
  * Any remaining tie keeps the caller's order, so the same input always gives
- * the same plan.
+ * the same plan. Debts that owe nothing are not passed in, so `custom` skips
+ * them like the others do.
  *
  * The order is fixed at the start and not re-evaluated as balances change.
  * Rates do not change, and the debt being paid is the one getting smaller, so
@@ -26,7 +30,11 @@ export function priorityOrder(debts: readonly ParsedDebt[], strategy: Strategy):
   const byRate = (a: ParsedDebt, b: ParsedDebt): number => compare(b.apr, a.apr)
   const byPosition = (a: ParsedDebt, b: ParsedDebt): number => a.position - b.position
   const rules =
-    strategy === 'snowball' ? [byBalance, byRate, byPosition] : [byRate, byBalance, byPosition]
+    strategy === 'custom'
+      ? [byPosition]
+      : strategy === 'snowball'
+        ? [byBalance, byRate, byPosition]
+        : [byRate, byBalance, byPosition]
   return [...debts].sort((a, b) => {
     for (const rule of rules) {
       const result = rule(a, b)
