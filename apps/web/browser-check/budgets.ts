@@ -15,6 +15,8 @@
  *             month and draw no "sending requests too fast"; the frame follows the month
  *  - forms:   add a line, a window and an allowance through the broker; a server refusal puts focus on the invalid
  *             field and scrolls the host to it; the plan field saves on Enter
+ *  - refresh: a category and a checking account added behind the open page are offered after the frame is hidden and
+ *             shown again, with one read of each and no month read
  *  - alerts:  "Start this month" and a failed remove show their message in their section, inside the window
  *  - size:    the frame is as tall as its document at 1440, 1024 and 390 px, follows a change, no horizontal overflow
  *  - a11y:    landmarks, headings, axe on the host and the page frame and the widget frame, light and dark
@@ -662,6 +664,78 @@ async function formChecks(pw: typeof Playwright, base: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// refresh
+// ---------------------------------------------------------------------------
+
+/**
+ * Categories and accounts are read when the page opens and again when the frame becomes visible after being hidden. A
+ * category and a checking account are added behind the open page (as from another tab); coming back shows both without a
+ * reload, with one read of each and no month read.
+ */
+async function refreshChecks(pw: typeof Playwright, base: string): Promise<void> {
+  await sweep(base)
+  const session = await login(base)
+  const o = await open(pw, base, { width: 1280, height: 900 })
+  let categoryId: string | undefined
+  let accountId: string | undefined
+  try {
+    const calls = trackCalls(o.page)
+    const frame = await gotoPage(o, base, 'isolated')
+    await sleep(500)
+    const optionTexts = (sel: string): Promise<string[]> => frame.locator(sel).evaluateAll((os) => os.map((x) => (x.textContent ?? '').trim()))
+    const name = `B2 refresh ${Date.now() % 100000}`
+    const acctName = `B2 refresh checking ${Date.now() % 100000}`
+    check('refresh: the new category is not offered before it exists', !(await optionTexts('select[aria-label="Add a category"] option, .bud__add select option')).some((t) => t.includes(name)))
+
+    const created = await core(base, session, 'POST', '/categories', { name, slug: `b2-${Date.now()}`, kind: 'expense' })
+    categoryId = (created.json as { id?: string } | null)?.id
+    const account = await core(base, session, 'POST', '/accounts', { name: acctName, accountType: 'checking', initialBalance: '0.00' })
+    accountId = (account.json as { id?: string } | null)?.id
+    note('category and checking account added behind the open page', { category: created.status, account: account.status })
+    await sleep(600)
+    const stale = await optionTexts('.bud__add select option')
+    check('refresh: while the frame stays visible nothing is read again, so the page does not show them yet', !stale.some((t) => t.includes(name)) && !stale.some((t) => t.includes(acctName)) && readsOf(calls, '/core/').length === 2, { reads: readsOf(calls, '/core/').map((c) => c.path), stale: stale.length })
+
+    // Hide the page (another tab in front) and bring it back. Whether headless Chromium reports the page as hidden is
+    // measured; when it does not, the frame is told the same thing through the event the browser would fire.
+    const other = await o.ctx.newPage()
+    await other.goto('about:blank')
+    await other.bringToFront()
+    await sleep(300)
+    const hiddenReal = await frame.evaluate(() => document.visibilityState === 'hidden')
+    note('headless Chromium reports the frame as hidden when another tab is in front', hiddenReal)
+    const mark = calls.length
+    if (hiddenReal) {
+      await o.page.bringToFront()
+    } else {
+      // A string, not a function: the check's own transpiler would add helpers the frame does not have.
+      await frame.evaluate(`(() => {
+        var state = 'hidden'
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: function () { return state } })
+        document.dispatchEvent(new Event('visibilitychange'))
+        state = 'visible'
+        document.dispatchEvent(new Event('visibilitychange'))
+      })()`)
+    }
+    await other.close()
+    const optionsNow = await eventually(() => optionTexts('.bud__add select option'), (t) => t.some((x) => x.includes(name)) && t.some((x) => x.includes(acctName)))
+    check('refresh: back on the page, the new category is offered (no reload)', optionsNow.some((t) => t.includes(name)), optionsNow.length)
+    check('refresh: and the new checking account is offered to the allowance form', optionsNow.some((t) => t.includes(acctName)), optionsNow.length)
+    await sleep(400)
+    const after = calls.slice(mark)
+    note('requests after coming back', after.map((c) => `${c.method} ${c.path} ${c.status}`))
+    report['refresh'] = { hiddenReal, requests: after.map((c) => `${c.method} ${c.path} ${c.status}`) }
+    check('refresh: coming back reads categories once and accounts once, no month, no write, all 200', readsOf(after, '/core/categories').length === 1 && readsOf(after, '/core/accounts').length === 1 && monthReads(after).length === 0 && writes(after).length === 0 && after.every((c) => c.status === 200), after.map((c) => `${c.path} ${c.status}`))
+    check('refresh: no console error, failed request or CSP violation', o.problems.length === 0, o.problems)
+  } finally {
+    await o.browser.close()
+    if (categoryId !== undefined) await core(base, session, 'DELETE', `/categories/${categoryId}`)
+    if (accountId !== undefined) await core(base, session, 'DELETE', `/accounts/${accountId}`)
+    await sweep(base)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // alerts
 // ---------------------------------------------------------------------------
 
@@ -1208,11 +1282,12 @@ async function main(): Promise<void> {
     if (wants('load')) await loadChecks(pw, isolated.base)
     if (wants('nav')) await navChecks(pw, isolated.base)
     if (wants('forms')) await formChecks(pw, isolated.base)
+    if (wants('refresh')) await refreshChecks(pw, isolated.base)
     if (wants('alerts')) await alertChecks(pw, isolated.base)
     if (wants('size')) await sizeChecks(pw, isolated.base)
     if (wants('a11y')) await a11yChecks(pw, isolated.base)
     if (wants('visual')) await visualChecks(pw, isolated.base)
-    if (wants('forms') || wants('alerts')) {
+    if (wants('forms') || wants('refresh') || wants('alerts')) {
       await sweep(isolated.base)
       check('the persona\'s budget lines, windows and allowances are as the run found them', (await snapshot(isolated.base)) === before)
     }

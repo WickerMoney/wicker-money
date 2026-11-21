@@ -93,8 +93,9 @@ export interface BudgetMonth {
  * user is now looking at. A save that finishes after the user has moved on does
  * not reload the month they left.
  *
- * Categories and accounts do not depend on the month, so they load once, when
- * the page opens, and not with every month. A change of month waits
+ * Categories and accounts do not depend on the month, so they load when the
+ * page opens, and again each time the frame becomes visible after being hidden
+ * (a category added in another tab shows up on return), and not with every month. A change of month waits
  * {@link MONTH_LOAD_DEBOUNCE_MS} before it loads (the first load does not wait),
  * so stepping through months quickly asks for the one the user stops on.
  *
@@ -158,15 +159,29 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
     [load],
   )
 
-  // Categories and accounts are the same whichever month is shown, so they are asked for once, not with each month.
+  // Categories and accounts are the same whichever month is shown, so they are asked for once, not with each month. They
+  // are asked for again when the frame becomes visible after being hidden (the person went to another tab to add a
+  // category or an account and came back); that is a person's action, so it cannot become a burst.
+  const [listsStale, setListsStale] = useState(0)
+  useEffect(() => {
+    const doc = typeof document === 'undefined' ? null : document
+    if (doc === null) return
+    const onVisible = () => { if (doc.visibilityState === 'visible') setListsStale((n) => n + 1) }
+    doc.addEventListener('visibilitychange', onVisible)
+    return () => doc.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
+    // The host keeps a read for a few seconds; a return to the page asks past it, or it could answer with the list from
+    // before the category was added. The first load takes whatever the host has.
+    const init = listsStale === 0 ? { signal: controller.signal } : { signal: controller.signal, cache: 'no-store' as const }
     const { signal } = controller
     Promise.all([
-      api.get<Category[]>('/core/categories/list', { signal }),
+      api.get<Category[]>('/core/categories/list', init),
       // The account listing only adds the allowance form's picker. A host
       // that does not offer it must not stop the month from loading.
-      api.get<{ accounts?: AccountOption[] }>('/core/accounts/list', { signal }).catch((e: unknown) => {
+      api.get<{ accounts?: AccountOption[] }>('/core/accounts/list', init).catch((e: unknown) => {
         if (signal.aborted) throw e
         return null
       }),
@@ -175,11 +190,12 @@ export function useBudgetMonth(ctx: PluginContext): BudgetMonth {
       // Only categories a budget can count; income and transfers would always read zero.
       setCategories(cats.filter(isBudgetable))
       setAccounts((accountList?.accounts ?? []).filter((a) => ACCOUNT_LINE_TYPES.includes(a.type)))
+      setListError(null)
     }).catch((e: unknown) => {
       if (!signal.aborted) setListError(e instanceof Error ? e.message : 'Could not load the categories.')
     })
     return () => controller.abort()
-  }, [api])
+  }, [api, listsStale])
 
   // The month: at once the first time, then after a pause, so a burst of month changes loads only the last.
   useEffect(() => {

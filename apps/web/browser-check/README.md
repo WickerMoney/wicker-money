@@ -78,12 +78,13 @@ quiet one. The hostile suite's page-frame phase covers what a page that lies abo
 
 `budgets.ts` checks the Budgets page and its "Budget breakdown" widget in frames (same setup and run command as the Forecast
 check; it makes its own marked lines, windows and allowances, a throwaway category and a throwaway checking account, removes
-them, and compares the persona's data before and after). `ONLY=load,nav,forms,alerts,size,a11y,visual,measure` runs some
+them, and compares the persona's data before and after). `ONLY=load,nav,forms,refresh,alerts,size,a11y,visual,measure` runs some
 groups. `nav` clicks "Previous" 20 times 30 ms apart and holds Enter on it, and expects one month request and no "sending
 requests too fast". `forms` adds a line, a window and an allowance through the broker, saves the plan field with Enter, and
 deletes the category behind the page's back so the server refuses the window: focus must land on the invalid field and the host
 must scroll to it, and the server's refusal of an overlapping window (no field owns it) must focus the form's own error, in view, with axe clean.
-`alerts` checks that a failed remove and "Start this month" show their message in their own section, inside
+`refresh` adds a category and a checking account behind the open page and expects both after the frame is hidden and shown again, with one read
+of each and no month read. `alerts` checks that a failed remove and "Start this month" show their message in their own section, inside
 the window. `size` checks that the frame is as tall as its document at 1440, 1024 and 390 px and follows a month change and a
 resize. `a11y` runs axe on the host, the page frame and the widget frame, light and dark (the frame document leaves out
 `landmark-one-main`, `page-has-heading-one` and `region`, ADR 0014). `measure` alternates in-realm and isolated for the time to

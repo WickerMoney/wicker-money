@@ -13,6 +13,8 @@ curated, human-readable version.
 
 - Budgets: a refusal on the window or allowance form that belongs to no one field now takes focus and is
   announced, as a field error already did.
+- Budgets: categories and accounts are read again when the page becomes visible after being hidden, so a category
+  or account added in another tab is offered without reopening the page.
 
 ## [0.8.0] - 2026-11-18
 
