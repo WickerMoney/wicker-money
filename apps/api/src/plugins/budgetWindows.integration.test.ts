@@ -345,3 +345,110 @@ describe('refusing what is not a window', () => {
     expect(del.statusCode).toBe(404)
   })
 })
+
+describe('a window write that would overlap another line', () => {
+  // Every case is a 409 `overlaps`, never a 500: the exclusion constraint's `23P01` has to come back through the
+  // plugin's database role, the host's transaction runner and the service's `refuseOverlap` as that one code,
+  // whether the write is an insert or an update and whether the other line is a window or a month.
+  let stays: string
+  let moves: string
+  let category: string
+
+  beforeAll(async () => {
+    category = await newCategory(user, 'Overlaps', 'overlaps')
+    const a = await putWindow({ categoryId: category, start: '2036-01-10', through: '2036-02-20', planned: '100.0000' })
+    const b = await putWindow({ categoryId: category, start: '2036-03-05', through: '2036-04-15', planned: '100.0000' })
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200])
+    stays = (a.json() as { id: string }).id
+    moves = (b.json() as { id: string }).id
+  })
+
+  it('refuses to update a window onto the days of another window', async () => {
+    const res = await putWindow({
+      id: moves, categoryId: category, start: '2036-02-20', through: '2036-04-15', planned: '100.0000',
+    })
+    expect(res.statusCode).toBe(409)
+    expect(codeOf(res)).toBe('overlaps')
+  })
+
+  it('leaves the window as it was after a refused update', async () => {
+    const body = await month('2036-03')
+    const line = body.lines.find((l) => l.id === moves)
+    expect(line?.window).toMatchObject({ start: '2036-03-05', through: '2036-04-15' })
+  })
+
+  it('refuses to update a window onto a month that has a monthly line', async () => {
+    const other = await newCategory(user, 'Overlaps monthly', 'overlaps-monthly')
+    expect((await putLine({ month: '2036-06', categoryId: other, planned: '10.0000', rollover: false })).statusCode).toBe(200)
+    const made = await putWindow({ categoryId: other, start: '2036-07-01', through: '2036-08-10', planned: '10.0000' })
+    expect(made.statusCode).toBe(200)
+
+    const res = await putWindow({
+      id: (made.json() as { id: string }).id, categoryId: other, start: '2036-06-20', through: '2036-08-10', planned: '10.0000',
+    })
+    expect(res.statusCode).toBe(409)
+    expect(codeOf(res)).toBe('overlaps')
+  })
+
+  it('refuses to move a window to another category onto that category\'s window', async () => {
+    const res = await putWindow({
+      id: stays, categoryId: gifts, start: '2030-12-25', through: '2031-01-05', planned: '100.0000',
+    })
+    expect(res.statusCode).toBe(409)
+    expect(codeOf(res)).toBe('overlaps')
+  })
+
+  // The unique index on (user, category, start day) refuses these before the exclusion constraint is consulted, with
+  // `23505` rather than `23P01`. They were a 500.
+  it('refuses a window that starts on the same day as another window', async () => {
+    const res = await putWindow({ categoryId: category, start: '2036-01-10', through: '2036-01-25', planned: '1.0000' })
+    expect(res.statusCode).toBe(409)
+    expect(codeOf(res)).toBe('overlaps')
+  })
+
+  it('refuses a window that starts on the first of a month that has a monthly line', async () => {
+    const other = await newCategory(user, 'Overlaps first', 'overlaps-first')
+    expect((await putLine({ month: '2036-05', categoryId: other, planned: '10.0000', rollover: false })).statusCode).toBe(200)
+    const res = await putWindow({ categoryId: other, start: '2036-05-01', through: '2036-06-10', planned: '1.0000' })
+    expect(res.statusCode).toBe(409)
+    expect(codeOf(res)).toBe('overlaps')
+  })
+
+  it('refuses to update a window so it starts on the day another window starts', async () => {
+    const res = await putWindow({
+      id: moves, categoryId: category, start: '2036-01-10', through: '2036-04-15', planned: '100.0000',
+    })
+    expect(res.statusCode).toBe(409)
+    expect(codeOf(res)).toBe('overlaps')
+  })
+
+  it('refuses a window inside another window, and one that swallows it', async () => {
+    const inside = await putWindow({ categoryId: category, start: '2036-01-20', through: '2036-01-25', planned: '1.0000' })
+    const around = await putWindow({ categoryId: category, start: '2036-01-01', through: '2036-03-01', planned: '1.0000' })
+    expect([inside.statusCode, around.statusCode]).toEqual([409, 409])
+    expect([codeOf(inside), codeOf(around)]).toEqual(['overlaps', 'overlaps'])
+  })
+
+  it('answers two overlapping inserts sent at the same moment with one 200 and one 409', async () => {
+    const fresh = await newCategory(user, 'Overlaps racing', 'overlaps-racing')
+    const results = await Promise.all([
+      putWindow({ categoryId: fresh, start: '2036-09-01', through: '2036-10-20', planned: '1.0000' }),
+      putWindow({ categoryId: fresh, start: '2036-10-10', through: '2036-11-30', planned: '1.0000' }),
+    ])
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 409])
+    expect(codeOf(results.find((r) => r.statusCode === 409)!)).toBe('overlaps')
+  })
+
+  it('answers two windows each grown into the other at the same moment with no 500', async () => {
+    const fresh = await newCategory(user, 'Overlaps growing', 'overlaps-growing')
+    const left = await putWindow({ categoryId: fresh, start: '2036-12-01', through: '2037-01-10', planned: '1.0000' })
+    const right = await putWindow({ categoryId: fresh, start: '2037-01-20', through: '2037-02-28', planned: '1.0000' })
+    const [l, r] = [(left.json() as { id: string }).id, (right.json() as { id: string }).id]
+    const results = await Promise.all([
+      putWindow({ id: l, categoryId: fresh, start: '2036-12-01', through: '2037-01-25', planned: '1.0000' }),
+      putWindow({ id: r, categoryId: fresh, start: '2037-01-05', through: '2037-02-28', planned: '1.0000' }),
+    ])
+    expect(results.map((x) => x.statusCode)).toEqual([409, 409])
+    expect(results.map(codeOf)).toEqual(['overlaps', 'overlaps'])
+  })
+})
