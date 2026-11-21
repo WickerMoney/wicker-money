@@ -964,7 +964,8 @@ migration.
 
 **Debt payoff** (bundled plugin `plugins/debt-payoff`, id `wickermoney.debt-payoff`)
 keeps a list of debts and builds a payoff plan from them, by the snowball
-(smallest balance first) or avalanche (highest rate first) method. It has a
+(smallest balance first) or avalanche (highest rate first) method, or in the
+person's own order (Custom order). It has a
 server half (tables, endpoints and the planning engine) and a browser half: a
 "Debt payoff" page in the main navigation and a "Debt-free date" dashboard
 widget, built as a Module Federation remote like Budgets. The page lists the
@@ -977,6 +978,8 @@ shows the result.
 It has its own tables in the `plugin_debt_payoff` schema (migration 030):
 `debts` (name, balance, APR, minimum payment, optional linked account, sort
 order, archived) and `plan_settings` (the saved strategy and monthly extra).
+`debts.sort_order` is the person's own order and what Custom order follows; migration 036
+only widens the strategy check to allow `custom`.
 Money is `numeric(19,4)` in PostgreSQL and a decimal string in TypeScript.
 Both tables are under forced row-level security, and a debt's account link is a
 composite `(user_id, account_id)` key into `core.accounts`, so a debt cannot
@@ -992,7 +995,8 @@ Endpoints, under `/api/v1/p/wickermoney.debt-payoff`:
 | --- | --- |
 | `GET /debts` (`?includeArchived=true`) | The list, in the person's own order |
 | `POST /debts`, `GET/PUT/DELETE /debts/:id` | Create, read, change (partial; `accountId: null` unlinks) and delete |
-| `GET /settings`, `PUT /settings` | Saved strategy (default `avalanche`) and extra (default `0`) |
+| `PUT /debts/order` | Body `{ ids }`: every debt that is not archived, once each, in the new order. One request and one `UPDATE`; numbers them from 0. A list that is not exactly the person's debts is a `400` on `ids` (`duplicate_debt`, `unknown_debt`, `missing_debt`) and changes nothing |
+| `GET /settings`, `PUT /settings` | Saved strategy (`snowball`, `avalanche` or `custom`; default `avalanche`) and extra (default `0`) |
 | `GET /plan?strategy&extra&tz` | The plan; values not given in the query come from the saved settings |
 | `GET /account-suggestions` | Loan and credit card accounts, with the debt already tracking each |
 
@@ -1008,7 +1012,10 @@ on the SDK's bigint `/money` maths, no floating point anywhere):
 - The same amount is paid every month: the sum of the minimums plus the extra.
   When a debt is paid off, its minimum rolls to the next debt in the order.
   The order is fixed at the start (snowball: balance, then rate, then list
-  position; avalanche: rate, then balance, then list position).
+  position; avalanche: rate, then balance, then list position; custom: list
+  position, which is the person's saved order, skipping debts at zero or left
+  out of the plan). The page changes the order with Move up and Move down
+  buttons, not drag, so it works from a keyboard.
 - A minimum above what is owed pays only what is owed.
 - The plan also carries a minimums-only baseline, so the response says how many
   months and how much interest the strategy saves.
