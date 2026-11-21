@@ -14,6 +14,9 @@
  *             the largest body
  *  - dialog:  the debt dialog in a tall page frame (where it opens, what it covers, focus, Escape, scroll lock,
  *             phone, theme, a hostile frame's use of the channel)
+ *  - custom:  Custom order: choose it, reorder by keyboard (Move up / Move down, one request per move, focus kept on
+ *             the pressed button, the position announced), the plan and totals change, the order survives a reload,
+ *             the frame is as tall as its content, axe in light and dark, phone widths with no horizontal overflow
  *  - a11y:    landmarks, headings, Tab order, axe on the host and on the page and widget frames
  *  - measure: time to the page's chart, memory and bytes, in-realm against isolated, alternating
  *
@@ -749,6 +752,185 @@ async function dialogChecks(pw: typeof Playwright, base: string): Promise<void> 
   } finally { await ph.browser.close() }
 }
 
+
+// ---------------------------------------------------------------------------
+// custom (Custom order)
+// ---------------------------------------------------------------------------
+
+/** The names in the Custom order list, top to bottom. */
+const customNames = (frame: Playwright.Frame): Promise<string[]> =>
+  frame.evaluate(() => [...document.querySelectorAll('.dp-custom__row')].map((li) => li.querySelector('.dp-custom__name > span:last-child')?.firstChild?.textContent ?? ''))
+
+/** The accessible text of the focused element in the frame. */
+const focusedIn = (frame: Playwright.Frame): Promise<string> =>
+  frame.evaluate(() => { const el = document.activeElement; return el === null || el === document.body ? 'body' : (el.textContent ?? '').trim().replace(/\s+/g, ' ') })
+
+/** The first column of the "Order of payoff" table, top to bottom. */
+const payoffOrder = (frame: Playwright.Frame): Promise<string[]> =>
+  frame.evaluate(() => [...document.querySelectorAll('.dp-order tbody tr')].map((tr) => (tr.querySelectorAll('td')[1]?.textContent ?? '').trim()))
+
+const totalsText = (frame: Playwright.Frame): Promise<string> => frame.evaluate(() => (document.querySelector('.dp-totals')?.textContent ?? '') + '|' + (document.querySelector('.dp-headline')?.textContent ?? ''))
+
+/** How far the iframe's box is from its document's content height, the host's job to keep at zero. */
+async function frameFit(page: Playwright.Page, frame: Playwright.Frame): Promise<{ box: number; content: number }> {
+  const content = await frame.evaluate(() => document.documentElement.scrollHeight)
+  const box = await page.locator(`iframe[title="${PAGE_TITLE}"]`).evaluate((e) => Math.round(e.getBoundingClientRect().height))
+  return { box, content }
+}
+
+async function customChecks(pw: typeof Playwright, base: string): Promise<void> {
+  const avalanche = { order: [] as string[], totals: '' }
+  await seedDebts(base, 5)
+  const o = await open(pw, base, { width: 1280, height: 900 })
+  try {
+    const calls = trackCalls(o.page)
+    const frame = await gotoPage(o, base, 'isolated')
+    check('custom: the page opens on avalanche, with no reorder list', (await frame.getByRole('button', { name: 'Avalanche' }).getAttribute('aria-pressed')) === 'true' && (await frame.locator('.dp-custom').count()) === 0)
+    const avalancheTotals = await totalsText(frame)
+    const avalancheOrder = await payoffOrder(frame)
+    avalanche.order = avalancheOrder
+    avalanche.totals = avalancheTotals
+    const fitBefore = await frameFit(o.page, frame)
+    check('custom: the frame is as tall as its content before choosing it', Math.abs(fitBefore.box - fitBefore.content) <= 2, fitBefore)
+
+    // Choose it.
+    await frame.getByRole('button', { name: 'Custom order' }).click()
+    await frame.getByRole('heading', { name: 'Your payoff order' }).waitFor()
+    await eventually(async () => lastWrite(calls)?.status ?? 0, (v) => v !== 0)
+    check('custom: choosing it saves the strategy as custom', JSON.stringify(lastWrite(calls)?.body) === '{"strategy":"custom"}' && lastWrite(calls)?.status === 200, lastWrite(calls))
+    check('custom: Custom order is pressed and the list shows every debt in the saved order', (await frame.getByRole('button', { name: 'Custom order' }).getAttribute('aria-pressed')) === 'true' && JSON.stringify(await customNames(frame)) === JSON.stringify(['Debt 01', 'Debt 02', 'Debt 03', 'Debt 04', 'Debt 05']), await customNames(frame))
+    await eventually(() => payoffOrder(frame), (v) => v[0]?.includes('Debt 01') === true)
+    const customOrder1 = await payoffOrder(frame)
+    check('custom: the plan pays in the list order', customOrder1.map((n) => n.replace(/\s+/g, ' ').trim().slice(0, 7)).join() === 'Debt 01,Debt 02,Debt 03,Debt 04,Debt 05', customOrder1)
+    check('custom: that is not the avalanche order (the strategy is doing something)', JSON.stringify(customOrder1) !== JSON.stringify(avalancheOrder), { avalancheOrder, customOrder1 })
+    await sleep(300)
+    const fitAfter = await frameFit(o.page, frame)
+    check('custom: the frame grows with the list and is as tall as its content', fitAfter.content > fitBefore.content && Math.abs(fitAfter.box - fitAfter.content) <= 2, { fitBefore, fitAfter })
+    await shot(o.page, 'custom-desktop')
+
+    // Two buttons on every row, named by the debt; the ends are inert but still in the tab order.
+    const buttons = await frame.locator('.dp-custom__row button').evaluateAll((bs) => bs.map((b) => ({ name: (b.textContent ?? '').replace(/\s+/g, ' ').trim(), disabled: (b as HTMLButtonElement).disabled, ariaDisabled: b.getAttribute('aria-disabled'), tab: (b as HTMLButtonElement).tabIndex })))
+    check('custom: ten buttons, Move up and Move down named by their debt, none `disabled`', buttons.length === 10 && buttons.every((b) => !b.disabled && b.tab === 0) && buttons[0]?.name === 'Move up Debt 01' && buttons[1]?.name === 'Move down Debt 01', buttons)
+    check('custom: only the first Move up and the last Move down are aria-disabled', buttons.filter((b) => b.ariaDisabled === 'true').map((b) => b.name).join() === 'Move up Debt 01,Move down Debt 05', buttons.filter((b) => b.ariaDisabled === 'true'))
+
+    // By keyboard: focus a Move up, press Enter, press Space; each press is one request and focus stays on the button.
+    await frame.evaluate(() => { (window as unknown as { __seen: string[] }).__seen = []; new MutationObserver(() => { for (const e of document.querySelectorAll('[role="status"]')) { const t = (e.textContent ?? '').trim(); if (t !== '') (window as unknown as { __seen: string[] }).__seen.push(t) } }).observe(document.body, { subtree: true, childList: true, characterData: true }) })
+    const putsBefore = calls.filter((c) => c.method === 'PUT' && c.path === '/debts/order').length
+    await frame.getByRole('button', { name: 'Move up Debt 05' }).focus()
+    await o.page.keyboard.press('Enter')
+    await eventually(() => customNames(frame), (v) => v[3] === 'Debt 05')
+    check('custom: Enter on Move up moves the debt up one place', JSON.stringify(await customNames(frame)) === JSON.stringify(['Debt 01', 'Debt 02', 'Debt 03', 'Debt 05', 'Debt 04']), await customNames(frame))
+    await sleep(250)
+    check('custom: focus is on the moved row\'s Move up button, not lost to the page', (await focusedIn(frame)).startsWith('Move up Debt 05'), await focusedIn(frame))
+    await o.page.keyboard.press('Space')
+    await eventually(() => customNames(frame), (v) => v[2] === 'Debt 05')
+    await sleep(250)
+    check('custom: Space moves it again, and focus is still on it', JSON.stringify(await customNames(frame)) === JSON.stringify(['Debt 01', 'Debt 02', 'Debt 05', 'Debt 03', 'Debt 04']) && (await focusedIn(frame)).startsWith('Move up Debt 05'), { names: await customNames(frame), focus: await focusedIn(frame) })
+    await frame.getByRole('button', { name: 'Move down Debt 01' }).focus()
+    await o.page.keyboard.press('Enter')
+    await eventually(() => customNames(frame), (v) => v[1] === 'Debt 01')
+    await sleep(250)
+    check('custom: Move down by keyboard works and keeps focus on Move down', JSON.stringify(await customNames(frame)) === JSON.stringify(['Debt 02', 'Debt 01', 'Debt 05', 'Debt 03', 'Debt 04']) && (await focusedIn(frame)).startsWith('Move down Debt 01'), { names: await customNames(frame), focus: await focusedIn(frame) })
+    const puts = calls.filter((c) => c.method === 'PUT' && c.path === '/debts/order')
+    check('custom: three moves are three requests, each the whole list in one body', puts.length - putsBefore === 3 && puts.slice(-3).every((c) => (c.body as { ids?: string[] }).ids?.length === 5 && c.status === 200), puts.slice(-3))
+    const seen = await frame.evaluate(() => [...new Set((window as unknown as { __seen: string[] }).__seen)])
+    note('status texts after the moves', seen)
+    check('custom: the new position is announced in the polite live region', seen.some((t) => /^Debt 05 moved up\. It is now number 4 of 5\./.test(t)) && seen.some((t) => /^Debt 01 moved down\. It is now number 2 of 5\./.test(t)), seen)
+    const liveOk = await frame.evaluate(() => { const r = document.querySelector('.dp > [role="status"][aria-live="polite"]'); return r !== null && r.getAttribute('aria-atomic') === 'true' })
+    check('custom: that region is polite, atomic and mounted from the start', liveOk)
+
+    // The plan and the date follow.
+    await eventually(() => payoffOrder(frame), (v) => v[0]?.includes('Debt 02') === true)
+    const customOrder2 = await payoffOrder(frame)
+    check('custom: the plan\'s order of payoff follows the new list', customOrder2.map((n) => n.slice(0, 7)).join() === 'Debt 02,Debt 01,Debt 05,Debt 03,Debt 04', customOrder2)
+    const customTotals2 = await totalsText(frame)
+    check('custom: the totals and the debt-free line changed with the order', customTotals2 !== avalancheTotals, { avalancheTotals, customTotals2 })
+    note('totals (avalanche, then after reordering)', [avalancheTotals, customTotals2])
+
+    // A phone press is a click: the same path, one request.
+    await frame.getByRole('button', { name: 'Move up Debt 04' }).click()
+    await eventually(() => customNames(frame), (v) => v[3] === 'Debt 04')
+    check('custom: a click does the same', (await customNames(frame))[3] === 'Debt 04')
+    await sleep(500)
+    check('custom: no console error, failed request or CSP violation while reordering', o.problems.length === 0, o.problems)
+    check('custom: every write was answered 200', writes(calls).every((c) => c.status === 200), writes(calls).filter((c) => c.status !== 200))
+  } finally { await o.browser.close() }
+
+  // Reload: the choice and the order are kept.
+  const r = await open(pw, base, { width: 1280, height: 900 })
+  try {
+    const frame = await gotoPage(r, base, 'isolated')
+    await frame.getByRole('heading', { name: 'Your payoff order' }).waitFor()
+    const names = await customNames(frame)
+    check('custom: after a reload Custom order is still chosen and the order is kept', (await frame.getByRole('button', { name: 'Custom order' }).getAttribute('aria-pressed')) === 'true' && names.join() === 'Debt 02,Debt 01,Debt 05,Debt 04,Debt 03', names)
+    const table = await frame.evaluate(() => [...document.querySelectorAll('.dp-debts tbody tr')].map((tr) => (tr.querySelector('td')?.textContent ?? '').slice(0, 7)))
+    check('custom: "Your debts" lists them in the same order', table.join() === 'Debt 02,Debt 01,Debt 05,Debt 04,Debt 03', table)
+    // Switching back is the old behaviour, unchanged.
+    await frame.getByRole('button', { name: 'Avalanche' }).click()
+    await eventually(() => frame.locator('.dp-custom').count(), (n) => n === 0)
+    await eventually(() => payoffOrder(frame), (v) => JSON.stringify(v) === JSON.stringify(avalanche.order))
+    check('custom: switching back to avalanche hides the list, and the plan is the avalanche plan it was, whatever the list order', (await frame.locator('.dp-custom').count()) === 0 && (await frame.getByRole('button', { name: 'Avalanche' }).getAttribute('aria-pressed')) === 'true' && JSON.stringify(await payoffOrder(frame)) === JSON.stringify(avalanche.order) && (await totalsText(frame)) === avalanche.totals, { now: await totalsText(frame), was: avalanche.totals })
+    check('custom: no console error after reloading and switching back', r.problems.length === 0, r.problems)
+  } finally { await r.browser.close() }
+
+  // Axe, light and dark, with the list on screen.
+  const sp = await open(pw, base, { width: 1280, height: 900 })
+  try {
+    // Put it back to custom for the accessibility runs.
+    const s = await login(base)
+    await plugin(base, s, 'PUT', '/settings', { strategy: 'custom' })
+  } finally { await sp.browser.close() }
+  for (const scheme of ['light', 'dark'] as const) {
+    const a = await open(pw, base, { width: 1280, height: 900, scheme })
+    try {
+      const frame = await gotoPage(a, base, 'isolated')
+      await frame.getByRole('heading', { name: 'Your payoff order' }).waitFor()
+      await sleep(500)
+      const inFrame = await axeRun(frame, FRAME_EXCLUDED_RULES)
+      check(`custom a11y ${scheme}: axe in the page frame with the reorder list: 0 violations`, inFrame.length === 0, inFrame)
+      const host = await axeRun(a.page.mainFrame(), ['page-has-heading-one'])
+      check(`custom a11y ${scheme}: axe on the host with the page frame: 0 violations`, host.length === 0, host)
+      // After a move, too (the list is re-rendered and the live region has spoken).
+      await frame.getByRole('button', { name: 'Move down Debt 02' }).click()
+      await eventually(() => customNames(frame), (v) => v[1] === 'Debt 02')
+      await sleep(400)
+      const moved = await axeRun(frame, FRAME_EXCLUDED_RULES)
+      check(`custom a11y ${scheme}: axe in the page frame after a move: 0 violations`, moved.length === 0, moved)
+      const contrast = await frame.evaluate(() => { const b = document.querySelector('.dp-custom__row .wm-btn[aria-disabled="true"]'); return b === null ? null : getComputedStyle(b).opacity })
+      note(`custom a11y ${scheme}: opacity of an inert end button (the ui-kit's aria-disabled style)`, contrast)
+      await shot(a.page, `custom-${scheme}`)
+    } finally { await a.browser.close() }
+  }
+
+  // Phone widths: no horizontal overflow, targets big enough, the frame is as tall as its content.
+  for (const width of [390, 320]) {
+    const ph = await open(pw, base, { width, height: 844 })
+    try {
+      const frame = await gotoPage(ph, base, 'isolated')
+      await frame.getByRole('heading', { name: 'Your payoff order' }).waitFor()
+      await sleep(600)
+      const m = await frame.evaluate(() => {
+        const rows = [...document.querySelectorAll('.dp-custom__row')]
+        const btn = document.querySelector('.dp-custom__row .wm-btn')?.getBoundingClientRect()
+        const seg = document.querySelector('.dp-seg')?.getBoundingClientRect()
+        const wide = rows.filter((r) => r.scrollWidth > r.clientWidth + 1).length
+        return { scrollW: document.documentElement.scrollWidth, clientW: document.documentElement.clientWidth, buttonH: btn === undefined ? 0 : Math.round(btn.height), buttonW: btn === undefined ? 0 : Math.round(btn.width), segRight: seg === undefined ? 0 : Math.round(seg.right), wide }
+      })
+      check(`custom phone ${width}: no horizontal overflow in the frame or on the host`, m.scrollW <= m.clientW && (await ph.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)) && m.wide === 0 && m.segRight <= m.clientW, m)
+      check(`custom phone ${width}: Move up and Move down are at least 44 px tall`, m.buttonH >= 44, m)
+      const fit = await frameFit(ph.page, frame)
+      check(`custom phone ${width}: the frame is as tall as its content`, Math.abs(fit.box - fit.content) <= 2, fit)
+      // Move one by touch-sized click and watch the height follow.
+      await frame.locator('.dp-custom__row').nth(2).getByRole('button', { name: /^Move up/ }).click()
+      await sleep(900)
+      const fit2 = await frameFit(ph.page, frame)
+      check(`custom phone ${width}: still as tall as its content after a move`, Math.abs(fit2.box - fit2.content) <= 2, fit2)
+      await shot(ph.page, `custom-phone-${width}`)
+      check(`custom phone ${width}: no console error or CSP violation`, ph.problems.length === 0, ph.problems)
+    } finally { await ph.browser.close() }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // a11y
 // ---------------------------------------------------------------------------
@@ -1143,6 +1325,7 @@ async function main(): Promise<void> {
     if (wants('load')) await loadChecks(pw, isolated.base)
     if (wants('writes')) await writeChecks(pw, isolated.base)
     if (wants('dialog')) await dialogChecks(pw, isolated.base)
+    if (wants('custom')) await customChecks(pw, isolated.base)
     if (wants('a11y')) await a11yChecks(pw, isolated.base)
     if (wants('visual')) await visualChecks(pw, isolated.base)
   } finally {
