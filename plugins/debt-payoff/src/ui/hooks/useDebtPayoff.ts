@@ -3,6 +3,7 @@ import type { PluginContext } from '@wickermoney/plugin-sdk/runtime'
 import { NO_FORM_ERRORS, formErrorsFrom, type FormErrors } from '@wickermoney/ui-kit'
 import { DEBT_PAYOFF_API_BASE } from '../../server/constants.js'
 import type { PlanResponse, Strategy } from '../../shared/index.js'
+import { STRATEGY_INFO } from '../helpers/STRATEGY_INFO.js'
 import { checkDraft } from '../helpers/checkDraft.js'
 import { colorFor } from '../helpers/colorFor.js'
 import { draftBody } from '../helpers/draftBody.js'
@@ -55,6 +56,13 @@ export interface DebtPayoff {
   readonly removeDebt: (debt: Debt) => Promise<boolean>
   /** Switches a debt into or out of the plan, saved at once. */
   readonly setIncluded: (debt: Debt, included: boolean) => Promise<void>
+  /**
+   * Moves a debt one place up or down among the debts that are not archived,
+   * and saves the whole order in one request.
+   *
+   * @returns Whether the new order was saved; `false` for a debt already at that end, or a failure.
+   */
+  readonly moveDebt: (debt: Debt, direction: 'up' | 'down') => Promise<boolean>
 }
 
 /**
@@ -150,7 +158,7 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
     try {
       await saveSettings({ strategy: next })
       setMessage(null)
-      setStatus(`${next === 'snowball' ? 'Snowball' : 'Avalanche'} selected. Updating the plan.`)
+      setStatus(`${STRATEGY_INFO[next].label} selected. Updating the plan.`)
     } catch (e: unknown) {
       setMessage(messageOf(e, 'Could not save that choice.'))
     } finally {
@@ -207,6 +215,31 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
     }
   }, [api])
 
+  const moveDebt = useCallback(async (debt: Debt, direction: 'up' | 'down'): Promise<boolean> => {
+    const ids = (debts ?? []).filter((d) => !d.archived).map((d) => d.id)
+    const from = ids.indexOf(debt.id)
+    const to = direction === 'up' ? from - 1 : from + 1
+    if (from < 0 || to < 0 || to >= ids.length) return false
+    ;[ids[from], ids[to]] = [ids[to] as string, ids[from] as string]
+    setBusy(true)
+    try {
+      const saved = await api.put<DebtsResponse>(`${DEBT_PAYOFF_API_BASE}/debts/order`, { ids })
+      // Show the saved order at once; the read that follows settles anything else (archived debts' places, the plan).
+      setDebts((current) => current === null ? current : [...saved.debts, ...current.filter((d) => d.archived)])
+      setVersion((v) => v + 1)
+      setMessage(null)
+      setStatus(`${debt.name} moved ${direction}. It is now number ${to + 1} of ${ids.length}. Updating the plan.`)
+      return true
+    } catch (e: unknown) {
+      setMessage(messageOf(e, `Could not move ${debt.name}.`))
+      // The likeliest cause is a list that changed elsewhere; read it again so the next move starts from the truth.
+      setVersion((v) => v + 1)
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }, [api, debts])
+
   const removeDebt = useCallback(async (debt: Debt): Promise<boolean> => {
     setBusy(true)
     try {
@@ -225,7 +258,7 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
 
   return {
     debts, colors, settings, plan, planLoading, suggestions, showArchived, setShowArchived,
-    message, status, busy, chooseStrategy, applyExtra, saveDebt, removeDebt, setIncluded,
+    message, status, busy, chooseStrategy, applyExtra, saveDebt, removeDebt, setIncluded, moveDebt,
   }
 }
 

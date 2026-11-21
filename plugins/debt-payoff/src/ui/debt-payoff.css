@@ -32,7 +32,7 @@
 .dp-strategy { flex: 1 1 280px; min-width: 0; }
 .dp-strategy__about { margin-top: 8px; max-width: 46ch; }
 .dp-seg {
-  display: inline-flex; gap: 2px; padding: 2px;
+  display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 2px;
   background: var(--wm-surface-alt); border: 1px solid var(--wm-border);
   border-radius: var(--wm-radius-sm, 6px);
 }
@@ -97,6 +97,20 @@
 
 /* The month-by-month table and its pager. */
 .dp-schedule__more { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+
+/* Custom order: the debts in the order extra money is aimed, each with Move up and Move down. */
+.dp-custom { margin: 0 0 16px; }
+.dp-custom .dp-h3 { margin-top: 4px; }
+.dp-custom__list { list-style: none; margin: 8px 0 0; padding: 0; border: 1px solid var(--wm-border); border-radius: var(--wm-radius-sm, 6px); }
+.dp-custom__row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px;
+  border-bottom: 1px solid var(--wm-border);
+}
+.dp-custom__row:last-child { border-bottom: 0; }
+.dp-custom__pos { flex: none; width: 24px; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--wm-text-muted); }
+.dp-custom__name { display: inline-flex; align-items: flex-start; gap: 8px; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.dp-custom__name .dp-swatch { margin-top: 4px; }
+.dp-custom__moves { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 
 /* The assumptions. */
 .dp-assume { margin: 0; padding-left: 18px; font-size: 13px; color: var(--wm-text); }
@@ -166,6 +180,8 @@
   .dp-schedule__table .wm-table td[data-col="cleared"]:empty { display: none; }
 
   .dp-seg__btn { min-height: 40px; padding: 8px 16px; }
+  .dp-custom__moves { margin-left: 32px; }
+  .dp-custom__moves .wm-btn { min-height: 44px; }
   .dp-extra__action { padding-top: 0; }
   .dp-actions { justify-content: flex-start; }
   .dp-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }

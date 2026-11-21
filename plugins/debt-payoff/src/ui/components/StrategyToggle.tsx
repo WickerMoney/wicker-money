@@ -10,10 +10,10 @@ export interface StrategyToggleProps {
   readonly onChange: (value: Strategy) => void
 }
 
-const ORDER: readonly Strategy[] = ['avalanche', 'snowball']
+const ORDER: readonly Strategy[] = ['avalanche', 'snowball', 'custom']
 
 /**
- * Snowball or avalanche, as two toggle buttons.
+ * Snowball, avalanche or Custom order, as toggle buttons.
  *
  * The group and each button's pressed state are announced; the sentence under
  * them says what the chosen one does, so the choice is never a bare label.

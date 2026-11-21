@@ -3,6 +3,7 @@ import type { PluginPageProps } from '@wickermoney/plugin-sdk/runtime'
 import { Alert, Button, EmptyState, Spinner, Surface } from '@wickermoney/ui-kit'
 import './styles.js'
 import { Assumptions } from './components/Assumptions.js'
+import { CustomOrderList } from './components/CustomOrderList.js'
 import { DebtDialog } from './components/DebtDialog.js'
 import { DebtsTable } from './components/DebtsTable.js'
 import { ExtraPaymentForm } from './components/ExtraPaymentForm.js'
@@ -27,8 +28,8 @@ interface DialogState {
 /**
  * "When will I be debt free?"
  *
- * The person lists their debts (balance, rate, minimum), picks snowball or
- * avalanche and an extra amount to pay each month, and the page shows the
+ * The person lists their debts (balance, rate, minimum), picks snowball,
+ * avalanche or their own order, and an extra amount to pay each month, and the page shows the
  * result: the date the last debt is cleared, the interest, what it saves against
  * paying only the minimums, a chart of what is owed month by month, and the
  * order the debts fall in. The arithmetic is the server's
@@ -140,6 +141,16 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
             <StrategyToggle value={settings.strategy} busy={payoff.busy} onChange={(s) => void payoff.chooseStrategy(s)} />
             <ExtraPaymentForm saved={settings.extraPayment} busy={payoff.busy} onApply={payoff.applyExtra} />
           </div>
+
+          {settings.strategy === 'custom' ? (
+            <CustomOrderList
+              debts={active}
+              colors={colors}
+              busy={payoff.busy}
+              formatMoney={formatMoney}
+              onMove={payoff.moveDebt}
+            />
+          ) : null}
 
           {plan === null ? <Spinner label="Working out the plan" /> : nothingInPlan ? (
             <p className="dp-muted" role="status">
