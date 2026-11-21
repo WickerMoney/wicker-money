@@ -7,6 +7,7 @@ import { registerGetPlan } from './handlers/getPlan.js'
 import { registerGetSettings } from './handlers/getSettings.js'
 import { registerListAccountSuggestions } from './handlers/listAccountSuggestions.js'
 import { registerListDebts } from './handlers/listDebts.js'
+import { registerReorderDebts } from './handlers/reorderDebts.js'
 import { registerSaveSettings } from './handlers/saveSettings.js'
 import { registerUpdateDebt } from './handlers/updateDebt.js'
 import type { DebtPayoffRouteDeps } from './helpers/DebtPayoffRouteDeps.js'
@@ -30,6 +31,7 @@ export function registerDebtPayoffRoutes(deps: DebtPayoffRouteDeps): void {
   registerCreateDebt(deps, service)
   registerGetDebt(deps, service)
   registerUpdateDebt(deps, service)
+  registerReorderDebts(deps, service)
   registerDeleteDebt(deps, service)
   registerGetSettings(deps, service)
   registerSaveSettings(deps, service)

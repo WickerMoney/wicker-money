@@ -163,6 +163,39 @@ export class DebtPayoffService {
   }
 
   /**
+   * Puts the user's debts that are not archived in a new order, in one write.
+   *
+   * The list must be exactly those debts, each once: the order is the whole
+   * list or nothing, so a client that is out of date (a debt added or removed
+   * elsewhere) is told rather than half-applied. Positions become `0..n-1`,
+   * which also removes any repeated positions an explicit `sortOrder` left.
+   * Archived debts are not touched. Another person's debt is not one of the
+   * user's, so it is refused as unknown, the same as an id that does not exist.
+   *
+   * @param userId - The signed-in user.
+   * @param ids - The debts' ids, first in line first.
+   * @returns The user's debts that are not archived, in their new order.
+   * @throws {DebtPayoffError} `400` on the `ids` field: `duplicate_debt`,
+   *   `unknown_debt` or `missing_debt`.
+   */
+  reorderDebts(userId: string, ids: readonly string[]): Promise<Debt[]> {
+    return this.uow.run(userId, async ({ debts }) => {
+      const mine = await debts.list(false)
+      const known = new Set(mine.map((row) => row.id))
+      const seen = new Set<string>()
+      for (const id of ids) {
+        if (seen.has(id)) throw DebtPayoffError.field('ids', 'Send each debt once.', 'duplicate_debt')
+        seen.add(id)
+        if (!known.has(id)) throw DebtPayoffError.field('ids', 'Send only your own debts that are not archived.', 'unknown_debt')
+      }
+      if (seen.size !== known.size) throw DebtPayoffError.field('ids', 'Send every debt that is not archived.', 'missing_debt')
+
+      if (ids.length > 0) await debts.reorder(ids)
+      return (await debts.list(false)).map(toDebt)
+    })
+  }
+
+  /**
    * Deletes a debt.
    *
    * @param userId - The signed-in user.

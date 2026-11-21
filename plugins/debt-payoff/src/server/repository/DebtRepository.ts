@@ -29,6 +29,14 @@ export interface DebtRepository {
    */
   replace(id: string, debt: Omit<NewDebt, 'sortOrder'> & { readonly sortOrder: number }): Promise<DebtRow | undefined>
 
+  /**
+   * Gives the user's debts the positions `0..n-1` in the order of `ids`, in one statement.
+   *
+   * @param ids - Debt ids, first in line first. Ids that are not the user's are ignored.
+   * @returns How many debts were moved.
+   */
+  reorder(ids: readonly string[]): Promise<number>
+
   /** @returns How many rows were deleted: 0 or 1. */
   delete(id: string): Promise<number>
 

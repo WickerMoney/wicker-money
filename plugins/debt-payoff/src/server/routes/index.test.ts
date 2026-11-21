@@ -46,6 +46,7 @@ describe('the routes', () => {
       'GET /settings',
       'POST /debts',
       'PUT /debts/:id',
+      'PUT /debts/order',
       'PUT /settings',
     ])
   })
@@ -62,6 +63,10 @@ describe('a request that is not valid', () => {
       ['PUT /debts/:id', { params: { id: 'nope' }, body: { name: 'x' } }],
       ['GET /debts/:id', { params: { id: 'nope' } }],
       ['DELETE /debts/:id', { params: {} }],
+      ['PUT /debts/order', { body: {} }],
+      ['PUT /debts/order', { body: { ids: ['nope'] } }],
+      ['PUT /debts/order', { body: { ids: ID } }],
+      ['PUT /debts/order', { body: null }],
       ['PUT /settings', { body: { strategy: 'fast' } }],
       ['GET /plan', { query: { tz: 'Nowhere/Land' } }],
       ['GET /plan', { query: { extra: '-3' } }],

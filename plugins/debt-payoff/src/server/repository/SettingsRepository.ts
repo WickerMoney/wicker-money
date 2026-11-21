@@ -10,7 +10,7 @@ export interface SettingsRepository {
    * Saves the settings, creating the row on first use.
    *
    * @param extraPayment - The monthly extra, as a decimal string.
-   * @param strategy - `snowball` or `avalanche`.
+   * @param strategy - `snowball`, `avalanche` or `custom`.
    * @returns The settings as saved.
    */
   save(extraPayment: string, strategy: string): Promise<SettingsRow | undefined>

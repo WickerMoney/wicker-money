@@ -3,6 +3,7 @@ import { aprField } from './aprField.js'
 import { createDebtBody } from './createDebtBody.js'
 import { moneyField } from './moneyField.js'
 import { planQuery } from './planQuery.js'
+import { reorderDebtsBody } from './reorderDebtsBody.js'
 import { settingsBody } from './settingsBody.js'
 import { updateDebtBody } from './updateDebtBody.js'
 
@@ -182,5 +183,36 @@ describe('planQuery', () => {
     expect(planQuery.safeParse({ strategy: 'x' }).success).toBe(false)
     expect(planQuery.safeParse({ extra: '1,5' }).success).toBe(false)
     expect(planQuery.safeParse({ tz: 'Mars/Olympus' }).success).toBe(false)
+  })
+})
+
+describe('strategy', () => {
+  it.each(['snowball', 'avalanche', 'custom'])('accepts %j in the settings and the plan query', (strategy) => {
+    expect(settingsBody.safeParse({ strategy }).success).toBe(true)
+    expect(planQuery.safeParse({ strategy }).success).toBe(true)
+  })
+
+  it.each(['Custom', 'custom order', 'random', '', 3])('refuses %j', (strategy) => {
+    expect(settingsBody.safeParse({ strategy }).success).toBe(false)
+    expect(planQuery.safeParse({ strategy }).success).toBe(false)
+  })
+})
+
+describe('reorderDebtsBody', () => {
+  it('accepts a list of ids, and an empty list', () => {
+    expect(reorderDebtsBody.parse({ ids: [ID] })).toEqual({ ids: [ID] })
+    expect(reorderDebtsBody.parse({ ids: [] })).toEqual({ ids: [] })
+  })
+
+  it.each([
+    [{}], [{ ids: ID }], [{ ids: [1] }], [{ ids: ['nope'] }], [{ ids: [null] }], [{ ids: [ID], extra: 1 }],
+    [{ ids: Array.from({ length: 51 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`) }],
+  ])('refuses %j', (body) => {
+    expect(reorderDebtsBody.safeParse(body).success).toBe(false)
+  })
+
+  it('names the position of a bad id', () => {
+    const result = reorderDebtsBody.safeParse({ ids: [ID, 'nope'] })
+    expect(result.error?.issues[0]?.path).toEqual(['ids', 1])
   })
 })
