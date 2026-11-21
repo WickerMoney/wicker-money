@@ -45,6 +45,7 @@ export function BudgetLinesTable({
 
   return (
     <Table
+      caption="Budget lines"
       columns={[
         {
           key: 'name',

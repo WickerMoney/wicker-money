@@ -1007,6 +1007,18 @@ async function a11yChecks(pw: typeof Playwright, base: string): Promise<void> {
       check(`a11y ${scheme}: the host has exactly one main landmark, and the frame none`, lm.main === 1 && fm.main === 0, { host: lm, frame: fm })
       check(`a11y ${scheme}: the frame has exactly one h1, the first heading, naming the page`, fm.h1 === 1 && fm.h1Text === 'Budgets' && fm.firstHeading === 'H1', fm)
       note(`headings in the page frame (${scheme})`, fm.headings)
+      // Every table the page draws is named: by a caption (the three tables) or by the labelled group around it (the charts).
+      const tables = await frame.evaluate(() => [...document.querySelectorAll('table')].map((t) => ({
+        caption: t.querySelector(':scope > caption')?.textContent?.trim() ?? null,
+        group: t.closest('[role="group"][aria-label], [role="group"][aria-labelledby]') !== null,
+      })))
+      note(`tables in the page frame (${scheme})`, tables)
+      const captions = tables.map((t) => t.caption).filter((c): c is string => c !== null)
+      check(`a11y ${scheme}: the lines table and the allowances table are captioned "Budget lines" and "Account allowances"`, captions.includes('Budget lines') && captions.includes('Account allowances'), tables)
+      check(`a11y ${scheme}: every table is named, by its caption or by its labelled group`, tables.every((t) => t.caption !== null || t.group), tables)
+      for (const name of ['Budget lines', 'Account allowances', 'Spent with no budget']) {
+        if (captions.includes(name)) check(`a11y ${scheme}: the "${name}" table has that accessible name`, (await frame.getByRole('table', { name, exact: true }).count()) === 1)
+      }
       const withAll = await axeRun(frame, [])
       note(`axe in the page frame with no exclusions (${scheme})`, withAll.map((v) => `${v.id}(${v.nodes})`))
       const inFrame = await axeRun(frame, FRAME_EXCLUDED_RULES)

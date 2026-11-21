@@ -30,6 +30,7 @@ export function AccountLinesTable({
 }: AccountLinesTableProps) {
   return (
     <Table
+      caption="Account allowances"
       columns={[
         {
           key: 'account',

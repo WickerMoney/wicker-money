@@ -86,7 +86,7 @@ must scroll to it, and the server's refusal of an overlapping window (no field o
 `refresh` adds a category and a checking account behind the open page and expects both after the frame is hidden and shown again, with one read
 of each and no month read. `alerts` checks that a failed remove and "Start this month" show their message in their own section, inside
 the window. `size` checks that the frame is as tall as its document at 1440, 1024 and 390 px and follows a month change and a
-resize. `a11y` runs axe on the host, the page frame and the widget frame, light and dark (the frame document leaves out
+resize. `a11y` runs axe on the host, the page frame and the widget frame, light and dark, and that the three tables are captioned (the frame document leaves out
 `landmark-one-main`, `page-has-heading-one` and `region`, ADR 0014). `measure` alternates in-realm and isolated for the time to
 the first table row, memory and bytes. `WEB_DIST_DIR` runs the same checks against an earlier build, which is how the 429, the
 19 px and the off-screen alert were shown on the build before this change.

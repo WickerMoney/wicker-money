@@ -15,6 +15,7 @@ curated, human-readable version.
   announced, as a field error already did.
 - Budgets: categories and accounts are read again when the page becomes visible after being hidden, so a category
   or account added in another tab is offered without reopening the page.
+- Budgets: the lines, allowances and "Spent with no budget" tables are named for screen readers (a hidden caption).
 
 ## [0.8.0] - 2026-11-18
 
