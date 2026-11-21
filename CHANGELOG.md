@@ -9,6 +9,15 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Import CSV: keyboard focus stays on the button while a request runs.** Check
+  for duplicates, Show more, Import and Undo were `disabled` while their request
+  ran, which dropped focus to the top of the page. They now use the ui-kit `busy`
+  state: still focusable, `aria-disabled`, a second press does nothing and says
+  "Still working". Import still really disables when there is nothing to import,
+  and Check for duplicates while no account is chosen.
+
 ## [0.8.0] - 2026-11-18
 
 Budgets and Import CSV move into sandboxed frames, so no bundled plugin runs in

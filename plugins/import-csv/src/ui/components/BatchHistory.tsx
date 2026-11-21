@@ -104,7 +104,7 @@ export function BatchHistory({ ctx, refreshKey, onReverted }: BatchHistoryProps)
                       <span className="imp__muted">Undone</span>
                     ) : (
                       <Button
-                        disabled={reverting === b.id}
+                        busy={reverting === b.id}
                         onClick={() => void revert(b.id)}
                       >
                         {reverting === b.id ? 'Undoing…' : 'Undo'}
