@@ -258,12 +258,29 @@ async function describeFocus(page: Playwright.Page): Promise<string> {
   return `iframe(${host.title}):nothing focused inside`
 }
 
+/**
+ * Where focus is once the host's hand-off has finished.
+ *
+ * Handing focus into a frame takes two steps: the host puts focus on the iframe element, then the frame (a message
+ * later) focuses a control inside it, or passes focus on when it has none. Between the two the iframe element is the
+ * active element with nothing focused inside, which a fixed sleep sometimes samples on a busy machine. So an iframe
+ * with nothing inside is read again until it changes; one that is still there after the wait is a real Tab stop.
+ */
+async function settledFocus(page: Playwright.Page): Promise<string> {
+  let seen = await describeFocus(page)
+  for (const t0 = Date.now(); seen.startsWith('iframe(') && Date.now() - t0 < 2_000;) {
+    await sleep(40)
+    seen = await describeFocus(page)
+  }
+  return seen
+}
+
 async function tabSequence(page: Playwright.Page, direction: 'Tab' | 'Shift+Tab', limit: number): Promise<string[]> {
   const seen: string[] = []
   for (let i = 0; i < limit; i++) {
     await page.keyboard.press(direction)
     await sleep(120)
-    seen.push(await describeFocus(page))
+    seen.push(await settledFocus(page))
   }
   return seen
 }
