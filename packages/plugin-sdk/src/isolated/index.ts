@@ -31,8 +31,9 @@
  *   `modal-layout` (ADR 0015). Both messages are additive, not a protocol bump
  *   (unknown messages are ignored, and an older host leaves the dialog where it
  *   was).
- * - **`notify` is reserved.** The message exists and a host answers it with
- *   `not_supported` until the permission is built.
+ * - **`notify` raises a host toast.** Gated by the `notify` manifest permission; text and
+ *   level only, no callback; the host caps, rate limits and prefixes it with the plugin's name.
+ *   A plugin calls `ctx.notify?.(level, text)`.
  * - **`RequestInit` is narrowed** to `signal` and `cache`. Headers and
  *   credentials are the host's to set, never the frame's.
  *

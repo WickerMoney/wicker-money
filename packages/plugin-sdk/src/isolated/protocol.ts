@@ -15,9 +15,9 @@ export const ISOLATED_PROTOCOL_VERSION = 1 as const
  * API's own codes pass through), so `PluginApiError.code` is a plain string;
  * these are the ones a plugin can rely on.
  *
- * - `grant_denied` - the manifest does not grant the table or path.
+ * - `grant_denied` - the manifest does not grant the table or path, or the permission the message needs (`notify`).
  * - `invalid_request` - the request was malformed or used an unsupported option.
- * - `not_supported` - the host does not implement the message (for example `notify`).
+ * - `not_supported` - the host does not implement the message (an older host, for `notify` or `download`).
  * - `network_error` - the host could not reach the API.
  * - `aborted` - the caller aborted the request.
  * - `disconnected` - the connection to the host was closed before an answer came.
@@ -198,9 +198,16 @@ export interface ModalMessage {
 }
 
 /**
- * Reserved for the `notify` permission, which no host implements yet. A host
- * answers with a `not_supported` error response. The message exists so the
- * protocol does not change when `notify` is built.
+ * Asks the host to raise a toast. Needs the `notify` permission in the manifest; a plugin without it is answered with
+ * `grant_denied`. An older host that does not implement it answers `not_supported`.
+ *
+ * The message carries text and a level and nothing else: no callback, no link, no markup. The host shows the text as
+ * plain text, prefixed with the plugin's manifest name so it cannot pass for the host's own message, and keeps its own
+ * limits: a text cap ({@link MAX_NOTIFY_LENGTH} is only what the validator accepts; the host shows at most 200
+ * characters), at most 3 toasts per 10 seconds per frame, one per identical text per 30 seconds, and at most two
+ * visible toasts per plugin. Control characters, newlines and bidirectional overrides are stripped. A refused
+ * notification is answered with an error (`invalid_request` for bad text, `request_failed` with status 429 for the
+ * rate limit) and counts toward the frame's strikes.
  */
 export interface NotifyMessage {
   readonly type: 'notify'

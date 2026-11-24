@@ -81,8 +81,10 @@ export interface HostConnection {
   /** Tells the host that focus left the frame, past its last (`next`) or before its first (`previous`) focusable element. */
   focusOut(direction: FocusDirection): void
   /**
-   * Sends a notification request. No host implements `notify` yet, so this
-   * rejects with code `not_supported` today.
+   * Asks the host to show a toast and waits for its answer. Rejects with `grant_denied` when the manifest does not
+   * declare the `notify` permission, `invalid_request` for text the host refuses, `request_failed` (status 429) when
+   * the rate limit drops it, and `not_supported` from a host that predates `notify`. Most plugins want the
+   * fire-and-forget `ctx.notify` instead.
    */
   notify(level: NotifyMessage['level'], message: string): Promise<void>
   /** Closes the port and rejects every call still waiting with code `disconnected`. */
@@ -322,6 +324,9 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     del: (path, init) => request('DELETE', path, undefined, init),
   }
 
+  const notifyHost = (level: NotifyMessage['level'], message: string): Promise<void> =>
+    call<void>((id) => ({ type: 'notify', id, level, message })).then(() => undefined)
+
   /** Listeners of `ctx.onClosing`. A `closing` from the host calls each once, then forgets them. */
   const closingListeners = new Set<() => void>()
 
@@ -331,6 +336,10 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     navigate: (path) => { post({ type: 'navigate', path }) },
     formatMoney: (value, currency) => formatMoneyIn(state.locale.locale, value, currency),
     formatDate: (value) => formatDateIn(state.locale.locale, value),
+    notify: (level, message) => {
+      // Fire and forget: a refusal (no permission, rate limit, an older host) is not the plugin's to handle.
+      notifyHost(level, message).catch(() => undefined)
+    },
     onClosing: (listener) => {
       closingListeners.add(listener)
       return () => { closingListeners.delete(listener) }
@@ -416,8 +425,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
       post({ type: 'modal', open })
     },
     focusOut: (direction) => { post({ type: 'focus-out', direction }) },
-    notify: (level, message) =>
-      call<void>((id) => ({ type: 'notify', id, level, message })).then(() => undefined),
+    notify: notifyHost,
     dispose() {
       if (closed) return
       closed = true

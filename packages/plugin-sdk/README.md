@@ -274,7 +274,7 @@ on the port:
 | frame to host | `resize` | The content height in CSS pixels; the host owns the width |
 | frame to host | `modal` | A page's modal dialog opened or closed (`open`); ignored from a widget, rate limited |
 | frame to host | `focus-out` | Focus left past the last (`next`) or before the first (`previous`) element |
-| frame to host | `notify` | Reserved; a host answers `not_supported` until the `notify` permission exists |
+| frame to host | `notify` | Show a toast (`level`, `message`); needs the `notify` permission (see "Notifications") |
 | host to frame | `init` | Plugin id, widget or page, session, locale, theme, size and range, first path |
 | host to frame | `response` | The JSON value, or an error: `code`, `message`, optional `status` and `issues` |
 | host to frame | `theme`, `locale`, `props`, `route` | Updates after `init` |
@@ -303,6 +303,30 @@ The host must run `parsePluginMessage` on every message a frame sends and identi
 frame by the `MessagePort` and `event.source`, never by `event.origin` (which is
 `"null"` for a sandboxed frame). Unknown message types are ignored by both sides, so
 adding one is not a version bump.
+
+### Notifications
+
+A plugin in a frame can raise a toast with `ctx.notify?.(level, message)`, where `level` is
+`'info' | 'success' | 'warning' | 'error'`. It needs the `notify` permission: declare
+`permissions: ['notify']` in the manifest. A plugin without it is answered with `grant_denied`
+(the broker also keeps counting it as a strike), so the call does nothing. `ctx.notify` is
+fire and forget: no promise, no callback, no link. `host.notify(level, message)` is the same
+call as a promise, for a test or for code that wants to know the refusal.
+
+What the host does with it (the limits are the host's, not the SDK's, and may be tightened):
+
+- **Plain text only.** Control characters, newlines (to a space) and bidirectional overrides are
+  stripped; markup is shown as the characters it is. At most **200 characters** are accepted
+  (`invalid_request` otherwise; `MAX_NOTIFY_LENGTH`, 500, is only what the validator parses).
+- **Named, so it cannot pass for the host.** The toast reads `<plugin name> plugin: <text>`, with
+  the name from the manifest, never from the message.
+- **Rate limited.** 3 in a burst and then one every 3.3 seconds per frame, and the same text at
+  most once every 30 seconds. A dropped one is answered `request_failed` with status 429 and
+  counts as a strike toward the connection being cut. At most **two** toasts of one plugin are
+  showing at once: a third replaces the oldest, and a plugin's toasts are withdrawn when its frame
+  goes away. Toasts stay until the person closes them, like the host's own.
+- It is an ordinary toast of the host's own stack: same queue, announcement and keyboard rules.
+  A plugin cannot make its toast more prominent, add a button, or keep it past the person closing it.
 
 ### Closing
 
@@ -374,8 +398,9 @@ reachable, including sign-in, the data export and other plugins.
   database role is a guardrail and not a sandbox). A manifest that asks for
   `contributes.endpoints` or `contributes.exporters` is refused, with a reason.
 - **No write.** A `write` grant on a core table has no route it can use.
-- **No permissions.** `network:outbound`, `schedule:daily` and `notify` are
-  reserved, not implemented, and a manifest that declares one is refused.
+- **One permission, `notify`.** It lets the plugin raise short text toasts (see
+  [Notifications](#notifications)). `network:outbound` and `schedule:daily` are reserved,
+  not implemented, and a manifest that declares either is refused.
 
 ### Integrity pin
 

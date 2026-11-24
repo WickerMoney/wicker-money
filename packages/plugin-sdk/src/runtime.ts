@@ -85,6 +85,9 @@ export interface PluginApi {
   del<T>(path: string, init?: RequestInit): Promise<T>
 }
 
+/** How a plugin toast looks and is announced; the same four values as the host's own toasts. */
+export type PluginNotifyLevel = 'info' | 'success' | 'warning' | 'error'
+
 /**
  * Everything a plugin is given. Injected as a prop — never a global, never a
  * module-scoped singleton, so two plugins cannot observe or corrupt each
@@ -101,6 +104,18 @@ export interface PluginContext {
   readonly formatMoney: (value: string, currency?: string) => string
   /** Formats a date string in the user's locale. */
   readonly formatDate: (value: string) => string
+  /**
+   * Shows a toast through the host: plain text, prefixed with the plugin's name by the host. Fire and forget (no promise,
+   * no callback, no way to learn that it was shown).
+   *
+   * Needs the `notify` permission in the manifest, or the host refuses it. The host also caps the text at 200 characters,
+   * allows 3 a frame every 10 seconds and one per identical text every 30 seconds, and shows at most two at a time per
+   * plugin; the rest are dropped. A refusal is silent here.
+   *
+   * Optional: the host provides it only to a plugin in a sandboxed frame, and a hand-built context may omit it, so call
+   * it as `ctx.notify?.('success', 'Saved')`.
+   */
+  readonly notify?: (level: PluginNotifyLevel, message: string) => void
   /**
    * Runs `listener` when the host is about to take the plugin's frame down, so the plugin can give back what it holds
    * on the server (for example a staged upload). Best effort: the host often removes the frame in the same task, in

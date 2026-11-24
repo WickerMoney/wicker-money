@@ -285,6 +285,39 @@ describe('modal dialogs in a page frame', () => {
   })
 })
 
+describe('ctx.notify', () => {
+  it('sends a notify message and returns nothing to wait for', async () => {
+    const { conn, seen } = await connect((m, reply) => { if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: true, value: null }) })
+    expect(conn.ctx.notify?.('success', 'Imported 12 rows')).toBeUndefined()
+    await tick()
+    expect(seen).toEqual([{ type: 'notify', id: 1, level: 'success', message: 'Imported 12 rows' }])
+  })
+
+  it('swallows a refusal: no throw and no unhandled rejection, whatever the host answers', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (e: unknown): void => { unhandled.push(e) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const { conn } = await connect((m, reply) => {
+        if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: false, error: { code: m.id === 1 ? 'grant_denied' : 'request_failed', message: 'No.', status: 429 } })
+      })
+      conn.ctx.notify?.('info', 'one')
+      conn.ctx.notify?.('info', 'two')
+      await tick()
+      await tick()
+      expect(unhandled).toEqual([])
+    } finally { process.off('unhandledRejection', onUnhandled) }
+  })
+
+  it('does nothing after dispose', async () => {
+    const { conn, seen } = await connect()
+    conn.dispose()
+    expect(() => conn.ctx.notify?.('info', 'late')).not.toThrow()
+    await tick()
+    expect(seen).toEqual([])
+  })
+})
+
 describe('closing', () => {
   it('runs each ctx.onClosing listener once, tells subscribers, and skips a removed listener', async () => {
     const { conn, reply } = await connect()
@@ -316,11 +349,11 @@ describe('closing', () => {
 describe('frame to host helpers', () => {
   it('navigate, focusOut and notify send their messages', async () => {
     const { conn, seen } = await connect((m, reply) => {
-      if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: false, error: { code: 'not_supported', message: 'No notify yet.' } })
+      if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: false, error: { code: 'grant_denied', message: 'No notify permission.' } })
     })
     conn.ctx.navigate('/transactions')
     conn.focusOut('previous')
-    await expect(conn.notify('info', 'Saved')).rejects.toMatchObject({ code: 'not_supported' })
+    await expect(conn.notify('info', 'Saved')).rejects.toMatchObject({ code: 'grant_denied' })
     expect(seen).toEqual([
       { type: 'navigate', path: '/transactions' },
       { type: 'focus-out', direction: 'previous' },
