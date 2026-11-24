@@ -175,6 +175,37 @@ describe('useBudgetMonth request volume', () => {
     expect(callsTo(api, '/core/categories')).toBe(1)
   })
 
+  it('loads the categories and the accounts again when the frame becomes visible after being hidden', async () => {
+    const api = makeApi()
+    serveAnyMonth(api)
+    const { result } = renderHook(() => useBudgetMonth(makeCtx(api)))
+    await waitFor(() => expect(result.current.month).not.toBeNull())
+    expect(callsTo(api, '/core/categories')).toBe(1)
+
+    const added: Category[] = [...CATEGORIES, { id: 'c2', name: 'Pets', parent_id: null }]
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/core/categories')) return Promise.resolve(added)
+      if (path.startsWith('/core/accounts')) return Promise.resolve({ accounts: [] })
+      return Promise.resolve(monthResponse('2026-06'))
+    })
+    const state = vi.spyOn(document, 'visibilityState', 'get')
+    state.mockReturnValue('hidden')
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    expect(callsTo(api, '/core/categories')).toBe(1)
+
+    state.mockReturnValue('visible')
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    await waitFor(() => expect(result.current.categories.map((c) => c.name)).toEqual(['Groceries', 'Pets']))
+    expect(callsTo(api, '/core/accounts')).toBe(2)
+    // The second read asks the host past its short-lived read cache; the first does not.
+    const reads = api.get.mock.calls.filter((c) => String(c[0]).startsWith('/core/categories'))
+    expect(reads[0]?.[1]).not.toHaveProperty('cache')
+    expect(reads[1]?.[1]).toHaveProperty('cache', 'no-store')
+    // The month is not asked for again.
+    expect(monthCalls(api)).toHaveLength(1)
+    state.mockRestore()
+  })
+
   it('asks only for the month a burst of changes ends on', async () => {
     const api = makeApi()
     serveAnyMonth(api)

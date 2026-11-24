@@ -11,6 +11,11 @@ curated, human-readable version.
 
 ### Fixed
 
+- Budgets: a refusal on the window or allowance form that belongs to no one field now takes focus and is
+  announced, as a field error already did.
+- Budgets: categories and accounts are read again when the page becomes visible after being hidden, so a category
+  or account added in another tab is offered without reopening the page.
+- Budgets: the lines, allowances and "Spent with no budget" tables are named for screen readers (a hidden caption).
 - **Import CSV: keyboard focus stays on the button while a request runs.** Check
   for duplicates, Show more, Import and Undo were `disabled` while their request
   ran, which dropped focus to the top of the page. They now use the ui-kit `busy`
