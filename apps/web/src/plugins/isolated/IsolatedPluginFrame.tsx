@@ -10,6 +10,7 @@ import { FrameController, HEIGHT_LIMITS, PLACEHOLDER_HEIGHT, type FrameState } f
 import { frameUrl } from './frameUrl.js'
 import { PageFrameLift } from './pageFrameLift.js'
 import { useNearViewport } from './useNearViewport.js'
+import { usePluginToasts } from './usePluginToasts.js'
 
 /** Props for {@link IsolatedPluginFrame}. */
 export interface IsolatedPluginFrameProps {
@@ -74,8 +75,9 @@ export function IsolatedPluginFrame({
   const [attempt, setAttempt] = useState(0)
 
   // Values the connection is built from but that must not rebuild it when they change.
-  const live = useRef({ ctx, size, range, path })
-  live.current = { ctx, size, range, path }
+  const toasts = usePluginToasts(manifest.id, manifest.name)
+  const live = useRef({ ctx, size, range, path, toasts })
+  live.current = { ctx, size, range, path, toasts }
 
   const { userId, email, timezone } = ctx.session
   const label = `${manifest.name} · ${title}`
@@ -104,6 +106,7 @@ export function IsolatedPluginFrame({
         onNavigate: (to) => { live.current.ctx.navigate(to) },
         onFocusOut: (direction) => { focusAround(iframe, direction === 'next' ? 'next' : 'previous') },
         onModal: (open) => { if (open) lift?.lift(); else lift?.release() },
+        onNotify: (level, text) => { live.current.toasts.show(level, text) },
       },
     })
     controllerRef.current = controller
@@ -115,6 +118,8 @@ export function IsolatedPluginFrame({
       unregisterFocus()
       lift?.dispose()
       controller.dispose()
+      // A plugin's toasts go with its frame (ADR 0009, question 5).
+      live.current.toasts.withdraw()
       controllerRef.current = null
       iframe.removeAttribute('src')
     }

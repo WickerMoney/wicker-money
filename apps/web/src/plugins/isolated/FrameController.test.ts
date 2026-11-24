@@ -44,7 +44,7 @@ function setup(kind: 'widget' | 'page' = 'widget', extra: { loadTimeoutMs?: numb
   const heights: number[] = []
   const currentTheme = { value: theme('light') }
   const events: FrameEvents = {
-    onState: (s) => states.push(s), onHeight: (h) => heights.push(h), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(),
+    onState: (s) => states.push(s), onHeight: (h) => heights.push(h), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(),
   }
   const controller = new FrameController({
     iframe: frame.iframe, manifest, userId: 'u1', email: 'u1@example.com', timezone: 'UTC', kind,

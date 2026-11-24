@@ -10,6 +10,7 @@ import type { ResponseCache } from '../../api/responseCache.js'
 import { refusalFor, type PathRefusal } from '../pluginPaths.js'
 import type { BrokerApi } from './brokerApi.js'
 import { RateLimiter } from './RateLimiter.js'
+import { cleanPluginText, MAX_PLUGIN_NOTIFY_LENGTH, type PluginToastLevel } from './pluginNotify.js'
 
 /** The message types a frame may send. Anything else is ignored, not punished: a newer plugin may send more. */
 const KNOWN_TYPES: ReadonlySet<string> = new Set(['ready', 'request', 'cancel', 'navigate', 'resize', 'focus-out', 'modal', 'notify'])
@@ -32,6 +33,12 @@ export interface BrokerLimits {
   readonly maxHandshakes: number
   /** A token is replaced this long before it expires, in milliseconds. */
   readonly refreshMarginMs: number
+  /** Most notifications a frame may raise in a burst. */
+  readonly notifyBurst: number
+  /** Notifications per second a frame may sustain after the burst (0.3 is 3 every 10 seconds). */
+  readonly notifyPerSecond: number
+  /** A notification with the same text as one raised this recently is dropped, in milliseconds. */
+  readonly notifyDuplicateMs: number
   /** After {@link PluginBroker.close} sends `closing`, how long the frame may still finish requests, in milliseconds. */
   readonly closingGraceMs: number
 }
@@ -47,6 +54,9 @@ export const DEFAULT_BROKER_LIMITS: BrokerLimits = {
   maxHandshakes: 10,
   refreshMarginMs: 30_000,
   closingGraceMs: 1000,
+  notifyBurst: 3,
+  notifyPerSecond: 0.3,
+  notifyDuplicateMs: 30_000,
 }
 
 /** What the broker asks the component that owns the frame to do. */
@@ -61,6 +71,12 @@ export interface BrokerHandlers {
   onFocusOut(direction: FocusDirection): void
   /** A modal dialog is open in the frame (`true`) or the last one closed. Opening is rate limited; closing never is. */
   onModal(open: boolean): void
+  /**
+   * The plugin raised a notification the broker accepted: the manifest declares `notify`, the text is cleaned,
+   * non-empty and within {@link MAX_PLUGIN_NOTIFY_LENGTH}, and it is inside the rate limits. The handler shows it,
+   * attributed to the plugin; it owns the "at most two visible per plugin" rule.
+   */
+  onNotify(level: PluginToastLevel, text: string): void
   /** The connection was cut off for a reason a person should be told. The broker has already disposed itself. */
   onFatal(reason: string): void
 }
@@ -133,6 +149,10 @@ export class PluginBroker {
   private readonly navigations: RateLimiter
   /** Opening a modal lifts the frame over the window, so a frame may not do it in a loop. Closing is never limited. */
   private readonly modals: RateLimiter
+  /** Notifications raise toasts in the host's own UI: 3 in a burst, then one every 3.3 s. */
+  private readonly notifications: RateLimiter
+  /** Text of recent notifications, by when they were raised; a repeat inside the window is dropped. */
+  private readonly recentNotices = new Map<string, number>()
   private readonly pending = new Map<number, AbortController>()
   private port: MessagePort | null = null
   private makeInit: (() => InitMessage) | null = null
@@ -156,6 +176,7 @@ export class PluginBroker {
     this.limiter = new RateLimiter(this.limits.burst, this.limits.perSecond, this.now)
     this.navigations = new RateLimiter(3, 1, this.now)
     this.modals = new RateLimiter(4, 2, this.now)
+    this.notifications = new RateLimiter(this.limits.notifyBurst, this.limits.notifyPerSecond, this.now)
     this.strikeWindowStart = this.now()
     this.handshakeWindowStart = this.now()
   }
@@ -286,7 +307,7 @@ export class PluginBroker {
     }
     if (!this.limiter.tryTake()) {
       this.strike()
-      if (message.type === 'request') this.reply(from, message.id, { ok: false, error: this.rateLimited() })
+      if (message.type === 'request' || message.type === 'notify') this.reply(from, message.id, { ok: false, error: this.rateLimited() })
       return
     }
     this.dispatch(from, message)
@@ -319,17 +340,46 @@ export class PluginBroker {
         if (!message.open || this.modals.tryTake()) handlers.onModal(message.open)
         else this.strike()
         return
-      case 'notify':
-        // Reserved: no host implements `notify` yet (ADR 0005, question 5).
-        this.reply(from, message.id, {
-          ok: false, error: { code: 'not_supported', message: 'This Wicker Money does not support notifications from plugins.' },
-        })
-        return
+      case 'notify': this.onNotify(from, message); return
     }
   }
 
-  private rateLimited(): PluginErrorPayload {
-    return { code: 'request_failed', status: 429, message: 'This plugin is sending requests too fast.' }
+  /**
+   * A plugin's request for a toast. Checked in this order, each refusal costing a strike so a frame cannot use the
+   * host's own UI as a flood target: the permission, the text (a cap of 200 and not empty once cleaned), the
+   * duplicate window, then the rate limit. The limit's token is spent only by a notification that will be shown.
+   */
+  private onNotify(from: MessagePort, message: Extract<PluginMessage, { type: 'notify' }>): void {
+    const refuse = (error: PluginErrorPayload): void => {
+      this.strike()
+      this.reply(from, message.id, { ok: false, error })
+    }
+    if (!this.options.manifest.permissions.includes('notify')) {
+      refuse({ code: 'grant_denied', message: "This plugin's manifest does not declare the 'notify' permission." })
+      return
+    }
+    if (message.message.length > MAX_PLUGIN_NOTIFY_LENGTH) {
+      refuse({ code: 'invalid_request', message: `A notification may be at most ${MAX_PLUGIN_NOTIFY_LENGTH} characters.` })
+      return
+    }
+    const text = cleanPluginText(message.message)
+    if (text === '') {
+      refuse({ code: 'invalid_request', message: 'A notification needs some text.' })
+      return
+    }
+    const t = this.now()
+    for (const [seen, at] of this.recentNotices) if (t - at >= this.limits.notifyDuplicateMs) this.recentNotices.delete(seen)
+    if (this.recentNotices.has(text) || !this.notifications.tryTake()) {
+      refuse(this.rateLimited('This plugin is raising notifications too fast.'))
+      return
+    }
+    this.recentNotices.set(text, t)
+    this.options.handlers.onNotify(message.level, text)
+    this.reply(from, message.id, { ok: true, value: null })
+  }
+
+  private rateLimited(message = 'This plugin is sending requests too fast.'): PluginErrorPayload {
+    return { code: 'request_failed', status: 429, message }
   }
 
   private cancel(id: number): void {

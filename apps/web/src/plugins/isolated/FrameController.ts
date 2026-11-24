@@ -8,6 +8,7 @@ import { PluginBroker, type BrokerOptions } from './broker.js'
 import type { BrokerApi } from './brokerApi.js'
 import { diagnoseFrameTimeout } from './devFrameHint.js'
 import { readHostLocale, readHostTheme } from './hostTheme.js'
+import type { PluginToastLevel } from './pluginNotify.js'
 
 /** The heights a frame may take, in CSS pixels, by kind. The frame asks; the host clamps. */
 export const HEIGHT_LIMITS: Readonly<Record<FrameKind, { readonly min: number; readonly max: number }>> = {
@@ -55,6 +56,11 @@ export interface FrameEvents {
    * `false` when the frame's connection is replaced or it fails, so a lift is always ended.
    */
   onModal(open: boolean): void
+  /**
+   * The plugin raised a notification the broker accepted (permission, length, rate limits already checked, text
+   * already cleaned). The owner of the frame shows it, attributed to the plugin.
+   */
+  onNotify(level: PluginToastLevel, text: string): void
 }
 
 /** Everything a {@link FrameController} needs. */
@@ -141,6 +147,7 @@ export class FrameController {
         onFocusOut: (direction) => { options.events.onFocusOut(direction) },
         // A widget frame is a card in a grid: it has nothing to lift, so its message is ignored.
         onModal: (open) => { if (options.kind === 'page') options.events.onModal(open) },
+        onNotify: (level, text) => { options.events.onNotify(level, text) },
         onFatal: (reason) => { this.fail(reason) },
       },
     })

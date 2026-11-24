@@ -62,7 +62,7 @@ function rig(opts: {
   })
   const send = vi.fn(opts.send ?? (async () => ({ rows: [] })))
   const api: BrokerApi = { mint, send }
-  const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onFatal: vi.fn() }
+  const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(), onFatal: vi.fn() }
   const cache = new ResponseCache({ now: () => clock.t })
   const state = { user: 'u1' as string | null }
   const broker = new PluginBroker({
@@ -192,13 +192,6 @@ describe('bad input', () => {
     await flush()
     expect(r.port.responses()[0]).toMatchObject({ id: 1, ok: false, error: { code: 'invalid_request' } })
     release({})
-  })
-
-  it('answers notify with not_supported', async () => {
-    const r = rig()
-    r.port.frame({ type: 'notify', id: 4, level: 'info', message: 'hi' })
-    await flush()
-    expect(r.port.responses()[0]).toMatchObject({ id: 4, ok: false, error: { code: 'not_supported' } })
   })
 
   it('rate limits a flood and ends the connection', async () => {
@@ -574,5 +567,115 @@ describe('closing', () => {
     r.broker.close()
     r.broker.dispose()
     expect(r.port.closed).toBe(true)
+  })
+})
+
+describe('notify', () => {
+  const withNotify = { ...manifest, permissions: ['notify'] } as unknown as PluginManifest
+  /** A rig whose manifest declares `notify` (the default one declares nothing). */
+  function notifyRig(limits?: BrokerOptions['limits']): Rig {
+    const clock = { t: 1_000_000 }
+    const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(), onFatal: vi.fn() }
+    const api: BrokerApi = { mint: vi.fn(), send: vi.fn() }
+    const cache = new ResponseCache({ now: () => clock.t })
+    const broker = new PluginBroker({
+      manifest: withNotify, userId: 'u1', api, activeUserId: () => 'u1', cache, handlers, now: () => clock.t,
+      ...(limits ? { limits } : {}),
+    })
+    const port = new FakePort()
+    broker.attach(asPort(port), init)
+    port.frame({ type: 'ready', protocol: 1 })
+    return { broker, port, handlers, mint: api.mint, send: api.send, cache, clock, user: 'u1' } as unknown as Rig
+  }
+  const note = (id: number, message: string, level = 'info') => ({ type: 'notify', id, level, message })
+
+  it('shows an accepted notification once, cleaned, with its level, and answers ok', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, '  Imported\n12 rows ', 'success'))
+    expect(r.handlers.onNotify).toHaveBeenCalledOnce()
+    expect(r.handlers.onNotify).toHaveBeenCalledWith('success', 'Imported 12 rows')
+    expect(r.port.responses()).toEqual([{ type: 'response', id: 1, ok: true, value: null }])
+  })
+
+  it('refuses a plugin whose manifest does not declare notify, with grant_denied, and counts a strike', () => {
+    const r = rig()
+    r.port.frame(note(4, 'hi'))
+    expect(r.handlers.onNotify).not.toHaveBeenCalled()
+    expect(r.port.responses()[0]).toMatchObject({ id: 4, ok: false, error: { code: 'grant_denied' } })
+  })
+
+  it('a manifest that lists other permissions but not notify is still refused', () => {
+    const r = notifyRig()
+    const other = { ...manifest, permissions: ['network:outbound'] } as unknown as PluginManifest
+    const broker = new PluginBroker({ manifest: other, userId: 'u1', api: { mint: vi.fn(), send: vi.fn() }, activeUserId: () => 'u1', cache: r.cache, handlers: r.handlers as unknown as BrokerHandlers })
+    const port = new FakePort()
+    broker.attach(asPort(port), init)
+    port.frame({ type: 'ready', protocol: 1 })
+    port.frame(note(1, 'hi'))
+    expect(port.responses()[0]).toMatchObject({ ok: false, error: { code: 'grant_denied' } })
+    expect(r.handlers.onNotify).not.toHaveBeenCalled()
+  })
+
+  it('refuses text over 200 characters, and text that is empty once cleaned, with invalid_request', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, 'x'.repeat(201)))
+    r.port.frame(note(2, '\n\t ‮'))
+    r.port.frame(note(3, 'x'.repeat(200)))
+    expect(r.port.responses().map((m) => (m.ok ? 'ok' : m.error.code))).toEqual(['invalid_request', 'invalid_request', 'ok'])
+    expect(r.handlers.onNotify).toHaveBeenCalledOnce()
+  })
+
+  it('drops a message the validator refuses (over 500, bad level) without calling the handler', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, 'x'.repeat(501)))
+    r.port.frame(note(2, 'hi', 'fatal'))
+    r.port.frame({ type: 'notify', id: 3, level: 'info', message: 5 })
+    r.port.frame({ type: 'notify', level: 'info', message: 'no id' })
+    expect(r.handlers.onNotify).not.toHaveBeenCalled()
+  })
+
+  it('allows 3 in a burst and then a notification every 3.3 s; the rest are dropped with a 429 and a strike', () => {
+    const r = notifyRig()
+    for (let i = 1; i <= 6; i += 1) r.port.frame(note(i, `message ${i}`))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(3)
+    const replies = r.port.responses()
+    expect(replies.map((m) => (m.ok ? 'ok' : `${m.error.code} ${String(m.error.status)}`))).toEqual(['ok', 'ok', 'ok', 'request_failed 429', 'request_failed 429', 'request_failed 429'])
+    r.clock.t += 3400
+    r.port.frame(note(7, 'message 7'))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(4)
+  })
+
+  it('drops the same text again inside 30 s, then allows it', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, 'Saved'))
+    r.clock.t += 5000
+    r.port.frame(note(2, 'Saved'))
+    r.port.frame(note(3, 'Saved\n')) // the same text once cleaned
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(1)
+    expect(r.port.responses().map((m) => (m.ok ? 'ok' : String(m.error.status)))).toEqual(['ok', '429', '429'])
+    r.clock.t += 31_000
+    r.port.frame(note(4, 'Saved'))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(2)
+  })
+
+  it('a refused notification does not use up the burst', () => {
+    const r = notifyRig()
+    for (let i = 1; i <= 5; i += 1) r.port.frame(note(i, 'x'.repeat(300)))
+    for (let i = 6; i <= 8; i += 1) r.port.frame(note(i, `fine ${i}`))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(3)
+  })
+
+  it('spam ends the connection by strikes, like any other abuse', () => {
+    const r = notifyRig({ maxStrikes: 10, burst: 1000 })
+    for (let i = 1; i <= 12; i += 1) r.port.frame(note(i, 'same text'))
+    expect(r.handlers.onFatal).toHaveBeenCalledOnce()
+    expect(r.handlers.onNotify).toHaveBeenCalledOnce()
+  })
+
+  it('answers a notify the general limiter drops, so the frame is not left waiting', () => {
+    const r = notifyRig({ burst: 1, perSecond: 0.001 })
+    r.port.frame(note(1, 'one'))
+    r.port.frame(note(2, 'two'))
+    expect(r.port.responses()[1]).toMatchObject({ id: 2, ok: false, error: { code: 'request_failed', status: 429 } })
   })
 })
