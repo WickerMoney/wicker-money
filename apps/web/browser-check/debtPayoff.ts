@@ -17,6 +17,10 @@
  *  - custom:  Custom order: choose it, reorder by keyboard (Move up / Move down, one request per move, focus kept on
  *             the pressed button, the position announced), the plan and totals change, the order survives a reload,
  *             the frame is as tall as its content, axe in light and dark, phone widths with no horizontal overflow
+ *  - lump:    Lump sums and the what-if: add, edit and remove (with field errors, the part for one debt, a past-dated one
+ *             that the plan ignores and the page says so), the what-if (busy with focus kept, the result in the live
+ *             region, nothing saved, "Save as a lump sum"), a keyboard-only add, axe in light and dark (list, what-if
+ *             answer, field errors, dialog), phone widths with no horizontal overflow, frame height follows content
  *  - a11y:    landmarks, headings, Tab order, axe on the host and on the page and widget frames
  *  - measure: time to the page's chart, memory and bytes, in-realm against isolated, alternating
  *
@@ -125,11 +129,13 @@ async function plugin(base: string, session: Session, method: string, path: stri
   return { status: res.status, json: await res.json().catch(() => null) }
 }
 
-/** Removes every debt of the persona (archived ones too), so a run starts and ends clean. */
+/** Removes every debt and lump sum of the persona (archived debts too), so a run starts and ends clean. */
 async function clearDebts(base: string): Promise<void> {
   const s = await login(base)
   const list = (await plugin(base, s, 'GET', '/debts?includeArchived=true')).json as { debts?: Array<{ id: string }> } | null
   for (const d of list?.debts ?? []) await plugin(base, s, 'DELETE', `/debts/${d.id}`)
+  const lumps = (await plugin(base, s, 'GET', '/lump-sums')).json as { lumpSums?: Array<{ id: string }> } | null
+  for (const l of lumps?.lumpSums ?? []) await plugin(base, s, 'DELETE', `/lump-sums/${l.id}`)
   await plugin(base, s, 'PUT', '/settings', { extraPayment: '0', strategy: 'avalanche' })
 }
 
@@ -932,6 +938,297 @@ async function customChecks(pw: typeof Playwright, base: string): Promise<void> 
 }
 
 // ---------------------------------------------------------------------------
+// lump (lump sums and the what-if)
+// ---------------------------------------------------------------------------
+
+/** A date `days` from today (UTC), `YYYY-MM-DD`. */
+const dayFromNow = (days: number): string => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+/** What to type into an `en-US` date input for an ISO date: `MMDDYYYY`. */
+const typedDate = (iso: string): string => `${iso.slice(5, 7)}${iso.slice(8, 10)}${iso.slice(0, 4)}`
+
+/** The rows of the lump sums table: date, amount and the text of the "Goes to" cell, top to bottom. */
+const lumpRows = (frame: Playwright.Frame): Promise<Array<{ date: string; amount: string; what: string }>> =>
+  frame.evaluate(() => [...document.querySelectorAll('tr')].filter((tr) => tr.querySelector('td[data-col="what"]') !== null).map((tr) => ({
+    date: (tr.querySelector('td[data-col="date"]')?.textContent ?? '').trim(),
+    amount: (tr.querySelector('td[data-col="amount"]')?.textContent ?? '').trim(),
+    what: (tr.querySelector('td[data-col="what"]')?.textContent ?? '').trim(),
+  })))
+
+/** The polite live region's text. */
+const statusText = (frame: Playwright.Frame): Promise<string> =>
+  frame.evaluate(() => (document.querySelector('.dp > [role="status"][aria-live="polite"]')?.textContent ?? '').trim())
+
+async function lumpChecks(pw: typeof Playwright, base: string): Promise<void> {
+  await seedDebts(base, 5)
+  const future = dayFromNow(120)
+  const past = dayFromNow(-40)
+
+  // Add, edit, remove, by pointer, at desktop width.
+  const o = await open(pw, base, { width: 1280, height: 900 })
+  try {
+    const calls = trackCalls(o.page)
+    const frame = await gotoPage(o, base, 'isolated')
+    await frame.getByRole('heading', { name: 'Lump sums' }).waitFor()
+    check('lump: the section starts empty, with the what-if form on the page', (await frame.getByText('No lump sums').count()) === 1 && (await frame.getByRole('form', { name: 'What if' }).count()) === 1)
+    const headlineBefore = (await frame.locator('.dp-headline').textContent()) ?? ''
+    const fit0 = await frameFit(o.page, frame)
+    check('lump: the frame is as tall as its content with the new section', Math.abs(fit0.box - fit0.content) <= 2, fit0)
+
+    // An empty form is refused on its fields; nothing is sent.
+    await frame.getByRole('button', { name: 'Add a lump sum' }).click()
+    const dialog = frame.getByRole('dialog', { name: 'Add a lump sum' })
+    await dialog.waitFor()
+    const writesBefore = writes(calls).length
+    await dialog.getByRole('button', { name: 'Add lump sum' }).click()
+    await sleep(200)
+    const invalid = await dialog.locator('[aria-invalid="true"]').evaluateAll((els) => els.map((e) => (e.closest('.wm-field')?.querySelector('label')?.textContent ?? '').trim()))
+    check('lump: an empty form marks the date and the amount invalid, and sends nothing', invalid.join() === 'Date paid,Amount' && writes(calls).length === writesBefore, { invalid, writes: writes(calls).length - writesBefore })
+    check('lump: focus moves to the first invalid field', (await frame.evaluate(() => document.activeElement?.closest('.wm-field')?.querySelector('label')?.textContent ?? '')) === 'Date paid')
+    await dialog.getByLabel('Date paid').fill(future)
+    await dialog.getByLabel('Amount').fill('1500')
+    await dialog.getByLabel('To Debt 01').fill('1000')
+    await dialog.getByLabel('To Debt 02').fill('600')
+    await dialog.getByRole('button', { name: 'Add lump sum' }).click()
+    await sleep(200)
+    check('lump: parts that add up to more than the whole are refused with a message, nothing sent', (await dialog.getByText(/add up to more than the lump sum/).count()) === 1 && writes(calls).length === writesBefore)
+
+    // A good one.
+    await dialog.getByLabel('To Debt 02').fill('')
+    await dialog.getByLabel('Note (optional)').fill('Tax refund')
+    await dialog.getByRole('button', { name: 'Add lump sum' }).click()
+    await dialog.waitFor({ state: 'detached' })
+    await landed(calls)
+    const created = lastWrite(calls)
+    check('lump: adding sends the date, amount, note and the part for one debt, and is answered 2xx', created?.method === 'POST' && created.path === '/lump-sums' && created.status >= 200 && created.status < 300 && JSON.stringify(created.body).includes('"amount":"1500"') && JSON.stringify(created.body).includes('"note":"Tax refund"') && ((created.body as { allocations?: unknown[] }).allocations?.length === 1), created)
+    const rows = await eventually(() => lumpRows(frame), (v) => v.length === 1)
+    check('lump: it is listed with its date, amount and part, and says the plan pays it', rows.length === 1 && /1,?500/.test(rows[0]?.amount ?? '') && rows[0].what.includes('Tax refund') && rows[0].what.includes('to Debt 01') && /Paid on/.test(rows[0].what), rows)
+    const status1 = await statusText(frame)
+    check('lump: the live region says it was added', /^Lump sum of 1500\S* on \S+ added\. Updating the plan\.$/.test(status1) || /added\. Updating the plan\./.test(status1), status1)
+    await eventually(async () => (await frame.locator('.dp-headline').textContent()) ?? '', (v) => v !== headlineBefore)
+    const headlineAfter = (await frame.locator('.dp-headline').textContent()) ?? ''
+    check('lump: the debt-free line changed with the lump sum', headlineAfter !== headlineBefore, { headlineBefore, headlineAfter })
+    note('headline before and after a 1500 lump sum', [headlineBefore, headlineAfter])
+    await sleep(300)
+    const fit1 = await frameFit(o.page, frame)
+    check('lump: the frame grew with the list and is as tall as its content', fit1.content !== fit0.content && Math.abs(fit1.box - fit1.content) <= 2, { fit0, fit1 })
+    await shot(o.page, 'lump-desktop')
+
+    // Edit.
+    await frame.getByRole('button', { name: /^Edit the lump sum of/ }).click()
+    const edit = frame.getByRole('dialog', { name: 'Edit lump sum' })
+    await edit.waitFor()
+    check('lump: editing starts from the saved values', (await edit.getByLabel('Amount').inputValue()) === '1500.00' && (await edit.getByLabel('Note (optional)').inputValue()) === 'Tax refund' && (await edit.getByLabel('To Debt 01').inputValue()) === '1000.00' && (await edit.getByLabel('Date paid').inputValue()) === future)
+    await edit.getByLabel('Amount').fill('2500')
+    await edit.getByRole('button', { name: 'Save changes' }).click()
+    await edit.waitFor({ state: 'detached' })
+    await landed(calls)
+    check('lump: saving an edit is a PUT of the whole lump sum, answered 200', lastWrite(calls)?.method === 'PUT' && /^\/lump-sums\//.test(lastWrite(calls)?.path ?? '') && lastWrite(calls)?.status === 200, lastWrite(calls))
+    await eventually(() => lumpRows(frame), (v) => /2,?500/.test(v[0]?.amount ?? ''))
+    check('lump: the list shows the new amount', /2,?500/.test((await lumpRows(frame))[0]?.amount ?? ''), await lumpRows(frame))
+
+    // A server refusal on a debt's field: a part for a debt that is not the person's.
+    const s = await login(base)
+    const refused = await plugin(base, s, 'POST', '/lump-sums', { onDate: future, amount: '100', allocations: [{ debtId: '00000000-0000-4000-8000-000000000000', amount: '50' }] })
+    check('lump: the API refuses a part for a debt that is not the person\'s (400, unknown_debt)', refused.status === 400 && JSON.stringify(refused.json).includes('unknown_debt'), refused)
+
+    // Past: made through the API, as an old one would be; the page says so and offers to remove it.
+    const pastMade = await plugin(base, s, 'POST', '/lump-sums', { onDate: past, amount: '300', note: 'Already paid' })
+    check('lump: a past-dated lump sum is accepted by the API (the plan ignores it)', pastMade.status >= 200 && pastMade.status < 300, pastMade)
+    await o.page.reload()
+    await dismissWizard(o.page)
+    const frame2 = await waitForPage(o.page, 'isolated')
+    await frame2.getByRole('heading', { name: 'Lump sums' }).waitFor()
+    await eventually(() => lumpRows(frame2), (v) => v.length === 2)
+    const noticeText = (await frame2.locator('.dp-notice[role="status"]').first().textContent()) ?? ''
+    check('lump: the page notes that a lump sum with a passed date is ignored', /One lump sum has a date that has passed/.test(noticeText) && /ignores it/.test(noticeText), noticeText)
+    const pastRow = (await lumpRows(frame2)).find((r) => r.what.includes('Already paid'))
+    check('lump: that row says the plan ignores it', /The date has passed, so the plan ignores it/.test(pastRow?.what ?? ''), pastRow)
+    check('lump: only the past one has a Remove button in the list', (await frame2.getByRole('button', { name: /^Remove the lump sum/ }).count()) === 1)
+    const headlineWithPast = (await frame2.locator('.dp-headline').textContent()) ?? ''
+    await frame2.getByRole('button', { name: /^Remove the lump sum of .*300/ }).click()
+    await eventually(() => lumpRows(frame2), (v) => v.length === 1)
+    await landed(calls)
+    check('lump: removing it is a DELETE answered 2xx, and it leaves the list', lastWrite(calls)?.method === 'DELETE' && (lastWrite(calls)?.status ?? 0) >= 200 && (lastWrite(calls)?.status ?? 0) < 300 && (await lumpRows(frame2)).length === 1, lastWrite(calls))
+    check('lump: the plan is the same with or without the ignored lump sum', ((await frame2.locator('.dp-headline').textContent()) ?? '') === headlineWithPast)
+    check('lump: the live region says it was removed', /removed\. Updating the plan\./.test(await statusText(frame2)), await statusText(frame2))
+
+    // Remove through the dialog, with its question.
+    await frame2.getByRole('button', { name: /^Edit the lump sum of/ }).click()
+    const dlg3 = frame2.getByRole('dialog', { name: 'Edit lump sum' })
+    await dlg3.getByRole('button', { name: 'Remove this lump sum' }).click()
+    check('lump: removing in the dialog asks first', (await dlg3.getByRole('group', { name: 'Remove this lump sum' }).count()) === 1)
+    await dlg3.getByRole('button', { name: 'Keep it' }).click()
+    check('lump: "Keep it" keeps it', (await lumpRows(frame2)).length === 1 && (await dlg3.getByRole('button', { name: 'Remove this lump sum' }).count()) === 1)
+    await dlg3.getByRole('button', { name: 'Remove this lump sum' }).click()
+    await dlg3.getByRole('button', { name: 'Yes, remove it' }).click()
+    await dlg3.waitFor({ state: 'detached' })
+    await eventually(() => lumpRows(frame2), (v) => v.length === 0)
+    check('lump: confirming removes it and the section is empty again', (await lumpRows(frame2)).length === 0 && (await frame2.getByText('No lump sums').count()) === 1)
+
+    await sleep(400)
+    check('lump: no console error, failed request or CSP violation', o.problems.length === 0, o.problems)
+    const bad = writes(calls).filter((c) => c.status < 200 || c.status >= 300)
+    check('lump: every write the page made was answered 2xx', bad.length === 0, bad)
+  } finally { await o.browser.close() }
+
+  // The what-if: nothing saved, busy while it works, focus kept, the result announced.
+  const w = await open(pw, base, { width: 1280, height: 900 })
+  try {
+    const calls = trackCalls(w.page)
+    const frame = await gotoPage(w, base, 'isolated')
+    await frame.getByRole('heading', { name: 'Lump sums' }).waitFor()
+    const form = frame.getByRole('form', { name: 'What if' })
+    await form.getByLabel('Date paid').fill(future)
+    await form.getByLabel('Amount').fill('3000')
+    // Hold the answer back so the busy state can be seen.
+    await w.page.route('**/plan/what-if', async (route) => { await sleep(700); await route.continue() })
+    const button = form.getByRole('button', { name: 'Show what it changes' })
+    await button.focus()
+    await w.page.keyboard.press('Enter')
+    await eventually(() => button.getAttribute('aria-disabled'), (v) => v === 'true', 2000)
+    const during = await frame.evaluate(() => ({ busy: document.activeElement?.getAttribute('aria-disabled'), label: (document.activeElement?.textContent ?? '').trim(), tag: document.activeElement?.tagName }))
+    check('lump what-if: while it works the button is aria-disabled and still has focus', during.busy === 'true' && during.label === 'Show what it changes', during)
+    const result = frame.getByTestId('what-if-result')
+    await result.waitFor()
+    await sleep(200)
+    const text = ((await result.textContent()) ?? '').trim()
+    check('lump what-if: it says the debt-free date, how much sooner, and the interest saved', /you would be debt free on \S+, .* from now: .*(sooner|the same date), saving \S+ in interest\./.test(text), text)
+    check('lump what-if: the live region announces the same sentence', (await statusText(frame)) === text, { live: await statusText(frame), text })
+    check('lump what-if: after the answer the button is enabled again and focus has not moved', (await button.getAttribute('aria-disabled')) !== 'true' && (await frame.evaluate(() => (document.activeElement?.textContent ?? '').trim())) === 'Show what it changes')
+    const request = calls.find((c) => c.path === '/plan/what-if')
+    check('lump what-if: it is one POST to /plan/what-if with the strategy and extra, answered 200', request?.method === 'POST' && request.status === 200 && (request.body as { strategy?: string }).strategy === 'avalanche' && (request.body as { extra?: string }).extra === '150.0000', request)
+    check('lump what-if: it saved nothing (no write but the what-if, and no lump sum listed)', writes(calls).every((c) => c.path === '/plan/what-if') && (await lumpRows(frame)).length === 0, writes(calls))
+    note('what-if sentence', text)
+    await form.getByLabel('Amount').fill('3001')
+    check('lump what-if: changing a number marks the answer out of date and hides Save', /^Out of date/.test(((await result.textContent()) ?? '').trim()) && (await form.getByRole('button', { name: 'Save as a lump sum' }).count()) === 0)
+    await button.click()
+    await eventually(async () => ((await result.textContent()) ?? '').trim(), (v) => !v.startsWith('Out of date'))
+    await form.getByRole('button', { name: 'Save as a lump sum' }).click()
+    await eventually(() => lumpRows(frame), (v) => v.length === 1)
+    check('lump what-if: "Save as a lump sum" saves it for real and clears the form', (await lumpRows(frame)).length === 1 && (await form.getByLabel('Amount').inputValue()) === '' && lastWrite(calls)?.path === '/lump-sums')
+    // A past date changes nothing, and says so.
+    await form.getByLabel('Date paid').fill(past)
+    await form.getByLabel('Amount').fill('500')
+    await button.click()
+    await eventually(async () => ((await result.textContent()) ?? '').trim(), (v) => /has passed/.test(v))
+    check('lump what-if: a date that has passed is reported as changing nothing', /nothing would change/.test(((await result.textContent()) ?? '').trim()))
+    // A field problem is shown on the field and focused; nothing is sent.
+    const n = calls.length
+    await form.getByLabel('Amount').fill('0')
+    await button.click()
+    await sleep(250)
+    check('lump what-if: a zero amount is refused on its field, focused, with no request', (await form.getByLabel('Amount').getAttribute('aria-invalid')) === 'true' && (await frame.evaluate(() => document.activeElement?.closest('.wm-field')?.querySelector('label')?.textContent ?? '')) === 'Amount' && calls.length === n)
+    check('lump what-if: no console error or CSP violation', w.problems.length === 0, w.problems)
+  } finally { await w.browser.close() }
+  await clearDebts(base)
+
+  // Keyboard only: open the dialog from its button, fill it with Tab and typing, submit with Enter, end back on the button.
+  await seedDebts(base, 5)
+  const k = await open(pw, base, { width: 1280, height: 900 })
+  try {
+    const calls = trackCalls(k.page)
+    const frame = await gotoPage(k, base, 'isolated')
+    await frame.getByRole('heading', { name: 'Lump sums' }).waitFor()
+    const keyboard = k.page.keyboard
+    await frame.getByRole('button', { name: 'Add a lump sum' }).focus()
+    await keyboard.press('Enter')
+    await frame.getByRole('dialog', { name: 'Add a lump sum' }).waitFor()
+    check('lump keyboard: opening the dialog puts focus on its first field', (await frame.evaluate(() => document.activeElement?.closest('.wm-field')?.querySelector('label')?.textContent ?? '')) === 'Date paid')
+    await keyboard.type(typedDate(future))
+    await keyboard.press('Tab')
+    // Tabbing out of a date input goes to the next segment or field; walk to Amount by label.
+    const focusLabel = (): Promise<string> => frame.evaluate(() => document.activeElement?.closest('.wm-field')?.querySelector('label')?.textContent ?? document.activeElement?.getAttribute('aria-label') ?? '')
+    for (let i = 0; i < 6 && (await focusLabel()) !== 'Amount'; i++) await keyboard.press('Tab')
+    check('lump keyboard: Tab reaches Amount', (await focusLabel()) === 'Amount')
+    await keyboard.type('800')
+    await keyboard.press('Tab')
+    await keyboard.type('Gift')
+    await keyboard.press('Enter')
+    await frame.getByRole('dialog').waitFor({ state: 'detached' })
+    await landed(calls)
+    check('lump keyboard: Enter in a field submits the form', lastWrite(calls)?.method === 'POST' && lastWrite(calls)?.path === '/lump-sums' && (lastWrite(calls)?.status ?? 0) >= 200 && (lastWrite(calls)?.status ?? 0) < 300 && (lastWrite(calls)?.body as { onDate?: string }).onDate === future, lastWrite(calls))
+    await sleep(250)
+    check('lump keyboard: focus goes back to the button that opened it', (await frame.evaluate(() => (document.activeElement?.textContent ?? '').trim())) === 'Add a lump sum')
+    const edit = frame.getByRole('button', { name: /^Edit the lump sum of/ })
+    await eventually(() => edit.count(), (c) => c === 1)
+    await edit.focus()
+    await keyboard.press('Space')
+    await frame.getByRole('dialog', { name: 'Edit lump sum' }).waitFor()
+    await keyboard.press('Escape')
+    await frame.getByRole('dialog').waitFor({ state: 'detached' })
+    await sleep(150)
+    check('lump keyboard: Escape closes the dialog and focus returns to Edit', (await frame.evaluate(() => (document.activeElement?.textContent ?? '').trim())) === 'Edit')
+    check('lump keyboard: no console error or CSP violation', k.problems.length === 0, k.problems)
+  } finally { await k.browser.close() }
+
+  // Axe in light and dark: list, what-if answer, and the dialog open.
+  for (const scheme of ['light', 'dark'] as const) {
+    const a = await open(pw, base, { width: 1280, height: 900, scheme })
+    try {
+      const frame = await gotoPage(a, base, 'isolated')
+      await frame.getByRole('heading', { name: 'Lump sums' }).waitFor()
+      const form = frame.getByRole('form', { name: 'What if' })
+      await form.getByLabel('Date paid').fill(future)
+      await form.getByLabel('Amount').fill('900')
+      await form.getByRole('button', { name: 'Show what it changes' }).click()
+      await frame.getByTestId('what-if-result').waitFor()
+      await sleep(300)
+      const list = await axeRun(frame, FRAME_EXCLUDED_RULES)
+      check(`lump a11y ${scheme}: axe in the page frame with lump sums and a what-if answer: 0 violations`, list.length === 0, list)
+      await form.getByLabel('Amount').fill('0')
+      await form.getByRole('button', { name: 'Show what it changes' }).click()
+      await sleep(250)
+      const errors = await axeRun(frame, FRAME_EXCLUDED_RULES)
+      check(`lump a11y ${scheme}: axe with a field error showing: 0 violations`, errors.length === 0, errors)
+      await frame.getByRole('button', { name: 'Add a lump sum' }).click()
+      await frame.getByRole('dialog', { name: 'Add a lump sum' }).waitFor()
+      await frame.getByRole('dialog').getByRole('button', { name: 'Add lump sum' }).click()
+      await sleep(250)
+      const dlg = await axeRun(frame, FRAME_EXCLUDED_RULES)
+      check(`lump a11y ${scheme}: axe in the lump sum dialog with field errors: 0 violations`, dlg.length === 0, dlg)
+      const host = await axeRun(a.page.mainFrame(), ['page-has-heading-one'])
+      check(`lump a11y ${scheme}: axe on the host with the dialog open: 0 violations`, host.length === 0, host)
+      await shot(a.page, `lump-dialog-${scheme}`)
+    } finally { await a.browser.close() }
+  }
+
+  // Phone widths.
+  for (const width of [390, 320]) {
+    const ph = await open(pw, base, { width, height: 844 })
+    try {
+      const frame = await gotoPage(ph, base, 'isolated')
+      await frame.getByRole('heading', { name: 'Lump sums' }).waitFor()
+      const form = frame.getByRole('form', { name: 'What if' })
+      await form.getByLabel('Date paid').fill(future)
+      await form.getByLabel('Amount').fill('900')
+      await form.getByRole('button', { name: 'Show what it changes' }).click()
+      await frame.getByTestId('what-if-result').waitFor()
+      await sleep(600)
+      const m = await frame.evaluate(() => {
+        const cw = document.documentElement.clientWidth
+        const wideEls = [...document.querySelectorAll('.dp *')].filter((e) => !e.closest('svg') && e.getBoundingClientRect().width > 0 && (e.getBoundingClientRect().right > cw + 1 || e.getBoundingClientRect().left < -1))
+        const wide = wideEls.length
+        const btn = [...document.querySelectorAll('.dp-lump-actions .wm-btn, .dp-whatif .wm-btn')].map((b) => Math.round(b.getBoundingClientRect().height))
+        return { scrollW: document.documentElement.scrollWidth, clientW: document.documentElement.clientWidth, wide, wideWhich: wideEls.map((e) => `${e.className}:${e.scrollWidth}>${e.clientWidth}`), minButtonH: btn.length === 0 ? 0 : Math.min(...btn) }
+      })
+      check(`lump phone ${width}: no horizontal overflow in the frame or on the host`, m.scrollW <= m.clientW && m.wide === 0 && (await ph.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)), m)
+      check(`lump phone ${width}: its buttons are at least 44 px tall`, m.minButtonH >= 44, m)
+      const fit = await frameFit(ph.page, frame)
+      check(`lump phone ${width}: the frame is as tall as its content`, Math.abs(fit.box - fit.content) <= 2, fit)
+      await frame.getByRole('button', { name: 'Add a lump sum' }).click()
+      const dialog = frame.getByRole('dialog', { name: 'Add a lump sum' })
+      await dialog.waitFor()
+      await sleep(300)
+      const dm = await frame.evaluate(() => { const d = document.querySelector('dialog'); return d === null ? null : { sw: d.scrollWidth, cw: d.clientWidth } })
+      check(`lump phone ${width}: the dialog has no horizontal overflow`, dm !== null && dm.sw <= dm.cw, dm)
+      await shot(ph.page, `lump-phone-${width}`)
+      check(`lump phone ${width}: no console error or CSP violation`, ph.problems.length === 0, ph.problems)
+    } finally { await ph.browser.close() }
+  }
+  await clearDebts(base)
+}
+
+// ---------------------------------------------------------------------------
 // a11y
 // ---------------------------------------------------------------------------
 
@@ -1326,6 +1623,7 @@ async function main(): Promise<void> {
     if (wants('writes')) await writeChecks(pw, isolated.base)
     if (wants('dialog')) await dialogChecks(pw, isolated.base)
     if (wants('custom')) await customChecks(pw, isolated.base)
+    if (wants('lump')) await lumpChecks(pw, isolated.base)
     if (wants('a11y')) await a11yChecks(pw, isolated.base)
     if (wants('visual')) await visualChecks(pw, isolated.base)
   } finally {

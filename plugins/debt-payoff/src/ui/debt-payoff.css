@@ -191,6 +191,9 @@
   .dp-seg__btn { min-height: 40px; padding: 8px 16px; }
   .dp-custom__moves { margin-left: 32px; }
   .dp-custom__moves .wm-btn { min-height: 44px; }
+  .dp-lump-actions .wm-btn, .dp-whatif .wm-btn { min-height: 44px; }
+  .dp-debts .wm-table td { overflow-wrap: anywhere; }
+  .dp-whatif { max-width: none; }
   .dp-extra__action { padding-top: 0; }
   .dp-actions { justify-content: flex-start; }
   .dp-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
