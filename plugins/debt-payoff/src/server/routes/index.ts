@@ -1,15 +1,20 @@
 import { QueryDebtUnitOfWork } from '../repository/QueryDebtUnitOfWork.js'
 import { DebtPayoffService } from '../service/DebtPayoffService.js'
 import { registerCreateDebt } from './handlers/createDebt.js'
+import { registerCreateLumpSum } from './handlers/createLumpSum.js'
 import { registerDeleteDebt } from './handlers/deleteDebt.js'
+import { registerDeleteLumpSum } from './handlers/deleteLumpSum.js'
 import { registerGetDebt } from './handlers/getDebt.js'
 import { registerGetPlan } from './handlers/getPlan.js'
 import { registerGetSettings } from './handlers/getSettings.js'
 import { registerListAccountSuggestions } from './handlers/listAccountSuggestions.js'
 import { registerListDebts } from './handlers/listDebts.js'
+import { registerListLumpSums } from './handlers/listLumpSums.js'
 import { registerReorderDebts } from './handlers/reorderDebts.js'
 import { registerSaveSettings } from './handlers/saveSettings.js'
 import { registerUpdateDebt } from './handlers/updateDebt.js'
+import { registerUpdateLumpSum } from './handlers/updateLumpSum.js'
+import { registerWhatIf } from './handlers/whatIf.js'
 import type { DebtPayoffRouteDeps } from './helpers/DebtPayoffRouteDeps.js'
 
 export { DebtPayoffError } from '../service/DebtPayoffError.js'
@@ -36,5 +41,10 @@ export function registerDebtPayoffRoutes(deps: DebtPayoffRouteDeps): void {
   registerGetSettings(deps, service)
   registerSaveSettings(deps, service)
   registerGetPlan(deps, service)
+  registerWhatIf(deps, service)
+  registerListLumpSums(deps, service)
+  registerCreateLumpSum(deps, service)
+  registerUpdateLumpSum(deps, service)
+  registerDeleteLumpSum(deps, service)
   registerListAccountSuggestions(deps, service)
 }

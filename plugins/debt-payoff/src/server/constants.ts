@@ -19,3 +19,12 @@ export const DEBT_PAYOFF_API_BASE = `/p/${DEBT_PAYOFF_PLUGIN_ID}`
  * dozen); archive paid-off debts to make room.
  */
 export const MAX_ACTIVE_DEBTS = 50
+
+/**
+ * The most lump sums a person can have, past ones included.
+ *
+ * The plan is built on every request, so what it reads is bounded where it is
+ * written. Two hundred is years of bonuses and refunds; a lump sum that has
+ * passed can be removed to make room.
+ */
+export const MAX_LUMP_SUMS = 200

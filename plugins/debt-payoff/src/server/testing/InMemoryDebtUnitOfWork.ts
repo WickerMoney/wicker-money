@@ -1,6 +1,7 @@
 import type { DebtRepositories } from '../repository/DebtRepositories.js'
 import type { DebtUnitOfWork } from '../repository/DebtUnitOfWork.js'
 import { InMemoryDebtRepository } from './InMemoryDebtRepository.js'
+import { InMemoryLumpSumRepository } from './InMemoryLumpSumRepository.js'
 import type { InMemoryDebtStore } from './InMemoryDebtStore.js'
 
 /**
@@ -18,6 +19,7 @@ export class InMemoryDebtUnitOfWork implements DebtUnitOfWork {
     const store = this.store
     return work({
       debts: new InMemoryDebtRepository(store, userId),
+      lumpSums: new InMemoryLumpSumRepository(store, userId),
       settings: {
         get: async () => store.settings.get(userId),
         save: async (extraPayment, strategy) => {

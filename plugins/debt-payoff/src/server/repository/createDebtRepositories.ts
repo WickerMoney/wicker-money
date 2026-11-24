@@ -2,6 +2,7 @@ import type { Query } from '@wickermoney/plugin-sdk/server'
 import type { DebtRepositories } from './DebtRepositories.js'
 import { QueryAccountRepository } from './QueryAccountRepository.js'
 import { QueryDebtRepository } from './QueryDebtRepository.js'
+import { QueryLumpSumRepository } from './QueryLumpSumRepository.js'
 import { QuerySettingsRepository } from './QuerySettingsRepository.js'
 
 /**
@@ -13,6 +14,7 @@ import { QuerySettingsRepository } from './QuerySettingsRepository.js'
 export function createDebtRepositories(q: Query): DebtRepositories {
   return {
     debts: new QueryDebtRepository(q),
+    lumpSums: new QueryLumpSumRepository(q),
     settings: new QuerySettingsRepository(q),
     accounts: new QueryAccountRepository(q),
   }

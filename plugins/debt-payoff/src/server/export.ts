@@ -1,9 +1,11 @@
 import type { Query } from '@wickermoney/plugin-sdk/server'
 import { createDebtRepositories } from './repository/createDebtRepositories.js'
 import type { ExportedDebt } from './repository/ExportedDebt.js'
+import type { ExportedLumpSum } from './repository/ExportedLumpSum.js'
 import type { ExportedSettings } from './repository/ExportedSettings.js'
 
 export type { ExportedDebt } from './repository/ExportedDebt.js'
+export type { ExportedLumpSum } from './repository/ExportedLumpSum.js'
 export type { ExportedSettings } from './repository/ExportedSettings.js'
 
 /**
@@ -18,12 +20,18 @@ export type { ExportedSettings } from './repository/ExportedSettings.js'
  * narrowed every row to the calling user.
  *
  * @param q - A query runner already bound to the current user.
- * @returns The user's debts (archived included) in their own order, and their
- *   saved plan settings, or `null` if they have never saved any.
+ * @returns The user's debts (archived included) in their own order, their
+ *   saved plan settings, or `null` if they have never saved any, and their
+ *   lump sums with their allocations (an empty list for someone who has none,
+ *   which is every export made before lump sums existed).
  */
 export async function exportDebtPayoffData(
   q: Query,
-): Promise<{ debts: readonly ExportedDebt[]; settings: ExportedSettings | null }> {
+): Promise<{ debts: readonly ExportedDebt[]; settings: ExportedSettings | null; lumpSums: readonly ExportedLumpSum[] }> {
   const repos = createDebtRepositories(q)
-  return { debts: await repos.debts.listAll(), settings: (await repos.settings.getForExport()) ?? null }
+  return {
+    debts: await repos.debts.listAll(),
+    settings: (await repos.settings.getForExport()) ?? null,
+    lumpSums: await repos.lumpSums.listAll(),
+  }
 }
