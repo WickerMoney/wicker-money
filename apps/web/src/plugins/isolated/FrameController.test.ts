@@ -220,6 +220,27 @@ describe('FrameController handshake', () => {
   })
 })
 
+describe('closing', () => {
+  it('dispose tells a connected frame it is closing before the connection ends', async () => {
+    const s = setup()
+    const port = connect(s)
+    port.postMessage({ type: 'ready', protocol: 1 })
+    await tick()
+    s.controller.dispose()
+    await tick()
+    expect(s.received.at(-1)).toEqual({ type: 'closing' })
+  })
+
+  it('says nothing to a frame that never connected', async () => {
+    const s = setup()
+    const port = connect(s)
+    s.controller.dispose()
+    await tick()
+    expect(s.received).toEqual([])
+    port.close()
+  })
+})
+
 describe('sizing', () => {
   it('clamps a widget to its minimum and maximum', async () => {
     const s = setup('widget')

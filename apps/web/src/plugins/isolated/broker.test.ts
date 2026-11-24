@@ -518,3 +518,61 @@ describe('re-handshake', () => {
     expect(r.handlers.onFatal).toHaveBeenCalledOnce()
   })
 })
+
+describe('closing', () => {
+  it('tells the frame, keeps serving request and cancel for the grace period, then ends the connection', async () => {
+    const r = rig({ limits: { closingGraceMs: 40 } })
+    r.broker.close()
+    expect(r.port.sent.at(-1)).toEqual({ type: 'closing' })
+    expect(r.port.closed).toBe(false)
+    // The frame still alive gives its upload back through the plugin's own namespace.
+    r.port.frame({ type: 'request', id: 1, method: 'POST', path: '/p/test.fixture/upload/abort', body: { uploadId: 'x' } })
+    await flush()
+    expect(r.port.responses()).toEqual([{ type: 'response', id: 1, ok: true, value: { rows: [] } }])
+    await new Promise((resolve) => { setTimeout(resolve, 80) })
+    expect(r.port.closed).toBe(true)
+    r.port.frame(get(2, '/core/transactions'))
+    await flush()
+    expect(r.port.responses()).toHaveLength(1)
+  })
+
+  it('serves nothing but request and cancel while closing', () => {
+    const r = rig({ limits: { closingGraceMs: 10_000 } })
+    r.broker.close()
+    r.port.frame({ type: 'navigate', path: '/accounts' })
+    r.port.frame({ type: 'modal', open: true })
+    r.port.frame({ type: 'resize', height: 300 })
+    r.port.frame({ type: 'focus-out', direction: 'next' })
+    r.port.frame({ type: 'notify', id: 9, level: 'info', message: 'late' })
+    expect(r.handlers.onNavigate).not.toHaveBeenCalled()
+    expect(r.handlers.onModal).not.toHaveBeenCalled()
+    expect(r.handlers.onResize).not.toHaveBeenCalled()
+    expect(r.handlers.onFocusOut).not.toHaveBeenCalled()
+    expect(r.port.responses()).toEqual([])
+    r.broker.dispose()
+  })
+
+  it('still checks grants while closing', async () => {
+    const r = rig({ limits: { closingGraceMs: 10_000 } })
+    r.broker.close()
+    r.port.frame(get(1, '/core/accounts/summary'))
+    await flush()
+    expect(r.port.responses()[0]).toMatchObject({ id: 1, ok: false, error: { code: 'grant_denied' } })
+    r.broker.dispose()
+  })
+
+  it('is disposed at once when no frame has connected, and is safe to call twice', () => {
+    const r = rig({ handshake: false })
+    r.broker.close()
+    expect(r.port.closed).toBe(true)
+    expect(r.port.sent).toEqual([])
+    r.broker.close()
+  })
+
+  it('dispose ends it immediately', () => {
+    const r = rig({ limits: { closingGraceMs: 10_000 } })
+    r.broker.close()
+    r.broker.dispose()
+    expect(r.port.closed).toBe(true)
+  })
+})

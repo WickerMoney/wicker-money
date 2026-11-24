@@ -32,6 +32,8 @@ export interface BrokerLimits {
   readonly maxHandshakes: number
   /** A token is replaced this long before it expires, in milliseconds. */
   readonly refreshMarginMs: number
+  /** After {@link PluginBroker.close} sends `closing`, how long the frame may still finish requests, in milliseconds. */
+  readonly closingGraceMs: number
 }
 
 /** The defaults. A widget's first paint is a handful of requests; 40 in a burst is generous and 20 a second is not a flood. */
@@ -44,6 +46,7 @@ export const DEFAULT_BROKER_LIMITS: BrokerLimits = {
   strikeWindowMs: 10_000,
   maxHandshakes: 10,
   refreshMarginMs: 30_000,
+  closingGraceMs: 1000,
 }
 
 /** What the broker asks the component that owns the frame to do. */
@@ -138,6 +141,9 @@ export class PluginBroker {
   private tokenState: TokenState | null = null
   private minting: Promise<TokenState> | null = null
   private epoch = 0
+  /** Set by {@link PluginBroker.close}: the frame has been told, and only `request` and `cancel` are still served. */
+  private closing = false
+  private closingTimer: ReturnType<typeof setTimeout> | undefined
   private strikes = 0
   private strikeWindowStart: number
   private handshakes = 0
@@ -200,10 +206,30 @@ export class PluginBroker {
     try { this.port.postMessage(message) } catch { /* the frame is gone */ }
   }
 
+  /**
+   * Takes the frame down politely: tells it `closing`, keeps serving its `request` and `cancel` messages for
+   * {@link BrokerLimits.closingGraceMs} (so a frame that is still alive can give back what it holds, for example
+   * `upload/abort`), then disposes. Everything else a frame can send (`navigate`, `notify`, `download`, `modal`,
+   * `resize`, `focus-out`) is ignored from the moment `closing` is sent. A broker with no connected, ready frame is
+   * disposed at once. Safe to call twice; {@link PluginBroker.dispose} still ends everything immediately.
+   */
+  close(): void {
+    if (this.disposed || this.closing) return
+    if (this.port === null || !this.ready) {
+      this.dispose()
+      return
+    }
+    this.closing = true
+    this.send({ type: 'closing' })
+    this.closingTimer = setTimeout(() => { this.dispose() }, this.limits.closingGraceMs)
+  }
+
   /** Cancels everything in flight, forgets the token and closes the port. Safe to call twice. */
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    if (this.closingTimer !== undefined) clearTimeout(this.closingTimer)
+    this.closingTimer = undefined
     this.epoch += 1
     this.closePort()
     this.tokenState = null
@@ -278,6 +304,8 @@ export class PluginBroker {
 
   private dispatch(from: MessagePort, message: Exclude<PluginMessage, { type: 'ready' }>): void {
     const { handlers } = this.options
+    // A frame that has been told it is closing may only finish what it holds on the server.
+    if (this.closing && message.type !== 'request' && message.type !== 'cancel') return
     switch (message.type) {
       case 'request': this.onRequest(from, message); return
       case 'cancel': this.cancel(message.id); return

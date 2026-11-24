@@ -331,12 +331,16 @@ export class FrameController {
     return true
   }
 
-  /** Stops listening, cancels everything in flight and drops the token. Safe to call twice. */
+  /**
+   * Stops listening, tells the frame it is closing (best effort, see `ClosingMessage`) and lets the broker finish
+   * the frame's requests for a short grace period before it cancels what is left and drops the token. Safe to call
+   * twice.
+   */
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
     this.stopTimer()
     for (const cleanup of this.cleanups) cleanup()
-    this.broker.dispose()
+    this.broker.close()
   }
 }
