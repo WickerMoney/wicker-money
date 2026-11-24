@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ResponseCache } from '../../api/responseCache.js'
 import { FrameController, HEIGHT_LIMITS, type FrameEvents, type FrameState } from './FrameController.js'
 import type { BrokerApi } from './brokerApi.js'
+import type { CheckedFile } from './downloadFile.js'
 
 const manifest = {
   id: 'test.fixture', name: 'Fixture', version: '0.1.0', description: '', author: '', sdkVersion: 0,
@@ -38,13 +39,13 @@ interface Setup {
   currentTheme: { value: HostTheme }
 }
 
-function setup(kind: 'widget' | 'page' = 'widget', extra: { loadTimeoutMs?: number; path?: string } = {}): Setup {
+function setup(kind: 'widget' | 'page' = 'widget', extra: { loadTimeoutMs?: number; path?: string; bundled?: boolean; save?: (f: CheckedFile) => void; strictDownloadGate?: boolean } = {}): Setup {
   const frame = fakeFrame()
   const states: FrameState[] = []
   const heights: number[] = []
   const currentTheme = { value: theme('light') }
   const events: FrameEvents = {
-    onState: (s) => states.push(s), onHeight: (h) => heights.push(h), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(),
+    onState: (s) => states.push(s), onHeight: (h) => heights.push(h), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(), onSaved: vi.fn(),
   }
   const controller = new FrameController({
     iframe: frame.iframe, manifest, userId: 'u1', email: 'u1@example.com', timezone: 'UTC', kind,
@@ -426,6 +427,87 @@ describe('modal dialogs', () => {
     s.controller.setModalLayout({ lifted: true, x: 18, y: -40, width: 900 })
     await tick()
     expect(s.received.filter((m) => m.type === 'modal-layout')).toEqual([{ type: 'modal-layout', lifted: true, x: 18, y: -40, width: 900 }])
+    s.controller.dispose()
+  })
+})
+
+describe('saving a file', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7]).buffer
+  const dlMsg = (id: number, over: Record<string, unknown> = {}) => ({ type: 'download', id, filename: 'share.jpg', mime: 'image/png', data: PNG.slice(0), ...over })
+
+  /** Makes the host window report an active user activation and the given element as the active element. */
+  function gesture(active: boolean, focused: Element | null) {
+    Object.defineProperty(navigator, 'userActivation', { value: { isActive: active }, configurable: true })
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(focused)
+  }
+  afterEach(() => {
+    vi.restoreAllMocks()
+    Reflect.deleteProperty(navigator, 'userActivation')
+  })
+
+  async function ready(s: Setup): Promise<MessagePort> {
+    const port = connect(s)
+    port.postMessage({ type: 'ready', protocol: 1 })
+    await tick()
+    s.received.length = 0
+    return port
+  }
+  const answers = (s: Setup) => s.received.filter((m): m is Extract<HostMessage, { type: 'response' }> => m.type === 'response')
+
+  it('saves for a bundled plugin after a gesture in its frame, tells the owner, and answers with the host name', async () => {
+    const save = vi.fn()
+    const s = setup('widget', { bundled: true, save })
+    const port = await ready(s)
+    gesture(true, s.frame.iframe)
+    port.postMessage(dlMsg(1))
+    await tick()
+    expect(save).toHaveBeenCalledOnce()
+    expect(save.mock.calls[0]![0]).toMatchObject({ filename: 'share.png', mime: 'image/png' })
+    expect(s.events.onSaved).toHaveBeenCalledWith('share.png')
+    expect(answers(s)).toEqual([{ type: 'response', id: 1, ok: true, value: { filename: 'share.png' } }])
+    s.controller.dispose()
+  })
+
+  it('refuses a plugin that is not bundled even with a perfect gesture', async () => {
+    const save = vi.fn()
+    for (const bundled of [false, undefined]) {
+      const s = setup('widget', { save, ...(bundled === undefined ? {} : { bundled }) })
+      const port = await ready(s)
+      gesture(true, s.frame.iframe)
+      port.postMessage(dlMsg(1))
+      await tick()
+      expect(answers(s)[0]).toMatchObject({ ok: false, error: { code: 'grant_denied' } })
+      s.controller.dispose()
+    }
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['the activation is spent', false, 'iframe'],
+    ['another element has focus', true, 'other'],
+    ['nothing has focus', true, 'none'],
+  ])('refuses with gesture_required when %s', async (_what, active, focus) => {
+    const save = vi.fn()
+    const s = setup('widget', { bundled: true, save })
+    const port = await ready(s)
+    gesture(active, focus === 'iframe' ? s.frame.iframe : focus === 'other' ? document.body : null)
+    port.postMessage(dlMsg(1))
+    await tick()
+    expect(answers(s)[0]).toMatchObject({ ok: false, error: { code: 'gesture_required' } })
+    expect(save).not.toHaveBeenCalled()
+    expect(s.events.onSaved).not.toHaveBeenCalled()
+    s.controller.dispose()
+  })
+
+  it('wires the default gate: script-made input on the host does not trip the strict check even when it is switched on', async () => {
+    const save = vi.fn()
+    const s = setup('widget', { bundled: true, save, strictDownloadGate: true })
+    const port = await ready(s)
+    window.dispatchEvent(new Event('keydown'))
+    gesture(true, s.frame.iframe)
+    port.postMessage(dlMsg(1))
+    await tick()
+    expect(save).toHaveBeenCalledOnce()
     s.controller.dispose()
   })
 })

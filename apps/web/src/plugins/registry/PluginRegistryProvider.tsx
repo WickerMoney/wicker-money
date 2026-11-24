@@ -91,7 +91,8 @@ export function PluginRegistryProvider({
   const value = useMemo<PluginRegistryState | null>(
     () => (registry === null ? null : {
       plugins: registry.plugins, failures: registry.failures,
-      ...(registry.runtimes !== undefined ? { runtimes: registry.runtimes } : {}), refresh,
+      ...(registry.runtimes !== undefined ? { runtimes: registry.runtimes } : {}),
+      ...(registry.bundled !== undefined ? { bundled: registry.bundled } : {}), refresh,
     }),
     [registry, refresh],
   )

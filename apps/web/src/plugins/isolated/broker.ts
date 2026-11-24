@@ -10,10 +10,14 @@ import type { ResponseCache } from '../../api/responseCache.js'
 import { refusalFor, type PathRefusal } from '../pluginPaths.js'
 import type { BrokerApi } from './brokerApi.js'
 import { RateLimiter } from './RateLimiter.js'
+import { checkDownload, type CheckedFile } from './downloadFile.js'
 import { cleanPluginText, MAX_PLUGIN_NOTIFY_LENGTH, type PluginToastLevel } from './pluginNotify.js'
 
 /** The message types a frame may send. Anything else is ignored, not punished: a newer plugin may send more. */
-const KNOWN_TYPES: ReadonlySet<string> = new Set(['ready', 'request', 'cancel', 'navigate', 'resize', 'focus-out', 'modal', 'notify'])
+const KNOWN_TYPES: ReadonlySet<string> = new Set(['ready', 'request', 'cancel', 'navigate', 'resize', 'focus-out', 'modal', 'notify', 'download'])
+
+/** Seconds between two saved files from one frame. */
+const DOWNLOAD_INTERVAL_S = 5
 
 /** Tunables for {@link PluginBroker}; each has a default chosen for a dashboard widget that reads aggregates. */
 export interface BrokerLimits {
@@ -77,6 +81,13 @@ export interface BrokerHandlers {
    * attributed to the plugin; it owns the "at most two visible per plugin" rule.
    */
   onNotify(level: PluginToastLevel, text: string): void
+  /**
+   * Whether the person's last click or key press was in this frame, as far as the host can tell. A handler that is
+   * missing answers `false`: the broker never saves a file for want of an answer.
+   */
+  canDownload?(): boolean
+  /** A file the plugin is bundled to offer, checked, within the rate limit and after a gesture; the host saves it. */
+  onDownload?(file: CheckedFile): void
   /** The connection was cut off for a reason a person should be told. The broker has already disposed itself. */
   onFatal(reason: string): void
 }
@@ -85,6 +96,11 @@ export interface BrokerHandlers {
 export interface BrokerOptions {
   /** The plugin this frame runs. Its grants are the only grants the frame has. */
   readonly manifest: PluginManifest
+  /**
+   * Whether the plugin ships with the app. Only a bundled plugin may save a file; anything else, and a caller that
+   * does not say, is refused with `grant_denied`. It comes from the registry row the API built, never from a manifest.
+   */
+  readonly bundled?: boolean
   /** The signed-in user the frame was created for. */
   readonly userId: string
   /** The network operations. */
@@ -149,6 +165,8 @@ export class PluginBroker {
   private readonly navigations: RateLimiter
   /** Opening a modal lifts the frame over the window, so a frame may not do it in a loop. Closing is never limited. */
   private readonly modals: RateLimiter
+  /** One file per 5 seconds per frame: a burst of 1, then one every 5 s. Spent only by a file that is saved. */
+  private readonly downloads: RateLimiter
   /** Notifications raise toasts in the host's own UI: 3 in a burst, then one every 3.3 s. */
   private readonly notifications: RateLimiter
   /** Text of recent notifications, by when they were raised; a repeat inside the window is dropped. */
@@ -176,6 +194,7 @@ export class PluginBroker {
     this.limiter = new RateLimiter(this.limits.burst, this.limits.perSecond, this.now)
     this.navigations = new RateLimiter(3, 1, this.now)
     this.modals = new RateLimiter(4, 2, this.now)
+    this.downloads = new RateLimiter(1, 1 / DOWNLOAD_INTERVAL_S, this.now)
     this.notifications = new RateLimiter(this.limits.notifyBurst, this.limits.notifyPerSecond, this.now)
     this.strikeWindowStart = this.now()
     this.handshakeWindowStart = this.now()
@@ -307,7 +326,7 @@ export class PluginBroker {
     }
     if (!this.limiter.tryTake()) {
       this.strike()
-      if (message.type === 'request' || message.type === 'notify') this.reply(from, message.id, { ok: false, error: this.rateLimited() })
+      if (message.type === 'request' || message.type === 'notify' || message.type === 'download') this.reply(from, message.id, { ok: false, error: this.rateLimited() })
       return
     }
     this.dispatch(from, message)
@@ -341,7 +360,34 @@ export class PluginBroker {
         else this.strike()
         return
       case 'notify': this.onNotify(from, message); return
+      case 'download': this.onDownload(from, message); return
     }
+  }
+
+  /**
+   * A plugin's request to save a file. Every refusal costs a strike and gets an error code. In this order: the plugin
+   * must be bundled (`grant_denied`), then the cheap checks that need nothing from the person (size, type, bytes),
+   * then the gesture, and last the rate limit, whose token only a file that will be saved spends, so a frame cannot
+   * use up the person's allowance with requests that are refused.
+   */
+  private onDownload(from: MessagePort, message: Extract<PluginMessage, { type: 'download' }>): void {
+    const refuse = (code: string, text: string): void => {
+      this.strike()
+      this.reply(from, message.id, { ok: false, error: { code, message: text } })
+    }
+    if (this.options.bundled !== true) {
+      refuse('grant_denied', 'Only a plugin that ships with the app can save a file.')
+      return
+    }
+    const checked = checkDownload(message)
+    if (!checked.ok) { refuse(checked.code, checked.message); return }
+    if (this.options.handlers.canDownload?.() !== true) {
+      refuse('gesture_required', 'Saving a file must follow a click or key press in the plugin.')
+      return
+    }
+    if (!this.downloads.tryTake()) { refuse('rate_limited', 'One file at a time: wait a few seconds.'); return }
+    this.options.handlers.onDownload?.(checked.file)
+    this.reply(from, message.id, { ok: true, value: { filename: checked.file.filename } })
   }
 
   /**

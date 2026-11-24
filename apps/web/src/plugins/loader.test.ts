@@ -103,6 +103,20 @@ describe('loadPluginRegistry', () => {
     expect(runtimes).toEqual({ 'wickermoney.insights': 'in-realm', 'acme.sandboxed': 'isolated' })
   })
 
+  it('records which plugins ship with the app, and treats anything but an explicit true as not bundled', async () => {
+    apiGet.mockResolvedValue({
+      plugins: [
+        manifest({ bundled: true }),
+        manifest({ id: 'acme.a', runtime: 'isolated', bundled: false }),
+        manifest({ id: 'acme.b', runtime: 'isolated' }),
+        manifest({ id: 'acme.c', runtime: 'isolated', bundled: 'true' }),
+        manifest({ id: 'acme.d', runtime: 'isolated', bundled: 1 }),
+      ],
+    })
+    const { bundled } = await loadPluginRegistry()
+    expect(bundled).toEqual({ 'wickermoney.insights': true, 'acme.a': false, 'acme.b': false, 'acme.c': false, 'acme.d': false })
+  })
+
   it('never registers an isolated plugin with the page\'s federation runtime', async () => {
     apiGet.mockResolvedValue({ plugins: [manifest({ id: 'acme.sandboxed', runtime: 'isolated' })] })
     const { plugins } = await loadPluginRegistry()

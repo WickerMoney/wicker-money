@@ -5,6 +5,7 @@ import type { PluginContext, PluginManifest } from '@wickermoney/plugin-sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrokerApi } from './brokerApi.js'
 import { IsolatedPluginFrame } from './IsolatedPluginFrame.js'
+import { PluginRegistryCtx } from '../registry/pluginRegistryContext.js'
 import { LAYOUT_SETTLED_AT_MS, SETTLE_MS } from './useNearViewport.js'
 
 const manifest = {
@@ -329,6 +330,78 @@ describe('a plugin notification', () => {
     await findToast('still here?')
     view.unmount()
     // The provider went with it; mount a bare one to prove nothing leaks into a later toast stack.
+    expect(toastTexts()).toEqual([])
+  })
+})
+
+describe('a plugin saving a file', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9]).buffer
+
+  /** The frame as the registry reports it: `bundled` says whether the API listed the plugin as shipped with the app. */
+  const mountWith = (bundled: boolean | undefined) => renderWithToasts(
+    <PluginRegistryCtx.Provider
+      value={{ plugins: [], failures: [], refresh: async () => {}, runtimes: { 'test.fixture': 'isolated' }, ...(bundled === undefined ? {} : { bundled: { 'test.fixture': bundled } }) }}
+    >
+      <IsolatedPluginFrame manifest={manifest} module="./Widget" title="Spending" kind="widget" ctx={ctx} size="md" api={api} />
+    </PluginRegistryCtx.Provider>,
+  )
+
+  function hostSaves() {
+    const create = vi.fn(() => 'blob:host/1')
+    Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() })
+    const clicked: string[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicked.push(this.download) })
+    return { create, clicked }
+  }
+  const gesture = (iframe: Element | null) => {
+    Object.defineProperty(navigator, 'userActivation', { value: { isActive: true }, configurable: true })
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(iframe)
+  }
+  afterEach(() => { Reflect.deleteProperty(navigator, 'userActivation') })
+  const send = async (port: MessagePort, id = 1) => {
+    const replies: unknown[] = []
+    port.onmessage = (e) => { replies.push(e.data) }
+    await act(async () => {
+      port.postMessage({ type: 'download', id, filename: 'share.jpg', mime: 'image/png', data: PNG.slice(0) }, [])
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    return replies
+  }
+
+  it('a bundled plugin after a click in its frame: the host makes the download and says "Saved <name> from <plugin>"', async () => {
+    const { container } = mountWith(true)
+    const f = frameOf(container)
+    const port = await f.connect()
+    const saves = hostSaves()
+    gesture(f.iframe)
+    const replies = await send(port)
+    expect(saves.clicked).toEqual(['share.png'])
+    expect(replies).toContainEqual({ type: 'response', id: 1, ok: true, value: { filename: 'share.png' } })
+    expect(await findToast('Saved share.png')).toEqual(['Saved share.png from Fixture'])
+  })
+
+  it.each([false, undefined])('a plugin that is not bundled (%s) gets grant_denied, and the host makes no download and no toast', async (bundled) => {
+    const { container } = mountWith(bundled)
+    const f = frameOf(container)
+    const port = await f.connect()
+    const saves = hostSaves()
+    gesture(f.iframe)
+    const replies = await send(port)
+    expect(saves.clicked).toEqual([])
+    expect(saves.create).not.toHaveBeenCalled()
+    expect(replies).toContainEqual(expect.objectContaining({ id: 1, ok: false, error: expect.objectContaining({ code: 'grant_denied' }) as unknown }))
+    expect(toastTexts()).toEqual([])
+  })
+
+  it('without a gesture in the frame: gesture_required, nothing saved', async () => {
+    const { container } = mountWith(true)
+    const f = frameOf(container)
+    const port = await f.connect()
+    const saves = hostSaves()
+    gesture(null)
+    const replies = await send(port)
+    expect(saves.clicked).toEqual([])
+    expect(replies).toContainEqual(expect.objectContaining({ id: 1, ok: false, error: expect.objectContaining({ code: 'gesture_required' }) as unknown }))
     expect(toastTexts()).toEqual([])
   })
 })

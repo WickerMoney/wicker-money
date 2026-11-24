@@ -9,6 +9,8 @@ const slots = new PluginToastSlots()
 export interface PluginToasts {
   /** Shows `text` (already cleaned and length-checked by the broker) as a toast attributed to the plugin. */
   readonly show: (level: PluginToastLevel, text: string) => void
+  /** Tells the person the host saved `filename` for the plugin: "Saved <name> from <plugin>", a host toast of its own. */
+  readonly saved: (filename: string) => void
   /** Dismisses every toast this frame raised that is still showing or waiting. Call when the frame goes away. */
   readonly withdraw: () => void
 }
@@ -30,9 +32,12 @@ export function usePluginToasts(pluginId: string, pluginName: string): PluginToa
     const id = toast.show(pluginToastText(pluginName, text), { kind: level, key: slots.keyFor(pluginId) })
     shown.current.add(id)
   }, [toast, pluginId, pluginName])
+  const saved = useCallback((filename: string): void => {
+    toast.show(`Saved ${filename} from ${pluginName}`, { kind: 'success', key: `plugin-saved:${pluginId}` })
+  }, [toast, pluginId, pluginName])
   const withdraw = useCallback((): void => {
     for (const id of shown.current) toast.dismiss(id)
     shown.current.clear()
   }, [toast])
-  return useMemo(() => ({ show, withdraw }), [show, withdraw])
+  return useMemo(() => ({ show, saved, withdraw }), [show, saved, withdraw])
 }

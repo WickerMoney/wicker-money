@@ -619,7 +619,7 @@ describe('notify', () => {
   it('refuses text over 200 characters, and text that is empty once cleaned, with invalid_request', () => {
     const r = notifyRig()
     r.port.frame(note(1, 'x'.repeat(201)))
-    r.port.frame(note(2, '\n\t ‮'))
+    r.port.frame(note(2, '\n\t \u202e'))
     r.port.frame(note(3, 'x'.repeat(200)))
     expect(r.port.responses().map((m) => (m.ok ? 'ok' : m.error.code))).toEqual(['invalid_request', 'invalid_request', 'ok'])
     expect(r.handlers.onNotify).toHaveBeenCalledOnce()
@@ -677,5 +677,139 @@ describe('notify', () => {
     r.port.frame(note(1, 'one'))
     r.port.frame(note(2, 'two'))
     expect(r.port.responses()[1]).toMatchObject({ id: 2, ok: false, error: { code: 'request_failed', status: 429 } })
+  })
+})
+
+describe('download', () => {
+  const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]
+  const buf = (bytes: readonly number[]): ArrayBuffer => new Uint8Array(bytes).buffer
+  /** Built from a plain Uint8Array: jsdom's TextEncoder hands back a buffer from another realm, which the parser rightly refuses. */
+  const text = (s: string): ArrayBuffer => new Uint8Array(Array.from(s, (ch) => ch.charCodeAt(0))).buffer
+  const dl = (id: number, over: Record<string, unknown> = {}) =>
+    ({ type: 'download', id, filename: 'share', mime: 'image/png', data: buf(PNG), ...over })
+
+  /** A rig for `download`: bundled unless said otherwise, with a gesture unless said otherwise. */
+  function dlRig(opts: { bundled?: boolean | undefined; gesture?: boolean; limits?: BrokerOptions['limits']; omitHandlers?: boolean } = {}) {
+    const clock = { t: 1_000_000 }
+    const gesture = { on: opts.gesture ?? true }
+    const handlers = {
+      onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(), onFatal: vi.fn(),
+      canDownload: vi.fn(() => gesture.on), onDownload: vi.fn(),
+    }
+    const api: BrokerApi = { mint: vi.fn(), send: vi.fn() }
+    const cache = new ResponseCache({ now: () => clock.t })
+    const given: BrokerHandlers = opts.omitHandlers === true
+      ? { onReady: handlers.onReady, onResize: handlers.onResize, onNavigate: handlers.onNavigate, onFocusOut: handlers.onFocusOut, onModal: handlers.onModal, onNotify: handlers.onNotify, onFatal: handlers.onFatal }
+      : handlers
+    const broker = new PluginBroker({
+      manifest, userId: 'u1', api, activeUserId: () => 'u1', cache, handlers: given, now: () => clock.t,
+      ...('bundled' in opts ? (opts.bundled === undefined ? {} : { bundled: opts.bundled }) : { bundled: true }),
+      ...(opts.limits ? { limits: opts.limits } : {}),
+    })
+    const port = new FakePort()
+    broker.attach(asPort(port), init)
+    port.frame({ type: 'ready', protocol: 1 })
+    return { broker, port, handlers, clock, gesture }
+  }
+  const err = (r: ReturnType<typeof dlRig>, index = 0) => (r.port.responses()[index] as { error?: { code: string } }).error?.code
+
+  it('saves a checked file once, with the host name, and answers with that name', () => {
+    const r = dlRig()
+    r.port.frame(dl(1, { filename: 'My Share.jpg' }))
+    expect(r.handlers.onDownload).toHaveBeenCalledOnce()
+    const file = r.handlers.onDownload.mock.calls[0]![0] as { filename: string; mime: string; bytes: Uint8Array }
+    expect(file).toMatchObject({ filename: 'My Share.png', mime: 'image/png' })
+    expect(Array.from(file.bytes)).toEqual(PNG)
+    expect(r.port.responses()).toEqual([{ type: 'response', id: 1, ok: true, value: { filename: 'My Share.png' } }])
+  })
+
+  it('pins the refusal of a plugin that is not bundled: grant_denied, nothing saved, a strike', () => {
+    for (const bundled of [false, undefined]) {
+      const r = dlRig({ bundled })
+      r.port.frame(dl(1))
+      expect(err(r)).toBe('grant_denied')
+      expect(r.handlers.onDownload).not.toHaveBeenCalled()
+      expect(r.handlers.canDownload).not.toHaveBeenCalled()
+    }
+  })
+
+  it('a plugin that is not bundled is cut off by repeated attempts, like any other refused message', () => {
+    const r = dlRig({ bundled: false, limits: { maxStrikes: 10, burst: 1000 } })
+    for (let i = 1; i <= 12; i += 1) r.port.frame(dl(i))
+    expect(r.handlers.onFatal).toHaveBeenCalledOnce()
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+  })
+
+  it('does not look at the gesture for a file that is refused on its own merits', () => {
+    const r = dlRig({ gesture: true })
+    r.port.frame(dl(1, { mime: 'text/html', data: text('<p>x</p>') }))
+    expect(err(r)).toBe('file_type_not_allowed')
+    expect(r.handlers.canDownload).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['file_type_not_allowed', { mime: 'image/svg+xml', data: text('<svg/>') }],
+    ['file_type_not_allowed', { mime: 'toString', data: text('x') }],
+    ['file_type_not_allowed', { mime: '__proto__', data: text('x') }],
+    ['file_invalid', { mime: 'image/png', data: buf([1, 2, 3]) }],
+    ['file_invalid', { mime: 'text/csv', data: text('<!DOCTYPE html><html></html>') }],
+    ['file_invalid', { mime: 'application/json', data: text('{nope') }],
+    ['file_invalid', { mime: 'text/plain', data: new ArrayBuffer(0) }],
+    ['file_too_large', { mime: 'text/plain', data: new ArrayBuffer(5 * 1024 * 1024 + 1) }],
+  ])('refuses with %s', (code, over) => {
+    const r = dlRig()
+    r.port.frame(dl(1, over))
+    expect(err(r)).toBe(code)
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+  })
+
+  it('refuses without a gesture, and a missing canDownload handler counts as no gesture', () => {
+    const a = dlRig({ gesture: false })
+    a.port.frame(dl(1))
+    expect(err(a)).toBe('gesture_required')
+    expect(a.handlers.onDownload).not.toHaveBeenCalled()
+    const b = dlRig({ omitHandlers: true })
+    b.port.frame(dl(1))
+    expect(err(b)).toBe('gesture_required')
+  })
+
+  it('allows one file per 5 seconds: a refused gesture does not spend the allowance, a saved file does', () => {
+    const r = dlRig({ gesture: false })
+    r.port.frame(dl(1))
+    r.port.frame(dl(2))
+    r.gesture.on = true
+    r.port.frame(dl(3))
+    expect(r.handlers.onDownload).toHaveBeenCalledOnce()
+    r.port.frame(dl(4))
+    expect(err(r, 3)).toBe('rate_limited')
+    r.clock.t += 4_000
+    r.port.frame(dl(5))
+    expect(err(r, 4)).toBe('rate_limited')
+    r.clock.t += 1_100
+    r.port.frame(dl(6))
+    expect(r.handlers.onDownload).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores a download after closing was sent, like the other non-request messages', () => {
+    const r = dlRig()
+    r.broker.close()
+    r.port.frame(dl(1))
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+    expect(r.port.responses()).toEqual([])
+  })
+
+  it('answers a download that the general limiter drops, so the frame is not left waiting', () => {
+    const r = dlRig({ limits: { burst: 1, perSecond: 0.001 } })
+    r.port.frame(dl(1))
+    r.port.frame(dl(2))
+    expect(r.port.responses()[1]).toMatchObject({ id: 2, ok: false, error: { code: 'request_failed', status: 429 } })
+  })
+
+  it('treats a malformed download as a strike, not a crash', () => {
+    const r = dlRig()
+    r.port.frame({ type: 'download', id: 1, filename: 'a', mime: 'text/plain', data: 'not a buffer' })
+    r.port.frame({ type: 'download', filename: 'a', mime: 'text/plain', data: new ArrayBuffer(1) })
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+    expect(r.port.responses()).toEqual([])
   })
 })

@@ -4,6 +4,8 @@ import {
   type FocusDirection, type FrameKind, type HostLocale, type HostTheme, type InitMessage,
 } from '@wickermoney/plugin-sdk/isolated'
 import type { ResponseCache } from '../../api/responseCache.js'
+import { DownloadGate, STRICT_DOWNLOAD_GATE } from './downloadGate.js'
+import { saveFile, type CheckedFile } from './downloadFile.js'
 import { PluginBroker, type BrokerOptions } from './broker.js'
 import type { BrokerApi } from './brokerApi.js'
 import { diagnoseFrameTimeout } from './devFrameHint.js'
@@ -61,6 +63,8 @@ export interface FrameEvents {
    * already cleaned). The owner of the frame shows it, attributed to the plugin.
    */
   onNotify(level: PluginToastLevel, text: string): void
+  /** A file the plugin asked for was handed to the browser to save, under this name. The owner tells the person. */
+  onSaved(filename: string): void
 }
 
 /** Everything a {@link FrameController} needs. */
@@ -77,6 +81,8 @@ export interface FrameControllerOptions {
   /** Pages only: the path to render first. */
   readonly path?: string
   readonly api: BrokerApi
+  /** Whether the plugin ships with the app (the API's flag). Only a bundled plugin may save a file; absent means no. */
+  readonly bundled?: boolean
   readonly activeUserId: () => string | null
   readonly cache: Pick<ResponseCache, 'read' | 'forget' | 'clear'>
   readonly events: FrameEvents
@@ -87,6 +93,10 @@ export interface FrameControllerOptions {
   readonly readLocale?: () => HostLocale
   /** The host window. Replaceable in tests. */
   readonly win?: Window
+  /** Starts the browser's download of a checked file. Replaceable in tests. */
+  readonly save?: (file: CheckedFile) => void
+  /** Replaces the strict-gate switch, for tests of the strict gate. Production leaves it unset. */
+  readonly strictDownloadGate?: boolean
 }
 
 /**
@@ -111,6 +121,7 @@ export interface FrameControllerOptions {
  */
 export class FrameController {
   private readonly broker: PluginBroker
+  private readonly gate: DownloadGate
   private readonly win: Window
   private readonly readTheme: () => HostTheme
   private readonly readLocale: () => HostLocale
@@ -131,10 +142,13 @@ export class FrameController {
   constructor(private readonly options: FrameControllerOptions) {
     this.win = options.win ?? window
     this.path = options.path
+    this.gate = new DownloadGate(this.win, options.iframe, options.strictDownloadGate ?? STRICT_DOWNLOAD_GATE)
+    this.cleanups.push(() => { this.gate.dispose() })
     this.readTheme = options.readTheme ?? (() => readHostTheme())
     this.readLocale = options.readLocale ?? (() => readHostLocale(options.timezone))
     this.broker = new PluginBroker({
       manifest: options.manifest,
+      ...(options.bundled !== undefined ? { bundled: options.bundled } : {}),
       userId: options.userId,
       api: options.api,
       activeUserId: options.activeUserId,
@@ -148,6 +162,11 @@ export class FrameController {
         // A widget frame is a card in a grid: it has nothing to lift, so its message is ignored.
         onModal: (open) => { if (options.kind === 'page') options.events.onModal(open) },
         onNotify: (level, text) => { options.events.onNotify(level, text) },
+        canDownload: () => this.gate.allows(),
+        onDownload: (file) => {
+          (options.save ?? saveFile)(file)
+          options.events.onSaved(file.filename)
+        },
         onFatal: (reason) => { this.fail(reason) },
       },
     })

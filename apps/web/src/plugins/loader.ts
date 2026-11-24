@@ -8,7 +8,7 @@ import { api } from '../api/client.js'
 import type { PluginLoadFailure } from './PluginLoadFailure.js'
 import type { PluginRegistry } from './PluginRegistry.js'
 import type { PluginRuntime } from './PluginRuntime.js'
-import { runtimeOf } from './PluginRuntime.js'
+import { bundledOf, runtimeOf } from './PluginRuntime.js'
 import { registerOne } from './registerOne.js'
 
 let initialised = false
@@ -60,6 +60,7 @@ export async function loadPluginRegistry(): Promise<PluginRegistry> {
   const plugins: PluginManifest[] = []
   const failures: PluginLoadFailure[] = [...(response.failures ?? [])]
   const runtimes: Record<string, PluginRuntime> = {}
+  const bundled: Record<string, boolean> = {}
 
   for (const raw of response.plugins) {
     const runtime = runtimeOf(raw)
@@ -67,11 +68,12 @@ export async function loadPluginRegistry(): Promise<PluginRegistry> {
     if (manifest !== undefined) {
       plugins.push(manifest)
       runtimes[manifest.id] = runtime
+      bundled[manifest.id] = bundledOf(raw)
     }
   }
   isolatedIds = new Set(Object.keys(runtimes).filter((id) => runtimes[id] === 'isolated'))
 
-  return { plugins, failures, runtimes }
+  return { plugins, failures, runtimes, bundled }
 }
 
 /**
