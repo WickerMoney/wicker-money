@@ -1,7 +1,9 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ToastProvider, ToastViewport } from '@wickermoney/ui-kit'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../../api/ApiError.js'
 import { api } from '../../../api/client.js'
 import { makeStatus } from '../../../testing/makeStatus.js'
 import { makeTransaction } from '../../../testing/makeTransaction.js'
@@ -49,6 +51,113 @@ describe('editing a transaction inline', () => {
     expect(hook.result.current.errors).toEqual({ fields: { amount: message }, form: null })
     expect(hook.result.current.editing).not.toBeNull()
     expect(status.show).not.toHaveBeenCalled()
+  })
+})
+
+const SNAP = { undo: { id: 'snap-1', expiresAt: '2026-11-24T12:10:00.000Z', kind: 'transaction' } }
+
+describe('Undo of a delete (ADR 0016)', () => {
+  const confirmYes = () => vi.spyOn(window, 'confirm').mockReturnValue(true)
+  const RESTORED = { restored: 1, relinkedMatch: false, restoredDismissals: 0, skippedDismissals: 0 }
+
+  it('asks the server to keep a copy and offers Undo when it did', async () => {
+    confirmYes()
+    const del = vi.spyOn(api, 'del').mockResolvedValue(SNAP)
+    const { hook } = editing()
+
+    await act(() => hook.result.current.remove(makeTransaction({ id: 't-9' })))
+
+    expect(del).toHaveBeenCalledWith('/transactions/t-9?undo=1')
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeTruthy()
+  })
+
+  it('offers no Undo when the server kept nothing (null) or is older (204)', async () => {
+    confirmYes()
+    const del = vi.spyOn(api, 'del').mockResolvedValue({ undo: null })
+    const { hook } = editing()
+
+    await act(() => hook.result.current.remove(makeTransaction()))
+    await waitFor(() => { expect(shownToasts()).toEqual(["Deleted 'Coffee' (-$4.50)."]) })
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+
+    del.mockResolvedValue(undefined)
+    await act(() => hook.result.current.remove(makeTransaction({ merchant: 'Bagel', amount: '-3.00' })))
+    await waitFor(() => { expect(shownToasts()).toEqual(["Deleted 'Bagel' (-$3.00)."]) })
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+
+  it('restores the snapshot, says Restored, and re-reads the list', async () => {
+    confirmYes()
+    vi.spyOn(api, 'del').mockResolvedValue(SNAP)
+    const post = vi.spyOn(api, 'post').mockResolvedValue(RESTORED)
+    const onChanged = vi.fn(async () => {})
+    const status = makeStatus()
+    const hook = renderHook(() => useTransactionEditing(status, onChanged), { wrapper: Toasts })
+
+    await act(() => hook.result.current.remove(makeTransaction({ merchant: 'Coffee', amount: '-4.50' })))
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => { expect(shownToasts()).toEqual(["Restored 'Coffee' (-$4.50)."]) })
+    expect(post).toHaveBeenCalledWith('/transaction-undos/snap-1/restore')
+    expect(onChanged).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+
+  it('says both sides of a transfer were put back', async () => {
+    confirmYes()
+    vi.spyOn(api, 'del').mockResolvedValue({ undo: { ...SNAP.undo, kind: 'transfer' } })
+    vi.spyOn(api, 'post').mockResolvedValue({ ...RESTORED, restored: 2 })
+    const { hook } = editing('tr-1')
+
+    await act(() => hook.result.current.remove(makeTransaction({ transfer_id: 'tr-1', amount: '-50.00' })))
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => { expect(shownToasts()).toEqual(['Restored transfer of $50.00. Both sides were put back.']) })
+  })
+
+  it('keeps each delete\'s own Undo: two deletes restore their own snapshots', async () => {
+    confirmYes()
+    const del = vi.spyOn(api, 'del')
+    del.mockResolvedValueOnce(SNAP).mockResolvedValueOnce({ undo: { ...SNAP.undo, id: 'snap-2' } })
+    const post = vi.spyOn(api, 'post').mockResolvedValue(RESTORED)
+    const { hook } = editing()
+
+    await act(() => hook.result.current.remove(makeTransaction({ merchant: 'Coffee' })))
+    await act(() => hook.result.current.remove(makeTransaction({ merchant: 'Bagel', amount: '-3.00' })))
+    const buttons = await screen.findAllByRole('button', { name: 'Undo' })
+    expect(buttons).toHaveLength(2)
+    await userEvent.click(buttons[0]!)
+
+    await waitFor(() => { expect(post).toHaveBeenCalledWith('/transaction-undos/snap-2/restore') })
+    expect(post).toHaveBeenCalledTimes(1)
+  })
+
+  it('says it is too late when the snapshot expired (410), in place of the Undo toast', async () => {
+    confirmYes()
+    vi.spyOn(api, 'del').mockResolvedValue(SNAP)
+    vi.spyOn(api, 'post').mockRejectedValue(new ApiError('Gone.', 410, 'undo_expired'))
+    const { hook } = editing()
+
+    await act(() => hook.result.current.remove(makeTransaction()))
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => { expect(shownToasts()).toEqual(['Error: It is too late to undo that.']) })
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull()
+  })
+
+  it.each([
+    [404, 'not_found', 'Nothing to undo.'],
+    [409, 'undo_unavailable', 'The account was deleted since.'],
+  ])('shows the server\'s own words for a %i', async (status, code, message) => {
+    confirmYes()
+    vi.spyOn(api, 'del').mockResolvedValue(SNAP)
+    vi.spyOn(api, 'post').mockRejectedValue(new ApiError(message, status, code))
+    const { hook } = editing()
+
+    await act(() => hook.result.current.remove(makeTransaction()))
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => { expect(shownToasts()).toEqual([`Error: ${message}`]) })
   })
 })
 

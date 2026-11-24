@@ -55,6 +55,12 @@ describe('an authenticated request', () => {
     await expect(api.del('/things/1')).resolves.toBeUndefined()
   })
 
+  it('returns the body of a 200 on a delete (the delete-with-undo answer)', async () => {
+    setAccessToken('tok-1')
+    route(() => new Response(JSON.stringify({ undo: { id: 's1' } }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    await expect(api.del('/things/1?undo=1')).resolves.toEqual({ undo: { id: 's1' } })
+  })
+
   it('reports a non-JSON error body with the status and a default code', async () => {
     setAccessToken('tok-1')
     route(() => new Response('<html>Bad gateway</html>', { status: 502 }))
