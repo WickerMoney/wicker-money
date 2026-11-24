@@ -1452,6 +1452,18 @@ four parts, and CI runs them as the required check **Hostile plugin suite**.
   flood of `begin` beside chunks, and chunk-shaped messages at the broker's
   body cap and rate. It starts its own API with Import CSV registered, so it
   does not depend on which plugins `run.ts` mounts.
+  `hostile/download.ts` (phase `download`, `ONLY=download`) covers the `download`,
+  `notify` and `closing` messages: a notify and a notify flood from a plugin without
+  the permission, a `closing` sent by the frame, then the file save. The frame tries the
+  sandbox (no direct download), a real click then a valid file, a second file inside
+  one activation, no gesture, an expired gesture, every type, size and content
+  refusal, 20 files after one click, a hostile name, and 30 gesture-less requests.
+  The judge is what Chromium saved (name, size, first bytes) and what the broker
+  answered. The residual (a click on the host, then a frame that takes focus and asks)
+  is pinned as `residual` for the default gate; the strict gate that closes it is
+  unit tested and not wired. The phase has its own time budget (150 s), mostly
+  waiting out the 5 second activation window; add no waits without raising it
+  on purpose.
 - **Remote-origin half** (`apps/web/browser-check/hostile/remote.ts`, Chromium,
   needs `openssl` for a throwaway certificate). A real federated build is served
   over https from a second origin and listed with a pin: a matching build loads in
