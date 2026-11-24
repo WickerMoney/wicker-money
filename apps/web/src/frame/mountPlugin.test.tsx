@@ -122,6 +122,44 @@ describe('mountPlugin', () => {
       expect(document.activeElement).toBe(one)
     })
 
+    it('hands focus straight on when the host puts it in a frame that has nothing to focus', async () => {
+      const root = document.createElement('div')
+      document.body.append(root)
+      const { connection, push } = fakeConnection()
+      const Plugin = () => <p>Nothing here takes focus</p>
+      await act(async () => { await mountPlugin(root, hash, base, { connect: async () => connection, load: async () => Plugin }) })
+      await act(async () => { push({ type: 'focus-in', direction: 'first' }, {}) })
+      expect(connection.focusOut).toHaveBeenCalledTimes(1)
+      expect(connection.focusOut).toHaveBeenLastCalledWith('next')
+      await act(async () => { push({ type: 'focus-in', direction: 'last' }, {}) })
+      expect(connection.focusOut).toHaveBeenCalledTimes(2)
+      expect(connection.focusOut).toHaveBeenLastCalledWith('previous')
+    })
+
+    it('keeps focus in a frame that has a control when the host puts it there', async () => {
+      const { connection, push } = await mountTwoButtons()
+      await act(async () => { push({ type: 'focus-in', direction: 'first' }, {}) })
+      expect(connection.focusOut).not.toHaveBeenCalled()
+    })
+
+    it('takes focus again when the browser drops it as the frame is focused, and not when the person moved on', async () => {
+      const { push, one, two } = await mountTwoButtons()
+      await act(async () => { push({ type: 'focus-in', direction: 'first' }, {}) })
+      expect(document.activeElement).toBe(one)
+      // The browser reports the frame as focused after the control took focus, and clears it.
+      one.blur()
+      one.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }))
+      window.dispatchEvent(new Event('focus'))
+      expect(document.activeElement).toBe(one)
+
+      // Focus that went to another control is left where the person put it.
+      await act(async () => { push({ type: 'focus-in', direction: 'first' }, {}) })
+      two.focus()
+      one.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: two }))
+      window.dispatchEvent(new Event('focus'))
+      expect(document.activeElement).toBe(two)
+    })
+
     it('takes Tab at the last control and Shift+Tab at the first, and hands them to the host in the same task', async () => {
       const { connection, one, two } = await mountTwoButtons()
       two.focus()
