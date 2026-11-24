@@ -21,7 +21,23 @@ curated, human-readable version.
   request) and accepts `custom` as a strategy. Snowball and avalanche plans are
   unchanged. **Migration 036** (additive, has a `down`) allows the new value in
   the strategy check; going back moves anyone on Custom order to avalanche.
-  
+- **Undo for a deleted transaction.** Deleting a transaction (or a transfer, both
+  sides) now shows a toast with an Undo button. Undo puts it back as it was,
+  including its splits, its link to a recurring occurrence and its dismissed
+  suggestions, unless an account or category it uses has been deleted since. The
+  deleted transaction is kept for `UNDO_TTL_SECONDS` (default 600, which is 10
+  minutes; 30 to 3600; `0` turns Undo off). **Migration 039** (additive, has a
+  `down`) adds `core.transaction_undo_snapshots`. The API gains
+  `POST /api/v1/transaction-undos/:id/restore`. "Erase my data" removes the
+  saved copies, and the data export does not include them.
+
+### Changed
+
+- `DELETE /api/v1/transactions/:id` still answers `204` and takes no body, but
+  with `?undo=1` it answers `200` with `{ "undo": null | { "id", "expiresAt",
+  "kind" } }`. A deleted transaction is now kept for the TTL (default 10 minutes)
+  before it is gone for good. Plugin tokens cannot restore.
+
 ### Fixed
 
 - Budgets: a refusal on the window or allowance form that belongs to no one field now takes focus and is
