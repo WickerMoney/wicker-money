@@ -48,11 +48,25 @@ export function FrameApp({ connection, Plugin }: FrameAppProps) {
   // frame has nothing to lift: the host would ignore the message, so it is not sent.
   useEffect(() => (isPage ? new ModalLift(connection).start() : undefined), [connection, isPage])
 
-  // The host takes focus in from either side.
+  // The host takes focus in from either side. The host cannot see inside the frame, so it has already put focus on the
+  // iframe element by the time this runs. A frame with nothing to focus (a widget that only shows figures, or one still
+  // loading) would leave focus parked there, an extra Tab stop with nothing in it, so it passes focus straight on the way
+  // it was going: forward when it was entered from before, back when it was entered from after.
   useEffect(() => connection.subscribe((change) => {
     if (change.type !== 'focus-in') return
     const items = tabbables(rootRef.current ?? document)
-    ;(change.direction === 'first' ? items[0] : items.at(-1))?.focus()
+    const target = change.direction === 'first' ? items[0] : items.at(-1)
+    if (target !== undefined) {
+      target.focus()
+      // The host focuses the iframe and sends this message in the same task, and the frame can act on it before the browser
+      // has finished moving focus to the frame. The browser then reports the frame as focused and drops the control's
+      // focus, which leaves the iframe as a Tab stop with nothing in it. When that happens, take focus again once the
+      // frame has it. A person leaving the control for another one is not this: focus goes to that control instead.
+      target.addEventListener('focusout', (event) => {
+        if (event.relatedTarget !== null) return
+        window.addEventListener('focus', () => { if (document.activeElement === document.body) target.focus() }, { once: true })
+      }, { once: true })
+    } else connection.focusOut(change.direction === 'first' ? 'next' : 'previous')
   }), [connection])
 
   // Tab at the frame's last control (or Shift+Tab at its first) is taken here and handed to the host, which moves focus

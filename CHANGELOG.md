@@ -9,6 +9,13 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Fixed
+
+- Budgets: saving a window that starts on the same day as another line for the category now says it overlaps (a
+  `409`, with the message beside the form) instead of failing with "Something went wrong." (a `500`).
+- Keyboard focus no longer stops on a plugin frame that has nothing to focus (such as the Budget breakdown card): Tab and
+  Shift+Tab go on past it.
+
 ## [0.8.0] - 2026-11-18
 
 Budgets and Import CSV move into sandboxed frames, so no bundled plugin runs in
