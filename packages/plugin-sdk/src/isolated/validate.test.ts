@@ -69,6 +69,8 @@ describe('parsePluginMessage (frame to host)', () => {
     ['a download with a typed array for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: new Uint8Array(1) }],
     ['a download with an array for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: [1, 2] }],
     ['a download with null data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: null }],
+    ['a download with a SharedArrayBuffer for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: new SharedArrayBuffer(2) }],
+    ['a download with an object that only claims to be an ArrayBuffer', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: { [Symbol.toStringTag]: 'ArrayBuffer', byteLength: 2 } }],
     ['a download with a Blob for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: new Blob(['x']) }],
     ['a modal whose state is not a boolean', { type: 'modal', open: 'yes' }],
   ])('rejects %s', (_name, data) => {

@@ -30,6 +30,18 @@ export const MAX_NOTIFY_LENGTH = 500
 
 type Obj = Record<string, unknown>
 
+const arrayBufferByteLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')?.get
+
+/**
+ * Whether `value` is a real `ArrayBuffer`, whichever realm made it. A brand check through the `byteLength` getter,
+ * which throws for anything without the internal slot: a typed array, a `SharedArrayBuffer` and an object that only
+ * claims to be one are all refused. `instanceof` would refuse a buffer from another realm.
+ */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  if (arrayBufferByteLength === undefined || typeof value !== 'object' || value === null) return false
+  try { arrayBufferByteLength.call(value); return true } catch { return false }
+}
+
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v)
 const isId = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
 const isStr = (v: unknown): v is string => typeof v === 'string'
@@ -156,7 +168,7 @@ export function parsePluginMessage(data: unknown): PluginMessage | null {
     case 'download': {
       const { id, filename, mime, data: bytes } = data
       if (!isId(id) || !isStr(filename) || filename.length === 0 || filename.length > MAX_DOWNLOAD_FILENAME) return null
-      if (!isStr(mime) || mime.length > 100 || !(bytes instanceof ArrayBuffer)) return null
+      if (!isStr(mime) || mime.length > 100 || !isArrayBuffer(bytes)) return null
       return { type: 'download', id, filename, mime, data: bytes }
     }
     default:
