@@ -25,7 +25,9 @@ describe('public runtime surface', () => {
 
   it('/isolated', () => {
     expect(names(isolated)).toEqual([
+      'DOWNLOAD_TYPES',
       'ISOLATED_PROTOCOL_VERSION',
+      'MAX_DOWNLOAD_BYTES',
       'MAX_MODAL_LAYOUT',
       'MAX_NOTIFY_LENGTH',
       'MAX_PATH_LENGTH',

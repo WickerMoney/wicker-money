@@ -87,6 +87,14 @@ export interface HostConnection {
    * fire-and-forget `ctx.notify` instead.
    */
   notify(level: NotifyMessage['level'], message: string): Promise<void>
+  /**
+   * Asks the host to save a file (see `DownloadMessage`). Call it from the handler of the person's click or key press
+   * on a control in this frame: the host refuses it with `gesture_required` otherwise. Rejects with `grant_denied`
+   * when the plugin is not bundled, `file_too_large`, `file_type_not_allowed`, `file_invalid`, `rate_limited`, or
+   * `not_supported` from a host that predates `download`. The bytes are transferred, so `data` is empty afterwards.
+   * Resolves with the name the host gave the file.
+   */
+  download(file: { readonly filename: string; readonly mime: string; readonly data: ArrayBuffer }): Promise<{ readonly filename: string }>
   /** Closes the port and rejects every call still waiting with code `disconnected`. */
   dispose(): void
 }
@@ -258,10 +266,10 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
   const paint = (theme: HostTheme): void => { if (themeRoot !== null) applyHostTheme(theme, themeRoot) }
   paint(state.theme)
 
-  const post = (message: PluginMessage): void => { if (!closed) port.postMessage(message) }
+  const post = (message: PluginMessage, transfer?: Transferable[]): void => { if (!closed) port.postMessage(message, transfer ?? []) }
 
   const call = <T,>(
-    message: (id: number) => PluginMessage, signal?: AbortSignal | null,
+    message: (id: number) => PluginMessage, signal?: AbortSignal | null, transfer?: Transferable[],
   ): Promise<T> => {
     if (closed) return Promise.reject(new PluginApiError({ code: 'disconnected', message: 'The connection to the host is closed.' }))
     if (signal?.aborted === true) return Promise.reject(new PluginApiError({ code: 'aborted', message: 'The request was aborted.' }))
@@ -278,7 +286,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
         reject,
         cleanup: () => signal?.removeEventListener('abort', onAbort),
       })
-      post(message(id))
+      post(message(id), transfer)
     })
   }
 
@@ -426,6 +434,10 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     },
     focusOut: (direction) => { post({ type: 'focus-out', direction }) },
     notify: notifyHost,
+    download: (file) =>
+      call<{ filename: string }>(
+        (id) => ({ type: 'download', id, filename: file.filename, mime: file.mime, data: file.data }), undefined, [file.data],
+      ),
     dispose() {
       if (closed) return
       closed = true

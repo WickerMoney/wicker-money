@@ -21,6 +21,9 @@ describe('parsePluginMessage (frame to host)', () => {
     expect(parsePluginMessage({ type: 'focus-out', direction: 'next' })).toEqual({ type: 'focus-out', direction: 'next' })
     expect(parsePluginMessage({ type: 'notify', id: 3, level: 'info', message: 'hi' }))
       .toEqual({ type: 'notify', id: 3, level: 'info', message: 'hi' })
+    const bytes = new Uint8Array([1, 2, 3]).buffer
+    expect(parsePluginMessage({ type: 'download', id: 4, filename: 'a.csv', mime: 'text/csv', data: bytes, extra: 1 }))
+      .toEqual({ type: 'download', id: 4, filename: 'a.csv', mime: 'text/csv', data: bytes })
     expect(parsePluginMessage({ type: 'modal', open: true })).toEqual({ type: 'modal', open: true })
     expect(parsePluginMessage({ type: 'modal', open: false, extra: 1 })).toEqual({ type: 'modal', open: false })
   })
@@ -55,6 +58,18 @@ describe('parsePluginMessage (frame to host)', () => {
     ['a bad notify level', { type: 'notify', id: 1, level: 'fatal', message: 'x' }],
     ['an over-long notify', { type: 'notify', id: 1, level: 'info', message: 'x'.repeat(501) }],
     ['a modal with no state', { type: 'modal' }],
+    ['a download with no id', { type: 'download', filename: 'a.csv', mime: 'text/csv', data: new ArrayBuffer(1) }],
+    ['a download with a string id', { type: 'download', id: '1', filename: 'a.csv', mime: 'text/csv', data: new ArrayBuffer(1) }],
+    ['a download with no filename', { type: 'download', id: 1, mime: 'text/csv', data: new ArrayBuffer(1) }],
+    ['a download with an empty filename', { type: 'download', id: 1, filename: '', mime: 'text/csv', data: new ArrayBuffer(1) }],
+    ['a download with a filename over 255 characters', { type: 'download', id: 1, filename: 'a'.repeat(256), mime: 'text/csv', data: new ArrayBuffer(1) }],
+    ['a download with a non-string mime', { type: 'download', id: 1, filename: 'a', mime: 5, data: new ArrayBuffer(1) }],
+    ['a download with a mime over 100 characters', { type: 'download', id: 1, filename: 'a', mime: 'x'.repeat(101), data: new ArrayBuffer(1) }],
+    ['a download with a string for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: 'a,b' }],
+    ['a download with a typed array for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: new Uint8Array(1) }],
+    ['a download with an array for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: [1, 2] }],
+    ['a download with null data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: null }],
+    ['a download with a Blob for data', { type: 'download', id: 1, filename: 'a', mime: 'text/csv', data: new Blob(['x']) }],
     ['a modal whose state is not a boolean', { type: 'modal', open: 'yes' }],
   ])('rejects %s', (_name, data) => {
     expect(parsePluginMessage(data)).toBeNull()

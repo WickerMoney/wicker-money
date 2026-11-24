@@ -23,6 +23,8 @@ export const MAX_REPORTED_HEIGHT = 100_000
 export const MAX_THEME_TOKENS = 512
 /** Largest offset or width a modal layout may carry, in CSS pixels. */
 export const MAX_MODAL_LAYOUT = 100_000
+/** Longest suggested file name accepted, in characters. */
+const MAX_DOWNLOAD_FILENAME = 255
 /** Longest notification text accepted, in characters. */
 export const MAX_NOTIFY_LENGTH = 500
 
@@ -150,6 +152,12 @@ export function parsePluginMessage(data: unknown): PluginMessage | null {
       if (!isId(id) || !isStr(message) || message.length > MAX_NOTIFY_LENGTH) return null
       if (level !== 'info' && level !== 'success' && level !== 'warning' && level !== 'error') return null
       return { type: 'notify', id, level, message }
+    }
+    case 'download': {
+      const { id, filename, mime, data: bytes } = data
+      if (!isId(id) || !isStr(filename) || filename.length === 0 || filename.length > MAX_DOWNLOAD_FILENAME) return null
+      if (!isStr(mime) || mime.length > 100 || !(bytes instanceof ArrayBuffer)) return null
+      return { type: 'download', id, filename, mime, data: bytes }
     }
     default:
       return null

@@ -22,6 +22,8 @@ export const ISOLATED_PROTOCOL_VERSION = 1 as const
  * - `aborted` - the caller aborted the request.
  * - `disconnected` - the connection to the host was closed before an answer came.
  * - `request_failed` - the API answered with an error that carried no code of its own.
+ * - `gesture_required`, `file_too_large`, `file_type_not_allowed`, `file_invalid`, `rate_limited` - a `download` the host
+ *   refused (see {@link DownloadMessage}).
  */
 export const PLUGIN_ERROR_CODES = [
   'grant_denied',
@@ -31,6 +33,12 @@ export const PLUGIN_ERROR_CODES = [
   'aborted',
   'disconnected',
   'request_failed',
+  // The `download` message:
+  'gesture_required',
+  'file_too_large',
+  'file_type_not_allowed',
+  'file_invalid',
+  'rate_limited',
 ] as const
 
 /** One of the error codes in {@link PLUGIN_ERROR_CODES}. */
@@ -216,6 +224,46 @@ export interface NotifyMessage {
   readonly message: string
 }
 
+/**
+ * MIME types a frame may ask the host to save, each with the one extension the host gives the file. Deliberately
+ * short: nothing a browser or a desktop would run or render with script (no `text/html`, `image/svg+xml`,
+ * `text/javascript`).
+ */
+export const DOWNLOAD_TYPES = {
+  'text/plain': 'txt',
+  'text/csv': 'csv',
+  'application/json': 'json',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'application/pdf': 'pdf',
+} as const
+
+/** Largest file a frame may hand the host, in bytes. */
+export const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024
+
+/**
+ * Asks the host to save a file the person asked for (a share image, a PDF, a CSV). The host checks the type, the size,
+ * the bytes themselves (magic bytes for PNG, JPEG and PDF; valid UTF-8 for text, CSV and JSON, and parseable JSON),
+ * and that the person's last click or key press was in this frame. It picks the final file name (NFKC, a safe base
+ * name, the extension of the checked `mime`) and starts the browser's own download, then shows a host toast
+ * "Saved <name> from <plugin>". At most one file per 5 seconds per frame.
+ *
+ * Answered with a `response` whose value is `{ filename }` (the name the host used), or an error: `gesture_required`,
+ * `file_too_large`, `file_type_not_allowed`, `file_invalid`, `rate_limited`, or `grant_denied` when the plugin is not
+ * bundled with the app (a plugin that is not bundled cannot save files). An older host answers `not_supported`.
+ *
+ * `data` should be transferred, not copied; `HostConnection.download` does that.
+ */
+export interface DownloadMessage {
+  readonly type: 'download'
+  readonly id: number
+  /** A suggestion: the host keeps only its base name, makes it safe and gives it the extension of `mime`. */
+  readonly filename: string
+  /** One of {@link DOWNLOAD_TYPES}. */
+  readonly mime: string
+  readonly data: ArrayBuffer
+}
+
 /** Every message a plugin frame may send on the port. */
 export type PluginMessage =
   | ReadyMessage
@@ -226,6 +274,7 @@ export type PluginMessage =
   | FocusOutMessage
   | ModalMessage
   | NotifyMessage
+  | DownloadMessage
 
 // ---------------------------------------------------------------------------
 // Host to frame, on the port.

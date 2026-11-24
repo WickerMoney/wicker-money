@@ -313,6 +313,7 @@ on the port:
 | frame to host | `modal` | A page's modal dialog opened or closed (`open`); ignored from a widget, rate limited |
 | frame to host | `focus-out` | Focus left past the last (`next`) or before the first (`previous`) element |
 | frame to host | `notify` | Show a toast (`level`, `message`); needs the `notify` permission (see "Notifications") |
+| frame to host | `download` | Save a file (`filename`, `mime`, `data` as a transferred `ArrayBuffer`); bundled plugins only, from a click or key press (see "Saving a file") |
 | host to frame | `init` | Plugin id, widget or page, session, locale, theme, size and range, first path |
 | host to frame | `response` | The JSON value, or an error: `code`, `message`, optional `status` and `issues` |
 | host to frame | `theme`, `locale`, `props`, `route` | Updates after `init` |
@@ -365,6 +366,48 @@ What the host does with it (the limits are the host's, not the SDK's, and may be
   goes away. Toasts stay until the person closes them, like the host's own.
 - It is an ordinary toast of the host's own stack: same queue, announcement and keyboard rules.
   A plugin cannot make its toast more prominent, add a button, or keep it past the person closing it.
+
+### Saving a file
+
+`host.download({ filename, mime, data })` (from `connectToHost` / `connectOverPort`) asks the host
+to save a file the person asked for: a share image, a CSV, a PDF. It resolves with
+`{ filename }`, the name the host used.
+
+```ts
+button.addEventListener('click', () => {
+  void host.download({ filename: 'spending', mime: 'text/csv', data: bytes.buffer })
+})
+```
+
+The frame has no way to download by itself (the sandbox has no `allow-downloads`, and that does
+not change), so the host does it: it makes the Blob and the link in its own page and starts
+the browser's download, then shows a toast "Saved <name> from <plugin>". What it checks, in order:
+
+- **Who.** Only a plugin **bundled with the app**. Any other plugin is answered `grant_denied`
+  and counts as a strike. There is no manifest field or permission that changes this.
+- **A gesture.** Call it in the handler of the person's click or key press on a control in
+  the frame; otherwise `gesture_required`. The host requires the browser's transient user
+  activation and that this frame is the page's active element.
+- **Type.** One of `DOWNLOAD_TYPES`: `text/plain` (txt), `text/csv` (csv), `application/json`
+  (json), `image/png` (png), `image/jpeg` (jpg), `application/pdf` (pdf). Never HTML or SVG.
+  Anything else is `file_type_not_allowed`.
+- **Size.** At most `MAX_DOWNLOAD_BYTES` (5 MiB), else `file_too_large`.
+- **Bytes.** PNG, JPEG and PDF must start with their magic bytes; text, CSV and JSON must be valid
+  UTF-8 and JSON must parse; an HTML or SVG document labelled as text is refused too. Otherwise
+  `file_invalid`.
+- **Rate.** One file per 5 seconds per frame, else `rate_limited`.
+
+The host takes only the base name you suggest, normalises it (NFKC), replaces anything unsafe,
+caps its length, and **gives it the extension of the checked MIME type**, so `report.exe` with
+`text/csv` is saved `report.csv`. The Blob URL is revoked after 30 seconds.
+
+An older host answers `not_supported`. `data` is transferred, so the buffer is empty after the call.
+
+**For a future non-bundled source.** The host's default gate is the activation check above.
+Behind one switch the host also carries a stricter gate (also refuses within 5 seconds of the
+person's input elsewhere in the page), which is not turned on. Allowing `download` for any plugin
+that is not bundled, whatever the manifest source, is conditional on turning on that strict gate
+or a confirm dialog first.
 
 ### Closing
 
@@ -436,6 +479,7 @@ reachable, including sign-in, the data export and other plugins.
   database role is a guardrail and not a sandbox). A manifest that asks for
   `contributes.endpoints` or `contributes.exporters` is refused, with a reason.
 - **No write.** A `write` grant on a core table has no route it can use.
+- **No file saving.** `download` is for bundled plugins only; it is refused with `grant_denied`.
 - **One permission, `notify`.** It lets the plugin raise short text toasts (see
   [Notifications](#notifications)). `network:outbound` and `schedule:daily` are reserved,
   not implemented, and a manifest that declares either is refused.

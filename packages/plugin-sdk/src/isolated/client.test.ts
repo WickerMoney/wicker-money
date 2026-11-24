@@ -361,6 +361,33 @@ describe('frame to host helpers', () => {
     ])
   })
 
+  it('download transfers the buffer, sends the message and resolves with the host name', async () => {
+    const { conn, seen } = await connect((m, reply) => {
+      if (m.type === 'download') reply({ type: 'response', id: m.id, ok: true, value: { filename: 'report.csv' } })
+    })
+    const data = new TextEncoder().encode('a,b\n1,2\n').buffer as ArrayBuffer
+    const size = data.byteLength
+    await expect(conn.download({ filename: 'report', mime: 'text/csv', data })).resolves.toEqual({ filename: 'report.csv' })
+    expect(data.byteLength).toBe(0)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatchObject({ type: 'download', id: 1, filename: 'report', mime: 'text/csv' })
+    expect((seen[0] as { data: ArrayBuffer }).data.byteLength).toBe(size)
+  })
+
+  it.each(['gesture_required', 'file_too_large', 'file_type_not_allowed', 'file_invalid', 'rate_limited', 'grant_denied', 'not_supported'])(
+    'download rejects with the host error %s', async (code) => {
+      const { conn } = await connect((m, reply) => {
+        if (m.type === 'download') reply({ type: 'response', id: m.id, ok: false, error: { code, message: 'No.' } })
+      })
+      await expect(conn.download({ filename: 'a', mime: 'text/plain', data: new ArrayBuffer(1) })).rejects.toMatchObject({ code })
+    })
+
+  it('download after dispose rejects with disconnected', async () => {
+    const { conn } = await connect()
+    conn.dispose()
+    await expect(conn.download({ filename: 'a', mime: 'text/plain', data: new ArrayBuffer(1) })).rejects.toMatchObject({ code: 'disconnected' })
+  })
+
   it('reportSize rounds up and skips repeats and bad values', async () => {
     const { conn, seen } = await connect()
     conn.reportSize(120.2)
