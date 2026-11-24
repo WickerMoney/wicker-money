@@ -160,10 +160,11 @@ body:has(.wm-dialog[open]) { overflow: hidden; }
   border: 1.5px solid var(--wm-toast-kind); border-radius: 50%;
 }
 .wm-toast__text { flex: 1 1 auto; min-width: 0; margin: 0; padding-top: 2px; overflow-wrap: anywhere; }
+.wm-toast__undo { flex: none; min-height: 32px; padding: 0 12px; color: var(--wm-accent); }
 .wm-toast__close { flex: none; min-width: 32px; height: 32px; padding: 0; border-color: transparent; background: transparent; color: var(--wm-accent); font-size: 18px; line-height: 1; }
 .wm-toast__close:hover:not(:disabled) { background: var(--wm-surface-alt); }
 .wm-toast-viewport__all { display: flex; justify-content: flex-end; }
 .wm-toast-viewport__all .wm-btn { background: var(--wm-surface); color: var(--wm-accent); box-shadow: var(--wm-shadow-raised); }
 @keyframes wm-toast-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .wm-toast { animation: none; } }
-@media (max-width: 560px) { .wm-toast__close { min-width: 40px; height: 40px; } }
+@media (max-width: 560px) { .wm-toast__close { min-width: 40px; height: 40px; } .wm-toast__undo { min-height: 40px; } }
