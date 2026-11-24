@@ -318,7 +318,7 @@ async function loadChecks(pw: typeof Playwright, base: string): Promise<void> {
     check('load: no console error, failed request or CSP violation', o.problems.length === 0, o.problems)
     const reads = calls.filter((c) => c.method === 'GET').map((c) => c.path.replace(/\?.*/, ''))
     note('requests the broker made for the page at load', calls.map((c) => `${c.method} ${c.path} ${c.status}`))
-    check('load: the page reads settings, debts, suggestions and the plan, and nothing else', JSON.stringify([...new Set(reads)].sort()) === JSON.stringify(['/account-suggestions', '/debts', '/plan', '/settings']), reads)
+    check('load: the page reads settings, debts, suggestions, lump sums and the plan, and nothing else', JSON.stringify([...new Set(reads)].sort()) === JSON.stringify(['/account-suggestions', '/debts', '/lump-sums', '/plan', '/settings']), reads)
     check('load: every one of them answered 200', calls.every((c) => c.status === 200), calls)
     await shot(o.page, 'load-desktop')
   } finally { await o.browser.close() }
