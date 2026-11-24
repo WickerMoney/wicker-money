@@ -112,6 +112,15 @@
 .dp-custom__name .dp-swatch { margin-top: 4px; }
 .dp-custom__moves { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 
+/* Lump sums and the what-if. */
+.dp-lump-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.dp-parts { margin: 8px 0 12px; padding: 8px 12px 4px; border: 1px solid var(--wm-border); border-radius: 8px; min-width: 0; }
+.dp-parts > legend { padding: 0 4px; font-weight: 600; }
+.dp-parts > p { margin: 0 0 8px; font-size: 13px; }
+.dp-whatif { max-width: 520px; min-width: 0; }
+.dp-whatif__actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; margin-top: 4px; }
+.dp-whatif__result { margin: 12px 0 0; font-size: 14px; max-width: 78ch; overflow-wrap: anywhere; }
+
 /* The assumptions. */
 .dp-assume { margin: 0; padding-left: 18px; font-size: 13px; color: var(--wm-text); }
 .dp-assume li { margin: 0 0 6px; max-width: 78ch; }

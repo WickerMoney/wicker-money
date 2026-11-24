@@ -1,5 +1,8 @@
 export type { Debt } from './Debt.js'
 export type { DebtsResponse } from './DebtsResponse.js'
+export type { LumpSum, LumpSumAllocation } from './LumpSum.js'
+export type { LumpSumDraft } from './LumpSumDraft.js'
+export type { LumpSumsResponse } from './LumpSumsResponse.js'
 export type { PlanSettings } from './PlanSettings.js'
 export type { AccountSuggestion } from './AccountSuggestion.js'
 export type { AccountSuggestionsResponse } from './AccountSuggestionsResponse.js'
