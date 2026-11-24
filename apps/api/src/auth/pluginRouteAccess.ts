@@ -139,6 +139,8 @@ export const PLUGIN_ROUTE_ACCESS: Readonly<Record<string, PluginRouteAccess>> = 
   'PUT /api/v1/transactions/:id/splits': DENIED,
   'GET /api/v1/transactions/:id/splits': DENIED,
   'DELETE /api/v1/transactions/:id/splits': DENIED,
+  // Undo of a delete: a plugin that deletes gets no way back (ADR 0016).
+  'POST /api/v1/transaction-undos/:id/restore': DENIED,
 
   'GET /api/v1/recurring-items': DENIED,
   'POST /api/v1/recurring-items': DENIED,

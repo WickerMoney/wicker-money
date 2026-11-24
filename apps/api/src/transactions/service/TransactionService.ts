@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { DuplicateKeyError } from '../../data/DuplicateKeyError.js'
+import type { Repositories } from '../../data/Repositories.js'
 import type { UnitOfWork } from '../../data/UnitOfWork.js'
 import type { Transaction, TransactionSplit } from '../../db/models/index.js'
 import { resolveCategory } from '../../categories/engine.js'
@@ -23,6 +24,9 @@ import type { TransactionPatch } from './TransactionPatch.js'
 import { TRANSFER_HAS_NO_CATEGORY } from './TRANSFER_HAS_NO_CATEGORY.js'
 import type { TransferCreated } from './TransferCreated.js'
 import { transferLabels } from './transferLabels.js'
+import { MAX_LIVE_UNDOS } from './MAX_LIVE_UNDOS.js'
+import type { TransactionServiceOptions } from './TransactionServiceOptions.js'
+import type { UndoSnapshot } from '../repository/UndoSnapshot.js'
 
 /**
  * Ledger rules: creating, editing, splitting, transferring and categorizing transactions.
@@ -33,8 +37,16 @@ import { transferLabels } from './transferLabels.js'
  * touching HTTP.
  */
 export class TransactionService {
-  /** @param uow - Opens transactions and supplies repositories. */
-  constructor(protected readonly uow: UnitOfWork) {}
+  /** Seconds a delete's snapshot stays restorable; `0` writes none. */
+  private readonly undoTtlSeconds: number
+
+  /**
+   * @param uow - Opens transactions and supplies repositories.
+   * @param options - Settings; with none, deletes write no Undo snapshot.
+   */
+  constructor(protected readonly uow: UnitOfWork, options: TransactionServiceOptions = {}) {
+    this.undoTtlSeconds = options.undoTtlSeconds ?? 0
+  }
 
   /**
    * Lists one page of the user's transactions, filtered and sorted, in a total
@@ -263,22 +275,54 @@ export class TransactionService {
    * is money that left one account and arrived nowhere. Legs are locked in id
    * order first.
    *
+   * With `options.undo` and Undo switched on (`UNDO_TTL_SECONDS` above 0), a
+   * snapshot of the rows, their splits and their match dismissals is written in
+   * the same unit of work, before the delete, and returned. Writing it is never
+   * a reason for the delete to fail: a snapshot over the size cap is skipped
+   * and the delete goes ahead with no `undo`. The caller's own expired
+   * snapshots are purged first and the newest {@link MAX_LIVE_UNDOS} are kept.
+   *
    * @param userId - The signed-in user.
    * @param id - Either leg, or an ordinary transaction.
+   * @param options - `undo`: whether the caller asked for a snapshot.
+   * @returns The snapshot, or `null` when none was written (not asked for, Undo off, over the size cap).
    * @throws {NotFoundError} If the transaction is not the user's.
    */
-  async remove(userId: string, id: string): Promise<void> {
-    await this.uow.forUser(userId, async ({ transactions }) => {
+  async remove(userId: string, id: string, options: { readonly undo?: boolean } = {}): Promise<UndoSnapshot | null> {
+    const wantsSnapshot = options.undo === true && this.undoTtlSeconds > 0
+    return this.uow.forUser(userId, async ({ transactions, transactionUndos }) => {
       const existing = await transactions.findById(id)
       if (existing === undefined) throw new NotFoundError('Transaction')
 
       if (existing.transfer_id !== null) {
-        await transactions.lockTransferLegs(existing.transfer_id)
+        const legs = await transactions.lockTransferLegs(existing.transfer_id)
+        const snapshot = wantsSnapshot
+          ? await this.snapshot(transactionUndos, userId, 'transfer', legs.map((leg) => leg.id))
+          : null
         await transactions.deleteTransferLegs(existing.transfer_id)
-        return
+        return snapshot
       }
+
+      // Locked first so an edit that lands after the snapshot cannot be lost.
+      if (wantsSnapshot && (await transactions.lockById(id)) === undefined) throw new NotFoundError('Transaction')
+      const snapshot = wantsSnapshot ? await this.snapshot(transactionUndos, userId, 'transaction', [id]) : null
       if (!(await transactions.delete(id))) throw new NotFoundError('Transaction')
+      return snapshot
     })
+  }
+
+  /** Purges, writes and caps one snapshot; `null` when nothing was written. */
+  private async snapshot(
+    undos: Repositories['transactionUndos'],
+    userId: string,
+    kind: 'transaction' | 'transfer',
+    transactionIds: readonly string[],
+  ): Promise<UndoSnapshot | null> {
+    await undos.purgeExpired()
+    const written = await undos.capture({ userId, kind, transactionIds, ttlSeconds: this.undoTtlSeconds })
+    if (written === undefined) return null
+    await undos.enforceCap(MAX_LIVE_UNDOS)
+    return written
   }
 
   /**

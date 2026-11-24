@@ -16,6 +16,7 @@ import { EraseService } from '../settings/service/EraseService.js'
 import { ExportTicketService } from '../settings/service/ExportTicketService.js'
 import { SettingsService } from '../settings/service/SettingsService.js'
 import { TransactionService } from '../transactions/service/TransactionService.js'
+import { TransactionUndoService } from '../transactions/service/TransactionUndoService.js'
 import { UserAdminService } from '../users/service/UserAdminService.js'
 
 
@@ -37,7 +38,8 @@ export function createServices(
     auth,
     users: new UserAdminService(uow),
     accounts: new AccountService(uow),
-    transactions: new TransactionService(uow),
+    transactions: new TransactionService(uow, { undoTtlSeconds: config.UNDO_TTL_SECONDS }),
+    transactionUndos: new TransactionUndoService(uow, { undoTtlSeconds: config.UNDO_TTL_SECONDS }),
     categories: new CategoryService(uow),
     categoryRules: new CategoryRuleService(uow),
     onboarding: new OnboardingService(uow),

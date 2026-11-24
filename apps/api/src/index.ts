@@ -10,6 +10,8 @@ import { assertSchemaReady } from './db/healthcheck.js'
 import { instanceHasUsers } from './db/instanceHasUsers.js'
 import { assertLeastPrivilege } from './db/privileges.js'
 import { recordDeployment } from './db/recordDeployment.js'
+import { TransactionUndoService } from './transactions/service/TransactionUndoService.js'
+import { startUndoPurge } from './transactions/startUndoPurge.js'
 import { loadExternalPlugins } from './plugins/loadExternalPlugins.js'
 import { seedBundledPlugins } from './plugins/registry.js'
 import { APP_VERSION, GIT_SHA } from './version.js'
@@ -58,9 +60,18 @@ const purgeTimer = startSessionPurge(new AuthService(new KyselyUnitOfWork(db), c
   app.log.error({ err: error }, 'session purge failed'),
 )
 
+// Expired Undo snapshots are also purged by every delete and restore; this is
+// for a person who deleted once and never came back. It runs even when
+// UNDO_TTL_SECONDS is 0, so snapshots kept before Undo was switched off still go.
+const undoPurgeTimer = startUndoPurge(
+  new TransactionUndoService(new KyselyUnitOfWork(db), { undoTtlSeconds: config.UNDO_TTL_SECONDS }),
+  (error) => app.log.error({ err: error }, 'undo snapshot purge failed'),
+)
+
 async function shutdown(signal: string): Promise<void> {
   console.log(`\n${signal} received, shutting down.`)
   clearInterval(purgeTimer)
+  clearInterval(undoPurgeTimer)
   await app.close()
   await db.destroy()
   process.exit(0)

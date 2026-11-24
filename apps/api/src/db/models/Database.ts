@@ -11,6 +11,7 @@ import type { RecurringMatchDismissalsTable } from './RecurringMatchDismissalsTa
 import type { RecurringOccurrencesTable } from './RecurringOccurrencesTable.js'
 import type { SessionsTable } from './SessionsTable.js'
 import type { TransactionSplitsTable } from './TransactionSplitsTable.js'
+import type { TransactionUndoSnapshotsTable } from './TransactionUndoSnapshotsTable.js'
 import type { TransactionsTable } from './TransactionsTable.js'
 import type { UsersTable } from './UsersTable.js'
 
@@ -24,6 +25,7 @@ export interface Database {
   'core.category_rule_conditions': CategoryRuleConditionsTable
   'core.transactions': TransactionsTable
   'core.transaction_splits': TransactionSplitsTable
+  'core.transaction_undo_snapshots': TransactionUndoSnapshotsTable
   'core.recurring_items': RecurringItemsTable
   'core.recurring_item_legs': RecurringItemLegsTable
   'core.recurring_occurrences': RecurringOccurrencesTable

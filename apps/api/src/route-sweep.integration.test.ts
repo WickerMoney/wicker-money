@@ -78,6 +78,7 @@ const PROTECTED_ROUTES: readonly string[] = [
   'PUT /api/v1/transactions/:id/splits',
   'GET /api/v1/transactions/:id/splits',
   'DELETE /api/v1/transactions/:id/splits',
+  'POST /api/v1/transaction-undos/:id/restore',
 
   'GET /api/v1/recurring-items',
   'POST /api/v1/recurring-items',

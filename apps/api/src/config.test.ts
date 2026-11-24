@@ -39,6 +39,7 @@ describe('defaults', () => {
       IMPORT_MAX_ROWS: 100_000,
       IMPORT_MAX_CONCURRENT: 5,
       IMPORT_QUEUE_WAIT_SECONDS: 30,
+      UNDO_TTL_SECONDS: 600,
       API_RATE_LIMIT_ENABLED: true,
       API_RATE_LIMIT_WINDOW_SECONDS: 60,
     })
@@ -371,6 +372,24 @@ describe('IMPORT_QUEUE_WAIT_SECONDS', () => {
 
   it.each(['-1', '601', '2.5', 'long'])('rejects %j', (value) => {
     expect(failure({ IMPORT_QUEUE_WAIT_SECONDS: value })).toContain('IMPORT_QUEUE_WAIT_SECONDS')
+  })
+})
+
+describe('UNDO_TTL_SECONDS', () => {
+  it('is 600 (ten minutes) unless set, and a blank value counts as unset', () => {
+    expect(loadConfig(env()).UNDO_TTL_SECONDS).toBe(600)
+    expect(loadConfig(env({ UNDO_TTL_SECONDS: '' })).UNDO_TTL_SECONDS).toBe(600)
+    expect(loadConfig(env({ UNDO_TTL_SECONDS: '  ' })).UNDO_TTL_SECONDS).toBe(600)
+  })
+
+  it('accepts 0 (Undo off) and 30 to 3600', () => {
+    for (const value of ['0', '30', '31', '600', '3599', '3600']) {
+      expect(loadConfig(env({ UNDO_TTL_SECONDS: value })).UNDO_TTL_SECONDS).toBe(Number(value))
+    }
+  })
+
+  it.each(['1', '29', '3601', '86400', '-1', '600.5', 'ten', 'Infinity'])('rejects %s, naming the variable', (value) => {
+    expect(failure({ UNDO_TTL_SECONDS: value })).toContain('UNDO_TTL_SECONDS')
   })
 })
 
