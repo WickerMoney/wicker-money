@@ -21,6 +21,24 @@ curated, human-readable version.
   request) and accepts `custom` as a strategy. Snowball and avalanche plans are
   unchanged. **Migration 036** (additive, has a `down`) allows the new value in
   the strategy check; going back moves anyone on Custom order to avalanche.
+  
+### Fixed
+
+- Budgets: a refusal on the window or allowance form that belongs to no one field now takes focus and is
+  announced, as a field error already did.
+- Budgets: categories and accounts are read again when the page becomes visible after being hidden, so a category
+  or account added in another tab is offered without reopening the page.
+- Budgets: the lines, allowances and "Spent with no budget" tables are named for screen readers (a hidden caption).
+- **Import CSV: keyboard focus stays on the button while a request runs.** Check
+  for duplicates, Show more, Import and Undo were `disabled` while their request
+  ran, which dropped focus to the top of the page. They now use the ui-kit `busy`
+  state: still focusable, `aria-disabled`, a second press does nothing and says
+  "Still working". Import still really disables when there is nothing to import,
+  and Check for duplicates while no account is chosen.
+- Budgets: saving a window that starts on the same day as another line for the category now says it overlaps (a
+  `409`, with the message beside the form) instead of failing with "Something went wrong." (a `500`).
+- Keyboard focus no longer stops on a plugin frame that has nothing to focus (such as the Budget breakdown card): Tab and
+  Shift+Tab go on past it.
 
 ## [0.8.0] - 2026-11-18
 

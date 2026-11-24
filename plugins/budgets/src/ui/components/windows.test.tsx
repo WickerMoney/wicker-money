@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { NO_FORM_ERRORS } from '@wickermoney/ui-kit'
 import type { Category, MonthLine, MonthResponse } from '../models/index.js'
@@ -152,6 +152,9 @@ describe('the window form', () => {
 
     fireEvent.click(screen.getByText('Save window'))
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/already has a budget line/)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/already has a budget line/)
+    // No field owns the refusal, so focus goes to the error itself.
+    await waitFor(() => expect(document.activeElement).toBe(alert))
   })
 })

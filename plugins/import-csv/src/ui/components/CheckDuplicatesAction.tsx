@@ -18,7 +18,7 @@ export function CheckDuplicatesAction({ hasRows, busy, accountMissing, onCheck, 
   return (
     <>
       <div className="imp__actions">
-        <Button variant="primary" disabled={busy || accountMissing} onClick={onCheck}>
+        <Button variant="primary" disabled={accountMissing} busy={busy} onClick={onCheck}>
           {busy ? 'Checking…' : 'Check for duplicates'}
         </Button>
       </div>

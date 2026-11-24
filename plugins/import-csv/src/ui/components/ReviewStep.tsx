@@ -120,7 +120,7 @@ export function ReviewStep({
           </TableScroll>
           {total > visible.length ? (
             <div className="imp__actions">
-              <Button disabled={loadingMore} onClick={() => void showMore()}>
+              <Button busy={loadingMore} onClick={() => void showMore()}>
                 {loadingMore ? 'Loading…' : `Show ${Math.min(REVIEW_PAGE_SIZE, total - visible.length)} more`}
               </Button>
               <span className="imp__hint">
@@ -132,7 +132,7 @@ export function ReviewStep({
       ) : null}
 
       <div className="imp__actions">
-        <Button variant="primary" disabled={busy || willImport === 0} onClick={onCommit}>
+        <Button variant="primary" disabled={willImport === 0} busy={busy} onClick={onCommit}>
           {busy ? 'Importing…' : `Import ${willImport} transaction${willImport === 1 ? '' : 's'}`}
         </Button>
         {willImport === 0 ? (

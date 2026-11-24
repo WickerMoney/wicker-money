@@ -35,6 +35,7 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
   const [through, setThrough] = useState('')
   const [planned, setPlanned] = useState('')
   const [note, setNote] = useState('')
+  // The ref is on the outer element, so it holds the form-level error too and focus can reach it.
   const form = useFormErrors<HTMLDivElement>()
   const { clear: clearErrors, clearField } = form
 
@@ -85,7 +86,7 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
   }
 
   return (
-    <div className="bud__window-form">
+    <div className="bud__window-form" ref={form.ref}>
       <h3 className="bud__window-title">
         {editing !== null ? `Edit the ${editing.categoryName} window` : 'Add a window'}
       </h3>
@@ -94,7 +95,7 @@ export function WindowForm({ categories, monthKey, editing, busy, onSave, onCanc
         through December 25. It is funded once, and each month shows what is left. The amount can
         be 0 for a window with nothing set aside yet.
       </p>
-      <div className="bud__add bud__add--aligned" ref={form.ref}>
+      <div className="bud__add bud__add--aligned">
         <SelectField label="Category" value={categoryId} error={form.errors.fields['categoryId']}
                      onChange={(e) => { setCategoryId(e.target.value); clearField('categoryId') }}>
           <CategoryOptions categories={categories} />

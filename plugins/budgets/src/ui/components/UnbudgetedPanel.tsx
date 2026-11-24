@@ -22,6 +22,7 @@ export function UnbudgetedPanel({ month, formatMoney: money }: UnbudgetedPanelPr
         simply absent.
       </p>
       <Table
+        caption="Spent with no budget"
         columns={[
           { key: 'name', header: 'Category', render: (u: Unbudgeted) => u.categoryName },
           {
