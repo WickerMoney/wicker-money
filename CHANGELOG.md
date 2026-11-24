@@ -21,6 +21,12 @@ curated, human-readable version.
   request) and accepts `custom` as a strategy. Snowball and avalanche plans are
   unchanged. **Migration 036** (additive, has a `down`) allows the new value in
   the strategy check; going back moves anyone on Custom order to avalanche.
+- **Plugin SDK: `contributes.themes` in the manifest.** A plugin manifest may
+  declare colour themes (`id`, `label`, `mode`, and `tokens`). Only a fixed set
+  of `--wm-` colour and length tokens is accepted, with plain colour and length
+  values: no `url()`, `calc()`, named colour, `;`, braces or unknown field, at
+  most 8 themes of at most 16 KiB together. This is the manifest field only; the
+  app does not register or apply the themes yet.
   
 ### Fixed
 

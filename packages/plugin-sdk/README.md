@@ -212,6 +212,44 @@ For your plugin's UI code, the broker and the server hold a plugin that runs in 
 frame to these grants. A plugin that ran in the app's own page (none does today)
 would not be held to them. See [Trust model](#trust-model).
 
+### Themes (`contributes.themes`)
+
+A manifest may declare colour themes. This is **manifest only**: `parseManifest`
+validates the field and keeps it; the web app does not register or apply themes
+yet.
+
+```ts
+contributes: {
+  themes: [
+    {
+      id: 'midnight',                 // lower-case letters, digits, single hyphens; at most 40
+      label: 'Midnight',              // 1 to 60 characters, no control or bidirectional characters
+      mode: 'dark',                   // 'light' | 'dark'
+      tokens: { '--wm-bg': '#0b0d12', '--wm-accent': 'rgb(120 200 255)' },
+    },
+  ],
+}
+```
+
+A theme can only set a fixed set of `--wm-` tokens: the surface, text, accent, status and chart
+colours, the two corner radii and the two spacing steps (the list is in
+`src/manifest/themeTokens.ts`; it is not exported). A colour is `#rgb`, `#rgba`, `#rrggbb`,
+`#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()` with plain numbers, or `var()` of another
+colour token. A length is `0`, a non-negative number with `px`, `rem` or `em`, or `var()` of another length
+token. Values are at most 64 characters. There are at most 8 themes, ids are unique, and
+all themes together take at most 16 KiB of JSON.
+
+The manifest is refused, with the path of the first problem, for: an unknown field on a
+theme (such as `css`), an unknown token, `url()`, `calc()`, a named colour, a keyword,
+a `var()` outside the token set or with a fallback, `;`, braces, comments, surrounding
+whitespace, a bad `mode` or `id`, no tokens, more than 8 themes, a duplicate id, or
+oversize values.
+
+This is not `MAX_THEME_TOKENS` (512). That constant caps how many tokens a running
+isolated plugin may send in one `setTheme` message at run time. `contributes.themes` is
+a static declaration read from the manifest, with a fixed token set and its own caps; the
+two do not share a limit.
+
 ### Widget
 
 ```tsx
