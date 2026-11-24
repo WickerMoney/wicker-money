@@ -9,6 +9,19 @@ curated, human-readable version.
 
 ## [Unreleased]
 
+### Added
+
+- **Debt payoff: Custom order.** A third strategy beside snowball and avalanche:
+  the extra money goes to your debts in an order you set, skipping any that are
+  paid off or left out of the plan. Choose it under "Payoff plan" and a list
+  appears with Move up and Move down on every debt (no drag, so it works from a
+  keyboard and a screen reader says the new position). The order is saved, is
+  the order "Your debts" is listed in, and is included in the data export
+  (`sort_order`). The API gains `PUT /debts/order` (the whole list in one
+  request) and accepts `custom` as a strategy. Snowball and avalanche plans are
+  unchanged. **Migration 036** (additive, has a `down`) allows the new value in
+  the strategy check; going back moves anyone on Custom order to avalanche.
+  
 ### Fixed
 
 - Budgets: a refusal on the window or allowance form that belongs to no one field now takes focus and is

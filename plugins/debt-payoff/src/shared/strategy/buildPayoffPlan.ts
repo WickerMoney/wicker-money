@@ -82,7 +82,8 @@ import { STRATEGIES } from './STRATEGIES.js'
  * minimum, nothing rolled over, no extra) so the plan can say what it saves.
  *
  * @param debts - The debts, in the order the person keeps them; that order
- *   breaks ties between debts the strategy treats as equal.
+ *   breaks ties between debts the strategy treats as equal, and is the order
+ *   the extra is aimed in under the `custom` strategy.
  * @param options - The strategy, the monthly extra, and the date the balances
  *   are as of.
  * @returns The plan. With no debts, or only debts at zero, the schedule is

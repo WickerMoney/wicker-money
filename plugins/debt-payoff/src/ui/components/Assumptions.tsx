@@ -60,7 +60,8 @@ export function Assumptions({ plan, formatDate }: AssumptionsProps) {
       </li>
       <li>
         <strong>Order:</strong> worked out once, from today's balances and rates. Snowball goes by smallest balance,
-        avalanche by highest rate.
+        avalanche by highest rate, and Custom order by the list you set, skipping a debt that is paid off or not in
+        the plan.
       </li>
       <li>
         <strong>Not modelled:</strong> new spending, fees and rate changes. The plan stops after{' '}

@@ -74,6 +74,20 @@ describe('plan statements', () => {
   })
 })
 
+describe('reordering', () => {
+  it.each([1, 5, 50])('writes once however many debts there are (%i): a read, one UPDATE, a read', async (count) => {
+    const { q, seen } = recorder(count)
+    const ids = debtRows(count).map((d) => d.id)
+    await new DebtPayoffService(new QueryDebtUnitOfWork((_userId, work) => work(q)), () => NOW).reorderDebts(USER, ids)
+
+    expect(seen).toHaveLength(3)
+    const writes = seen.filter((s) => /\bUPDATE\b/i.test(s.sql))
+    expect(writes).toHaveLength(1)
+    expect(writes[0]?.values).toEqual([ids])
+    expect(writes[0]?.sql).toContain('unnest(')
+  })
+})
+
 describe('the tables the repositories touch', () => {
   /** Every relation named after FROM, JOIN, INTO or UPDATE in a statement. */
   function relations(sql: string): string[] {
@@ -87,7 +101,7 @@ describe('the tables the repositories touch', () => {
       repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false, promoInterestBase: 'original' as const, compounding: 'monthly' as const }
     await Promise.all([
       debts.list(true), debts.find('a'), debts.findForUpdate('a'), debts.countActive(),
-      debts.insert({ ...row, sortOrder: undefined }), debts.replace('a', row), debts.delete('a'), debts.listAll(),
+      debts.insert({ ...row, sortOrder: undefined }), debts.replace('a', row), debts.reorder(['a', 'b']), debts.delete('a'), debts.listAll(),
       settings.get(), settings.save('1', 'snowball'), settings.getForExport(),
       accounts.find('a'), accounts.listLiabilities(),
     ])

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { buildPayoffPlan } from '../../shared/index.js'
 import { MAX_ACTIVE_DEBTS } from '../constants.js'
 import { InMemoryDebtStore } from '../testing/InMemoryDebtStore.js'
 import { InMemoryDebtUnitOfWork } from '../testing/InMemoryDebtUnitOfWork.js'
@@ -374,5 +375,144 @@ describe('account suggestions', () => {
       { id: expect.any(String), name: 'Auto loan', accountType: 'loan', debtId: null },
       { id: visa, name: 'Visa', accountType: 'credit_card', debtId: debt.id },
     ])
+  })
+})
+
+describe('reordering debts', () => {
+  let ids: string[]
+  const names = async (userId = ALICE) => (await service.listDebts(userId, false)).map((d) => d.name)
+
+  beforeEach(async () => {
+    ids = []
+    for (const name of ['A', 'B', 'C']) ids.push((await service.createDebt(ALICE, { ...card, name })).id)
+  })
+
+  it('puts the debts in the order sent and numbers them from zero', async () => {
+    const [a, b, c] = ids as [string, string, string]
+    const debts = await service.reorderDebts(ALICE, [c, a, b])
+    expect(debts.map((d) => [d.name, d.sortOrder])).toEqual([['C', 0], ['A', 1], ['B', 2]])
+    expect(await names()).toEqual(['C', 'A', 'B'])
+  })
+
+  it('removes repeated positions an explicit sort order left', async () => {
+    await service.updateDebt(ALICE, ids[0] as string, { sortOrder: 5 })
+    await service.updateDebt(ALICE, ids[1] as string, { sortOrder: 5 })
+    const debts = await service.reorderDebts(ALICE, [ids[1], ids[0], ids[2]] as string[])
+    expect(debts.map((d) => d.sortOrder)).toEqual([0, 1, 2])
+  })
+
+  it('accepts the order it already has, and an empty list for someone with no debts', async () => {
+    expect((await service.reorderDebts(ALICE, ids)).map((d) => d.sortOrder)).toEqual([0, 1, 2])
+    expect(await service.reorderDebts(BOB, [])).toEqual([])
+  })
+
+  it('refuses an id sent twice, naming the field, and changes nothing', async () => {
+    const [a, b] = ids as [string, string]
+    const error = await codeOf(service.reorderDebts(ALICE, [a, b, a]))
+    expect(error).toEqual({ status: 400, code: 'duplicate_debt' })
+    expect(await names()).toEqual(['A', 'B', 'C'])
+  })
+
+  it('refuses a debt that is not there, and another person\'s debt, the same way', async () => {
+    const theirs = (await service.createDebt(BOB, card)).id
+    const [a, b, c] = ids as [string, string, string]
+    expect(await codeOf(service.reorderDebts(ALICE, [a, b, theirs]))).toEqual({ status: 400, code: 'unknown_debt' })
+    expect(await codeOf(service.reorderDebts(ALICE, [a, b, c, store.newId()]))).toEqual({ status: 400, code: 'unknown_debt' })
+    expect(await names()).toEqual(['A', 'B', 'C'])
+    expect(await names(BOB)).toEqual(['Visa'])
+    expect((await service.getDebt(BOB, theirs)).sortOrder).toBe(0)
+  })
+
+  it('refuses a list that leaves a debt out, and an empty list when there are debts', async () => {
+    const [a, b] = ids as [string, string]
+    expect(await codeOf(service.reorderDebts(ALICE, [b, a]))).toEqual({ status: 400, code: 'missing_debt' })
+    expect(await codeOf(service.reorderDebts(ALICE, []))).toEqual({ status: 400, code: 'missing_debt' })
+    expect(await names()).toEqual(['A', 'B', 'C'])
+  })
+
+  it('reports the field the problem is on', async () => {
+    try {
+      await service.reorderDebts(ALICE, [ids[0] as string])
+      throw new Error('Expected a refusal.')
+    } catch (error) {
+      expect(error).toBeInstanceOf(DebtPayoffError)
+      expect((error as DebtPayoffError).issues).toEqual([{ path: ['ids'], message: 'Send every debt that is not archived.' }])
+    }
+  })
+
+  it('leaves archived debts out of the list and untouched', async () => {
+    const old = await service.createDebt(ALICE, { ...card, name: 'Old', archived: true, sortOrder: 9 })
+    expect(await codeOf(service.reorderDebts(ALICE, [...ids, old.id]))).toEqual({ status: 400, code: 'unknown_debt' })
+    await service.reorderDebts(ALICE, [...ids].reverse())
+    expect((await service.getDebt(ALICE, old.id)).sortOrder).toBe(9)
+  })
+
+  it('is what Custom order follows: the plan aims the extra in the new order', async () => {
+    await service.saveSettings(ALICE, { strategy: 'custom', extraPayment: '100.0000' })
+    const [a, b, c] = ids as [string, string, string]
+    expect((await service.getPlan(ALICE, { timezone: 'UTC' })).order).toEqual([a, b, c])
+    await service.reorderDebts(ALICE, [c, a, b])
+    const plan = await service.getPlan(ALICE, { timezone: 'UTC' })
+    expect(plan).toMatchObject({ strategy: 'custom', order: [c, a, b] })
+  })
+})
+
+describe('Custom order in settings and the plan', () => {
+  beforeEach(async () => {
+    await service.createDebt(ALICE, { name: 'Big', balance: '5000.0000', apr: '24.0000', minimumPayment: '150.0000' })
+    await service.createDebt(ALICE, { name: 'Small', balance: '1200.0000', apr: '8.0000', minimumPayment: '50.0000' })
+    await service.createDebt(ALICE, { name: 'Loan', balance: '8000.0000', apr: '6.0000', minimumPayment: '200.0000' })
+  })
+
+  it('is saved and read back, keeping the extra', async () => {
+    await service.saveSettings(ALICE, { extraPayment: '150.0000' })
+    expect(await service.saveSettings(ALICE, { strategy: 'custom' })).toEqual({ extraPayment: '150.0000', strategy: 'custom', saved: true })
+    expect(await service.getSettings(ALICE)).toEqual({ extraPayment: '150.0000', strategy: 'custom', saved: true })
+  })
+
+  it('follows the saved list order, skipping debts that are cleared or out of the plan', async () => {
+    const [big, small, loan] = (await service.listDebts(ALICE, false)).map((d) => d.id) as [string, string, string]
+    await service.updateDebt(ALICE, small, { balance: '0.0000' })
+    await service.reorderDebts(ALICE, [loan, small, big])
+    const plan = await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'custom', extraPayment: '300.0000' })
+    expect(plan.order).toEqual([loan, big])
+
+    await service.updateDebt(ALICE, loan, { included: false })
+    expect((await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'custom', extraPayment: '300.0000' })).order).toEqual([big])
+  })
+
+  it('does not change what snowball and avalanche give, however the list is ordered', async () => {
+    const before = {
+      snowball: await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'snowball', extraPayment: '300.0000' }),
+      avalanche: await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'avalanche', extraPayment: '300.0000' }),
+    }
+    const ids = (await service.listDebts(ALICE, false)).map((d) => d.id)
+    await service.reorderDebts(ALICE, [...ids].reverse())
+    expect(await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'snowball', extraPayment: '300.0000' })).toEqual(before.snowball)
+    expect(await service.getPlan(ALICE, { timezone: 'UTC', strategy: 'avalanche', extraPayment: '300.0000' })).toEqual(before.avalanche)
+  })
+})
+
+describe('a person who saved settings before Custom order existed', () => {
+  it.each(['snowball', 'avalanche'] as const)('gets exactly the plan the planner gives for %s', async (strategy) => {
+    // A settings row and debts as they were stored before migration 036: a strategy of the first two kinds
+    // and positions from the old list. No part of the plan reads anything that 036 or this feature added.
+    store.settings.set(ALICE, { extra_payment: '300.0000', strategy })
+    const inputs = [
+      { name: 'Big', balance: '5000.0000', apr: '24.0000', minimumPayment: '150.0000' },
+      { name: 'Small', balance: '1200.0000', apr: '8.0000', minimumPayment: '50.0000' },
+      { name: 'Loan', balance: '8000.0000', apr: '6.0000', minimumPayment: '200.0000' },
+    ]
+    const made = []
+    for (const input of inputs) made.push(await service.createDebt(ALICE, input))
+
+    const plan = await service.getPlan(ALICE, { timezone: 'UTC' })
+    const { excludedDebts, ...engine } = plan
+    expect(excludedDebts).toEqual([])
+    expect(JSON.stringify(engine)).toBe(JSON.stringify(buildPayoffPlan(
+      made.map((d) => ({ id: d.id, name: d.name, balance: d.balance, apr: d.apr, minimumPayment: d.minimumPayment, extraPayment: '0.0000', repaymentStartsOn: null, promoApr: null, promoEndsOn: null, promoDeferredInterest: false, promoInterestBase: 'original' as const, compounding: 'monthly' as const })),
+      { strategy, extraPayment: '300.0000', startDate: '2026-10-11' },
+    )))
+    expect(plan.strategy).toBe(strategy)
   })
 })

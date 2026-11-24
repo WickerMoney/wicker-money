@@ -6,8 +6,8 @@ import { settingsBody } from '../schemas/settingsBody.js'
 /**
  * Registers `PUT /settings`: saves the plan settings.
  *
- * Body: `extraPayment` (a decimal string), `strategy` (`snowball` or
- * `avalanche`), or both; one not sent keeps its value.
+ * Body: `extraPayment` (a decimal string), `strategy` (`snowball`,
+ * `avalanche` or `custom`), or both; one not sent keeps its value.
  *
  * Responds `200` with `{ extraPayment, strategy, saved: true }`, or `400` for
  * an invalid body.

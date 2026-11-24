@@ -126,6 +126,20 @@ export class QueryDebtRepository implements DebtRepository {
   }
 
   /** @inheritdoc */
+  async reorder(ids: readonly string[]): Promise<number> {
+    // One statement however many debts there are. Row-level security narrows the
+    // UPDATE to this user's rows, so an id that is not theirs matches nothing.
+    const moved = await this.q<{ id: string }>`
+      UPDATE plugin_debt_payoff.debts AS d
+      SET sort_order = (v.position - 1)::integer, updated_at = now()
+      FROM unnest(${[...ids]}::uuid[]) WITH ORDINALITY AS v(id, position)
+      WHERE d.id = v.id
+      RETURNING d.id
+    `
+    return moved.length
+  }
+
+  /** @inheritdoc */
   async delete(id: string): Promise<number> {
     const gone = await this.q<{ id: string }>`
       DELETE FROM plugin_debt_payoff.debts WHERE id = ${id}::uuid RETURNING id

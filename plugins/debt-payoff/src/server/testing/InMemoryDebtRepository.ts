@@ -80,6 +80,17 @@ export class InMemoryDebtRepository implements DebtRepository {
     return row(found)
   }
 
+  async reorder(ids: readonly string[]): Promise<number> {
+    let moved = 0
+    ids.forEach((id, position) => {
+      const found = this.mine().find((d) => d.id === id)
+      if (found === undefined) return
+      found.sort_order = position
+      moved += 1
+    })
+    return moved
+  }
+
   async delete(id: string): Promise<number> {
     const at = this.store.debts.findIndex((d) => d.userId === this.userId && d.id === id)
     if (at < 0) return 0

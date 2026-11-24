@@ -587,3 +587,184 @@ describe('deferred loans, promotions and compounding', () => {
     expect(dialog.querySelector('details')?.open).toBe(false)
   })
 })
+
+describe('Custom order', () => {
+  const trio = (): Debt[] => [visa(), car(), store()]
+  const names = () =>
+    within(document.querySelector('.dp-custom__list') as HTMLElement)
+      .getAllByRole('listitem')
+      .map((li) => li.querySelector('.dp-custom__name > span:last-child')?.firstChild?.textContent)
+
+  async function choose(backend: Backend) {
+    const opened = await open(backend)
+    await opened.user.click(screen.getByRole('button', { name: 'Custom order' }))
+    await waitFor(() => expect(pressed('Custom order')).toBe('true'))
+    await screen.findByRole('heading', { name: 'Your payoff order' })
+    return opened
+  }
+
+  it('is a third choice, saves as custom, and describes itself', async () => {
+    const backend = makeBackend(trio())
+    await choose(backend)
+    expect(backend.api.put).toHaveBeenCalledWith(expect.stringContaining('/settings'), { strategy: 'custom' })
+    expect(screen.getByText(/Extra money goes to the debts in the order you set/)).not.toBeNull()
+    expect(backend.calls().some((c) => c.includes('/plan?strategy=custom'))).toBe(true)
+  })
+
+  it('shows the reorder list only under Custom order', async () => {
+    const backend = makeBackend(trio())
+    const { user } = await open(backend)
+    expect(screen.queryByRole('heading', { name: 'Your payoff order' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Custom order' }))
+    await screen.findByRole('heading', { name: 'Your payoff order' })
+    await user.click(screen.getByRole('button', { name: 'Snowball' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Your payoff order' })).toBeNull())
+  })
+
+  it('lists every debt in the saved order, and the plan follows it', async () => {
+    await choose(makeBackend(trio()))
+    expect(names()).toEqual(['Visa', 'Car loan', 'Store card'])
+    expect(orderRows()).toEqual([expect.stringContaining('Visa'), expect.stringContaining('Car loan'), expect.stringContaining('Store card')])
+  })
+
+  it('moves a debt with the keyboard, saves the whole order in one request, and keeps focus on the button', async () => {
+    const backend = makeBackend(trio())
+    backend.state.settings = { ...backend.state.settings, extraPayment: '300.0000' }
+    const { user } = await choose(backend)
+    const totals = () => (document.querySelector('.dp-totals') as HTMLElement).textContent
+    const before = totals()
+
+    const up = screen.getByRole('button', { name: 'Move up Store card' })
+    up.focus()
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => expect(names()).toEqual(['Visa', 'Store card', 'Car loan']))
+    expect(backend.api.put).toHaveBeenCalledWith(expect.stringContaining('/debts/order'), { ids: ['visa', 'store', 'car'] })
+    expect(backend.api.put.mock.calls.filter((c) => String(c[0]).includes('/debts/order'))).toHaveLength(1)
+    // Focus is on the moved row's button, not on the page.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move up Store card' })))
+    // A second press moves it again.
+    await user.keyboard(' ')
+    await waitFor(() => expect(names()).toEqual(['Store card', 'Visa', 'Car loan']))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move up Store card' }))
+    // The plan is read again for the new order.
+    await waitFor(() => expect(orderRows()[0]).toContain('Store card'))
+    await waitFor(() => expect(totals()).not.toBe(before))
+  })
+
+  it('moves down too, and keeps focus on the Move down button', async () => {
+    const backend = makeBackend(trio())
+    const { user } = await choose(backend)
+    const down = screen.getByRole('button', { name: 'Move down Visa' })
+    await user.click(down)
+    await waitFor(() => expect(names()).toEqual(['Car loan', 'Visa', 'Store card']))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move down Visa' })))
+  })
+
+  it('announces the new position in the polite live region', async () => {
+    const { user } = await choose(makeBackend(trio()))
+    await user.click(screen.getByRole('button', { name: 'Move up Car loan' }))
+    await waitFor(() => expect(names()).toEqual(['Car loan', 'Visa', 'Store card']))
+    const live = document.querySelector('[role="status"][aria-live="polite"].wm-visually-hidden') as HTMLElement
+    expect(live.textContent).toBe('Car loan moved up. It is now number 1 of 3. Updating the plan.')
+  })
+
+  it('leaves the top Move up and the bottom Move down inert but focusable, not disabled', async () => {
+    const backend = makeBackend(trio())
+    const { user } = await choose(backend)
+    const top = screen.getByRole('button', { name: 'Move up Visa' })
+    const bottom = screen.getByRole('button', { name: 'Move down Store card' })
+    for (const button of [top, bottom]) {
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+      expect((button as HTMLButtonElement).disabled).toBe(false)
+    }
+    top.focus()
+    await user.keyboard('{Enter}')
+    await user.click(bottom)
+    expect(backend.api.put.mock.calls.filter((c) => String(c[0]).includes('/debts/order'))).toHaveLength(0)
+    expect(document.activeElement).toBe(bottom)
+    expect(screen.getByRole('button', { name: 'Move up Car loan' }).getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('stays focusable while the request runs, ignores a second press, and says so', async () => {
+    const backend = makeBackend(trio())
+    const { user } = await choose(backend)
+    let release: () => void = () => undefined
+    const real = backend.api.put.getMockImplementation()!
+    backend.api.put.mockImplementation(async (path: string, body: unknown) => {
+      if (path.includes('/debts/order')) await new Promise<void>((resolve) => { release = resolve })
+      return real(path, body)
+    })
+
+    const up = screen.getByRole('button', { name: 'Move up Store card' })
+    up.focus()
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(up.getAttribute('aria-disabled')).toBe('true'))
+    expect((up as HTMLButtonElement).disabled).toBe(false)
+    expect(document.activeElement).toBe(up)
+    // Every button waits, none loses focus.
+    expect(screen.getByRole('button', { name: 'Move down Visa' }).getAttribute('aria-disabled')).toBe('true')
+
+    await user.keyboard('{Enter}')
+    expect(backend.api.put.mock.calls.filter((c) => String(c[0]).includes('/debts/order'))).toHaveLength(1)
+
+    release()
+    await waitFor(() => expect(names()).toEqual(['Visa', 'Store card', 'Car loan']))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move up Store card' })))
+    expect(screen.getByRole('button', { name: 'Move up Store card' }).getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('shows a refusal as an alert, keeps the old order and the focus', async () => {
+    const backend = makeBackend(trio())
+    const { user } = await choose(backend)
+    const real = backend.api.put.getMockImplementation()!
+    backend.api.put.mockImplementation(async (path: string, body: unknown) => {
+      if (path.includes('/debts/order')) throw new Error('ids: Send every debt that is not archived.')
+      return real(path, body)
+    })
+    const up = screen.getByRole('button', { name: 'Move up Store card' })
+    up.focus()
+    await user.keyboard('{Enter}')
+    expect((await screen.findByRole('alert')).textContent).toContain('Send every debt that is not archived.')
+    expect(names()).toEqual(['Visa', 'Car loan', 'Store card'])
+    expect(document.activeElement).toBe(up)
+    expect(up.getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('sends only the debts that are not archived, and keeps archived ones out of the list', async () => {
+    const old = makeDebt({ id: 'old', name: 'Old card', archived: true })
+    const backend = makeBackend([visa(), old, car()])
+    const { user } = await choose(backend)
+    expect(names()).toEqual(['Visa', 'Car loan'])
+    await user.click(screen.getByRole('button', { name: 'Move up Car loan' }))
+    await waitFor(() => expect(backend.api.put).toHaveBeenCalledWith(expect.stringContaining('/debts/order'), { ids: ['car', 'visa'] }))
+  })
+
+  it('marks a debt that is skipped: out of the plan, or already at zero', async () => {
+    await choose(makeBackend([visa(), makeDebt({ id: 'm', name: 'Mortgage', included: false }), makeDebt({ id: 'z', name: 'Paid card', balance: '0.0000' })]))
+    const list = within(document.querySelector('.dp-custom__list') as HTMLElement)
+    expect(list.getByText('Not in plan')).not.toBeNull()
+    expect(list.getByText('Paid off')).not.toBeNull()
+    expect(list.getAllByText(/, skipped/)).toHaveLength(2)
+  })
+
+  it('does not change what snowball and avalanche show', async () => {
+    const backend = makeBackend(trio())
+    const { user } = await open(backend)
+    expect(orderRows()[0]).toContain('Visa')
+    await user.click(screen.getByRole('button', { name: 'Snowball' }))
+    await waitFor(() => expect(orderRows()[0]).toContain('Store card'))
+    expect(screen.queryByRole('button', { name: /^Move (up|down)/ })).toBeNull()
+  })
+
+  it('keeps the order when the page is opened again', async () => {
+    const backend = makeBackend(trio())
+    const { user } = await choose(backend)
+    await user.click(screen.getByRole('button', { name: 'Move up Store card' }))
+    await waitFor(() => expect(names()).toEqual(['Visa', 'Store card', 'Car loan']))
+    document.body.replaceChildren()
+    render(<DebtPayoffPage ctx={makeCtx(backend.api)} />)
+    await screen.findByRole('heading', { name: 'Your payoff order' })
+    expect(names()).toEqual(['Visa', 'Store card', 'Car loan'])
+  })
+})

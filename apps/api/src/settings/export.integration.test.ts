@@ -194,13 +194,27 @@ describe('GET /api/v1/settings/export', () => {
       expect.objectContaining({
         name: 'Exported card', included: false, extra_payment: '15.0000',
         repayment_starts_on: '2027-04-10', promo_apr: '0.0000', promo_ends_on: '2027-10-10',
-        promo_deferred_interest: true, promo_interest_base: 'original', compounding: 'daily',
+        promo_deferred_interest: true, promo_interest_base: 'original', compounding: 'daily', sort_order: 0,
       }),
     ])
     expect(exported.settings).toEqual(expect.objectContaining({ strategy: 'snowball' }))
 
     const { doc: theirs } = await exportFor(alice.user)
     expect(JSON.stringify(theirs.plugins[DEBT_PAYOFF])).not.toContain('Exported card')
+  })
+
+  it('exports the order of the debts and a Custom order choice', async () => {
+    const mine = await createUser(h)
+    const url = '/api/v1/p/wickermoney.debt-payoff'
+    const make = async (name: string) => await send(mine, 'POST', `${url}/debts`, { name, balance: '10', apr: '1', minimumPayment: '1' }, DEBT_PAYOFF) as { id: string }
+    const [a, b, c] = [await make('First'), await make('Second'), await make('Third')] as [{ id: string }, { id: string }, { id: string }]
+    await send(mine, 'PUT', `${url}/debts/order`, { ids: [c.id, a.id, b.id] }, DEBT_PAYOFF)
+    await send(mine, 'PUT', `${url}/settings`, { strategy: 'custom' }, DEBT_PAYOFF)
+
+    const { doc } = await exportFor(mine)
+    const exported = doc.plugins[DEBT_PAYOFF] as unknown as { debts: Array<Record<string, unknown>>; settings: Record<string, unknown> | null }
+    expect(exported.debts.map((d) => [d['name'], d['sort_order']])).toEqual([['Third', 0], ['First', 1], ['Second', 2]])
+    expect(exported.settings).toEqual(expect.objectContaining({ strategy: 'custom' }))
   })
 
   it('never includes password hashes or sessions', async () => {

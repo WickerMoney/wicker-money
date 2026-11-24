@@ -100,6 +100,17 @@ export function makeBackend(debts: readonly Debt[] = [], suggestions: readonly A
       }
       return state.settings
     }
+    if (route === '/debts/order') {
+      // As the server does: every active debt once, numbered from zero in the order sent.
+      const ids = (b['ids'] as string[])
+      const active = state.debts.filter((d) => !d.archived)
+      if (ids.length !== active.length || ids.some((id) => !active.some((d) => d.id === id))) {
+        throw new Error('ids: Send every debt that is not archived.')
+      }
+      const moved = ids.map((id, i) => ({ ...(active.find((d) => d.id === id) as Debt), sortOrder: i }))
+      state.debts = [...moved, ...state.debts.filter((d) => d.archived)]
+      return { debts: moved }
+    }
     const id = route.replace('/debts/', '')
     state.debts = state.debts.map((d) => (d.id === id ? { ...d, ...(b as Partial<Debt>) } : d))
     return state.debts.find((d) => d.id === id)

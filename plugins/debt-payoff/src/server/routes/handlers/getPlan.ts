@@ -6,7 +6,7 @@ import { planQuery } from '../schemas/planQuery.js'
 /**
  * Registers `GET /plan`: the payoff plan for the user's active debts.
  *
- * Query parameters, all optional: `strategy` (`snowball` or `avalanche`) and
+ * Query parameters, all optional: `strategy` (`snowball`, `avalanche` or `custom`) and
  * `extra` (the monthly extra, a decimal string) default to the saved settings,
  * and `tz` (an IANA time zone) decides what today is and defaults to `UTC`.
  * The request writes nothing; the settings are not changed by asking for a

@@ -203,6 +203,38 @@ describe('row-level security between two people', () => {
     expect([...theirPlan.debts, ...theirPlan.excludedDebts].map((d) => d.id)).not.toContain(mine.id)
   })
 
+  it('never lets one person reorder, or learn the ids of, another person’s debts', async () => {
+    const who = await createUser(h)
+    const rival = await createUser(h)
+    const a = await debt(who, { name: 'Mine A' })
+    const b = await debt(who, { name: 'Mine B' })
+    const theirs = await debt(rival, { name: 'Theirs' })
+
+    // Their ids in my list: refused as unknown, exactly as an id that does not exist is.
+    const forged = await req('PUT', '/debts/order', rival, { ids: [theirs.id, b.id, a.id] })
+    const missing = await req('PUT', '/debts/order', rival, { ids: [theirs.id, '00000000-0000-4000-8000-0000000000aa'] })
+    expect(forged.statusCode).toBe(400)
+    expect(forged.json()).toMatchObject({ code: 'unknown_debt', issues: [{ path: ['ids'] }] })
+    expect(missing.json()).toMatchObject({ code: 'unknown_debt', issues: [{ path: ['ids'] }] })
+    expect(forged.json().message).toBe(missing.json().message)
+
+    // Nothing moved, for either of them.
+    expect(((await req('GET', '/debts', who)).json() as { debts: DebtBody[] }).debts.map((d) => [d.name, d.sortOrder])).toEqual([['Mine A', a.sortOrder], ['Mine B', b.sortOrder]])
+    expect((await req('GET', `/debts/${theirs.id}`, rival)).json()).toEqual(theirs)
+
+    // The database itself: a statement as the other person's role-bound session touches none of my rows.
+    const moved = await asRole(rival.id, 'UPDATE plugin_debt_payoff.debts SET sort_order = 99 WHERE id = ?::uuid RETURNING id', a.id)
+    expect(moved).toEqual([])
+    expect((await req('GET', `/debts/${a.id}`, who)).json()).toMatchObject({ sortOrder: a.sortOrder })
+
+    // And a reorder only ever answers with the caller's own debts.
+    const ok = await req('PUT', '/debts/order', who, { ids: [b.id, a.id] })
+    expect(ok.statusCode).toBe(200)
+    expect((ok.json() as { debts: DebtBody[] }).debts.map((d) => d.name)).toEqual(['Mine B', 'Mine A'])
+    expect(JSON.stringify(ok.json())).not.toContain(theirs.id)
+    expect(((await req('GET', '/debts', rival)).json() as { debts: DebtBody[] }).debts.map((d) => d.name)).toEqual(['Theirs'])
+  })
+
   it('refuses to link a debt to another person’s account', async () => {
     const theirsCard = await account(other, 'credit_card', 'Their card')
     const res = await req('POST', '/debts', user, {
@@ -221,12 +253,123 @@ describe('row-level security between two people', () => {
     ).rejects.toThrow()
   })
 
+  it('keeps a Custom order choice per person', async () => {
+    const who = await createUser(h)
+    const them = await createUser(h)
+    expect((await req('PUT', '/settings', who, { strategy: 'custom' })).json()).toMatchObject({ strategy: 'custom', saved: true })
+    expect((await req('GET', '/settings', them)).json()).toMatchObject({ strategy: 'avalanche', saved: false })
+    expect((await req('GET', '/settings', who)).json()).toMatchObject({ strategy: 'custom' })
+  })
+
   it('keeps settings per person', async () => {
     await req('PUT', '/settings', user, { strategy: 'snowball', extraPayment: '50' })
     const mine = (await req('GET', '/settings', user)).json()
     const theirs = (await req('GET', '/settings', other)).json()
     expect(mine).toMatchObject({ strategy: 'snowball', extraPayment: '50.0000', saved: true })
     expect(theirs).toMatchObject({ strategy: 'avalanche', extraPayment: '0.0000', saved: false })
+  })
+})
+
+describe('reordering debts', () => {
+  const orderOf = async (u: TestUser) =>
+    ((await req('GET', '/debts', u)).json() as { debts: DebtBody[] }).debts
+
+  it('reorders every debt in one request, keeps the order, and numbers from zero', async () => {
+    const who = await createUser(h)
+    const a = await debt(who, { name: 'A' })
+    const b = await debt(who, { name: 'B' })
+    const c = await debt(who, { name: 'C' })
+    const archived = await debt(who, { name: 'Old', archived: true })
+
+    const res = await req('PUT', '/debts/order', who, { ids: [c.id, a.id, b.id] })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { debts: DebtBody[] }
+    expect(body.debts.map((d) => [d.name, d.sortOrder])).toEqual([['C', 0], ['A', 1], ['B', 2]])
+
+    // It is what a later request sees (the order is stored, not held by the page).
+    expect((await orderOf(who)).map((d) => d.name)).toEqual(['C', 'A', 'B'])
+    // Archived debts are left alone.
+    const old = (await req('GET', `/debts/${archived.id}`, who)).json() as DebtBody
+    expect(old.sortOrder).toBe(archived.sortOrder)
+    // `order` is a route of its own and is never read as a debt id.
+    expect((await req('GET', '/debts/order', who)).statusCode).toBe(400)
+  })
+
+  it('reverses a long list in one request', async () => {
+    const who = await createUser(h)
+    const ids: string[] = []
+    for (let i = 0; i < 12; i += 1) ids.push((await debt(who, { name: `D${i}` })).id)
+    const res = await req('PUT', '/debts/order', who, { ids: [...ids].reverse() })
+    expect(res.statusCode).toBe(200)
+    expect((await orderOf(who)).map((d) => d.name)).toEqual(ids.map((_, i) => `D${11 - i}`))
+  })
+
+  it('refuses a list that is not exactly the person\'s debts, on the ids field, and changes nothing', async () => {
+    const who = await createUser(h)
+    const a = await debt(who, { name: 'A' })
+    const b = await debt(who, { name: 'B' })
+    const cases: Array<[string, unknown, string]> = [
+      ['a duplicate', { ids: [a.id, b.id, a.id] }, 'duplicate_debt'],
+      ['a missing debt', { ids: [a.id] }, 'missing_debt'],
+      ['an empty list', { ids: [] }, 'missing_debt'],
+      ['an unknown debt', { ids: [a.id, b.id, '00000000-0000-4000-8000-00000000beef'] }, 'unknown_debt'],
+    ]
+    for (const [label, payload, code] of cases) {
+      const res = await req('PUT', '/debts/order', who, payload)
+      expect(res.statusCode, label).toBe(400)
+      expect(res.json(), label).toMatchObject({ code, issues: [{ path: ['ids'] }] })
+    }
+    expect((await orderOf(who)).map((d) => d.name)).toEqual(['A', 'B'])
+  })
+
+  it('refuses a malformed body with a 400 and never a 500', async () => {
+    const who = await createUser(h)
+    await debt(who)
+    for (const payload of [{}, { ids: 'x' }, { ids: ['not-a-uuid'] }, { ids: [1] }, { ids: [], extra: true }, null, []]) {
+      const res = await req('PUT', '/debts/order', who, payload)
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+    }
+  })
+
+  it('requires a sign-in', async () => {
+    const res = await h.app.inject({ method: 'PUT', url: `${BASE}/debts/order`, payload: { ids: [] } })
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+describe('Custom order', () => {
+  it('is saved, refused when unknown at the database too, and followed by the plan', async () => {
+    const who = await createUser(h)
+    const small = await debt(who, { name: 'Small', balance: '200', apr: '20', minimumPayment: '25' })
+    const big = await debt(who, { name: 'Big', balance: '3000', apr: '9', minimumPayment: '60' })
+
+    expect((await req('PUT', '/settings', who, { strategy: 'custom', extraPayment: '100' })).json()).toMatchObject({ strategy: 'custom', extraPayment: '100.0000' })
+    const first = (await req('GET', '/plan?tz=UTC', who)).json() as { strategy: string; order: string[]; debtFreeDate: string; totalInterest: string }
+    expect(first).toMatchObject({ strategy: 'custom', order: [small.id, big.id] })
+
+    await req('PUT', '/debts/order', who, { ids: [big.id, small.id] })
+    const second = (await req('GET', '/plan?tz=UTC', who)).json() as typeof first
+    expect(second).toMatchObject({ strategy: 'custom', order: [big.id, small.id] })
+    expect(second.totalInterest).not.toBe(first.totalInterest)
+
+    // A request can ask for it without saving it.
+    await req('PUT', '/settings', who, { strategy: 'avalanche' })
+    expect((await req('GET', '/plan?tz=UTC&strategy=custom', who)).json()).toMatchObject({ strategy: 'custom', order: [big.id, small.id] })
+    expect((await req('GET', '/settings', who)).json()).toMatchObject({ strategy: 'avalanche' })
+
+    await expect(
+      asRole(who.id, "UPDATE plugin_debt_payoff.plan_settings SET strategy = 'random' WHERE user_id = core.current_user_id()"),
+    ).rejects.toThrow(/ck_plan_settings_strategy/)
+  })
+
+  it('leaves snowball and avalanche plans as they were for a person whose debts are in any order', async () => {
+    const who = await createUser(h)
+    const a = await debt(who, { name: 'A', balance: '3000', apr: '9', minimumPayment: '60' })
+    const b = await debt(who, { name: 'B', balance: '200', apr: '20', minimumPayment: '25' })
+    const plan = async (strategy: string) => (await req('GET', `/plan?tz=UTC&extra=50&strategy=${strategy}`, who)).json() as Record<string, unknown>
+    const before = [await plan('snowball'), await plan('avalanche')]
+    await req('PUT', '/debts/order', who, { ids: [b.id, a.id] })
+    expect([await plan('snowball'), await plan('avalanche')]).toEqual(before)
   })
 })
 
@@ -356,6 +499,7 @@ describe('settings and plan', () => {
   it('refuses a bad time zone or strategy', async () => {
     expect((await req('GET', '/plan?tz=Mars/Olympus', user)).statusCode).toBe(400)
     expect((await req('GET', '/plan?strategy=chaos', user)).statusCode).toBe(400)
+    expect((await req('PUT', '/settings', user, { strategy: 'chaos' })).statusCode).toBe(400)
   })
 
   it('answers an empty plan when there are no debts', async () => {
