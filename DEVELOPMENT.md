@@ -279,11 +279,15 @@ file (`measure`, "small file"). The pieces are in
   chunk. `400` on `finish` starts over with a message. A `commit` retry keeps its
   idempotency key, so a lost answer is replayed, not imported twice.
 - **Choosing another file** gives the first upload back (`upload/abort`). **Leaving
-  the page does not, from a frame:** the host disposes the broker and removes the
-  frame before the frame can send anything, so an upload staged and abandoned stays
-  until its 15 minutes pass, and a person who does this twice is told "You already
-  have 2 uploads waiting" until then. The check's in-page baseline (it puts the plugin's id in `IN_REALM_PLUGIN_IDS`
-for one run) does give it back.
+  the page cannot, from a frame:** the host removes the frame before the frame can
+  send anything, so an upload staged and abandoned stays until its 15 minutes pass.
+  It no longer locks the person out: a `begin` at the limit of 2 discards the user's
+  own oldest live upload and succeeds. The host also sends the frame a best-effort
+  `closing` message before it takes the frame down (see "Closing" in the plugin SDK
+  README); the page gives its upload back on it when the frame is still alive to
+  act, which is not the case when React removes the whole frame at once. The check's
+  in-page baseline (it puts the plugin's id in `IN_REALM_PLUGIN_IDS`
+for one run) gives it back directly.
 
 **What `finish` checks**, in this order: every index from 0 to `chunks - 1` has
 arrived (`409 upload_incomplete`, naming the first missing; the upload stays
@@ -298,7 +302,7 @@ upload repeats its answer.
 
 | Limit | Value | Over it |
 |---|---|---|
-| Live uploads per user | 2 | `begin`: `409 too_many_uploads` |
+| Live uploads per user | 2 | `begin` succeeds and discards that user's oldest live upload (never another user's) |
 | Size and chunks of one upload | 8,000,000 bytes, 64 chunks | `begin`: `400` |
 | One chunk | 256 KiB of UTF-8 | `413 chunk_too_large` |
 | Chunks add up to more than `begin` declared | the declared bytes | `413 upload_too_large`, upload discarded |
