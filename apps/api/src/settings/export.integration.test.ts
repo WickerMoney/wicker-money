@@ -217,6 +217,32 @@ describe('GET /api/v1/settings/export', () => {
     expect(exported.settings).toEqual(expect.objectContaining({ strategy: 'custom' }))
   })
 
+  it('exports lump sums with their allocations, only the caller\'s, and an empty list for someone who has none', async () => {
+    const mine = await createUser(h)
+    const url = '/api/v1/p/wickermoney.debt-payoff'
+    const card = await send(mine, 'POST', `${url}/debts`, { name: 'Lump card', balance: '500', apr: '10', minimumPayment: '25' }, DEBT_PAYOFF) as { id: string }
+    await send(mine, 'POST', `${url}/lump-sums`,
+      { onDate: '2027-03-01', amount: '800', note: 'Exported refund', allocations: [{ debtId: card.id, amount: '300' }] }, DEBT_PAYOFF)
+
+    const { doc } = await exportFor(mine)
+    const exported = doc.plugins[DEBT_PAYOFF] as unknown as { debts: unknown[]; settings: unknown; lumpSums: Array<Record<string, unknown>> }
+    expect(exported.lumpSums).toEqual([
+      expect.objectContaining({
+        on_date: '2027-03-01', amount: '800.0000', note: 'Exported refund',
+        allocations: [{ debt_id: card.id, amount: '300.0000' }],
+      }),
+    ])
+    expect(exported.lumpSums[0]?.['created_at']).toBeDefined()
+
+    // Everyone else gets an empty list, which is also what an export made before lump sums existed is: the other
+    // keys are all still there and unchanged, and the new one is additive.
+    const { doc: theirs } = await exportFor(alice.user)
+    const theirExport = theirs.plugins[DEBT_PAYOFF] as unknown as Record<string, unknown>
+    expect(Object.keys(theirExport).sort()).toEqual(['debts', 'lumpSums', 'settings'])
+    expect(theirExport['lumpSums']).toEqual([])
+    expect(JSON.stringify(theirExport)).not.toContain('Exported refund')
+  })
+
   it('never includes password hashes or sessions', async () => {
     const hash = await asUser(h.db, alice.user.id, async (trx) => {
       const row = await trx.selectFrom('core.users').select('password_hash').where('id', '=', alice.user.id).executeTakeFirstOrThrow()
