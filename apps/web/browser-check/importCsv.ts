@@ -16,6 +16,8 @@
  *  - small:   a small file through the whole flow: staged in one chunk, analysed and committed by upload id
  *  - big:     100,000 rows, 7.1 MB: choose the file, map while it uploads, analyse, page through the flagged rows,
  *             commit; chunk size, requests in flight and the broker's limits
+ *  - busy:    the four controls that start a request (Check for duplicates, Show more, Import, Undo) keep focus while it runs,
+ *             say so, ignore a second press and send once; Import stays really disabled when there is nothing to import
  *  - midway:  a chunk that fails once (sent again, no message) and one that keeps failing (a message in the file
  *             step, the upload given back, then "Check for duplicates" starts again)
  *  - expiry:  the server has lost the upload when the person asks for the check or the import (sent again once, then
@@ -515,6 +517,104 @@ async function smallChecks(pw: typeof Playwright, base: string, small: TestFile)
     check('small: a successful commit gives nothing back (no abort: the server freed the text)', to(calls, '/upload/abort').length === 0)
     check('small: no console error or CSP violation', unexpected(o.problems).length === 0, o.problems)
     note('small file: requests', calls.filter((x) => x.path !== '/batches').map((x) => `${x.method} ${x.path} ${x.bytes}B ${x.status}`))
+  } finally { await o.browser.close() }
+  await undoAll(base)
+}
+
+/** Holds every request that matches until `release()`, and counts them, so a control can be read while its request runs. */
+async function holdRequests(page: Playwright.Page, glob: string, match: (req: Playwright.Request) => boolean) {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  let seen = 0
+  await page.route(glob, async (route) => {
+    if (match(route.request())) { seen += 1; await gate }
+    await route.continue().catch(() => undefined)
+  })
+  return { count: () => seen, release, stop: () => page.unroute(glob) }
+}
+
+interface ControlState { readonly focused: boolean; readonly aria: string | null; readonly disabled: boolean; readonly label: string; readonly active: string }
+
+const controlState = (c: Playwright.Locator): Promise<ControlState> =>
+  c.evaluate((el) => ({ focused: el === document.activeElement, aria: el.getAttribute('aria-disabled'), disabled: (el as HTMLButtonElement).disabled, label: (el.textContent ?? '').trim(), active: document.activeElement?.tagName ?? '' }))
+
+/**
+ * One in-flight action of the page: the request is held open while the control is read. The pressed control keeps
+ * focus (`aria-disabled`, not `disabled`, which would drop focus to <body>), still says what it is doing, is told
+ * "Still working" by a second press (click and Enter) that sends nothing, and the request is sent once. Returns the
+ * state after the request ended.
+ */
+async function busyControl(
+  frame: Playwright.Frame, page: Playwright.Page, tag: string, control: Playwright.Locator, glob: string,
+  match: (req: Playwright.Request) => boolean, busyLabel: RegExp,
+): Promise<ControlState> {
+  const held = await holdRequests(page, glob, match)
+  await control.click()
+  await eventually(async () => held.count(), (n) => n >= 1)
+  const during = await controlState(control)
+  check(`busy ${tag}: while the request runs, focus stays on the control`, during.focused, during)
+  check(`busy ${tag}: it is aria-disabled and not disabled`, during.aria === 'true' && !during.disabled, during)
+  check(`busy ${tag}: its label says what is happening`, busyLabel.test(during.label), during.label)
+  await control.click({ force: true })
+  await page.keyboard.press('Enter')
+  await sleep(300)
+  check(`busy ${tag}: pressing it again sends nothing`, held.count() === 1, held.count())
+  check(`busy ${tag}: a second press says "Still working"`, await has(frame, 'Still working', 1500))
+  check(`busy ${tag}: focus is still on the control after the second press`, (await controlState(control)).focused)
+  held.release()
+  await sleep(50)
+  await held.stop()
+  return controlState(control).catch(() => ({ focused: false, aria: null, disabled: false, label: '', active: 'gone' }))
+}
+
+async function busyChecks(pw: typeof Playwright, base: string, small: TestFile, dups: TestFile): Promise<void> {
+  const o = await open(pw, base, { width: 1280, height: 900 })
+  try {
+    // 1 and 2: a file whose rows the persona already has, so the review lists more flagged rows than one request carries.
+    let frame = await gotoPage(o, base, 'isolated')
+    await choose(frame, dups)
+    check('busy: choosing the file shows the mapping step', await waitForMapping(frame))
+    await has(frame, 'Your file is on the server.')
+    const checkBtn = frame.getByRole('button', { name: /^(Check for duplicates|Checking…)$/ })
+    const afterCheck = await busyControl(frame, o.page, 'Check for duplicates', checkBtn, `**/api/v1/p/${IMPORT}/analyze`, (r) => r.method() === 'POST', /^Checking…$/)
+    await has(frame, '3 · Review', 60_000)
+    const checkAfter = await eventually(() => controlState(checkBtn), (s) => s.label === 'Check for duplicates', 5000)
+    check('busy Check for duplicates: when it is over the button is usable again and still has focus (the flow keeps it where it was)', checkAfter.focused && checkAfter.aria === null && !checkAfter.disabled, { afterCheck, checkAfter })
+
+    const importBtn = frame.getByRole('button', { name: /^Import \d+ transactions?$/ })
+    const importState = await importBtn.evaluate((el) => ({ disabled: (el as HTMLButtonElement).disabled, aria: el.getAttribute('aria-disabled') }))
+    check('busy Import: with nothing to import the button stays really disabled (not a request in flight), with the hint beside it', importState.disabled && (await has(frame, 'Nothing new to import from this file.', 500)), importState)
+
+    const more = frame.getByRole('button', { name: /^Show \d+ more$|^Loading…$/ })
+    for (let i = 0; i < 4; i++) { await more.click(); await sleep(60) }
+    const rows = await frame.getByRole('region', { name: 'Possible duplicates' }).locator('tbody tr').count()
+    check('busy Show more: five pages shown from the 500 rows already loaded (no request)', rows === 500, rows)
+    const afterMore = await busyControl(frame, o.page, 'Show more', more, `**/api/v1/p/${IMPORT}/analyze`, (r) => (r.postData() ?? '').includes('flaggedOffset'), /^Loading…$/)
+    const moreRows = await eventually(() => frame.getByRole('region', { name: 'Possible duplicates' }).locator('tbody tr').count(), (n) => n === 600, 8000)
+    check('busy Show more: when it is over the next page is shown, and the button is usable again and still has focus', moreRows === 600 && afterMore.focused && afterMore.aria === null && !afterMore.disabled && /^Show \d+ more$/.test(afterMore.label), { moreRows, afterMore })
+
+    // 3 and 4: a small new file, imported and then undone.
+    frame = await gotoPage(o, base, 'isolated')
+    await choose(frame, small)
+    check('busy: a small file shows the mapping step', await waitForMapping(frame))
+    await has(frame, 'Your file is on the server.')
+    await clickCheck(frame)
+    const commit = await importButton(frame)
+    const label = await commit.textContent()
+    const commitAfter = await busyControl(frame, o.page, 'Import', frame.getByRole('button', { name: /^Import \d+ transactions?$|^Importing…$/ }), `**/api/v1/p/${IMPORT}/commit`, (r) => r.method() === 'POST', /^Importing…$/)
+    check('busy Import: the import completes after the second press, once', await has(frame, 'transactions imported', 15_000), label)
+    // The button is replaced by the result, which is the flow's intended end, so there is no control to keep focus on.
+    note('busy Import: after the import the button is replaced by the result; focus is on', { stateBefore: commitAfter.active, now: await frame.evaluate(() => document.activeElement?.tagName ?? '') })
+    // The history may hold batches other groups left undone, and file names repeat: take the newest batch not yet undone.
+    const history = frame.locator('tr').filter({ has: frame.getByRole('button', { name: /^(Undo|Undoing…)$/ }) })
+    const undone = frame.locator('tr.imp__reverted')
+    await eventually(() => history.count(), (n) => n >= 1, 8000)
+    const undoneBefore = await undone.count()
+    const undo = history.first().getByRole('button', { name: /^(Undo|Undoing…)$/ })
+    const undoAfter = await busyControl(frame, o.page, 'Undo', undo, `**/api/v1/p/${IMPORT}/batches/*/revert`, (r) => r.method() === 'POST', /^Undoing…$/)
+    check('busy Undo: the row shows the batch as undone afterwards', await eventually(() => undone.count(), (n) => n === undoneBefore + 1, 8000).then((n) => n === undoneBefore + 1), undoAfter)
+    note('busy Undo: after the undo the button is replaced by "Undone"; focus is on', await frame.evaluate(() => document.activeElement?.tagName ?? ''))
+    check('busy: no console error or CSP violation', unexpected(o.problems).length === 0, o.problems)
   } finally { await o.browser.close() }
   await undoAll(base)
 }
@@ -1129,6 +1229,7 @@ async function main(): Promise<void> {
 
   const small = writeFile('small.csv', bankCsv(200_000, 200_030), 30)
   const mid = writeFile('midway.csv', bankCsv(300_000, 310_000), 10_000)
+  const dups = writeFile('busy-dups.csv', bankCsv(0, KNOWN_ROWS), KNOWN_ROWS)
   const big = writeFile('big.csv', bankCsv(0, BIG_ROWS), BIG_ROWS)
   note('generated files', { small: small.bytes, mid: mid.bytes, big: big.bytes, bigBytesPerRow: Math.round(big.bytes / BIG_ROWS) })
 
@@ -1146,6 +1247,7 @@ async function main(): Promise<void> {
   await group('picker', 'isolated', (b) => pickerChecks(pw, b, small))
   await group('small', 'isolated', (b) => smallChecks(pw, b, small))
   await group('big', 'isolated', async (b) => { await importDirect(b, 0, KNOWN_ROWS, 'known-rows.csv'); await bigChecks(pw, b, big) })
+  await group('busy', 'isolated', async (b) => { await importDirect(b, 0, KNOWN_ROWS, 'known-rows.csv'); await busyChecks(pw, b, small, dups) })
   await group('midway', 'isolated', (b) => midwayChecks(pw, b, mid))
   await group('expiry', 'isolated', (b) => expiryChecks(pw, b, small))
   await group('switch', 'isolated', (b) => switchChecks(pw, b, big, small, 'isolated'))
