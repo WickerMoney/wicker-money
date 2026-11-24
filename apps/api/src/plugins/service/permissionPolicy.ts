@@ -11,8 +11,15 @@ import type { Permission } from '@wickermoney/plugin-sdk'
  * decision here.
  */
 
-/** Permissions the host enforces, each with the path of the test that proves it. None yet. */
-export const IMPLEMENTED_PERMISSIONS: Readonly<Partial<Record<Permission, string>>> = {}
+/**
+ * Permissions the host enforces, each with the path (from `apps/api`, where the tests run) of the test that proves it.
+ *
+ * - `notify`: the broker refuses a plugin's `notify` message with `grant_denied` unless the manifest declares it, and
+ *   caps, cleans and rate limits what it lets through (`describe('notify')` in the broker test).
+ */
+export const IMPLEMENTED_PERMISSIONS: Readonly<Partial<Record<Permission, string>>> = {
+  notify: '../web/src/plugins/isolated/broker.test.ts',
+}
 
 /**
  * Permissions the host refuses at load, until it can enforce them, and why.
@@ -22,10 +29,8 @@ export const IMPLEMENTED_PERMISSIONS: Readonly<Partial<Record<Permission, string
  *   Needs a design (a host allow-list and user-visible consent) first.
  * - `schedule:daily`: scheduled work is server-side code, and a third party's
  *   server code is not admitted (ADR 0007).
- * - `notify`: the broker will own it when a plugin needs it. The message type
- *   is reserved in protocol 1 and the host answers it with `not_supported`.
  */
-export const REFUSED_PERMISSIONS: readonly Permission[] = ['network:outbound', 'schedule:daily', 'notify']
+export const REFUSED_PERMISSIONS: readonly Permission[] = ['network:outbound', 'schedule:daily']
 
 /**
  * @param permissions - A validated manifest's `permissions`.

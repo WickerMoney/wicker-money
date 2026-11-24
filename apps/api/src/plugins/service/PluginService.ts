@@ -196,6 +196,7 @@ export class PluginService {
         failure: checked.reason ?? null,
         origin: manifest === undefined ? null : originOf(manifest.remoteEntry),
         tables: manifest === undefined ? [] : [...new Set(manifest.requiredTables.map((t) => t.table))].sort(),
+        permissions: manifest === undefined ? [] : [...manifest.permissions],
         contributes: {
           pages: manifest?.contributes.pages.map((p) => p.title) ?? [],
           widgets: manifest?.contributes.widgets.map((w) => w.title) ?? [],
