@@ -285,6 +285,34 @@ describe('modal dialogs in a page frame', () => {
   })
 })
 
+describe('closing', () => {
+  it('runs each ctx.onClosing listener once, tells subscribers, and skips a removed listener', async () => {
+    const { conn, reply } = await connect()
+    const ran: string[] = []
+    const changes: string[] = []
+    conn.subscribe((c) => { changes.push(c.type) })
+    conn.ctx.onClosing?.(() => { ran.push('a') })
+    conn.ctx.onClosing?.(() => { throw new Error('a plugin bug') })
+    conn.ctx.onClosing?.(() => { ran.push('c') })
+    const off = conn.ctx.onClosing?.(() => { ran.push('removed') })
+    off?.()
+    reply({ type: 'closing' })
+    await tick()
+    reply({ type: 'closing' })
+    await tick()
+    expect(ran).toEqual(['a', 'c'])
+    expect(changes).toEqual(['closing', 'closing'])
+  })
+
+  it('lets the frame answer with a request: a listener may post upload/abort-style calls', async () => {
+    const { conn, reply, seen } = await connect((m, r) => { if (m.type === 'request') r({ type: 'response', id: m.id, ok: true, value: {} }) })
+    conn.ctx.onClosing?.(() => { void conn.ctx.api.post('/p/x/upload/abort', { uploadId: 'u' }) })
+    reply({ type: 'closing' })
+    await tick()
+    expect(seen).toEqual([{ type: 'request', id: 1, method: 'POST', path: '/p/x/upload/abort', body: { uploadId: 'u' } }])
+  })
+})
+
 describe('frame to host helpers', () => {
   it('navigate, focusOut and notify send their messages', async () => {
     const { conn, seen } = await connect((m, reply) => {

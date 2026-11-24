@@ -56,6 +56,7 @@ export { PluginApiError } from './PluginApiError.js'
 export { ISOLATED_PROTOCOL_VERSION, PLUGIN_ERROR_CODES } from './protocol.js'
 export type {
   CancelMessage,
+  ClosingMessage,
   FocusDirection,
   FocusInMessage,
   FocusOutMessage,

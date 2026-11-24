@@ -101,6 +101,15 @@ export interface PluginContext {
   readonly formatMoney: (value: string, currency?: string) => string
   /** Formats a date string in the user's locale. */
   readonly formatDate: (value: string) => string
+  /**
+   * Runs `listener` when the host is about to take the plugin's frame down, so the plugin can give back what it holds
+   * on the server (for example a staged upload). Best effort: the host often removes the frame in the same task, in
+   * which case the listener never runs, so release the same thing on unmount too and never rely on this alone.
+   * The listener runs at most once. Returns a function that removes it.
+   *
+   * Optional: the host provides it only to a plugin in a sandboxed frame, and a hand-built context may omit it.
+   */
+  readonly onClosing?: (listener: () => void) => () => void
 }
 
 /** Props the host passes to a plugin page component. */

@@ -299,6 +299,20 @@ export interface ModalLayoutMessage {
   readonly width: number
 }
 
+/**
+ * Best effort: the host is about to take this frame down (the person left the page, or the host is rebuilding the
+ * connection), so give back what you hold on the server, for example `upload/abort` for a staged upload.
+ *
+ * Not guaranteed. The host often removes the frame in the same task it sends this, in which case the frame never
+ * runs again and the message is never delivered; a plugin must not depend on it, and anything it holds on the server
+ * must also be released some other way (an expiry, or a limit that replaces the oldest). While the frame is still
+ * alive the host keeps serving `request` and `cancel` for a short grace period after sending it (see the README), and
+ * nothing else.
+ */
+export interface ClosingMessage {
+  readonly type: 'closing'
+}
+
 /** Every message the host may send on the port. */
 export type HostMessage =
   | InitMessage
@@ -309,3 +323,4 @@ export type HostMessage =
   | RouteMessage
   | FocusInMessage
   | ModalLayoutMessage
+  | ClosingMessage

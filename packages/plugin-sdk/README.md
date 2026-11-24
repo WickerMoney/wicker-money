@@ -280,6 +280,7 @@ on the port:
 | host to frame | `theme`, `locale`, `props`, `route` | Updates after `init` |
 | host to frame | `modal-layout` | The frame is lifted (or put back) and where its page sits in the lifted layer (`x`, `y`, `width`) |
 | host to frame | `focus-in` | Move focus to the frame's first or last focusable element |
+| host to frame | `closing` | Best effort: the host is about to take the frame down; give back what you hold (see "Closing") |
 
 What differs from the in-realm `ctx.api`:
 
@@ -302,6 +303,21 @@ The host must run `parsePluginMessage` on every message a frame sends and identi
 frame by the `MessagePort` and `event.source`, never by `event.origin` (which is
 `"null"` for a sandboxed frame). Unknown message types are ignored by both sides, so
 adding one is not a version bump.
+
+### Closing
+
+The host sends `closing` before it takes a frame down, so a plugin can give back what it
+holds on the server. Listen with `ctx.onClosing(listener)` (optional on `PluginContext`: only
+a frame has it, so call it as `ctx.onClosing?.(...)`), or `subscribe` to the `closing` change.
+Each `onClosing` listener runs once. Import CSV uses it to send `upload/abort`.
+
+**It is best effort and a plugin must not depend on it.** React removes the frame's element
+in the same task in which the host sends the message, so for a person who simply leaves the
+page the frame never runs again and the message is never delivered. Where the frame is still
+alive (the host rebuilding a connection, a retry), the host keeps answering `request` and
+`cancel` for one second after sending it, and nothing else: no `navigate`, `notify`, `download`
+or `modal`. Anything a plugin holds on the server must also be released another way: an expiry,
+and a limit that replaces the oldest instead of refusing (Import CSV's staged uploads do both).
 
 ## Two rules that fail at runtime, not build time
 

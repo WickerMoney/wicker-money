@@ -9,6 +9,7 @@ import { ISOLATED_PROTOCOL_VERSION } from './protocol.js'
 import type {
   FocusDirection,
   FocusInMessage,
+  ClosingMessage,
   FrameKind,
   HostLocale,
   HostTheme,
@@ -41,7 +42,8 @@ export interface IsolatedState {
 }
 
 /** A change the host pushed after `init`. `state` already reflects it by the time listeners run. */
-export type HostChange = ThemeMessage | LocaleMessage | PropsMessage | RouteMessage | FocusInMessage | ModalLayoutMessage
+export type HostChange =
+  ThemeMessage | LocaleMessage | PropsMessage | RouteMessage | FocusInMessage | ModalLayoutMessage | ClosingMessage
 
 /** The live link between a plugin frame and the host. */
 export interface HostConnection {
@@ -50,7 +52,7 @@ export interface HostConnection {
   /** The latest state. */
   getState(): IsolatedState
   /**
-   * Listens for changes the host pushes (theme, locale, props, route, focus-in).
+   * Listens for changes the host pushes (theme, locale, props, route, focus-in, closing).
    *
    * @returns A function that removes the listener.
    */
@@ -320,12 +322,19 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     del: (path, init) => request('DELETE', path, undefined, init),
   }
 
+  /** Listeners of `ctx.onClosing`. A `closing` from the host calls each once, then forgets them. */
+  const closingListeners = new Set<() => void>()
+
   const ctx: PluginContext = {
     get session() { return state.session },
     api,
     navigate: (path) => { post({ type: 'navigate', path }) },
     formatMoney: (value, currency) => formatMoneyIn(state.locale.locale, value, currency),
     formatDate: (value) => formatDateIn(state.locale.locale, value),
+    onClosing: (listener) => {
+      closingListeners.add(listener)
+      return () => { closingListeners.delete(listener) }
+    },
   }
 
   const emit = (change: HostChange): void => { for (const l of [...listeners]) l(change) }
@@ -363,6 +372,13 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
       case 'focus-in':
       case 'modal-layout':
         return emit(msg)
+      case 'closing': {
+        // Each listener runs once and is dropped; one that throws does not stop the others.
+        const toRun = [...closingListeners]
+        closingListeners.clear()
+        for (const run of toRun) { try { run() } catch { /* a plugin's cleanup must not break the rest */ } }
+        return emit(msg)
+      }
       case 'init':
         return // a second init is ignored; the first one defines the frame
     }
@@ -413,6 +429,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
       }
       pending.clear()
       listeners.clear()
+      closingListeners.clear()
     },
   }
 }

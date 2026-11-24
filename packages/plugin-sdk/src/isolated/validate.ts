@@ -226,6 +226,8 @@ export function parseHostMessage(data: unknown): HostMessage | null {
       if (typeof lifted !== 'boolean' || !inRange(x) || !inRange(y) || !inRange(width) || width < 0) return null
       return { type: 'modal-layout', lifted, x, y, width }
     }
+    case 'closing':
+      return { type: 'closing' }
     default:
       return null
   }

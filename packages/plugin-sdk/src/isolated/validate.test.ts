@@ -83,6 +83,15 @@ describe('parseHostMessage (host to frame)', () => {
     expect(parseHostMessage({ type: 'focus-in', direction: 'last' })).toEqual({ type: 'focus-in', direction: 'last' })
   })
 
+  it('accepts closing, and drops anything else it carries', () => {
+    expect(parseHostMessage({ type: 'closing' })).toEqual({ type: 'closing' })
+    expect(parseHostMessage({ type: 'closing', grace: 99999 })).toEqual({ type: 'closing' })
+  })
+
+  it('a frame cannot send closing: it is a host message, unknown to the frame-to-host parser', () => {
+    expect(parsePluginMessage({ type: 'closing' })).toBeNull()
+  })
+
   it('accepts modal-layout, lifted or not', () => {
     expect(parseHostMessage({ type: 'modal-layout', lifted: true, x: 18, y: -504.5, width: 1036 }))
       .toEqual({ type: 'modal-layout', lifted: true, x: 18, y: -504.5, width: 1036 })
