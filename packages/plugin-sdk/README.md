@@ -416,9 +416,10 @@ holds on the server. Listen with `ctx.onClosing(listener)` (optional on `PluginC
 a frame has it, so call it as `ctx.onClosing?.(...)`), or `subscribe` to the `closing` change.
 Each `onClosing` listener runs once. Import CSV uses it to send `upload/abort`.
 
-**It is best effort and a plugin must not depend on it.** React removes the frame's element
-in the same task in which the host sends the message, so for a person who simply leaves the
-page the frame never runs again and the message is never delivered. Where the frame is still
+**It is best effort and a plugin must not depend on it.** The host sends the message and
+removes the frame's element in the same task, so delivery is not promised: in Chromium, Import CSV's
+`upload/abort` did reach the server when the person left through the app's navigation (the browser
+check measures it), but a closed tab, a crash or another browser may not run the frame again. Where the frame is still
 alive (the host rebuilding a connection, a retry), the host keeps answering `request` and
 `cancel` for one second after sending it, and nothing else: no `navigate`, `notify`, `download`
 or `modal`. Anything a plugin holds on the server must also be released another way: an expiry,
