@@ -7,7 +7,7 @@ import {
 import type { StagedUpload } from './StagedUpload.js'
 import type { UploadReceipt } from './UploadReceipt.js'
 import type { UploadStoreOptions } from './UploadStoreOptions.js'
-import { stagingFull, tooManyUploads, uploadNotFound } from './uploadErrors.js'
+import { stagingFull, uploadNotFound } from './uploadErrors.js'
 import { utf8Length } from './utf8Length.js'
 
 /** Seconds a refused `begin` is told to wait when the process holds all the staging space it allows. */
@@ -52,7 +52,8 @@ export interface UploadProgress {
  * chunk count and the exact size in UTF-8 bytes), any number of `chunk` calls
  * in any order, and `finish`. Every limit is checked when the data it limits
  * arrives, never only at `finish`: at most {@link MAX_LIVE_UPLOADS_PER_USER}
- * live uploads per user, at most {@link MAX_UPLOAD_BYTES} bytes and
+ * live uploads per user (a `begin` over the limit discards that user's oldest
+ * live upload instead of failing), at most {@link MAX_UPLOAD_BYTES} bytes and
  * {@link MAX_UPLOAD_CHUNKS} chunks each, {@link MAX_STAGED_BYTES_TOTAL} bytes
  * across all users (reserved at `begin`), and expiry {@link UPLOAD_TTL_MS}
  * after the last new chunk.
@@ -90,8 +91,15 @@ export class UploadStore {
    * @param bytes - The exact size of the whole text in bytes of UTF-8 (1 to 8,000,000).
    * @returns The new upload's id and what was reserved.
    * @throws {ImportError} `400` for numbers outside the limits or that cannot fit
-   *   together; `409` (`too_many_uploads`) at the per-user limit; `503`
-   *   (`staging_full`, with `retryAfterSeconds`) when the process-wide limit is reached.
+   *   together; `503` (`staging_full`, with `retryAfterSeconds`) when the
+   *   process-wide limit is reached.
+   *
+   * At the per-user limit the caller's own oldest live upload is discarded to
+   * make room, so a person who left a page with an upload staged is never locked
+   * out of starting another. Only the caller's own uploads are candidates: the
+   * store is keyed by user, and each plugin has its own store, so another user's
+   * or another plugin's upload is never evicted. The eviction happens only when
+   * the new upload will be accepted, so a refused `begin` discards nothing.
    */
   begin(userId: string, chunks: unknown, bytes: unknown): BegunUpload {
     this.sweep()
@@ -100,8 +108,11 @@ export class UploadStore {
     if (chunkCount > declared || declared > chunkCount * MAX_CHUNK_BYTES) {
       throw ImportError.field(['chunks'], `${chunkCount} chunks cannot hold ${declared} bytes (a chunk is 1 byte to ${MAX_CHUNK_BYTES}).`)
     }
-    if (this.live(userId).length >= this.maxLivePerUser) throw tooManyUploads(this.maxLivePerUser)
-    if (this.reservedBytes() + declared > this.maxTotalBytes) throw stagingFull(FULL_RETRY_SECONDS)
+    const live = this.live(userId)
+    // `live` is in the order the uploads began (a Map keeps insertion order), so the first is the oldest.
+    const evicted = live.length >= this.maxLivePerUser ? live[0] : undefined
+    if (this.reservedBytes() - (evicted?.declaredBytes ?? 0) + declared > this.maxTotalBytes) throw stagingFull(FULL_RETRY_SECONDS)
+    if (evicted !== undefined) this.remove(userId, evicted.id)
 
     const upload: Upload = {
       id: randomUUID(), chunkCount, declaredBytes: declared, state: 'receiving',

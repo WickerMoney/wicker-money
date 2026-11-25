@@ -24,6 +24,7 @@ interface Violation { directive: string; blocked: string; disposition: string }
 type Json = Record<string, unknown>
 
 export interface RawRequest { method: string; path: string; body?: unknown; cache?: string; extra?: Json }
+export interface DlSpec { filename: string; mime: string; bytes: number[] | { len: number; head: number[] } }
 export interface RawReply { sent: Json; reply: unknown }
 
 declare global {
@@ -386,6 +387,139 @@ class Hostile {
     }
     return out
   }
+  // ---- the download message ----
+  downloadReplies: unknown[] = []
+  getDownloadReplies(): unknown[] { return this.downloadReplies }
+  /** A `download` message built from a spec: bytes are `[...]`, or `{ len, head }` for a large buffer. */
+  private buildDownload(spec: DlSpec): Json {
+    const id = this.nextId++
+    let data: ArrayBuffer
+    if (Array.isArray(spec.bytes)) data = new Uint8Array(spec.bytes).buffer
+    else { const u = new Uint8Array(spec.bytes.len); u.set(spec.bytes.head); data = u.buffer }
+    return { type: 'download', id, filename: spec.filename, mime: spec.mime, data }
+  }
+  private async rawDownload(spec: DlSpec, transfer = true, waitMs = 1500): Promise<unknown> {
+    const port = this.port
+    if (port === null) return { error: 'no port' }
+    const msg = this.buildDownload(spec)
+    const id = msg['id'] as number
+    const wait = new Promise<unknown>((resolve) => { this.waiters.set(id, resolve); setTimeout(() => { resolve({ silence: true }) }, waitMs) })
+    const t0 = performance.now()
+    try { port.postMessage(msg, transfer ? [msg['data'] as ArrayBuffer] : []) } catch (e) { return errorInfo(e) }
+    const reply = await wait
+    return { reply, ms: Math.round(performance.now() - t0) }
+  }
+  /**
+   * Sends these downloads from the handler of the next real pointer press in the frame (what an honest plugin does),
+   * after `delayMs`. The runner makes no `evaluate` while a request is made: Playwright runs `evaluate` with CDP
+   * `userGesture: true`, which gives the evaluating frame and its ancestors transient activation.
+   */
+  armDownload(specs: DlSpec[], opts: { gapMs?: number; delayMs?: number; transfer?: boolean } = {}): void {
+    this.downloadReplies = []
+    const onDown = (): void => {
+      document.removeEventListener('pointerdown', onDown, true)
+      setTimeout(() => { void this.sendAll(specs, opts) }, opts.delayMs ?? 0)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+  }
+  /** Sends these downloads `delayMs` from now with no click. `focusFirst` makes the frame take focus first (a frame can). */
+  scheduleDownloads(specs: DlSpec[], delayMs: number, opts: { gapMs?: number; focusFirst?: boolean } = {}): void {
+    this.downloadReplies = []
+    setTimeout(() => { if (opts.focusFirst === true) this.focusSelf(); void this.sendAll(specs, opts) }, delayMs)
+  }
+  private async sendAll(specs: DlSpec[], opts: { gapMs?: number; transfer?: boolean }): Promise<void> {
+    for (const sp of specs) {
+      this.downloadReplies.push(await this.rawDownload(sp, opts.transfer ?? true, 4000))
+      if ((opts.gapMs ?? 0) > 0) await sleep(opts.gapMs!)
+    }
+  }
+  /** A direct `<a download>` click on a Blob URL from inside the frame, the way a plugin would try without the host. */
+  directAnchorDownload(): Json {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob(['direct'], { type: 'text/plain' }))
+    a.download = 'direct.txt'
+    document.body.append(a)
+    a.click()
+    return { clicked: true }
+  }
+  /**
+   * The piggyback attack, driven by the person's own click rather than by a clock: the frame takes focus, waits until it loses it
+   * (the person clicked the host, which blurs the frame), then `delayMs` later takes focus back and asks for a file. `blurAt` is
+   * when the click was seen, so the runner can tell "the click never came" from "the gate refused".
+   */
+  blurAt: number | null = null
+  armPiggyback(specs: DlSpec[], delayMs: number): void {
+    this.downloadReplies = []
+    this.blurAt = null
+    this.focusSelf()
+    const onBlur = (): void => {
+      window.removeEventListener('blur', onBlur)
+      this.blurAt = Math.round(performance.now())
+      setTimeout(() => {
+        // Ask only once the browser has given this frame the focus (its `focus` event): the host's active element is the iframe
+        // from then on. Asking in the same task as `focus()` races the browser process and would test the race, not the gate.
+        const gained = new Promise<void>((resolve) => { window.addEventListener('focus', () => { resolve() }, { once: true }) })
+        this.focusSelf()
+        void Promise.race([gained.then(() => true), sleep(1500).then(() => false)]).then((got) => {
+          this.focusState = { ...this.focusState, focusEvent: got }
+          return this.askUntilAnswered(specs[0]!)
+        })
+      }, delayMs)
+    }
+    window.addEventListener('blur', onBlur)
+  }
+  /**
+   * Asks, and asks again every 100 ms while the answer is `gesture_required` (at most 20 times, 2 s): the browser moves the host's
+   * active element to this iframe a little after the frame's own `focus` event, which the frame cannot see, so a frame that wants
+   * the file simply retries. The last answer is what the runner reads, with the number of attempts.
+   */
+  private async askUntilAnswered(spec: DlSpec): Promise<void> {
+    this.downloadReplies = []
+    let attempts = 0
+    for (; attempts < 20;) {
+      attempts += 1
+      const reply = await this.rawDownload(spec, true, 4000)
+      const refused = ((reply as { reply?: Json }).reply?.['error'] as Json | undefined)?.['code'] === 'gesture_required'
+      if (!refused || attempts === 20) { this.downloadReplies.push(reply); break }
+      await sleep(100)
+    }
+    this.focusState = { ...this.focusState, attempts }
+  }
+  getBlurAt(): number | null { return this.blurAt }
+  focusState: Json = {}
+  getFocusState(): Json { return this.focusState }
+  focusSelf(): Json {
+    window.focus(); document.body.tabIndex = -1; document.body.focus()
+    this.focusState = { hasFocus: document.hasFocus(), bodyActive: document.activeElement === document.body, at: Math.round(performance.now()) }
+    return this.focusState
+  }
+
+  // ---- the notify and closing messages ----
+  /** Sends `count` valid-looking notify messages at once and returns how each was answered. */
+  async notifyBurst(count: number, text: string): Promise<Json> {
+    const port = this.port
+    if (port === null) return { error: 'no port' }
+    const replies: Json[] = []
+    const prior = port.onmessage
+    port.onmessage = (e: MessageEvent) => { replies.push(e.data as Json); prior?.call(port, e) }
+    for (let i = 0; i < count; i++) {
+      try { port.postMessage({ type: 'notify', id: 600_000 + i, level: 'error', message: `${text} ${i}` }) } catch { break }
+    }
+    await sleep(1500)
+    port.onmessage = prior
+    const codes: Record<string, number> = {}
+    for (const r of replies) {
+      if (r['type'] !== 'response') continue
+      const key = r['ok'] === true ? 'ok' : `${String((r['error'] as Json | undefined)?.['code'])}:${String((r['error'] as Json | undefined)?.['status'] ?? '')}`
+      codes[key] = (codes[key] ?? 0) + 1
+    }
+    return { sent: count, codes }
+  }
+  /** The `closing` messages the host has sent this frame on the raw port so far. */
+  closingSeen(): number { return this.seen.filter((m) => (m as Json | null)?.['type'] === 'closing').length }
+  /** Sends `closing` to the host, which only the host may send. */
+  async sendClosingToHost(): Promise<unknown> { return this.rawSend({ type: 'closing' }, 400) }
+
   /** Messages a sane client never sends. Each is its own send; the answer is the broker's, or silence. */
   async rawOddities(): Promise<Array<{ label: string; reply: unknown }>> {
     const big = new ArrayBuffer(2_000_000)
@@ -418,7 +552,11 @@ class Hostile {
       ['focus-out, bad direction', { type: 'focus-out', direction: 'sideways' }],
       ['notify, bad level', { type: 'notify', id: 8808, level: 'fatal', message: 'x' }],
       ['notify, 100 kB text', { type: 'notify', id: 8809, level: 'info', message: 'x'.repeat(100_000) }],
-      ['notify, valid (reserved)', { type: 'notify', id: 8810, level: 'info', message: 'hello' }],
+      ['notify, valid text but the manifest has no notify permission', { type: 'notify', id: 8810, level: 'info', message: 'hello' }],
+      ['download, valid file but no gesture and not asked for', { type: 'download', id: 8811, filename: 'a.txt', mime: 'text/plain', data: new TextEncoder().encode('hi').buffer }],
+      ['download, data is a string', { type: 'download', id: 8812, filename: 'a.txt', mime: 'text/plain', data: 'hi' }],
+      ['download, data is a typed array', { type: 'download', id: 8813, filename: 'a.txt', mime: 'text/plain', data: new Uint8Array(2) }],
+      ['download, no filename', { type: 'download', id: 8814, mime: 'text/plain', data: new ArrayBuffer(2) }],
       ['2 MB ArrayBuffer', big], ['Blob', new Blob(['x'])], ['Date', new Date()], ['Map', new Map([['type', 'request']])],
     ]
     const out: Array<{ label: string; reply: unknown }> = []

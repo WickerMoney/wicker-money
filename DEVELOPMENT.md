@@ -279,11 +279,15 @@ file (`measure`, "small file"). The pieces are in
   chunk. `400` on `finish` starts over with a message. A `commit` retry keeps its
   idempotency key, so a lost answer is replayed, not imported twice.
 - **Choosing another file** gives the first upload back (`upload/abort`). **Leaving
-  the page does not, from a frame:** the host disposes the broker and removes the
-  frame before the frame can send anything, so an upload staged and abandoned stays
-  until its 15 minutes pass, and a person who does this twice is told "You already
-  have 2 uploads waiting" until then. The check's in-page baseline (it puts the plugin's id in `IN_REALM_PLUGIN_IDS`
-for one run) does give it back.
+  the page cannot, from a frame:** the host removes the frame before the frame can
+  send anything, so an upload staged and abandoned stays until its 15 minutes pass.
+  It no longer locks the person out: a `begin` at the limit of 2 discards the user's
+  own oldest live upload and succeeds. The host also sends the frame a best-effort
+  `closing` message before it takes the frame down (see "Closing" in the plugin SDK
+  README); the page gives its upload back on it when the frame is still alive to
+  act, which is not the case when React removes the whole frame at once. The check's
+  in-page baseline (it puts the plugin's id in `IN_REALM_PLUGIN_IDS`
+for one run) gives it back directly.
 
 **What `finish` checks**, in this order: every index from 0 to `chunks - 1` has
 arrived (`409 upload_incomplete`, naming the first missing; the upload stays
@@ -298,7 +302,7 @@ upload repeats its answer.
 
 | Limit | Value | Over it |
 |---|---|---|
-| Live uploads per user | 2 | `begin`: `409 too_many_uploads` |
+| Live uploads per user | 2 | `begin` succeeds and discards that user's oldest live upload (never another user's) |
 | Size and chunks of one upload | 8,000,000 bytes, 64 chunks | `begin`: `400` |
 | One chunk | 256 KiB of UTF-8 | `413 chunk_too_large` |
 | Chunks add up to more than `begin` declared | the declared bytes | `413 upload_too_large`, upload discarded |
@@ -1448,6 +1452,22 @@ four parts, and CI runs them as the required check **Hostile plugin suite**.
   flood of `begin` beside chunks, and chunk-shaped messages at the broker's
   body cap and rate. It starts its own API with Import CSV registered, so it
   does not depend on which plugins `run.ts` mounts.
+  `hostile/download.ts` (phase `download`, `ONLY=download`) covers the `download`,
+  `notify` and `closing` messages: a notify and a notify flood from a plugin without
+  the permission, a `closing` sent by the frame, then the file save. The frame tries the
+  sandbox (no direct download), a real click then a valid file, a second file inside
+  one activation, no gesture, an expired gesture, every type, size and content
+  refusal, 20 files after one click, a hostile name, and 30 gesture-less requests.
+  The judge is what Chromium saved (name, size, first bytes) and what the broker
+  answered. The residual (a click on the host, then a frame that takes focus and asks)
+  is pinned as `residual` for the default gate: the frame waits for its own click (it
+  loses focus), takes focus back 3.4 s later and asks, again every 100 ms while it is
+  refused, because the browser makes the iframe the host's active element a moment after
+  the frame's own `focus` event. Saved is the pinned outcome; a refusal with nothing
+  saved is accepted as a stronger gate; anything else fails. The strict gate that closes
+  it is unit tested and not wired. The phase has its own time budget (150 s), mostly
+  waiting out the 5 second activation window; add no waits without raising it
+  on purpose.
 - **Remote-origin half** (`apps/web/browser-check/hostile/remote.ts`, Chromium,
   needs `openssl` for a throwaway certificate). A real federated build is served
   over https from a second origin and listed with a pin: a matching build loads in

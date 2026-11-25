@@ -125,12 +125,6 @@ describe('stageUpload', () => {
     expect(server.callsTo('/upload/abort')).toHaveLength(0)
   })
 
-  it('reports the two-upload limit (409 too_many_uploads) in the server\'s words', async () => {
-    const server = fakeImportApi({ store: { maxLivePerUser: 0 } })
-    const f = await failureOf(stageUpload(server.api, planUpload(rows(50)), { sleep: noWait }).ready)
-    expect(f.kind).toBe('too_many')
-  })
-
   it('starts over once when the server has lost the upload mid-way (404), and says so when it happens twice', async () => {
     const server = fakeImportApi()
     server.intercept('/upload/chunk', (call, nth) => { if (nth === 3) server.restartServer() })

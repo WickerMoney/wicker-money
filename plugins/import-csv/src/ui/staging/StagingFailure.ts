@@ -4,8 +4,6 @@ export type StagingFailureKind =
   | 'too_big'
   /** The server is holding all the staged files it allows. Try later. */
   | 'busy'
-  /** The person already has the most uploads waiting. */
-  | 'too_many'
   /** The server lost the upload (expired or unknown), and sending it again did not help. */
   | 'gone'
   /** The server refused what arrived and discarded the upload; start again. */

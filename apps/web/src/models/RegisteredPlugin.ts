@@ -25,6 +25,8 @@ export interface RegisteredPlugin {
   readonly origin: string | null
   /** The core tables its manifest lists, sorted; empty when its manifest is unusable. */
   readonly tables: readonly string[]
+  /** The permissions its manifest declares (`notify` is the only one that loads); empty when its manifest is unusable. */
+  readonly permissions: readonly string[]
   /** What it adds to the app. */
   readonly contributes: {
     readonly pages: readonly string[]
