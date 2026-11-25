@@ -240,8 +240,13 @@ export async function runDownload(c: DownloadContext): Promise<void> {
     await c.call('armPiggyback', [spec('piggyback.png')], 3400)
     await sleep(5200) // the arm's own evaluate gave the page 5 s of activation: let it end before the click
     await w.page.mouse.click(blank?.x ?? 100, blank?.y ?? 880) // a real host click, no navigation
-    await sleep(5200) // 3.4 s for the frame's timer, then the answer
-    const piggy = await replies()
+    await sleep(3600) // the frame's 3.4 s timer
+    // Then the answer, however long the frame needs: where the browser never gives the frame the focus (a headless CI display) it
+    // waits out its 1.5 s focus timeout and then asks 20 times, about 4 s in all, so a fixed wait would read "no reply" for a frame
+    // that is still asking. Poll up to 10 s; a reply that never comes still fails.
+    let piggy = await replies()
+    for (const deadline = Date.now() + 10_000; piggy.length === 0 && Date.now() < deadline;) { await sleep(250); piggy = await replies() }
+    await sleep(500) // let a saved file reach the disk before it is counted
     const focus = await c.call<Json>('getFocusState')
     const blurAt = await c.call<number | null>('getBlurAt')
     // Two outcomes are acceptable and the second is a stronger gate than the one pinned: the file is saved (the residual, as
