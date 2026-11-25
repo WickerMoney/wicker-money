@@ -117,6 +117,7 @@ describe('plugin route classification', () => {
     'PATCH /api/v1/users/:id/role',
     'GET /api/v1/transactions',
     'DELETE /api/v1/transactions/:id',
+    'POST /api/v1/transaction-undos/:id/restore',
   ])('denies %s to plugin tokens', (route) => {
     const [method, pattern] = route.split(' ') as [string, string]
     expect(pluginRouteAccess(method, pattern)).toEqual({ kind: 'denied' })

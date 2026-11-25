@@ -11,6 +11,7 @@ import type { EraseService } from '../settings/service/EraseService.js'
 import type { ExportTicketService } from '../settings/service/ExportTicketService.js'
 import type { SettingsService } from '../settings/service/SettingsService.js'
 import type { TransactionService } from '../transactions/service/TransactionService.js'
+import type { TransactionUndoService } from '../transactions/service/TransactionUndoService.js'
 import type { UserAdminService } from '../users/service/UserAdminService.js'
 
 /** Every application service, constructed once at startup and shared by all requests. */
@@ -21,6 +22,8 @@ export interface Services {
   readonly accounts: AccountService
   /** Ledger rules: creating, editing, splitting, transferring and categorizing transactions. */
   readonly transactions: TransactionService
+  /** Undo for a deleted transaction: restores a snapshot, and sweeps the expired ones. */
+  readonly transactionUndos: TransactionUndoService
   /** Category tree rules. */
   readonly categories: CategoryService
   /** Auto-categorization rules. */

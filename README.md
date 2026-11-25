@@ -122,7 +122,8 @@ frame, which has known gaps and has not been independently reviewed (see
   Settings, applied live, and its data is kept. See [Plugins](#plugins).
 - **Yours.** Self-hosted, one container, PostgreSQL with row-level security
   between users, light and dark themes, and a full JSON export of your data
-  from Settings.
+  from Settings. A transaction you delete is kept for a short while (10 minutes by
+  default, `UNDO_TTL_SECONDS`) so you can undo it, then removed for good.
 
 How each feature works under the hood is in
 [DEVELOPMENT.md](DEVELOPMENT.md#how-the-features-work).

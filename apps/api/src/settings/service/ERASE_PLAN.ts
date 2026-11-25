@@ -46,6 +46,8 @@ export const PLUGIN_ERASE_PLANS: readonly PluginErasePlan[] = [
  * signed out only once the rest has gone.
  */
 export const CORE_ERASE_ORDER: readonly string[] = [
+  // First: nothing points at it, and it holds a copy of ledger rows (ADR 0016).
+  'transaction_undo_snapshots',
   'recurring_match_dismissals',
   'recurring_occurrence_legs',
   'recurring_occurrences',

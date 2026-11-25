@@ -91,6 +91,45 @@ describe('the erase plan covers the database', () => {
   })
 })
 
+describe('Undo snapshots and the erase plan', () => {
+  it('names the snapshot table first in the plan, ahead of the ledger rows it copies', () => {
+    expect(CORE_ERASE_ORDER[0]).toBe('transaction_undo_snapshots')
+    expect(plannedTables().has('core.transaction_undo_snapshots')).toBe(true)
+    expect(CORE_ERASE_ORDER.indexOf('transaction_undo_snapshots')).toBeLessThan(CORE_ERASE_ORDER.indexOf('transactions'))
+  })
+
+  it('refuses with erase_unplanned_tables, erasing nothing, if the plan forgets the table', async () => {
+    const user = await household('undo-unplanned')
+    const before = await rowsOwnedBy(h.db, user.id)
+    expect(before['core.transaction_undo_snapshots']).toBeGreaterThan(0)
+    const order = CORE_ERASE_ORDER as string[]
+    const at = order.indexOf('transaction_undo_snapshots')
+    order.splice(at, 1)
+    try {
+      const res = await erase(user)
+      expect(res.statusCode).toBe(500)
+      expect(res.json()).toMatchObject({ code: 'erase_unplanned_tables' })
+      expect(res.json<{ message: string }>().message).toContain('core.transaction_undo_snapshots')
+    } finally {
+      order.splice(at, 0, 'transaction_undo_snapshots')
+    }
+    expect(await rowsOwnedBy(h.db, user.id)).toEqual(before)
+  })
+
+  it('empties the snapshots with the rest, so a deleted transaction cannot come back after an erase', async () => {
+    const user = await createUser(h)
+    const home = await seedHousehold(h, user, 'undo-erase')
+    expect((await rowsOwnedBy(h.db, user.id))['core.transaction_undo_snapshots']).toBe(1)
+    expect((await erase(user)).statusCode).toBe(204)
+    expect((await rowsOwnedBy(h.db, user.id))['core.transaction_undo_snapshots']).toBe(0)
+    const again = await signIn(user)
+    const restored = await h.app.inject({
+      method: 'POST', url: `/api/v1/transaction-undos/${home.undoId}/restore`, headers: auth(again),
+    })
+    expect(restored.statusCode).toBe(404)
+  })
+})
+
 describe('POST /api/v1/settings/erase-my-data', () => {
   it('refuses the wrong phrase on the confirmation field, and erases nothing', async () => {
     const user = await household('phrase')

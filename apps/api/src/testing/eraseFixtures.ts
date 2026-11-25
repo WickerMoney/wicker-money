@@ -21,6 +21,8 @@ export interface Household {
   readonly groceriesId: string
   readonly transactionId: string
   readonly billId: string
+  /** The Undo snapshot of a transaction deleted with `?undo=1` (a copy of ledger rows that erase and export must treat like the ledger). */
+  readonly undoId: string
 }
 
 async function call(
@@ -39,8 +41,8 @@ async function call(
  * accounts, a category and a child category, a rule with a condition, a split
  * transaction, a recurring bill with an overridden occurrence and a dismissed
  * suggestion, a budget line and an account allowance, a debt and its payoff settings, an import with its saved
- * mapping and batch, a finished setup wizard and (because the user signed in) a
- * session.
+ * mapping and batch, a transaction deleted with Undo (so a live snapshot of it
+ * exists), a finished setup wizard and (because the user signed in) a session.
  *
  * @param h - The running harness.
  * @param user - A user from `createUser`.
@@ -117,9 +119,19 @@ export async function seedHousehold(h: Harness, user: TestUser, label: string): 
     dateFormat: 'MM/DD/YYYY', amountStyle: 'signed', invertAmount: false,
   }, IMPORT)
 
+  // A deleted transaction whose Undo is still open: a short-lived copy of ledger rows.
+  const doomed = await call(h, user, 'POST', '/api/v1/transactions', {
+    accountId: checkingId, amount: '-12.34', merchant: `${label} deleted`, transactionDate: addDays(today, -3),
+  })
+  const deleted = await h.app.inject({
+    method: 'DELETE', url: `/api/v1/transactions/${doomed['id']}?undo=1`, headers: auth(user),
+  })
+  if (deleted.statusCode !== 200) throw new Error(`delete with undo failed: ${deleted.statusCode} ${deleted.body}`)
+  const undoId = (deleted.json() as { undo: { id: string } }).undo.id
+
   await call(h, user, 'POST', '/api/v1/onboarding/complete', { situations: [] })
 
-  return { checkingId, savingsId, groceriesId, transactionId: tx['id'] as string, billId }
+  return { checkingId, savingsId, groceriesId, transactionId: tx['id'] as string, billId, undoId }
 }
 
 /** The user's "today" as the API reports it, so dates relative to it match the server's idea of the present. */

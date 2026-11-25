@@ -12,6 +12,7 @@ import { KyselyRecurringOccurrenceRepository } from '../recurring/repository/Kys
 import { KyselySessionRepository } from '../auth/repository/KyselySessionRepository.js'
 import { KyselySplitRepository } from '../transactions/repository/KyselySplitRepository.js'
 import { KyselyTransactionRepository } from '../transactions/repository/KyselyTransactionRepository.js'
+import { KyselyTransactionUndoRepository } from '../transactions/repository/KyselyTransactionUndoRepository.js'
 import { KyselyUsageRepository } from '../db/repository/KyselyUsageRepository.js'
 import { KyselyUserRepository } from '../auth/repository/KyselyUserRepository.js'
 import { KyselyUserAdminRepository } from '../users/repository/KyselyUserAdminRepository.js'
@@ -28,6 +29,7 @@ export function createRepositories(trx: Trx): Repositories {
     accounts: new KyselyAccountRepository(trx),
     transactions: new KyselyTransactionRepository(trx),
     splits: new KyselySplitRepository(trx),
+    transactionUndos: new KyselyTransactionUndoRepository(trx),
     categories: new KyselyCategoryRepository(trx),
     categoryRules: new KyselyCategoryRuleRepository(trx),
     users: new KyselyUserRepository(trx),

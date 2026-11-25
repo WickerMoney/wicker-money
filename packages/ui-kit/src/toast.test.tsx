@@ -275,6 +275,236 @@ describe('provider', () => {
   })
 })
 
+describe('undo', () => {
+  /** A promise the test settles by hand. */
+  function deferred() {
+    let resolve!: () => void
+    let reject!: (e: Error) => void
+    const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej })
+    return { promise, resolve, reject }
+  }
+  const undoButton = () => screen.getByRole('button', { name: /^Undo/ })
+
+  it('draws the button before Close, as a tab stop described by the toast text', async () => {
+    setup()
+    await show('Deleted Coffee.', { kind: 'success', undo: { run: () => Promise.resolve() } })
+    const buttons = Array.from(stack()!.querySelectorAll('button'))
+    expect(buttons.map((b) => b.textContent)).toEqual(['Undo', '×'])
+    const undo = undoButton()
+    expect(undo.tabIndex).toBe(0)
+    expect(undo.className).toContain('wm-btn')
+    expect(undo.getAttribute('aria-describedby')).toBe(buttons[1]!.getAttribute('aria-describedby'))
+    expect(screen.getByRole('button', { name: 'Undo' })).toBe(undo)
+  })
+
+  it('uses the label it is given, and offers no button when there is no undo', async () => {
+    setup()
+    await show('Gone.', { kind: 'info', undo: { label: 'Put it back', run: () => Promise.resolve() } })
+    expect(screen.getByRole('button', { name: /Put it back/ })).toBeTruthy()
+    await show('Plain.', { kind: 'success' })
+    expect(stack()!.querySelectorAll('button')).toHaveLength(3 + 1) // Put it back, two Close, Dismiss all
+    expect(screen.queryAllByRole('button', { name: /^Undo/ })).toHaveLength(0)
+  })
+
+  it('says "Undo is available." in the announcement, and the visible text does not', async () => {
+    setup()
+    await show("Deleted 'Coffee' ($4.50).", { kind: 'success', undo: { run: () => Promise.resolve() } })
+    expect(announcer().textContent).toBe("Deleted 'Coffee' ($4.50). Undo is available.")
+    expect(texts()).toEqual(["Deleted 'Coffee' ($4.50)."])
+    await frame(1600)
+    await show('No undo here.', { kind: 'success' })
+    expect(announcer().textContent).toBe('No undo here.')
+  })
+
+  it('ignores undo on a warning or an error, with a console warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    setup()
+    await show('Careful.', { kind: 'warning', undo: { run: () => Promise.resolve() } })
+    await show('Broke.', { kind: 'error', undo: { run: () => Promise.resolve() } })
+    expect(screen.queryAllByRole('button', { name: /^Undo/ })).toHaveLength(0)
+    expect(announcer().textContent).toBe('Error: Broke.')
+    expect(warn).toHaveBeenCalledTimes(2)
+    warn.mockRestore()
+  })
+
+  it('is never removed by a timer: still there, with its button, after 24 hours', async () => {
+    setup()
+    await show('Deleted.', { kind: 'success', undo: { run: () => Promise.resolve() } })
+    await frame(24 * 3600 * 1000)
+    expect(texts()).toEqual(['Deleted.'])
+    expect(undoButton()).toBeTruthy()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('runs once on click, is busy while it runs with focus kept, and closes the toast when it resolves', async () => {
+    setup(undefined, <input aria-label="Name" />)
+    screen.getByLabelText('Name').focus()
+    const d = deferred()
+    const run = vi.fn(() => d.promise)
+    await show('Deleted.', { kind: 'success', undo: { run } })
+    const undo = undoButton()
+    act(() => { undo.focus() })
+    fireEvent.click(undo)
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(undo.getAttribute('aria-disabled')).toBe('true')
+    expect(undo.hasAttribute('disabled')).toBe(false)
+    expect(document.activeElement).toBe(undo)
+    // A second click while it runs does nothing but say it is working.
+    fireEvent.click(undo)
+    fireEvent.click(undo)
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(announcer().textContent).toBe('Still working. Try again in a moment.')
+    expect(document.activeElement).toBe(undo)
+    await act(async () => { d.resolve(); await d.promise })
+    expect(stack()).toBeNull()
+    // Focus went back to where it came from before the stack took it, here the field.
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'))
+  })
+
+  it('gives focus to <main> when the toast closes and focus did not come from anywhere that is still there', async () => {
+    setup()
+    const d = deferred()
+    await show('Deleted.', { kind: 'success', undo: { run: () => d.promise } })
+    const main = screen.getByRole('main')
+    main.tabIndex = -1
+    const undo = undoButton()
+    act(() => { undo.focus() })
+    fireEvent.click(undo)
+    await act(async () => { d.resolve(); await d.promise })
+    expect(stack()).toBeNull()
+    expect(document.activeElement).toBe(main)
+  })
+
+  it('stays and works again when it rejects, and does not report the rejection itself', async () => {
+    setup()
+    const d1 = deferred()
+    const run = vi.fn().mockReturnValueOnce(d1.promise).mockResolvedValue(undefined)
+    await show('Deleted.', { kind: 'success', undo: { run } })
+    const undo = undoButton()
+    fireEvent.click(undo)
+    expect(undo.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => { d1.reject(new Error('too late')); await d1.promise.catch(() => undefined) })
+    expect(texts()).toEqual(['Deleted.'])
+    expect(undo.getAttribute('aria-disabled')).toBeNull()
+    fireEvent.click(undo)
+    expect(run).toHaveBeenCalledTimes(2)
+    await act(async () => { await Promise.resolve() })
+    expect(stack()).toBeNull()
+  })
+
+  it('treats a run that throws before returning a promise like a rejection', async () => {
+    setup()
+    await show('Deleted.', { kind: 'success', undo: { run: () => { throw new Error('sync') } } })
+    const undo = undoButton()
+    fireEvent.click(undo)
+    await act(async () => { await Promise.resolve() })
+    expect(undo.getAttribute('aria-disabled')).toBeNull()
+    expect(texts()).toEqual(['Deleted.'])
+  })
+
+  it('does not move focus when it is shown', async () => {
+    setup(undefined, <input aria-label="Name" />)
+    const input = screen.getByLabelText('Name')
+    input.focus()
+    await show('Deleted.', { kind: 'success', undo: { run: () => Promise.resolve() } })
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('survives a route change, while a plain success toast beside it does not', async () => {
+    const { route } = setup('/transactions')
+    await show('Deleted.', { kind: 'success', key: 'del:1', undo: { run: () => Promise.resolve() } })
+    await show('Saved.', { kind: 'success' })
+    await show('Warn.', { kind: 'warning' })
+    route('/accounts')
+    await frame()
+    expect(texts()).toEqual(['Deleted.'])
+    expect(undoButton()).toBeTruthy()
+    // And it still works from the other page.
+    route('/settings')
+    await frame()
+    expect(texts()).toEqual(['Deleted.'])
+  })
+
+  it('does not replace another Undo toast when each has its own key', async () => {
+    setup()
+    await show('Deleted A.', { kind: 'success', key: 'transactions:delete:a', undo: { run: () => Promise.resolve() } })
+    await show('Deleted B.', { kind: 'success', key: 'transactions:delete:b', undo: { run: () => Promise.resolve() } })
+    expect(texts().sort()).toEqual(['Deleted A.', 'Deleted B.'])
+    expect(screen.getAllByRole('button', { name: /^Undo/ })).toHaveLength(2)
+    // The same key does replace, which is why a shared key would drop the earlier Undo.
+    await show('Deleted B again.', { kind: 'success', key: 'transactions:delete:b', undo: { run: () => Promise.resolve() } })
+    expect(texts().sort()).toEqual(['Deleted A.', 'Deleted B again.'])
+  })
+
+  it('keeps a toast that run() raised under the same key, instead of closing it with the Undo toast', async () => {
+    setup()
+    await show('Deleted.', {
+      kind: 'success', key: 'del:1',
+      undo: { run: () => { api.show('It is too late to undo that.', { kind: 'error', key: 'del:1' }); return Promise.resolve() } },
+    })
+    fireEvent.click(undoButton())
+    await act(async () => { await Promise.resolve() })
+    await frame()
+    expect(texts()).toEqual(['Error: It is too late to undo that.'])
+    expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull()
+  })
+
+  it('keeps each button bound to its own toast', async () => {
+    setup()
+    const a = vi.fn(() => Promise.resolve())
+    const b = vi.fn(() => Promise.resolve())
+    await show('Deleted A.', { kind: 'success', key: 'a', undo: { run: a } })
+    await show('Deleted B.', { kind: 'success', key: 'b', undo: { run: b } })
+    const cards = Array.from(stack()!.querySelectorAll<HTMLElement>('.wm-toast'))
+    const cardOf = (text: string) => cards.find((c) => c.textContent?.includes(text))!
+    fireEvent.click(cardOf('Deleted A.').querySelector('.wm-toast__undo')!)
+    await act(async () => { await Promise.resolve() })
+    expect(a).toHaveBeenCalledTimes(1)
+    expect(b).not.toHaveBeenCalled()
+    expect(texts()).toEqual(['Deleted B.'])
+  })
+
+  it('does not close a different toast that took its key while it ran, and frees the button', async () => {
+    setup()
+    const d = deferred()
+    await show('Deleted.', { kind: 'success', key: 'k', undo: { run: () => d.promise } })
+    fireEvent.click(undoButton())
+    await show('Replaced.', { kind: 'success', key: 'k', undo: { run: () => Promise.resolve() } })
+    await act(async () => { d.resolve(); await d.promise })
+    expect(texts()).toEqual(['Replaced.'])
+    expect(undoButton().getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('settling after the toast was closed does nothing and throws nothing', async () => {
+    setup()
+    const d = deferred()
+    await show('Deleted.', { kind: 'success', undo: { run: () => d.promise } })
+    fireEvent.click(undoButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }))
+    expect(stack()).toBeNull()
+    await act(async () => { d.resolve(); await d.promise })
+    expect(stack()).toBeNull()
+  })
+
+  it('queues behind three toasts without losing its button, and is announced when it appears', async () => {
+    setup()
+    const ids = []
+    for (const n of ['1', '2', '3']) ids.push(await show(n))
+    await show('Deleted.', { kind: 'success', undo: { run: () => Promise.resolve() } })
+    expect(screen.queryAllByRole('button', { name: /^Undo/ })).toHaveLength(0)
+    act(() => { api.dismiss(ids[0]!) })
+    await frame()
+    expect(undoButton()).toBeTruthy()
+    expect(announcer().textContent).toBe('Deleted. Undo is available.')
+  })
+
+  it('useToast still throws outside a provider', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(() => render(<Capture />)).toThrow(/useToast\(\) was called outside a <ToastProvider>/)
+    spy.mockRestore()
+  })
+})
+
 describe('exports', () => {
   it('exposes exactly the toast surface from the root', () => {
     for (const name of ['ToastProvider', 'ToastViewport', 'useToast']) expect(typeof (kit as Record<string, unknown>)[name]).toBe('function')

@@ -48,6 +48,7 @@ let owner: TestUser
 let otherOwner: TestUser
 let stranger: TestUser
 let hostileToken: string
+let household: Awaited<ReturnType<typeof seedHousehold>>
 let previousOwners: string[] = []
 
 const bearer = (token: string): Record<string, string> => ({ authorization: `Bearer ${token}` })
@@ -80,7 +81,7 @@ beforeAll(async () => {
   const { rows } = await sql<{ id: string }>`UPDATE core.users SET role = 'member' WHERE role = 'owner' RETURNING id`.execute(admin)
   previousOwners = rows.map((r) => r.id)
   await sql`UPDATE core.users SET role = 'owner' WHERE id = ANY(${[owner.id, otherOwner.id]}::uuid[])`.execute(admin)
-  await seedHousehold(h, owner, 'hostile')
+  household = await seedHousehold(h, owner, 'hostile')
   await seedHousehold(h, stranger, 'stranger')
   hostileToken = await mintFor(owner, HOSTILE_PLUGIN_ID)
 })
@@ -175,6 +176,7 @@ const DENIED_CLASSES: Readonly<Record<string, readonly string[]>> = {
     'PUT /api/v1/transactions/:id/splits',
     'GET /api/v1/transactions/:id/splits',
     'DELETE /api/v1/transactions/:id/splits',
+    'POST /api/v1/transaction-undos/:id/restore',
   ],
   'host data screens: recurring items': [
     'GET /api/v1/recurring-items',
@@ -328,6 +330,36 @@ describe('a plugin token is refused on every denied route class', () => {
     // The export ticket was refused before anything looked at it: the host can still spend it.
     const spent = await app.inject({ method: 'GET', url: '/api/v1/settings/export', headers: exportHeaders(owner, ticket) })
     expect(spent.statusCode).toBe(200)
+  })
+})
+
+describe('Undo (ADR 0016) is closed to a plugin token', () => {
+  it('refuses a restore of a real, live snapshot of the owner\'s, and leaves the snapshot spendable by the owner', async () => {
+    const before = await rowsOwnedBy(h.db, owner.id)
+    const res = await app.inject({
+      method: 'POST', url: `/api/v1/transaction-undos/${household.undoId}/restore`,
+      headers: { ...bearer(hostileToken), 'x-wickermoney-csrf': '1', cookie: `wickermoney_refresh=${owner.refreshToken}` },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().code).toBe('plugin_route_denied')
+    expect(await rowsOwnedBy(h.db, owner.id)).toEqual(before)
+    // Control: the owner's own session can restore the same snapshot.
+    const own = await app.inject({ method: 'POST', url: `/api/v1/transaction-undos/${household.undoId}/restore`, headers: auth(owner) })
+    expect(own.statusCode).toBe(200)
+  })
+
+  it('ignores nothing and deletes nothing: DELETE ?undo=1 with a plugin token is refused before the handler runs', async () => {
+    const before = await rowsOwnedBy(h.db, owner.id)
+    for (const query of ['?undo=1', '', '?undo=1&undo=1']) {
+      const res = await app.inject({
+        method: 'DELETE', url: `/api/v1/transactions/${household.transactionId}${query}`, headers: bearer(hostileToken),
+      })
+      expect(res.statusCode, query).toBe(403)
+      expect(res.json().code).toBe('plugin_route_denied')
+      expect(res.body).not.toContain('"undo"')
+    }
+    // The row is still there and no snapshot was written.
+    expect(await rowsOwnedBy(h.db, owner.id)).toEqual(before)
   })
 })
 

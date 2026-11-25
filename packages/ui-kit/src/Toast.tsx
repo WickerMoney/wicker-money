@@ -3,6 +3,7 @@ import {
   type KeyboardEvent, type ReactNode,
 } from 'react'
 import { registerAnnouncer } from './busy.js'
+import { Button } from './Button.js'
 import {
   ToastApiContext, ToastViewContext,
   type ToastApi, type ToastItem, type ToastKind, type ToastView,
@@ -13,7 +14,9 @@ export interface ToastProviderProps {
   readonly children: ReactNode
   /**
    * When this value changes (pass the current route), every toast that is not
-   * an `error` is cleared: a confirmation from the page the person left is stale.
+   * an `error` and has no `undo` is cleared: a confirmation from the page the
+   * person left is stale. An Undo toast stays, since clearing it would remove the
+   * only way back.
    */
   readonly routeKey?: string
 }
@@ -44,9 +47,15 @@ function modalIsOpen(): boolean {
   try { return document.querySelector('dialog:modal') !== null } catch { return false }
 }
 
-const announcedText = (t: ToastItem): string => (
-  t.kind === 'error' ? `Error: ${t.message}` : t.kind === 'warning' ? `Warning: ${t.message}` : t.message
-)
+/** The text a screen reader hears. A button in the stack is not announced, so an Undo toast says it has one. */
+const UNDO_AVAILABLE = ' Undo is available.'
+const announcedText = (t: ToastItem): string => {
+  const base = t.kind === 'error' ? `Error: ${t.message}` : t.kind === 'warning' ? `Warning: ${t.message}` : t.message
+  return t.undo === undefined ? base : base + UNDO_AVAILABLE
+}
+
+/** Stays through a route change: errors, and anything with an Undo button. */
+const survivesRouteChange = (t: ToastItem): boolean => t.kind === 'error' || t.undo !== undefined
 
 /** Adds delivered toasts to the list: the same id replaces in place, an error goes ahead of the waiting queue. */
 function merge(list: readonly ToastItem[], batch: readonly ToastItem[], limit: number): ToastItem[] {
@@ -96,12 +105,12 @@ export function ToastProvider({ children, routeKey }: ToastProviderProps) {
   const listRef = useRef(list)
   listRef.current = list
 
-  // A new route clears everything but errors. Adjusting state while rendering is
+  // A new route clears everything but errors and Undo toasts. Adjusting state while rendering is
   // the documented way to react to a changed prop without an extra commit.
   const [lastRouteKey, setLastRouteKey] = useState(routeKey)
   if (routeKey !== lastRouteKey) {
     setLastRouteKey(routeKey)
-    if (list.some((t) => t.kind !== 'error')) setList(list.filter((t) => t.kind === 'error'))
+    if (list.some((t) => !survivesRouteChange(t))) setList(list.filter(survivesRouteChange))
   }
 
   const announce = useCallback((text: string) => {
@@ -189,7 +198,15 @@ export function ToastProvider({ children, routeKey }: ToastProviderProps) {
           console.warn(`useToast().show: a message of ${message.length} characters is long; keep toasts under ${ADVISED_LENGTH}.`)
         }
       }
-      const item: ToastItem = { id, message, kind, rev: 0 }
+      let undo = options?.undo
+      if (undo !== undefined && kind !== 'success' && kind !== 'info') {
+        undo = undefined
+        const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+        if (env?.['NODE_ENV'] !== 'production') {
+          console.warn(`useToast().show: undo is only for success and info toasts; it was ignored on a ${kind} toast.`)
+        }
+      }
+      const item: ToastItem = undo === undefined ? { id, message, kind, rev: 0 } : { id, message, kind, rev: 0, undo }
       const at = pending.current.findIndex((t) => t.id === id)
       if (at >= 0) pending.current[at] = item
       else pending.current.push(item)
@@ -201,7 +218,10 @@ export function ToastProvider({ children, routeKey }: ToastProviderProps) {
 
   const visible = useMemo(() => list.slice(0, limit).reverse(), [list, limit])
   const view = useMemo<ToastView>(
-    () => ({ visible, dismissMany: removeIds, originRef, groupRef }),
+    () => ({
+      visible, dismissMany: removeIds, originRef, groupRef,
+      replacementWaiting: (id: string) => pending.current.some((p) => p.id === id),
+    }),
     [visible, removeIds],
   )
 
@@ -218,8 +238,40 @@ export function ToastProvider({ children, routeKey }: ToastProviderProps) {
 const GLYPH: Record<ToastKind, string> = { success: '✓', info: 'i', warning: '!', error: '✕' }
 const WORD: Record<ToastKind, string> = { success: '', info: '', warning: 'Warning: ', error: 'Error: ' }
 
-function ToastCard({ item, onDismiss }: { readonly item: ToastItem; readonly onDismiss: (id: string) => void }) {
+function ToastCard({ item, onDismiss, replacementWaiting }: {
+  readonly item: ToastItem
+  readonly onDismiss: (id: string) => void
+  /** Whether a toast with this id is queued to take its place. */
+  readonly replacementWaiting: (id: string) => boolean
+}) {
   const textId = useId()
+  const [busy, setBusy] = useState(false)
+  // What the click handler needs to know when its promise settles, which may be after a re-render or an unmount.
+  const live = useRef({ rev: item.rev, mounted: true })
+  live.current.rev = item.rev
+  useEffect(() => {
+    live.current.mounted = true
+    return () => { live.current.mounted = false }
+  }, [])
+
+  const runUndo = (): void => {
+    const { undo } = item
+    if (undo === undefined) return
+    const started = item.rev
+    setBusy(true)
+    let result: Promise<void>
+    try { result = Promise.resolve(undo.run()) } catch (error) { result = Promise.reject(error instanceof Error ? error : new Error(String(error))) }
+    result.then(
+      () => {
+        if (!live.current.mounted) return
+        // Closed on success, unless the same key has put a different toast in its place meanwhile.
+        // A replacement that is queued but not yet shown (run() raised one with this key) must not be dropped with it.
+        if (live.current.rev === started && !replacementWaiting(item.id)) onDismiss(item.id)
+        else setBusy(false)
+      },
+      () => { if (live.current.mounted) setBusy(false) },
+    )
+  }
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     if (e.key !== 'Escape') return
     e.preventDefault()
@@ -232,6 +284,11 @@ function ToastCard({ item, onDismiss }: { readonly item: ToastItem; readonly onD
         {WORD[item.kind] === '' ? null : <span className="wm-visually-hidden">{WORD[item.kind]}</span>}
         {item.message}
       </p>
+      {item.undo === undefined ? null : (
+        <Button className="wm-toast__undo" busy={busy} aria-describedby={textId} onClick={runUndo}>
+          {item.undo.label ?? 'Undo'}
+        </Button>
+      )}
       <button type="button" className="wm-btn wm-toast__close" aria-label="Dismiss notification"
               aria-describedby={textId} onClick={() => { onDismiss(item.id) }}>
         <span aria-hidden="true">×</span>
@@ -291,7 +348,7 @@ export function ToastViewport() {
 }
 
 function ToastBanner({ view }: { readonly view: ToastView }) {
-  const { visible, dismissMany, originRef, groupRef } = view
+  const { visible, dismissMany, originRef, groupRef, replacementWaiting } = view
   usePublishHeight(groupRef)
   return (
     <div ref={groupRef} className="wm-toast-viewport" role="group" aria-label="Notifications"
@@ -301,7 +358,7 @@ function ToastBanner({ view }: { readonly view: ToastView }) {
            if (from instanceof HTMLElement && !e.currentTarget.contains(from)) originRef.current = from
            else if (!(from instanceof HTMLElement)) originRef.current = null
          }}>
-      {visible.map((t) => <ToastCard key={t.id} item={t} onDismiss={(id) => { dismissMany([id]) }} />)}
+      {visible.map((t) => <ToastCard key={t.id} item={t} onDismiss={(id) => { dismissMany([id]) }} replacementWaiting={replacementWaiting} />)}
       {visible.length >= 2 ? (
         <div className="wm-toast-viewport__all">
           <button type="button" className="wm-btn" onClick={() => { dismissMany(visible.map((t) => t.id)) }}>

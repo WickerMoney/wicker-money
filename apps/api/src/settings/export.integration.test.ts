@@ -261,6 +261,31 @@ describe('GET /api/v1/settings/export', () => {
     expect(Object.keys(doc.core)).not.toContain('sessions')
   })
 
+  it('leaves out a live Undo snapshot: no key for it, and none of its payload text', async () => {
+    // A deleted transaction's Undo is a short-lived copy of rows that are, to the person, deleted.
+    // An export (and so an import) must not bring them back.
+    const u = await createUser(h)
+    const account = await send(u, 'POST', '/api/v1/accounts', { name: 'Undo export account', accountType: 'checking' })
+    const doomed = await send(u, 'POST', '/api/v1/transactions', {
+      accountId: account['id'], amount: '-31.4159', merchant: 'UNDO-EXPORT-PAYLOAD-MARKER',
+      transactionDate: '2026-03-11', notes: 'undo-export-note-marker',
+    })
+    const deleted = await h.app.inject({ method: 'DELETE', url: `/api/v1/transactions/${doomed['id']}?undo=1`, headers: auth(u) })
+    expect(deleted.statusCode).toBe(200)
+    const undoId = (deleted.json() as { undo: { id: string } }).undo.id
+    const live = await asUser(h.db, u.id, async (trx) =>
+      Number((await sql<{ n: string }>`SELECT count(*)::text AS n FROM core.transaction_undo_snapshots WHERE restored_at IS NULL`.execute(trx)).rows[0]?.n))
+    expect(live).toBe(1)
+
+    const { body, doc } = await exportFor(u)
+    expect(Object.keys(doc.core).filter((k) => /undo|snapshot/i.test(k))).toEqual([])
+    expect(Object.keys(doc.plugins).filter((k) => /undo|snapshot/i.test(k))).toEqual([])
+    for (const text of ['UNDO-EXPORT-PAYLOAD-MARKER', 'undo-export-note-marker', '31.4159', undoId, String(doomed['id']), 'payload']) {
+      expect(body, text).not.toContain(text)
+    }
+    expect(doc.core.transactions).toEqual([])
+  })
+
   it('has empty collections, not missing ones, for a user with no data', async () => {
     const empty = await createUser(h)
     const { doc } = await exportFor(empty)

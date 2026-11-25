@@ -132,7 +132,7 @@ function DeleteButton() {
 | Member | Description |
 |---|---|
 | `useToast()` | Returns `{ show, dismiss }`, stable for the life of the provider. Throws outside a `ToastProvider` |
-| `show(message, { kind?, key? })` | Returns an id. `message` is a plain string (keep it under 200 characters). `kind` is `success`, `info` (default), `warning` or `error`. A toast with the same `key` replaces the earlier one in place and is announced again; the id is the same |
+| `show(message, { kind?, key?, undo? })` | Returns an id. `message` is a plain string (keep it under 200 characters). `kind` is `success`, `info` (default), `warning` or `error`. A toast with the same `key` replaces the earlier one in place and is announced again; the id is the same. `undo` is **experimental** and described [below](#undo-on-a-toast) |
 | `dismiss(id)` | Removes a visible, waiting or not yet delivered toast |
 | `ToastProvider` | Props: `children`, `routeKey?`. Owns the queue and the screen-reader announcer |
 | `ToastViewport` | No props. Draws the stack; renders nothing when empty or outside a provider |
@@ -167,6 +167,50 @@ How it behaves:
   property is experimental.
 - **Tokens.** `--wm-shadow-raised` (light and dark) is new; the rest are existing
   surface, border, text, accent and status colours.
+
+#### Undo on a toast
+
+> **Stability: experimental, and the least settled part of the toast API.** The
+> `undo` option and the `ToastUndo` type are new in 0.9.0, additive (no existing
+> call changes) and may change in any 0.x release. They are for the core app
+> only: plugins have no toasts of their own yet, and a plugin toast will carry
+> no callback.
+
+```tsx
+toast.show("Deleted 'Coffee' ($4.50).", {
+  kind: 'success',
+  key: `transactions:delete:${snapshotId}`,          // one key per Undo, see below
+  undo: {
+    label: 'Undo',                                    // optional, "Undo" by default
+    run: async () => {
+      await api.restore(snapshotId)                   // reject to keep the toast and the button
+      toast.show("Restored 'Coffee'.", { kind: 'success' })   // no `undo` here: there is no Undo of an Undo
+    },
+  },
+})
+```
+
+- **Where.** A button before Close, a normal tab stop in the toast group, described by
+  the toast text (so a screen reader says "Undo, Deleted 'Coffee'…"). There is no
+  keyboard shortcut. Allowed on `success` and `info`; on `warning` and `error` it is
+  ignored with a console warning outside production.
+- **While `run` is pending** the button is `busy` (`aria-disabled`, not `disabled`): it
+  keeps focus and a second click is ignored with the usual "Still working" message.
+  When `run` resolves the toast closes and focus returns as for any closed toast (to
+  where it came from, else `<main>`). When it rejects the toast stays, the button works
+  again, and the rejection is not reported: `run` shows its own error toast. A toast
+  that took the same `key` while `run` was pending is not closed.
+- **Announcement.** The announced text is the message plus " Undo is available."
+  (`"Deleted 'Coffee' ($4.50). Undo is available."`), because a button in the visible
+  stack is not announced.
+- **Nothing closes it on a timer.** Like every toast it stays until Close, Escape, a
+  replacement with the same `key`, or `run` resolving. How long the action can be
+  undone is the caller's data limit, not a presentation limit: a late `run` should fail
+  and say so.
+- **A route change keeps it**, as it keeps errors, because clearing it would remove the
+  only way back. Toasts without `undo` clear as before.
+- **Keys.** Give each Undo toast its own `key` (for example one per snapshot id). A shared
+  key replaces the earlier toast, and with it the earlier Undo button.
 
 ### Focus trap
 

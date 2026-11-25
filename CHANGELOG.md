@@ -38,6 +38,22 @@ curated, human-readable version.
   request) and accepts `custom` as a strategy. Snowball and avalanche plans are
   unchanged. **Migration 036** (additive, has a `down`) allows the new value in
   the strategy check; going back moves anyone on Custom order to avalanche.
+- **Undo for a deleted transaction.** Deleting a transaction (or a transfer, both
+  sides) now shows a toast with an Undo button. Undo puts it back as it was,
+  including its splits, its link to a recurring occurrence and its dismissed
+  suggestions, unless an account or category it uses has been deleted since. The
+  deleted transaction is kept for `UNDO_TTL_SECONDS` (default 600, which is 10
+  minutes; 30 to 3600; `0` turns Undo off). **Migration 039** (additive, has a
+  `down`) adds `core.transaction_undo_snapshots`. The API gains
+  `POST /api/v1/transaction-undos/:id/restore`. "Erase my data" removes the
+  saved copies, and the data export does not include them.
+
+### Changed
+
+- `DELETE /api/v1/transactions/:id` still answers `204` and takes no body, but
+  with `?undo=1` it answers `200` with `{ "undo": null | { "id", "expiresAt",
+  "kind" } }`. A deleted transaction is now kept for the TTL (default 10 minutes)
+  before it is gone for good. Plugin tokens cannot restore.
 - **Plugin SDK: `contributes.themes` in the manifest.** A plugin manifest may
   declare colour themes (`id`, `label`, `mode`, and `tokens`). Only a fixed set
   of `--wm-` colour and length tokens is accepted, with plain colour and length
@@ -64,9 +80,6 @@ curated, human-readable version.
   uploader sends a best-effort `closing` message the frame can answer with
   `upload/abort`. Leaving the page still cannot be relied on to deliver it, so
   the replace-the-oldest rule is what frees the memory.
-  
-### Changed
-
 - **Database: the unused trigram index on transaction merchants is dropped.**
   `ix_transactions_merchant_trgm` (added in migration 015 for `ILIKE '%text%'`
   search) could never be used by the app: it runs under row-level security,

@@ -8,6 +8,25 @@ import { createContext, useContext } from 'react'
 export type ToastKind = 'success' | 'info' | 'warning' | 'error'
 
 /**
+ * An Undo button on a toast.
+ *
+ * @experimental Part of the toast API, which may change in any 0.x release;
+ *   `undo` in particular is new and the least settled part of it.
+ */
+export interface ToastUndo {
+  /** The button's text. Defaults to `"Undo"`. */
+  readonly label?: string
+  /**
+   * What the button does. While the returned promise is pending the button is
+   * `busy` (it keeps focus and ignores a second click). When it resolves the toast
+   * closes; show the outcome with your own toast, which should carry no `undo`
+   * (there is no Undo of an Undo). When it rejects the toast stays and the button
+   * works again: raise your own error toast, the rejection itself is not reported.
+   */
+  readonly run: () => Promise<void>
+}
+
+/**
  * Options for {@link ToastApi.show}.
  *
  * @experimental Part of the toast API, which may change in any 0.x release.
@@ -21,6 +40,23 @@ export interface ToastOptions {
    * so they do not stack.
    */
   readonly key?: string
+  /**
+   * Adds an Undo button before Close, for `success` and `info` toasts (ignored on
+   * `warning` and `error`, with a console warning outside production).
+   *
+   * An Undo toast follows the same rules as any other, with two differences. It is
+   * announced with " Undo is available." added, because the button inside the stack
+   * is not announced. And it **survives a route change**, as an error does, because
+   * clearing it would remove the only way back. Nothing closes it on a timer: the
+   * limit on how long the action can be undone belongs to the caller (the API
+   * answers an Undo that is too late with an error, which `run` shows). Give each
+   * Undo toast its own `key`, or a later one replaces the earlier one's button.
+   *
+   * Plugins get no `undo`: a plugin toast (the later `ctx.notify`) carries no callback.
+   *
+   * @experimental New in 0.9.0 and the least settled part of the toast API.
+   */
+  readonly undo?: ToastUndo
 }
 
 /**
@@ -47,6 +83,8 @@ export interface ToastItem {
   readonly kind: ToastKind
   /** Incremented when the same key replaces it, so the replacement is announced again. */
   readonly rev: number
+  /** The Undo button, when the caller asked for one. */
+  readonly undo?: ToastUndo
 }
 
 /** What the viewport reads. Internal: not exported from the package. */
@@ -54,6 +92,8 @@ export interface ToastView {
   /** The toasts on screen, newest first. */
   readonly visible: readonly ToastItem[]
   readonly dismissMany: (ids: readonly string[]) => void
+  /** Whether a toast with this id is queued to replace the one showing. */
+  readonly replacementWaiting: (id: string) => boolean
   /** Where focus was before it entered the stack, so closing a focused toast can give it back. */
   readonly originRef: { current: HTMLElement | null }
   readonly groupRef: { current: HTMLDivElement | null }

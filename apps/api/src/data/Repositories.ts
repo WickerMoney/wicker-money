@@ -13,6 +13,7 @@ import type { RecurringOccurrenceRepository } from '../recurring/repository/Recu
 import type { EraseRepository } from '../settings/repository/EraseRepository.js'
 import type { ExportRepository } from '../settings/repository/ExportRepository.js'
 import type { SplitRepository } from '../transactions/repository/SplitRepository.js'
+import type { TransactionUndoRepository } from '../transactions/repository/TransactionUndoRepository.js'
 import type { TransactionRepository } from '../transactions/repository/TransactionRepository.js'
 
 /**
@@ -30,6 +31,8 @@ export interface Repositories {
   readonly transactions: TransactionRepository
   /** Transaction splits. */
   readonly splits: SplitRepository
+  /** Short-lived copies of deleted transactions, for Undo. */
+  readonly transactionUndos: TransactionUndoRepository
   /** The category tree. */
   readonly categories: CategoryRepository
   /** Auto-categorization rules and their conditions. */

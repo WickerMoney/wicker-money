@@ -170,6 +170,27 @@ const schema = z.object({
     z.coerce.number().int().min(0).max(600).default(30),
   ),
 
+  // ── Undo for a deleted transaction (one self-contained block) ──────────────
+  /**
+   * Seconds a deleted transaction stays restorable. Deleting a transaction
+   * from the web app keeps a copy of it (with its splits and match dismissals)
+   * for this long, and the Undo button in the "Deleted" message puts it back.
+   * After that the copy is purged, and the data is gone for good.
+   *
+   * `600` (10 minutes) by default; 30 to 3600 otherwise. `0` turns Undo off:
+   * nothing is kept, the delete message has no Undo button, and the restore
+   * route answers 404. Changing it affects deletes from then on; a copy
+   * already kept expires at the time it was given. Backups are not covered.
+   */
+  UNDO_TTL_SECONDS: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce
+      .number()
+      .int()
+      .refine((n) => n === 0 || (n >= 30 && n <= 3600), 'UNDO_TTL_SECONDS must be 0 (Undo off) or between 30 and 3600')
+      .default(600),
+  ),
+
   /**
    * Whether the refresh cookie carries the `Secure` attribute. Defaults to
    * `true` in production. Set to `false` only for plain-HTTP local use.

@@ -151,6 +151,7 @@ the behaviour before they existed, except the import row cap (below).
 | `IMPORT_MAX_ROWS` | `100000` | Data rows one CSV import may contain, counting unreadable ones. The 8 MB file limit applies as well and is not configurable. |
 | `IMPORT_MAX_CONCURRENT` | half of `DB_POOL_MAX` (at least 1) | CSV imports this process commits at once; others wait for a turn without holding a connection (1 to 1000, blank means the default). At or above `DB_POOL_MAX` it has no effect. Per process: each API instance has its own. |
 | `IMPORT_QUEUE_WAIT_SECONDS` | `30` | Longest an import waits for its turn, in **seconds** (0 to 600), before it is refused with `503 import_busy` and a `Retry-After` header. `0` refuses at once when every slot is busy. |
+| `UNDO_TTL_SECONDS` | `600` | How long a deleted transaction can be restored, in **seconds** (30 to 3600; `0` turns Undo off, so nothing is kept; blank means the default). The copy is kept in `core.transaction_undo_snapshots` until it expires, is purged hourly, and is erased by "Erase my data". At most 20 are kept per person. |
 
 **Why 100,000 rows.** An 8 MB file holds about 109k bank-style rows, 67k with a
 memo column, and 374k rows of minimal text, so the size limit alone does not

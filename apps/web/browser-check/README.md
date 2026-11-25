@@ -132,7 +132,7 @@ not a dependency of the repo (see the Insights check).
 app) against the seeded database, signs in as `hero` and, at desktop, 390 px and 360 px in light and dark, changes a
 category, saves the edit dialog with a long merchant name and deletes a row. It checks what each toast says (and that the
 announcer carries the same words), that focus stays put, that a toast raised by the edit dialog arrives after the dialog
-closed, that nothing offers Undo and nothing closes itself, that Escape closes a focused toast, that axe finds nothing it
+closed, that a delete offers Undo (ADR 0016) and Undo restores the row, that a late Undo (410) says so in place of the Undo toast, that nothing closes itself, that Escape closes a focused toast, that axe finds nothing it
 did not find before the toast, and that Shift+Tab up the list with a full stack never leaves the focused control behind the
 banner. It prints the real height of one toast and of the stack, per width (`BROWSER_CHECK_OUT=file.json` keeps them).
 

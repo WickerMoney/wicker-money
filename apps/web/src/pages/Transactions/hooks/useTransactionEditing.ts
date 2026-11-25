@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, useToast, type FormErrors } from '@wickermoney/ui-kit'
+import { ApiError } from '../../../api/ApiError.js'
 import { api } from '../../../api/client.js'
 import type { ActionStatus } from '../../../hooks/useActionStatus.js'
 import { checkMoney, checkText, fieldErrors, REQUIRED_MESSAGE } from '../../../lib/fieldChecks.js'
@@ -8,8 +9,17 @@ import type { Transaction } from '../../../models/index.js'
 import type { TransactionEdit } from '../state/TransactionEdit.js'
 import type { TransactionEditing } from '../state/TransactionEditing.js'
 
+/** What `DELETE /transactions/:id?undo=1` answers: the saved copy, or `null` when none was kept. */
+interface DeleteResult { readonly undo: { readonly id: string; readonly expiresAt: string; readonly kind: string } | null }
+
+/** What to tell the person when a restore was refused: the server's own words, except for a late one. */
+function undoFailure(e: unknown): string {
+  if (e instanceof ApiError && e.status === 410) return 'It is too late to undo that.'
+  return e instanceof Error ? e.message : 'Could not undo that.'
+}
+
 /**
- * Owns the transaction table's inline editing, category assignment and delete.
+ * Owns the transaction table's inline editing, category assignment, delete and Undo of a delete.
  *
  * @param status - Busy flag and error message shared with the page.
  * @param onChanged - Called after any change so the list can be re-read.
@@ -108,15 +118,43 @@ export function useTransactionEditing(
     if (!window.confirm(message)) return
     begin()
     try {
-      await api.del(`/transactions/${t.id}`)
+      // `?undo=1` asks the server to keep a copy for a few minutes (ADR 0016). It answers 200 with
+      // `{ undo: null }` when Undo is off or the row could not be kept, and 204 from an older server.
+      const result = await api.del<DeleteResult | undefined>(`/transactions/${t.id}?undo=1`)
+      const undo = result?.undo ?? null
       setEditing((current) => (current?.id === t.id ? null : current))
+      const isTransfer = t.transfer_id !== null
       // Says what went. A transfer's amount is shown without the sign of the leg that was clicked.
-      toast(
-        t.transfer_id !== null
-          ? `Deleted transfer of ${formatMoney(t.amount.replace(/^[-+]/, ''))}. Both sides were removed.`
-          : `Deleted '${t.merchant}' (${formatMoney(t.amount)}).`,
-        { kind: 'success', key: 'transactions:delete' },
-      )
+      const said = isTransfer
+        ? `Deleted transfer of ${formatMoney(t.amount.replace(/^[-+]/, ''))}. Both sides were removed.`
+        : `Deleted '${t.merchant}' (${formatMoney(t.amount)}).`
+      // One key per snapshot: a second delete is a different toast with its own Undo, and an Undo
+      // never restores the other delete's row (a shared key would replace the first toast's Undo).
+      const key = undo === null ? 'transactions:delete' : `transactions:delete:${undo.id}`
+      toast(said, {
+        kind: 'success',
+        key,
+        ...(undo === null ? {} : {
+          undo: {
+            run: async () => {
+              try {
+                await api.post<unknown>(`/transaction-undos/${undo.id}/restore`)
+              } catch (e) {
+                // The error takes the place of the Undo toast: a refused restore will not work a second time.
+                toast(undoFailure(e), { kind: 'error', key })
+                return
+              }
+              toast(
+                isTransfer
+                  ? `Restored transfer of ${formatMoney(t.amount.replace(/^[-+]/, ''))}. Both sides were put back.`
+                  : `Restored '${t.merchant}' (${formatMoney(t.amount)}).`,
+                { kind: 'success', key: 'transactions:restore' },
+              )
+              await onChanged()
+            },
+          },
+        }),
+      })
       await onChanged()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not delete that transaction.', { kind: 'error', key: 'transactions:delete' })

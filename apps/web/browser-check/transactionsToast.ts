@@ -6,6 +6,10 @@
  * desktop and phone width, in light and dark. It does real actions (changes a
  * category, edits a merchant in the dialog, deletes a row) and checks that:
  *
+ * - a delete asks for `?undo=1` and offers Undo (ADR 0016); Undo puts the row back and says "Restored ...", an expired
+ *   Undo (the restore answered 410) says "It is too late to undo that." in place of the Undo toast, and what the check
+ *   deleted is put back through the API when the context ends;
+ *
  * - each says what happened, in the toast and in the announcer, and `show()`
  *   leaves focus where it was;
  * - a toast raised by saving the edit dialog is delivered after the dialog closed;
@@ -75,10 +79,6 @@ async function startServer() {
   return { base: `http://127.0.0.1:${port}`, close: async () => { await app.close(); await db.destroy() } }
 }
 
-async function login(base: string, email = 'hero@seed.wickermoney.test', password = 'SeedHero!2026'): Promise<string> {
-  return (await loginSession(base, email, password)).refresh
-}
-
 /** Signs in and returns the refresh cookie value and an access token (for calling the API from the check itself). */
 async function loginSession(base: string, email: string, password: string): Promise<{ refresh: string; access: string }> {
   const res = await fetch(`${base}/api/v1/auth/login`, {
@@ -137,9 +137,18 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
       for (const scheme of SCHEMES) {
         const tag = `${vp.name}/${scheme}`
         const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, colorScheme: scheme })
-        await ctx.addCookies([{ name: 'wickermoney_refresh', value: await login(base), url: base }])
+        const session = await loginSession(base, 'hero@seed.wickermoney.test', 'SeedHero!2026')
+        await ctx.addCookies([{ name: 'wickermoney_refresh', value: session.refresh, url: base }])
         const page = await ctx.newPage()
         const errors: string[] = []
+        // What a delete saved (ADR 0016), so the end of this context can put back whatever Undo did not.
+        const snapshots: string[] = []
+        const deleteUrls: string[] = []
+        page.on('response', (res) => {
+          if (res.request().method() !== 'DELETE' || !/\/api\/v1\/transactions\/[^/?]+/.test(res.url())) return
+          deleteUrls.push(res.url())
+          void res.json().then((b: { undo?: { id?: string } | null }) => { if (typeof b.undo?.id === 'string') snapshots.push(b.undo.id) }, () => undefined)
+        })
         page.on('pageerror', (e) => errors.push(String(e)))
         let lastConfirm = ''
         page.on('dialog', (d) => { lastConfirm = d.message(); void d.accept() })
@@ -192,6 +201,7 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         }
         await dismissAll()
         check(`${tag}: everything can be closed`, (await page.locator('.wm-toast').count()) === 0)
+        const rowsBefore = await rows().count()
         const third = rows().nth(2)
         const merchant3 = (await third.locator('td[data-col="merchant"]').innerText()).trim()
         lastConfirm = ''
@@ -238,7 +248,9 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
           : new RegExp(`^Deleted '${merchant3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}' \\(.+\\)\\.$`)
         await page.unroute('**/api/v1/transactions/*')
         check(`${tag}: a delete names what was deleted`, await waitToast(page, deletedText), { confirm: lastConfirm, toasts: await toastTexts(page) })
-        check(`${tag}: nothing offers Undo`, (await page.getByRole('button', { name: /undo/i }).count()) === 0)
+        check(`${tag}: the delete asked for ?undo=1`, deleteUrls.length === 1 && deleteUrls[0]!.endsWith('?undo=1'), deleteUrls)
+        check(`${tag}: the delete toast offers one Undo`, (await page.getByRole('button', { name: 'Undo' }).count()) === 1)
+        check(`${tag}: the announcer says Undo is available`, (await announcer()).includes('Undo is available.'), await announcer())
         await sleep(350)
         measure(`${tag}: one delete toast`, await bannerHeights(page))
         await shot('transactions-toast')
@@ -253,12 +265,34 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         await sleep(2000)
         check(`${tag}: nothing dismisses itself`, (await page.locator('.wm-toast').count()) === 1)
 
+        // 3b. Undo: the row comes back, the toast says so, and focus is not lost to <body>.
+        await page.getByRole('button', { name: 'Undo' }).click()
+        check(`${tag}: Undo says what it restored`, await waitToast(page, /^Restored /), await toastTexts(page))
+        await page.waitForFunction((n) => document.querySelectorAll('.txn-table tbody tr:not(.wm-table__detail)').length === n, rowsBefore, { timeout: 5000 }).catch(() => undefined)
+        check(`${tag}: the row is back in the list (${rowsBefore} rows)`, (await rows().count()) === rowsBefore, await rows().count())
+        check(`${tag}: the Undo toast is gone and focus is not on <body>`, (await page.getByRole('button', { name: 'Undo' }).count()) === 0
+          && await page.evaluate(() => document.activeElement !== document.body && document.activeElement !== null))
+        await shot('transactions-restored')
+
         // 4. Escape on a focused toast closes it.
         const text = (await toastTexts(page))[0]!
         await page.locator('.wm-toast__close').first().focus()
         await page.keyboard.press('Escape')
         await sleep(150)
         check(`${tag}: Escape closes the focused toast`, !(await toastTexts(page)).includes(text), await toastTexts(page))
+
+        // 4b. An Undo that is too late (the restore answers 410): the error takes the Undo toast's place.
+        await dismissAll()
+        await page.route('**/api/v1/transaction-undos/*/restore', (route) => route.fulfill({
+          status: 410, contentType: 'application/json', body: JSON.stringify({ code: 'undo_expired', message: 'It is too late to undo that.' }),
+        }))
+        await rows().nth(2).getByRole('button', { name: 'Delete' }).click()
+        check(`${tag}: a second delete offers Undo again`, await waitToast(page, /^Deleted /), await toastTexts(page))
+        await page.getByRole('button', { name: 'Undo' }).click()
+        check(`${tag}: a late Undo says so`, await waitToast(page, /It is too late to undo that\./), await toastTexts(page))
+        check(`${tag}: and no Undo is left on screen`, (await page.getByRole('button', { name: 'Undo' }).count()) === 0)
+        await page.unroute('**/api/v1/transaction-undos/*/restore')
+        await dismissAll()
 
         // 5. A full stack (every family raised, one with a long name), then the keyboard: the banner is stuck to
         // the top, and Shift+Tab up the list must not leave the focused control behind it.
@@ -309,6 +343,14 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         check(`${tag}: Shift+Tab up the list never leaves the focus behind the banner (${steps} stops)`, hidden === null, hidden)
         await shot('transactions-keyboard')
 
+        // Put back what is still deleted (a 409 `already_undone` is the one Undo restored already).
+        let putBack = 0
+        for (const id of snapshots) {
+          const res = await fetch(`${base}/api/v1/transaction-undos/${id}/restore`, { method: 'POST', headers: { authorization: `Bearer ${session.access}` } })
+          if (res.ok) putBack += 1
+          else if (res.status !== 409) check(`${tag}: put back a deleted row (${id})`, false, res.status)
+        }
+        measure(`${tag}: snapshots made / put back by the check`, { made: snapshots.length, putBack })
         await ctx.close()
         check(`${tag}: no page errors`, errors.length === 0, errors)
       }

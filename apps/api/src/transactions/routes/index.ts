@@ -8,10 +8,12 @@ import { registerListTransactionSplits } from './handlers/listTransactionSplits.
 import { registerListTransactions } from './handlers/listTransactions.js'
 import { registerRemoveTransactionSplits } from './handlers/removeTransactionSplits.js'
 import { registerReplaceTransactionSplits } from './handlers/replaceTransactionSplits.js'
+import { registerRestoreTransactionUndo } from './handlers/restoreTransactionUndo.js'
 import { registerUpdateTransaction } from './handlers/updateTransaction.js'
 
 /**
- * Registers every transaction endpoint under `/api/v1/transactions`.
+ * Registers every transaction endpoint under `/api/v1/transactions`, and the
+ * Undo restore route under `/api/v1/transaction-undos`.
  *
  * Static paths (`/categorize`, `/transfer`) are registered before the
  * parameterised `/:id` routes for readability; Fastify's router prefers static
@@ -20,7 +22,7 @@ import { registerUpdateTransaction } from './handlers/updateTransaction.js'
  * @param app - The Fastify instance to register routes on.
  * @param services - The application services.
  */
-export function registerTransactionRoutes(app: FastifyInstance, { transactions }: Services): void {
+export function registerTransactionRoutes(app: FastifyInstance, { transactions, transactionUndos }: Services): void {
   registerListTransactions(app, transactions)
   registerCategorizeTransactions(app, transactions)
   registerCreateTransaction(app, transactions)
@@ -30,4 +32,5 @@ export function registerTransactionRoutes(app: FastifyInstance, { transactions }
   registerReplaceTransactionSplits(app, transactions)
   registerListTransactionSplits(app, transactions)
   registerRemoveTransactionSplits(app, transactions)
+  registerRestoreTransactionUndo(app, transactionUndos)
 }

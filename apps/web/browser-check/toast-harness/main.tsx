@@ -5,7 +5,7 @@
  */
 import { createRoot } from 'react-dom/client'
 import { useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router'
+import { BrowserRouter, Route, Routes, useNavigate } from 'react-router'
 import { Dialog, ToastProvider, useToast, type ToastApi } from '@wickermoney/ui-kit'
 import { AppShell } from '../../src/shell/AppShell.js'
 // Imported by path: the package's own `sideEffects` list does not name src/, so a bundle
@@ -14,11 +14,12 @@ import '../../../../packages/ui-kit/src/tokens.css'
 import '../../../../packages/ui-kit/src/components.css'
 import '../../src/app.css'
 
-declare global { interface Window { __toast: ToastApi } }
+declare global { interface Window { __toast: ToastApi; __navigate: (to: string) => void; __undone: number } }
 
 function Page() {
   const toast = useToast()
   window.__toast = toast
+  window.__navigate = useNavigate()
   const [open, setOpen] = useState(false)
   return (
     <div className="page">

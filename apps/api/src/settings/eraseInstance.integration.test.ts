@@ -271,6 +271,8 @@ describe('erasing the instance', () => {
     for (const user of [boss, alice, bob]) {
       const before = await rowsOwnedBy(h.db, user.id)
       expect(Object.values(before).every((n) => n > 0), user.email).toBe(true)
+      // Each has a live Undo snapshot (a copy of a deleted transaction) that the erase must take too.
+      expect(before['core.transaction_undo_snapshots'], user.email).toBe(1)
     }
 
     const res = await erase(boss)
@@ -280,7 +282,9 @@ describe('erasing the instance', () => {
 
     expect(await accountCount()).toBe(0)
     for (const user of [boss, alice, bob]) {
-      expect(Object.values(await rowsOwnedBy(h.db, user.id)).every((n) => n === 0), user.email).toBe(true)
+      const after = await rowsOwnedBy(h.db, user.id)
+      expect(Object.values(after).every((n) => n === 0), user.email).toBe(true)
+      expect(after['core.transaction_undo_snapshots'], user.email).toBe(0)
       expect((await me(user)).statusCode).toBe(401)
     }
     // A refresh cookie from before the erase does not bring anyone back.

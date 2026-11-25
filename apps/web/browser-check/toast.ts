@@ -16,6 +16,8 @@
  * - a toast raised while a Dialog is open is held until it closes;
  * - show() does not move focus, and Escape on a toast closes it and gives
  *   focus back;
+ * - a toast with Undo (ADR 0016): axe, Undo before Close in Tab order, announced, survives a route
+ *   change, busy while it runs, run once, closed when it resolves;
  * - with reduced motion emulated there is no animation, transition or transform.
  *
  * Needs: a Chromium (`CHROMIUM_PATH`, default the preinstalled one),
@@ -183,6 +185,65 @@ async function run(pw: typeof Playwright, base: string): Promise<void> {
         for (let i = 0; i < 4 && (await count()) > 0; i++) { await page.getByRole('button', { name: 'Dismiss all' }).click().catch(async () => { await page.locator('.wm-toast__close').first().click() }); await sleep(100) }
         check(`${tag}: everything can be dismissed`, (await count()) === 0, await count())
         check(`${tag}: --wm-toast-height is gone with the last toast`, await page.evaluate(() => document.querySelector('main')!.style.getPropertyValue('--wm-toast-height') === ''))
+
+        // Undo (ADR 0016): a toast with an Undo button. axe, Tab order, announcement, survives navigation, runs once.
+        // A string, not a function: tsx's name helper would not exist in the page.
+        await page.evaluate(`(() => {
+          window.__undone = 0
+          window.__toast.show('Deleted Coffee (-$4.50).', {
+            kind: 'success', key: 'transactions:delete:snap-1',
+            undo: { run: () => { window.__undone += 1; return new Promise((r) => setTimeout(r, 150)) } },
+          })
+        })()`)
+        await page.waitForSelector('.wm-toast__undo')
+        await sleep(350)
+        const undoBtn = page.getByRole('button', { name: 'Undo' })
+        check(`${tag}: Undo toast shows one Undo button before Close`, (await undoBtn.count()) === 1 && await page.evaluate(() => {
+          const t = document.querySelector('.wm-toast')!
+          const u = t.querySelector('.wm-toast__undo'), c = t.querySelector('.wm-toast__close')
+          return u !== null && c !== null && (u.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+        }))
+        check(`${tag}: Undo toast is announced with "Undo is available."`, (await page.evaluate(() => document.querySelector('[role="status"][aria-live]')?.textContent ?? '')).includes('Undo is available.'))
+        const undoBox = (await undoBtn.boundingBox())!
+        check(`${tag}: Undo button is at least 24 px tall and in the viewport`, undoBox.height >= 24 && undoBox.x >= 0 && undoBox.x + undoBox.width <= vp.width, undoBox)
+        v = await axeOf(page)
+        check(`${tag}: axe, Undo toast showing`, v.length === 0, v)
+        await shot('toast-undo')
+        await focusTarget.focus()
+        await page.keyboard.press('Tab')
+        const tabbed = await page.evaluate(() => document.activeElement?.className ?? '')
+        await page.keyboard.press('Tab')
+        const tabbed2 = await page.evaluate(() => document.activeElement?.className ?? '')
+        await focusTarget.focus()
+        await page.keyboard.press('Shift+Tab')
+        const back = await page.evaluate(() => document.activeElement?.className ?? '')
+        const order = await page.evaluate(() => {
+          const all = Array.from(document.querySelectorAll<HTMLElement>('main button, main input, main select, main a[href], [aria-label="Notifications"] button'))
+          return {
+            undo: all.indexOf(document.querySelector('.wm-toast__undo') as HTMLElement),
+            close: all.indexOf(document.querySelector('.wm-toast__close') as HTMLElement),
+            search: all.indexOf(document.getElementById('search') as HTMLElement),
+          }
+        })
+        check(`${tag}: Undo comes before Close in the Tab order, both before the page's controls`, order.undo >= 0 && order.undo < order.close && order.close < order.search, { order, tabbed, tabbed2, back })
+        // Navigation: a success toast with Undo survives a route change; one without does not.
+        await page.evaluate(() => { window.__navigate('/transactions/other') })
+        await sleep(300)
+        check(`${tag}: Undo toast survives a navigation`, (await page.locator('.wm-toast__undo').count()) === 1)
+        // Run: busy while pending, focus stays on the button, dismissed on resolve, run once.
+        await undoBtn.focus()
+        await page.keyboard.press('Enter')
+        await sleep(40)
+        const busy = await undoBtn.getAttribute('aria-disabled')
+        const focusedWhileBusy = await page.evaluate(() => document.activeElement?.classList.contains('wm-toast__undo') === true)
+        await page.keyboard.press('Enter')
+        await sleep(400)
+        check(`${tag}: Undo is busy while running, keeps focus, runs once, then closes the toast`, busy === 'true' && focusedWhileBusy && (await page.evaluate(() => window.__undone)) === 1 && (await page.locator('.wm-toast__undo').count()) === 0, {
+          busy, focusedWhileBusy, undone: await page.evaluate(() => window.__undone), left: await page.locator('.wm-toast__undo').count(),
+        })
+        await page.evaluate(() => { window.__navigate('/') })
+        await sleep(200)
+        for (let i = 0; i < 4 && (await count()) > 0; i++) { await page.locator('.wm-toast__close').first().click().catch(() => undefined); await sleep(100) }
 
         // Dialog: a toast raised while it is open is held until it closes. The announcer is emptied
         // 1.5 s after its last update, so let the earlier ones clear before reading it as "nothing delivered".
