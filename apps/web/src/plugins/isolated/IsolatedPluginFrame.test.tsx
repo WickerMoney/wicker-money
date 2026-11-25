@@ -1,8 +1,11 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, screen, within } from '@testing-library/react'
+import { renderWithToasts } from '../../testing/renderWithToasts.js'
+import { findToast, toastTexts } from '../../testing/toastTexts.js'
 import type { PluginContext, PluginManifest } from '@wickermoney/plugin-sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrokerApi } from './brokerApi.js'
 import { IsolatedPluginFrame } from './IsolatedPluginFrame.js'
+import { PluginRegistryCtx } from '../registry/pluginRegistryContext.js'
 import { LAYOUT_SETTLED_AT_MS, SETTLE_MS } from './useNearViewport.js'
 
 const manifest = {
@@ -41,7 +44,10 @@ function frameOf(container: HTMLElement) {
   }
 }
 
-const mount = (extra: Partial<React.ComponentProps<typeof IsolatedPluginFrame>> = {}) => render(
+/** Queries inside the plugin frame's own box: the toast provider the tests mount also has a `status` region. */
+const inFrame = (container: HTMLElement) => within(container.querySelector<HTMLElement>('.plugin-frame')!)
+
+const mount = (extra: Partial<React.ComponentProps<typeof IsolatedPluginFrame>> = {}) => renderWithToasts(
   <IsolatedPluginFrame manifest={manifest} module="./Widget" title="Spending" kind="widget" ctx={ctx} size="md" api={api} {...extra} />,
 )
 
@@ -59,10 +65,10 @@ describe('IsolatedPluginFrame', () => {
 
   it('shows a loading status until the frame connects', async () => {
     const { container } = mount()
-    expect(screen.getByRole('status').textContent).toContain('Loading Fixture · Spending')
+    expect(inFrame(container).getByRole('status').textContent).toContain('Loading Fixture · Spending')
     expect(container.querySelector('iframe')!.style.visibility).toBe('hidden')
     await frameOf(container).connect()
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(inFrame(container).queryByRole('status')).toBeNull()
     expect(container.querySelector('iframe')!.style.visibility).toBe('visible')
   })
 
@@ -86,7 +92,7 @@ describe('IsolatedPluginFrame', () => {
     expect(container.querySelector('iframe')!.style.height).toBe('0px')
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('status')).toBeTruthy()
+    expect(inFrame(container).getByRole('status')).toBeTruthy()
   })
 
   it('navigates the app when the frame asks to', async () => {
@@ -119,7 +125,7 @@ describe('IsolatedPluginFrame', () => {
   })
 
   it('moves focus past the iframe when focus leaves the frame', async () => {
-    const { container } = render(
+    const { container } = renderWithToasts(
       <>
         <button>before</button>
         <IsolatedPluginFrame manifest={manifest} module="./Widget" title="Spending" kind="widget" ctx={ctx} api={api} />
@@ -177,7 +183,7 @@ describe('IsolatedPluginFrame, lazy start', () => {
     expect(root.style.minHeight).toBe('360px')
     expect(root.textContent).toContain('Fixture · Spending loads when you scroll to it.')
     // Not a live region, and nothing a keyboard can land on.
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(inFrame(container).queryByRole('status')).toBeNull()
     expect(root.querySelector('[tabindex],button,a,input')).toBeNull()
     expect(observers[0]!.options?.rootMargin).toBe('600px 0px')
   })
@@ -276,5 +282,126 @@ describe('IsolatedPluginFrame, lazy start', () => {
     vi.useRealTimers()
     expect(screen.getByRole('alert').textContent).toContain('could not be loaded')
     expect(container.querySelector('iframe')).not.toBeNull()
+  })
+})
+
+describe('a plugin notification', () => {
+  const notifying = { ...manifest, permissions: ['notify'] } as unknown as PluginManifest
+
+  it('becomes a toast in the host, prefixed with the plugin name, as plain text, of the kind the plugin asked for', async () => {
+    const { container } = mount({ manifest: notifying })
+    const port = await frameOf(container).connect()
+    const replies: unknown[] = []
+    port.onmessage = (e) => { replies.push(e.data) }
+    await act(async () => {
+      port.postMessage({ type: 'notify', id: 1, level: 'success', message: '<b>Imported</b>\n12 rows' })
+      await new Promise((r) => setTimeout(r, 5))
+    })
+    expect(await findToast('Imported')).toEqual(['Fixture plugin: <b>Imported</b> 12 rows'])
+    // Text, not markup: nothing was parsed into the toast.
+    expect(document.querySelector('.wm-toast b')).toBeNull()
+    expect(replies).toContainEqual({ type: 'response', id: 1, ok: true, value: null })
+  })
+
+  it('is refused for a plugin without the permission: no toast, a grant_denied answer', async () => {
+    const { container } = mount()
+    const port = await frameOf(container).connect()
+    const replies: unknown[] = []
+    port.onmessage = (e) => { replies.push(e.data) }
+    await act(async () => { port.postMessage({ type: 'notify', id: 1, level: 'info', message: 'hello' }); await new Promise((r) => setTimeout(r, 30)) })
+    expect(toastTexts()).toEqual([])
+    expect(replies).toContainEqual(expect.objectContaining({ id: 1, ok: false, error: expect.objectContaining({ code: 'grant_denied' }) as unknown }))
+  })
+
+  it('never shows more than two at once for one plugin, the third replacing the first', async () => {
+    const { container } = mount({ manifest: notifying })
+    const port = await frameOf(container).connect()
+    for (const n of [1, 2, 3]) {
+      await act(async () => { port.postMessage({ type: 'notify', id: n, level: 'info', message: `message ${n}` }); await new Promise((r) => setTimeout(r, 5)) })
+    }
+    await findToast('message 3')
+    expect(toastTexts().sort()).toEqual(['Fixture plugin: message 2', 'Fixture plugin: message 3'])
+  })
+
+  it('is withdrawn when the frame goes away', async () => {
+    const view = mount({ manifest: notifying })
+    const port = await frameOf(view.container).connect()
+    await act(async () => { port.postMessage({ type: 'notify', id: 1, level: 'info', message: 'still here?' }); await new Promise((r) => setTimeout(r, 5)) })
+    await findToast('still here?')
+    view.unmount()
+    // The provider went with it; mount a bare one to prove nothing leaks into a later toast stack.
+    expect(toastTexts()).toEqual([])
+  })
+})
+
+describe('a plugin saving a file', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9]).buffer
+
+  /** The frame as the registry reports it: `bundled` says whether the API listed the plugin as shipped with the app. */
+  const mountWith = (bundled: boolean | undefined) => renderWithToasts(
+    <PluginRegistryCtx.Provider
+      value={{ plugins: [], failures: [], refresh: async () => {}, runtimes: { 'test.fixture': 'isolated' }, ...(bundled === undefined ? {} : { bundled: { 'test.fixture': bundled } }) }}
+    >
+      <IsolatedPluginFrame manifest={manifest} module="./Widget" title="Spending" kind="widget" ctx={ctx} size="md" api={api} />
+    </PluginRegistryCtx.Provider>,
+  )
+
+  function hostSaves() {
+    const create = vi.fn(() => 'blob:host/1')
+    Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() })
+    const clicked: string[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicked.push(this.download) })
+    return { create, clicked }
+  }
+  const gesture = (iframe: Element | null) => {
+    Object.defineProperty(navigator, 'userActivation', { value: { isActive: true }, configurable: true })
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(iframe)
+  }
+  afterEach(() => { Reflect.deleteProperty(navigator, 'userActivation') })
+  const send = async (port: MessagePort, id = 1) => {
+    const replies: unknown[] = []
+    port.onmessage = (e) => { replies.push(e.data) }
+    await act(async () => {
+      port.postMessage({ type: 'download', id, filename: 'share.jpg', mime: 'image/png', data: PNG.slice(0) }, [])
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    return replies
+  }
+
+  it('a bundled plugin after a click in its frame: the host makes the download and says "Saved <name> from <plugin>"', async () => {
+    const { container } = mountWith(true)
+    const f = frameOf(container)
+    const port = await f.connect()
+    const saves = hostSaves()
+    gesture(f.iframe)
+    const replies = await send(port)
+    expect(saves.clicked).toEqual(['share.png'])
+    expect(replies).toContainEqual({ type: 'response', id: 1, ok: true, value: { filename: 'share.png' } })
+    expect(await findToast('Saved share.png')).toEqual(['Saved share.png from Fixture'])
+  })
+
+  it.each([false, undefined])('a plugin that is not bundled (%s) gets grant_denied, and the host makes no download and no toast', async (bundled) => {
+    const { container } = mountWith(bundled)
+    const f = frameOf(container)
+    const port = await f.connect()
+    const saves = hostSaves()
+    gesture(f.iframe)
+    const replies = await send(port)
+    expect(saves.clicked).toEqual([])
+    expect(saves.create).not.toHaveBeenCalled()
+    expect(replies).toContainEqual(expect.objectContaining({ id: 1, ok: false, error: expect.objectContaining({ code: 'grant_denied' }) as unknown }))
+    expect(toastTexts()).toEqual([])
+  })
+
+  it('without a gesture in the frame: gesture_required, nothing saved', async () => {
+    const { container } = mountWith(true)
+    const f = frameOf(container)
+    const port = await f.connect()
+    const saves = hostSaves()
+    gesture(null)
+    const replies = await send(port)
+    expect(saves.clicked).toEqual([])
+    expect(replies).toContainEqual(expect.objectContaining({ id: 1, ok: false, error: expect.objectContaining({ code: 'gesture_required' }) as unknown }))
+    expect(toastTexts()).toEqual([])
   })
 })

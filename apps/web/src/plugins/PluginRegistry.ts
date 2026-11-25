@@ -14,4 +14,9 @@ export interface PluginRegistry {
    * has been loaded; code that builds a registry by hand (tests) may omit it.
    */
   readonly runtimes?: Readonly<Record<string, PluginRuntime>>
+  /**
+   * Whether each plugin ships with the app, by manifest id, as the API reported it. A plugin missing from the
+   * map, or a registry built by hand without one, is not bundled.
+   */
+  readonly bundled?: Readonly<Record<string, boolean>>
 }

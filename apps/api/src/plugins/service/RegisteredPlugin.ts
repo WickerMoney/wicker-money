@@ -39,6 +39,11 @@ export interface RegisteredPlugin {
    * Empty when no usable manifest exists.
    */
   readonly tables: readonly string[]
+  /**
+   * The permissions its manifest declares (today only `notify` can load), so the owner's consent text can name them.
+   * Empty when no usable manifest exists.
+   */
+  readonly permissions: readonly string[]
   /** What the plugin adds to the app, by title, so an owner can tell what switching it off removes. */
   readonly contributes: {
     /** Titles of the pages it adds. */

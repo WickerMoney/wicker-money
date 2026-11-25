@@ -40,6 +40,7 @@ export type {
   Permission,
   PluginManifest,
   TableGrant,
+  ThemeContribution,
   WidgetContribution,
   WidgetSize,
   WidgetSlot,

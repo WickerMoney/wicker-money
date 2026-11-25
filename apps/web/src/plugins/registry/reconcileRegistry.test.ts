@@ -22,6 +22,12 @@ describe('reconcileRegistry', () => {
     expect(reconcileRegistry(prev, next)).toBe(prev)
   })
 
+  it('follows a change in which plugins are bundled, and keeps the map when it did not change', () => {
+    const prev = { plugins: [manifest('a.one')], failures: [], bundled: { 'a.one': false } }
+    expect(reconcileRegistry(prev, { plugins: [manifest('a.one')], failures: [], bundled: { 'a.one': false } })).toBe(prev)
+    expect(reconcileRegistry(prev, { plugins: [manifest('a.one')], failures: [], bundled: { 'a.one': true } }).bundled).toEqual({ 'a.one': true })
+  })
+
   it('drops a removed plugin and keeps the survivors\' objects', () => {
     const one = manifest('a.one')
     const prev = { plugins: [one, manifest('a.two')], failures: [] }

@@ -212,6 +212,44 @@ For your plugin's UI code, the broker and the server hold a plugin that runs in 
 frame to these grants. A plugin that ran in the app's own page (none does today)
 would not be held to them. See [Trust model](#trust-model).
 
+### Themes (`contributes.themes`)
+
+A manifest may declare colour themes. This is **manifest only**: `parseManifest`
+validates the field and keeps it; the web app does not register or apply themes
+yet.
+
+```ts
+contributes: {
+  themes: [
+    {
+      id: 'midnight',                 // lower-case letters, digits, single hyphens; at most 40
+      label: 'Midnight',              // 1 to 60 characters, no control or bidirectional characters
+      mode: 'dark',                   // 'light' | 'dark'
+      tokens: { '--wm-bg': '#0b0d12', '--wm-accent': 'rgb(120 200 255)' },
+    },
+  ],
+}
+```
+
+A theme can only set a fixed set of `--wm-` tokens: the surface, text, accent, status and chart
+colours, the two corner radii and the two spacing steps (the list is in
+`src/manifest/themeTokens.ts`; it is not exported). A colour is `#rgb`, `#rgba`, `#rrggbb`,
+`#rrggbbaa`, `rgb()`, `rgba()`, `hsl()`, `hsla()` with plain numbers, or `var()` of another
+colour token. A length is `0`, a non-negative number with `px`, `rem` or `em`, or `var()` of another length
+token. Values are at most 64 characters. There are at most 8 themes, ids are unique, and
+all themes together take at most 16 KiB of JSON.
+
+The manifest is refused, with the path of the first problem, for: an unknown field on a
+theme (such as `css`), an unknown token, `url()`, `calc()`, a named colour, a keyword,
+a `var()` outside the token set or with a fallback, `;`, braces, comments, surrounding
+whitespace, a bad `mode` or `id`, no tokens, more than 8 themes, a duplicate id, or
+oversize values.
+
+This is not `MAX_THEME_TOKENS` (512). That constant caps how many tokens a running
+isolated plugin may send in one `setTheme` message at run time. `contributes.themes` is
+a static declaration read from the manifest, with a fixed token set and its own caps; the
+two do not share a limit.
+
 ### Widget
 
 ```tsx
@@ -274,12 +312,14 @@ on the port:
 | frame to host | `resize` | The content height in CSS pixels; the host owns the width |
 | frame to host | `modal` | A page's modal dialog opened or closed (`open`); ignored from a widget, rate limited |
 | frame to host | `focus-out` | Focus left past the last (`next`) or before the first (`previous`) element |
-| frame to host | `notify` | Reserved; a host answers `not_supported` until the `notify` permission exists |
+| frame to host | `notify` | Show a toast (`level`, `message`); needs the `notify` permission (see "Notifications") |
+| frame to host | `download` | Save a file (`filename`, `mime`, `data` as a transferred `ArrayBuffer`); bundled plugins only, from a click or key press (see "Saving a file") |
 | host to frame | `init` | Plugin id, widget or page, session, locale, theme, size and range, first path |
 | host to frame | `response` | The JSON value, or an error: `code`, `message`, optional `status` and `issues` |
 | host to frame | `theme`, `locale`, `props`, `route` | Updates after `init` |
 | host to frame | `modal-layout` | The frame is lifted (or put back) and where its page sits in the lifted layer (`x`, `y`, `width`) |
 | host to frame | `focus-in` | Move focus to the frame's first or last focusable element |
+| host to frame | `closing` | Best effort: the host is about to take the frame down; give back what you hold (see "Closing") |
 
 What differs from the in-realm `ctx.api`:
 
@@ -302,6 +342,88 @@ The host must run `parsePluginMessage` on every message a frame sends and identi
 frame by the `MessagePort` and `event.source`, never by `event.origin` (which is
 `"null"` for a sandboxed frame). Unknown message types are ignored by both sides, so
 adding one is not a version bump.
+
+### Notifications
+
+A plugin in a frame can raise a toast with `ctx.notify?.(level, message)`, where `level` is
+`'info' | 'success' | 'warning' | 'error'`. It needs the `notify` permission: declare
+`permissions: ['notify']` in the manifest. A plugin without it is answered with `grant_denied`
+(the broker also keeps counting it as a strike), so the call does nothing. `ctx.notify` is
+fire and forget: no promise, no callback, no link. `host.notify(level, message)` is the same
+call as a promise, for a test or for code that wants to know the refusal.
+
+What the host does with it (the limits are the host's, not the SDK's, and may be tightened):
+
+- **Plain text only.** Control characters, newlines (to a space) and bidirectional overrides are
+  stripped; markup is shown as the characters it is. At most **200 characters** are accepted
+  (`invalid_request` otherwise; `MAX_NOTIFY_LENGTH`, 500, is only what the validator parses).
+- **Named, so it cannot pass for the host.** The toast reads `<plugin name> plugin: <text>`, with
+  the name from the manifest, never from the message.
+- **Rate limited.** 3 in a burst and then one every 3.3 seconds per frame, and the same text at
+  most once every 30 seconds. A dropped one is answered `request_failed` with status 429 and
+  counts as a strike toward the connection being cut. At most **two** toasts of one plugin are
+  showing at once: a third replaces the oldest, and a plugin's toasts are withdrawn when its frame
+  goes away. Toasts stay until the person closes them, like the host's own.
+- It is an ordinary toast of the host's own stack: same queue, announcement and keyboard rules.
+  A plugin cannot make its toast more prominent, add a button, or keep it past the person closing it.
+
+### Saving a file
+
+`host.download({ filename, mime, data })` (from `connectToHost` / `connectOverPort`) asks the host
+to save a file the person asked for: a share image, a CSV, a PDF. It resolves with
+`{ filename }`, the name the host used.
+
+```ts
+button.addEventListener('click', () => {
+  void host.download({ filename: 'spending', mime: 'text/csv', data: bytes.buffer })
+})
+```
+
+The frame has no way to download by itself (the sandbox has no `allow-downloads`, and that does
+not change), so the host does it: it makes the Blob and the link in its own page and starts
+the browser's download, then shows a toast "Saved <name> from <plugin>". What it checks, in order:
+
+- **Who.** Only a plugin **bundled with the app**. Any other plugin is answered `grant_denied`
+  and counts as a strike. There is no manifest field or permission that changes this.
+- **A gesture.** Call it in the handler of the person's click or key press on a control in
+  the frame; otherwise `gesture_required`. The host requires the browser's transient user
+  activation and that this frame is the page's active element.
+- **Type.** One of `DOWNLOAD_TYPES`: `text/plain` (txt), `text/csv` (csv), `application/json`
+  (json), `image/png` (png), `image/jpeg` (jpg), `application/pdf` (pdf). Never HTML or SVG.
+  Anything else is `file_type_not_allowed`.
+- **Size.** At most `MAX_DOWNLOAD_BYTES` (5 MiB), else `file_too_large`.
+- **Bytes.** PNG, JPEG and PDF must start with their magic bytes; text, CSV and JSON must be valid
+  UTF-8 and JSON must parse; an HTML or SVG document labelled as text is refused too. Otherwise
+  `file_invalid`.
+- **Rate.** One file per 5 seconds per frame, else `rate_limited`.
+
+The host takes only the base name you suggest, normalises it (NFKC), replaces anything unsafe,
+caps its length, and **gives it the extension of the checked MIME type**, so `report.exe` with
+`text/csv` is saved `report.csv`. The Blob URL is revoked after 30 seconds.
+
+An older host answers `not_supported`. `data` is transferred, so the buffer is empty after the call.
+
+**For a future non-bundled source.** The host's default gate is the activation check above.
+Behind one switch the host also carries a stricter gate (also refuses within 5 seconds of the
+person's input elsewhere in the page), which is not turned on. Allowing `download` for any plugin
+that is not bundled, whatever the manifest source, is conditional on turning on that strict gate
+or a confirm dialog first.
+
+### Closing
+
+The host sends `closing` before it takes a frame down, so a plugin can give back what it
+holds on the server. Listen with `ctx.onClosing(listener)` (optional on `PluginContext`: only
+a frame has it, so call it as `ctx.onClosing?.(...)`), or `subscribe` to the `closing` change.
+Each `onClosing` listener runs once. Import CSV uses it to send `upload/abort`.
+
+**It is best effort and a plugin must not depend on it.** The host sends the message and
+removes the frame's element in the same task, so delivery is not promised: in Chromium, Import CSV's
+`upload/abort` did reach the server when the person left through the app's navigation (the browser
+check measures it), but a closed tab, a crash or another browser may not run the frame again. Where the frame is still
+alive (the host rebuilding a connection, a retry), the host keeps answering `request` and
+`cancel` for one second after sending it, and nothing else: no `navigate`, `notify`, `download`
+or `modal`. Anything a plugin holds on the server must also be released another way: an expiry,
+and a limit that replaces the oldest instead of refusing (Import CSV's staged uploads do both).
 
 ## Two rules that fail at runtime, not build time
 
@@ -358,8 +480,10 @@ reachable, including sign-in, the data export and other plugins.
   database role is a guardrail and not a sandbox). A manifest that asks for
   `contributes.endpoints` or `contributes.exporters` is refused, with a reason.
 - **No write.** A `write` grant on a core table has no route it can use.
-- **No permissions.** `network:outbound`, `schedule:daily` and `notify` are
-  reserved, not implemented, and a manifest that declares one is refused.
+- **No file saving.** `download` is for bundled plugins only; it is refused with `grant_denied`.
+- **One permission, `notify`.** It lets the plugin raise short text toasts (see
+  [Notifications](#notifications)). `network:outbound` and `schedule:daily` are reserved,
+  not implemented, and a manifest that declares either is refused.
 
 ### Integrity pin
 

@@ -92,17 +92,18 @@ describe('rate buckets with real uploads', () => {
   })
   afterAll(async () => { await h.close() })
 
-  it('refuses a burst of begin calls after the import allowance, 409s counted, while chunks and finish still go through', async () => {
+  it('refuses a burst of begin calls after the import allowance, replacements counted, while chunks and finish still go through', async () => {
     const u = await createUser(h)
     const seen: number[] = []
     let live = ''
     for (let i = 0; i < 9; i += 1) {
       const res = await s.begin(u, 2, 6)
       seen.push(res.statusCode)
-      if (i === 0) live = (res.json() as { uploadId: string }).uploadId
+      // Past the limit of two a begin replaces the user's oldest, so the upload still there is the last one accepted.
+      if (res.statusCode === 200) live = (res.json() as { uploadId: string }).uploadId
     }
-    // Two live uploads, then the per-user limit (409) which still costs a count, then the bucket (429).
-    expect(seen).toEqual([200, 200, 409, 409, 409, 409, 429, 429, 429])
+    // Six begins are accepted (each past the second replaces the oldest, and still costs a count), then the bucket (429).
+    expect(seen).toEqual([200, 200, 200, 200, 200, 200, 429, 429, 429])
     const refused = await s.begin(u, 2, 6)
     expect(refused.statusCode).toBe(429)
     expect(refused.json()).toMatchObject({ code: 'rate_limited', message: expect.stringMatching(/^Too many imports\./) as string })
@@ -132,9 +133,10 @@ describe('rate buckets with real uploads', () => {
       for (let i = 0; i < 16; i += 1) codes.push((await t.chunk(u, uploadId, 0, 'abc')).statusCode)
       expect(codes.slice(0, 12)).toEqual(Array(12).fill(200))
       expect(codes.slice(12)).toEqual([429, 429, 429, 429])
-      // A fresh begin is not a general-bucket request, so it still answers (409: the user holds one, and has room for one more).
+      // A fresh begin is not a general-bucket request, so it still answers (twice: the second replaces the oldest of the user's two).
       expect((await t.begin(u, 1, 3)).statusCode).toBe(200)
-      expect((await t.begin(u, 1, 3)).statusCode).toBe(409)
+      expect((await t.begin(u, 1, 3)).statusCode).toBe(200)
+      expect((await t.begin(u, 1, 3)).statusCode).toBe(200)
     } finally {
       await small.close()
     }
@@ -452,6 +454,7 @@ describe('the staging space once an upload is aborted', () => {
     await s.abort(sixth, (taken.json() as { uploadId: string }).uploadId)
     expect((await s.begin(fifth, 1, 1)).statusCode).toBe(200)
     expect((await s.begin(fifth, 1, 1)).statusCode).toBe(200)
-    expect((await s.begin(fifth, 1, 1)).statusCode).toBe(409)
+    // A third replaces the oldest of the two instead of being refused.
+    expect((await s.begin(fifth, 1, 1)).statusCode).toBe(200)
   }, 60_000)
 })

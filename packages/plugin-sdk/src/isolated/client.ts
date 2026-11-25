@@ -9,6 +9,7 @@ import { ISOLATED_PROTOCOL_VERSION } from './protocol.js'
 import type {
   FocusDirection,
   FocusInMessage,
+  ClosingMessage,
   FrameKind,
   HostLocale,
   HostTheme,
@@ -41,7 +42,8 @@ export interface IsolatedState {
 }
 
 /** A change the host pushed after `init`. `state` already reflects it by the time listeners run. */
-export type HostChange = ThemeMessage | LocaleMessage | PropsMessage | RouteMessage | FocusInMessage | ModalLayoutMessage
+export type HostChange =
+  ThemeMessage | LocaleMessage | PropsMessage | RouteMessage | FocusInMessage | ModalLayoutMessage | ClosingMessage
 
 /** The live link between a plugin frame and the host. */
 export interface HostConnection {
@@ -50,7 +52,7 @@ export interface HostConnection {
   /** The latest state. */
   getState(): IsolatedState
   /**
-   * Listens for changes the host pushes (theme, locale, props, route, focus-in).
+   * Listens for changes the host pushes (theme, locale, props, route, focus-in, closing).
    *
    * @returns A function that removes the listener.
    */
@@ -79,10 +81,20 @@ export interface HostConnection {
   /** Tells the host that focus left the frame, past its last (`next`) or before its first (`previous`) focusable element. */
   focusOut(direction: FocusDirection): void
   /**
-   * Sends a notification request. No host implements `notify` yet, so this
-   * rejects with code `not_supported` today.
+   * Asks the host to show a toast and waits for its answer. Rejects with `grant_denied` when the manifest does not
+   * declare the `notify` permission, `invalid_request` for text the host refuses, `request_failed` (status 429) when
+   * the rate limit drops it, and `not_supported` from a host that predates `notify`. Most plugins want the
+   * fire-and-forget `ctx.notify` instead.
    */
   notify(level: NotifyMessage['level'], message: string): Promise<void>
+  /**
+   * Asks the host to save a file (see `DownloadMessage`). Call it from the handler of the person's click or key press
+   * on a control in this frame: the host refuses it with `gesture_required` otherwise. Rejects with `grant_denied`
+   * when the plugin is not bundled, `file_too_large`, `file_type_not_allowed`, `file_invalid`, `rate_limited`, or
+   * `not_supported` from a host that predates `download`. The bytes are transferred, so `data` is empty afterwards.
+   * Resolves with the name the host gave the file.
+   */
+  download(file: { readonly filename: string; readonly mime: string; readonly data: ArrayBuffer }): Promise<{ readonly filename: string }>
   /** Closes the port and rejects every call still waiting with code `disconnected`. */
   dispose(): void
 }
@@ -254,10 +266,10 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
   const paint = (theme: HostTheme): void => { if (themeRoot !== null) applyHostTheme(theme, themeRoot) }
   paint(state.theme)
 
-  const post = (message: PluginMessage): void => { if (!closed) port.postMessage(message) }
+  const post = (message: PluginMessage, transfer?: Transferable[]): void => { if (!closed) port.postMessage(message, transfer ?? []) }
 
   const call = <T,>(
-    message: (id: number) => PluginMessage, signal?: AbortSignal | null,
+    message: (id: number) => PluginMessage, signal?: AbortSignal | null, transfer?: Transferable[],
   ): Promise<T> => {
     if (closed) return Promise.reject(new PluginApiError({ code: 'disconnected', message: 'The connection to the host is closed.' }))
     if (signal?.aborted === true) return Promise.reject(new PluginApiError({ code: 'aborted', message: 'The request was aborted.' }))
@@ -274,7 +286,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
         reject,
         cleanup: () => signal?.removeEventListener('abort', onAbort),
       })
-      post(message(id))
+      post(message(id), transfer)
     })
   }
 
@@ -320,12 +332,26 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
     del: (path, init) => request('DELETE', path, undefined, init),
   }
 
+  const notifyHost = (level: NotifyMessage['level'], message: string): Promise<void> =>
+    call<void>((id) => ({ type: 'notify', id, level, message })).then(() => undefined)
+
+  /** Listeners of `ctx.onClosing`. A `closing` from the host calls each once, then forgets them. */
+  const closingListeners = new Set<() => void>()
+
   const ctx: PluginContext = {
     get session() { return state.session },
     api,
     navigate: (path) => { post({ type: 'navigate', path }) },
     formatMoney: (value, currency) => formatMoneyIn(state.locale.locale, value, currency),
     formatDate: (value) => formatDateIn(state.locale.locale, value),
+    notify: (level, message) => {
+      // Fire and forget: a refusal (no permission, rate limit, an older host) is not the plugin's to handle.
+      notifyHost(level, message).catch(() => undefined)
+    },
+    onClosing: (listener) => {
+      closingListeners.add(listener)
+      return () => { closingListeners.delete(listener) }
+    },
   }
 
   const emit = (change: HostChange): void => { for (const l of [...listeners]) l(change) }
@@ -363,6 +389,13 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
       case 'focus-in':
       case 'modal-layout':
         return emit(msg)
+      case 'closing': {
+        // Each listener runs once and is dropped; one that throws does not stop the others.
+        const toRun = [...closingListeners]
+        closingListeners.clear()
+        for (const run of toRun) { try { run() } catch { /* a plugin's cleanup must not break the rest */ } }
+        return emit(msg)
+      }
       case 'init':
         return // a second init is ignored; the first one defines the frame
     }
@@ -400,8 +433,11 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
       post({ type: 'modal', open })
     },
     focusOut: (direction) => { post({ type: 'focus-out', direction }) },
-    notify: (level, message) =>
-      call<void>((id) => ({ type: 'notify', id, level, message })).then(() => undefined),
+    notify: notifyHost,
+    download: (file) =>
+      call<{ filename: string }>(
+        (id) => ({ type: 'download', id, filename: file.filename, mime: file.mime, data: file.data }), undefined, [file.data],
+      ),
     dispose() {
       if (closed) return
       closed = true
@@ -413,6 +449,7 @@ function buildConnection(port: MessagePort, init: InitMessage, options: ConnectO
       }
       pending.clear()
       listeners.clear()
+      closingListeners.clear()
     },
   }
 }

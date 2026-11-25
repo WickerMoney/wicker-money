@@ -135,6 +135,11 @@ const PROTECTED_ROUTES: readonly string[] = [
   'GET /api/v1/p/wickermoney.debt-payoff/settings',
   'PUT /api/v1/p/wickermoney.debt-payoff/settings',
   'GET /api/v1/p/wickermoney.debt-payoff/plan',
+  'POST /api/v1/p/wickermoney.debt-payoff/plan/what-if',
+  'GET /api/v1/p/wickermoney.debt-payoff/lump-sums',
+  'POST /api/v1/p/wickermoney.debt-payoff/lump-sums',
+  'PUT /api/v1/p/wickermoney.debt-payoff/lump-sums/:id',
+  'DELETE /api/v1/p/wickermoney.debt-payoff/lump-sums/:id',
   'GET /api/v1/p/wickermoney.debt-payoff/account-suggestions',
 
   'GET /api/v1/settings/config',

@@ -15,13 +15,15 @@ export const ISOLATED_PROTOCOL_VERSION = 1 as const
  * API's own codes pass through), so `PluginApiError.code` is a plain string;
  * these are the ones a plugin can rely on.
  *
- * - `grant_denied` - the manifest does not grant the table or path.
+ * - `grant_denied` - the manifest does not grant the table or path, or the permission the message needs (`notify`).
  * - `invalid_request` - the request was malformed or used an unsupported option.
- * - `not_supported` - the host does not implement the message (for example `notify`).
+ * - `not_supported` - the host does not implement the message (an older host, for `notify` or `download`).
  * - `network_error` - the host could not reach the API.
  * - `aborted` - the caller aborted the request.
  * - `disconnected` - the connection to the host was closed before an answer came.
  * - `request_failed` - the API answered with an error that carried no code of its own.
+ * - `gesture_required`, `file_too_large`, `file_type_not_allowed`, `file_invalid`, `rate_limited` - a `download` the host
+ *   refused (see {@link DownloadMessage}).
  */
 export const PLUGIN_ERROR_CODES = [
   'grant_denied',
@@ -31,6 +33,12 @@ export const PLUGIN_ERROR_CODES = [
   'aborted',
   'disconnected',
   'request_failed',
+  // The `download` message:
+  'gesture_required',
+  'file_too_large',
+  'file_type_not_allowed',
+  'file_invalid',
+  'rate_limited',
 ] as const
 
 /** One of the error codes in {@link PLUGIN_ERROR_CODES}. */
@@ -198,15 +206,62 @@ export interface ModalMessage {
 }
 
 /**
- * Reserved for the `notify` permission, which no host implements yet. A host
- * answers with a `not_supported` error response. The message exists so the
- * protocol does not change when `notify` is built.
+ * Asks the host to raise a toast. Needs the `notify` permission in the manifest; a plugin without it is answered with
+ * `grant_denied`. An older host that does not implement it answers `not_supported`.
+ *
+ * The message carries text and a level and nothing else: no callback, no link, no markup. The host shows the text as
+ * plain text, prefixed with the plugin's manifest name so it cannot pass for the host's own message, and keeps its own
+ * limits: a text cap ({@link MAX_NOTIFY_LENGTH} is only what the validator accepts; the host shows at most 200
+ * characters), at most 3 toasts per 10 seconds per frame, one per identical text per 30 seconds, and at most two
+ * visible toasts per plugin. Control characters, newlines and bidirectional overrides are stripped. A refused
+ * notification is answered with an error (`invalid_request` for bad text, `request_failed` with status 429 for the
+ * rate limit) and counts toward the frame's strikes.
  */
 export interface NotifyMessage {
   readonly type: 'notify'
   readonly id: number
   readonly level: 'info' | 'success' | 'warning' | 'error'
   readonly message: string
+}
+
+/**
+ * MIME types a frame may ask the host to save, each with the one extension the host gives the file. Deliberately
+ * short: nothing a browser or a desktop would run or render with script (no `text/html`, `image/svg+xml`,
+ * `text/javascript`).
+ */
+export const DOWNLOAD_TYPES = {
+  'text/plain': 'txt',
+  'text/csv': 'csv',
+  'application/json': 'json',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'application/pdf': 'pdf',
+} as const
+
+/** Largest file a frame may hand the host, in bytes. */
+export const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024
+
+/**
+ * Asks the host to save a file the person asked for (a share image, a PDF, a CSV). The host checks the type, the size,
+ * the bytes themselves (magic bytes for PNG, JPEG and PDF; valid UTF-8 for text, CSV and JSON, and parseable JSON),
+ * and that the person's last click or key press was in this frame. It picks the final file name (NFKC, a safe base
+ * name, the extension of the checked `mime`) and starts the browser's own download, then shows a host toast
+ * "Saved <name> from <plugin>". At most one file per 5 seconds per frame.
+ *
+ * Answered with a `response` whose value is `{ filename }` (the name the host used), or an error: `gesture_required`,
+ * `file_too_large`, `file_type_not_allowed`, `file_invalid`, `rate_limited`, or `grant_denied` when the plugin is not
+ * bundled with the app (a plugin that is not bundled cannot save files). An older host answers `not_supported`.
+ *
+ * `data` should be transferred, not copied; `HostConnection.download` does that.
+ */
+export interface DownloadMessage {
+  readonly type: 'download'
+  readonly id: number
+  /** A suggestion: the host keeps only its base name, makes it safe and gives it the extension of `mime`. */
+  readonly filename: string
+  /** One of {@link DOWNLOAD_TYPES}. */
+  readonly mime: string
+  readonly data: ArrayBuffer
 }
 
 /** Every message a plugin frame may send on the port. */
@@ -219,6 +274,7 @@ export type PluginMessage =
   | FocusOutMessage
   | ModalMessage
   | NotifyMessage
+  | DownloadMessage
 
 // ---------------------------------------------------------------------------
 // Host to frame, on the port.
@@ -299,6 +355,20 @@ export interface ModalLayoutMessage {
   readonly width: number
 }
 
+/**
+ * Best effort: the host is about to take this frame down (the person left the page, or the host is rebuilding the
+ * connection), so give back what you hold on the server, for example `upload/abort` for a staged upload.
+ *
+ * Not guaranteed. The host often removes the frame in the same task it sends this, in which case the frame never
+ * runs again and the message is never delivered; a plugin must not depend on it, and anything it holds on the server
+ * must also be released some other way (an expiry, or a limit that replaces the oldest). While the frame is still
+ * alive the host keeps serving `request` and `cancel` for a short grace period after sending it (see the README), and
+ * nothing else.
+ */
+export interface ClosingMessage {
+  readonly type: 'closing'
+}
+
 /** Every message the host may send on the port. */
 export type HostMessage =
   | InitMessage
@@ -309,3 +379,4 @@ export type HostMessage =
   | RouteMessage
   | FocusInMessage
   | ModalLayoutMessage
+  | ClosingMessage

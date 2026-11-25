@@ -94,7 +94,9 @@ export class InMemoryDebtRepository implements DebtRepository {
   async delete(id: string): Promise<number> {
     const at = this.store.debts.findIndex((d) => d.userId === this.userId && d.id === id)
     if (at < 0) return 0
-    this.store.debts.splice(at, 1)
+    const [gone] = this.store.debts.splice(at, 1)
+    // As the composite foreign key does: the parts aimed at a deleted debt go with it.
+    for (const lump of this.store.lumpSums) lump.allocations = lump.allocations.filter((a) => a.debt_id !== gone?.id)
     return 1
   }
 

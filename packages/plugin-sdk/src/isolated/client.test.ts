@@ -285,19 +285,107 @@ describe('modal dialogs in a page frame', () => {
   })
 })
 
+describe('ctx.notify', () => {
+  it('sends a notify message and returns nothing to wait for', async () => {
+    const { conn, seen } = await connect((m, reply) => { if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: true, value: null }) })
+    expect(conn.ctx.notify?.('success', 'Imported 12 rows')).toBeUndefined()
+    await tick()
+    expect(seen).toEqual([{ type: 'notify', id: 1, level: 'success', message: 'Imported 12 rows' }])
+  })
+
+  it('swallows a refusal: no throw and no unhandled rejection, whatever the host answers', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (e: unknown): void => { unhandled.push(e) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const { conn } = await connect((m, reply) => {
+        if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: false, error: { code: m.id === 1 ? 'grant_denied' : 'request_failed', message: 'No.', status: 429 } })
+      })
+      conn.ctx.notify?.('info', 'one')
+      conn.ctx.notify?.('info', 'two')
+      await tick()
+      await tick()
+      expect(unhandled).toEqual([])
+    } finally { process.off('unhandledRejection', onUnhandled) }
+  })
+
+  it('does nothing after dispose', async () => {
+    const { conn, seen } = await connect()
+    conn.dispose()
+    expect(() => conn.ctx.notify?.('info', 'late')).not.toThrow()
+    await tick()
+    expect(seen).toEqual([])
+  })
+})
+
+describe('closing', () => {
+  it('runs each ctx.onClosing listener once, tells subscribers, and skips a removed listener', async () => {
+    const { conn, reply } = await connect()
+    const ran: string[] = []
+    const changes: string[] = []
+    conn.subscribe((c) => { changes.push(c.type) })
+    conn.ctx.onClosing?.(() => { ran.push('a') })
+    conn.ctx.onClosing?.(() => { throw new Error('a plugin bug') })
+    conn.ctx.onClosing?.(() => { ran.push('c') })
+    const off = conn.ctx.onClosing?.(() => { ran.push('removed') })
+    off?.()
+    reply({ type: 'closing' })
+    await tick()
+    reply({ type: 'closing' })
+    await tick()
+    expect(ran).toEqual(['a', 'c'])
+    expect(changes).toEqual(['closing', 'closing'])
+  })
+
+  it('lets the frame answer with a request: a listener may post upload/abort-style calls', async () => {
+    const { conn, reply, seen } = await connect((m, r) => { if (m.type === 'request') r({ type: 'response', id: m.id, ok: true, value: {} }) })
+    conn.ctx.onClosing?.(() => { void conn.ctx.api.post('/p/x/upload/abort', { uploadId: 'u' }) })
+    reply({ type: 'closing' })
+    await tick()
+    expect(seen).toEqual([{ type: 'request', id: 1, method: 'POST', path: '/p/x/upload/abort', body: { uploadId: 'u' } }])
+  })
+})
+
 describe('frame to host helpers', () => {
   it('navigate, focusOut and notify send their messages', async () => {
     const { conn, seen } = await connect((m, reply) => {
-      if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: false, error: { code: 'not_supported', message: 'No notify yet.' } })
+      if (m.type === 'notify') reply({ type: 'response', id: m.id, ok: false, error: { code: 'grant_denied', message: 'No notify permission.' } })
     })
     conn.ctx.navigate('/transactions')
     conn.focusOut('previous')
-    await expect(conn.notify('info', 'Saved')).rejects.toMatchObject({ code: 'not_supported' })
+    await expect(conn.notify('info', 'Saved')).rejects.toMatchObject({ code: 'grant_denied' })
     expect(seen).toEqual([
       { type: 'navigate', path: '/transactions' },
       { type: 'focus-out', direction: 'previous' },
       { type: 'notify', id: 1, level: 'info', message: 'Saved' },
     ])
+  })
+
+  it('download transfers the buffer, sends the message and resolves with the host name', async () => {
+    const { conn, seen } = await connect((m, reply) => {
+      if (m.type === 'download') reply({ type: 'response', id: m.id, ok: true, value: { filename: 'report.csv' } })
+    })
+    const data = new TextEncoder().encode('a,b\n1,2\n').buffer as ArrayBuffer
+    const size = data.byteLength
+    await expect(conn.download({ filename: 'report', mime: 'text/csv', data })).resolves.toEqual({ filename: 'report.csv' })
+    expect(data.byteLength).toBe(0)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatchObject({ type: 'download', id: 1, filename: 'report', mime: 'text/csv' })
+    expect((seen[0] as { data: ArrayBuffer }).data.byteLength).toBe(size)
+  })
+
+  it.each(['gesture_required', 'file_too_large', 'file_type_not_allowed', 'file_invalid', 'rate_limited', 'grant_denied', 'not_supported'])(
+    'download rejects with the host error %s', async (code) => {
+      const { conn } = await connect((m, reply) => {
+        if (m.type === 'download') reply({ type: 'response', id: m.id, ok: false, error: { code, message: 'No.' } })
+      })
+      await expect(conn.download({ filename: 'a', mime: 'text/plain', data: new ArrayBuffer(1) })).rejects.toMatchObject({ code })
+    })
+
+  it('download after dispose rejects with disconnected', async () => {
+    const { conn } = await connect()
+    conn.dispose()
+    await expect(conn.download({ filename: 'a', mime: 'text/plain', data: new ArrayBuffer(1) })).rejects.toMatchObject({ code: 'disconnected' })
   })
 
   it('reportSize rounds up and skips repeats and bad values', async () => {

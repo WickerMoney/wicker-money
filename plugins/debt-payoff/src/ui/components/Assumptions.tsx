@@ -38,6 +38,12 @@ export function Assumptions({ plan, formatDate }: AssumptionsProps) {
         keep that money working.
       </li>
       <li>
+        <strong>Lump sums:</strong> a one-off payment is made on the first payment date on or after its date, after
+        that month's interest and minimums, and goes first to any debt you aimed part of it at, then to the debt the
+        strategy would pay next. Money no debt can take (every debt is paid off or not yet due) is not used. A
+        lump sum dated before today is ignored, because your balances already include it.
+      </li>
+      <li>
         <strong>Deferred loans:</strong> a debt with a repayment start date owes no minimum until the first month
         whose payment date falls on or after it. Until then interest keeps adding to its balance and the extra money
         skips it (only an amount set on that debt can pay it early). Its minimum joins the monthly payment when it

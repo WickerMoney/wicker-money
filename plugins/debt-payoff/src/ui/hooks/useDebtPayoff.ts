@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PluginContext } from '@wickermoney/plugin-sdk/runtime'
-import { NO_FORM_ERRORS, formErrorsFrom, type FormErrors } from '@wickermoney/ui-kit'
+import { NO_FORM_ERRORS, formErrorsFrom, hasFormErrors, type FormErrors } from '@wickermoney/ui-kit'
 import { DEBT_PAYOFF_API_BASE } from '../../server/constants.js'
-import type { PlanResponse, Strategy } from '../../shared/index.js'
+import type { PlanResponse, Strategy, WhatIfResult } from '../../shared/index.js'
 import { STRATEGY_INFO } from '../helpers/STRATEGY_INFO.js'
 import { checkDraft } from '../helpers/checkDraft.js'
 import { colorFor } from '../helpers/colorFor.js'
 import { draftBody } from '../helpers/draftBody.js'
+import { checkLumpSumDraft, partField } from '../helpers/checkLumpSumDraft.js'
+import { lumpSumBody, whatIfBody } from '../helpers/lumpSumBody.js'
+import { whatIfSentence } from '../helpers/whatIfSentence.js'
 import { moneyProblem } from '../helpers/moneyProblem.js'
 import type {
-  AccountSuggestion, AccountSuggestionsResponse, Debt, DebtDraft, DebtsResponse, PlanSettings,
+  AccountSuggestion, AccountSuggestionsResponse, Debt, DebtDraft, DebtsResponse, LumpSum, LumpSumDraft, LumpSumsResponse,
+  PlanSettings,
 } from '../models/index.js'
 
 const DEBT_FIELDS = ['name', 'balance', 'apr', 'minimumPayment', 'accountId', 'archived', 'included', 'extraPayment'] as const
+const LUMP_FIELDS = ['onDate', 'amount', 'note'] as const
 const SETTINGS_FIELDS = ['extraPayment', 'strategy'] as const
 
 /** What {@link useDebtPayoff} returns. */
@@ -63,6 +68,23 @@ export interface DebtPayoff {
    * @returns Whether the new order was saved; `false` for a debt already at that end, or a failure.
    */
   readonly moveDebt: (debt: Debt, direction: 'up' | 'down') => Promise<boolean>
+  /** The person's lump sums, soonest first; `null` while loading. */
+  readonly lumpSums: readonly LumpSum[] | null
+  /**
+   * Adds a lump sum, or changes one.
+   *
+   * @param id - The lump sum to change, or `null` to add one.
+   * @returns The problems by field, or no errors once saved.
+   */
+  readonly saveLumpSum: (id: string | null, draft: LumpSumDraft) => Promise<FormErrors>
+  /** Removes a lump sum. Resolves to whether it went. */
+  readonly removeLumpSum: (lump: LumpSum) => Promise<boolean>
+  /**
+   * Works out what a lump sum would change, saving nothing, and announces the answer.
+   *
+   * @returns The problems by field, or the result.
+   */
+  readonly previewLumpSum: (draft: LumpSumDraft) => Promise<{ readonly errors: FormErrors; readonly result: WhatIfResult | null }>
 }
 
 /**
@@ -87,6 +109,7 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
   const [showArchived, setShowArchived] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [status, setStatus] = useState('')
+  const [lumpSums, setLumpSums] = useState<readonly LumpSum[] | null>(null)
   const [busy, setBusy] = useState(false)
   // Bumped after any change to the debts, so the list, the suggestions and the plan are read again.
   const [version, setVersion] = useState(0)
@@ -121,6 +144,19 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
       .catch(() => { if (!signal.aborted) setSuggestions([]) })
     return () => controller.abort()
   }, [api, showArchived, version])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+    api.get<LumpSumsResponse>(`${DEBT_PAYOFF_API_BASE}/lump-sums`, { signal })
+      .then((r) => { if (!signal.aborted) setLumpSums(r.lumpSums) })
+      .catch((e: unknown) => {
+        if (signal.aborted) return
+        setLumpSums((l) => l ?? [])
+        setMessage(messageOf(e, 'Could not load your lump sums.'))
+      })
+    return () => controller.abort()
+  }, [api, version])
 
   const strategy = settings?.strategy
   const extra = settings?.extraPayment
@@ -256,9 +292,86 @@ export function useDebtPayoff(ctx: PluginContext): DebtPayoff {
     }
   }, [api])
 
+  const { formatMoney, formatDate } = ctx
+  const debtOrder = useMemo(() => (debts ?? []).map((d) => d.id), [debts])
+
+  /** Server problems on a part come back as `allocations.<n>.amount`; they go on that debt's field. */
+  const lumpErrors = useCallback((e: unknown, sent: readonly string[], fallback: string): FormErrors => formErrorsFrom(
+    e,
+    (path) => {
+      if ((LUMP_FIELDS as readonly string[]).includes(path)) return path
+      const m = /^allocations\.(\d+)/.exec(path)
+      const debtId = m?.[1] === undefined ? undefined : sent[Number(m[1])]
+      return debtId === undefined ? undefined : partField(debtId)
+    },
+    fallback,
+  ), [])
+
+  const saveLumpSum = useCallback(async (id: string | null, draft: LumpSumDraft): Promise<FormErrors> => {
+    const problems = checkLumpSumDraft(draft)
+    if (hasFormErrors(problems)) return problems
+    const body = lumpSumBody(draft, debtOrder)
+    setBusy(true)
+    try {
+      if (id === null) await api.post<LumpSum>(`${DEBT_PAYOFF_API_BASE}/lump-sums`, body)
+      else await api.put<LumpSum>(`${DEBT_PAYOFF_API_BASE}/lump-sums/${id}`, body)
+      setVersion((v) => v + 1)
+      setMessage(null)
+      setStatus(`Lump sum of ${formatMoney(draft.amount.trim())} on ${formatDate(draft.onDate.trim())} ${id === null ? 'added' : 'saved'}. Updating the plan.`)
+      return NO_FORM_ERRORS
+    } catch (e: unknown) {
+      return lumpErrors(e, (body['allocations'] as Array<{ debtId: string }>).map((a) => a.debtId), 'Could not save that lump sum.')
+    } finally {
+      setBusy(false)
+    }
+  }, [api, debtOrder, formatDate, formatMoney, lumpErrors])
+
+  const removeLumpSum = useCallback(async (lump: LumpSum): Promise<boolean> => {
+    setBusy(true)
+    try {
+      await api.del(`${DEBT_PAYOFF_API_BASE}/lump-sums/${lump.id}`)
+      setVersion((v) => v + 1)
+      setMessage(null)
+      setStatus(`Lump sum of ${formatMoney(lump.amount)} on ${formatDate(lump.onDate)} removed. Updating the plan.`)
+      return true
+    } catch (e: unknown) {
+      setMessage(messageOf(e, 'Could not remove that lump sum.'))
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }, [api, formatDate, formatMoney])
+
+  const previewLumpSum = useCallback(async (draft: LumpSumDraft) => {
+    const problems = checkLumpSumDraft(draft, { withNote: false })
+    if (hasFormErrors(problems)) return { errors: problems, result: null }
+    const candidate = whatIfBody(draft, debtOrder)
+    const body = {
+      ...candidate,
+      ...(strategy === undefined ? {} : { strategy }),
+      ...(extra === undefined ? {} : { extra }),
+      tz: timezone,
+    }
+    setBusy(true)
+    try {
+      const result = await api.post<WhatIfResult>(`${DEBT_PAYOFF_API_BASE}/plan/what-if`, body)
+      setMessage(null)
+      setStatus(whatIfSentence(result, formatMoney, formatDate))
+      return { errors: NO_FORM_ERRORS, result }
+    } catch (e: unknown) {
+      return {
+        errors: lumpErrors(e, (candidate['allocations'] as Array<{ debtId: string }>).map((a) => a.debtId), 'Could not work that out.'),
+        result: null,
+      }
+    } finally {
+      setBusy(false)
+    }
+  }, [api, debtOrder, extra, formatDate, formatMoney, lumpErrors, strategy, timezone])
+
   return {
     debts, colors, settings, plan, planLoading, suggestions, showArchived, setShowArchived,
     message, status, busy, chooseStrategy, applyExtra, saveDebt, removeDebt, setIncluded, moveDebt,
+    lumpSums, saveLumpSum, removeLumpSum, previewLumpSum,
   }
 }
 

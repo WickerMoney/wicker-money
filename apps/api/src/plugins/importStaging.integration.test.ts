@@ -124,14 +124,30 @@ describe('begin', () => {
     expect((await begin(await createUser(h), 64, 8_000_000)).statusCode).toBe(200)
   })
 
-  it('allows two live uploads per user, refuses a third with 409, and counts users separately', async () => {
+  it('allows two live uploads per user, replaces the oldest on a third, and counts users separately', async () => {
     const u = await createUser(h)
-    expect((await begin(u, 1, 10)).statusCode).toBe(200)
-    expect((await begin(u, 1, 10)).statusCode).toBe(200)
+    const v = await createUser(h)
+    const first = (await begin(u, 1, 10)).json() as { uploadId: string }
+    const second = (await begin(u, 1, 10)).json() as { uploadId: string }
+    const theirs = (await begin(v, 1, 10)).json() as { uploadId: string }
     const third = await begin(u, 1, 10)
-    expect(third.statusCode).toBe(409)
-    expect(third.json()).toMatchObject({ code: 'too_many_uploads' })
-    expect((await begin(await createUser(h), 1, 10)).statusCode).toBe(200)
+    expect(third.statusCode).toBe(200)
+    // The oldest of u's uploads is gone; the second, the third and v's own are live.
+    expect((await chunk(u, first.uploadId, 0, 'abcdefghij')).json()).toMatchObject(NOT_FOUND)
+    expect((await chunk(u, second.uploadId, 0, 'abcdefghij')).statusCode).toBe(200)
+    expect((await chunk(u, (third.json() as { uploadId: string }).uploadId, 0, 'abcdefghij')).statusCode).toBe(200)
+    expect((await chunk(v, theirs.uploadId, 0, 'abcdefghij')).statusCode).toBe(200)
+  })
+
+  it('never evicts or aborts another user\'s upload, whoever names the id', async () => {
+    const u = await createUser(h)
+    const v = await createUser(h)
+    const victim = (await begin(v, 1, 10)).json() as { uploadId: string }
+    // u begins past the limit, and names v's id in an abort: v's upload survives both.
+    for (let i = 0; i < 4; i += 1) expect((await begin(u, 1, 10)).statusCode).toBe(200)
+    expect((await post('/upload/abort', { uploadId: victim.uploadId }, u)).statusCode).toBe(200)
+    expect((await chunk(v, victim.uploadId, 0, 'abcdefghij')).statusCode).toBe(200)
+    expect((await finish(v, victim.uploadId)).statusCode).toBe(200)
   })
 })
 
@@ -221,11 +237,10 @@ describe('chunk and finish', () => {
 })
 
 describe('abort', () => {
-  it('frees the quota at once, and answers alike for an unknown id and another user\'s', async () => {
+  it('frees the upload at once, and answers alike for an unknown id and another user\'s', async () => {
     const u = await createUser(h)
     const a = (await begin(u, 1, 5)).json() as { uploadId: string }
     const b = (await begin(u, 1, 5)).json() as { uploadId: string }
-    expect((await begin(u, 1, 5)).statusCode).toBe(409)
 
     const theirs = await createUser(h)
     const stranger = await abort(theirs, a.uploadId)

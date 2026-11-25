@@ -11,6 +11,11 @@ export interface PluginRegistryState {
   /** Where each plugin's UI runs, by manifest id; see `PluginRegistry.runtimes`. */
   readonly runtimes?: Readonly<Record<string, PluginRuntime>>
   /**
+   * Whether each plugin ships with the app, by manifest id, as the API reported it. A plugin missing from the
+   * map, or a registry built by hand without one, is not bundled.
+   */
+  readonly bundled?: Readonly<Record<string, boolean>>
+  /**
    * Fetches the registry again and applies it: newly enabled plugins mount,
    * disabled ones unmount. Never rejects; a failed fetch keeps what was there.
    */

@@ -450,6 +450,32 @@ describe('useImportFlow staging', () => {
     await waitFor(() => expect(server.store.liveCount('user-1')).toBe(0))
   })
 
+  it('gives the upload back when the host says closing (ctx.onClosing), once, and stops listening on unmount', async () => {
+    const server = fakeImportApi({ accounts: ACCOUNTS })
+    const listeners = new Set<() => void>()
+    const ctx = { api: server.api, onClosing: (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } } } as unknown as PluginContext
+    const hook = renderHook(() => useImportFlow(ctx))
+    await act(async () => { await hook.result.current.onFile(file()) })
+    await waitFor(() => expect(hook.result.current.upload.phase).toBe('ready'))
+    expect(listeners.size).toBe(1)
+
+    for (const l of [...listeners]) l() // the host's closing
+
+    await waitFor(() => expect(server.store.liveCount('user-1')).toBe(0))
+    expect(server.callsTo('/upload/abort')).toHaveLength(1)
+    hook.unmount()
+    expect(listeners.size).toBe(0)
+  })
+
+  it('works with a context that has no onClosing (in the page, or a hand-built one)', async () => {
+    const server = fakeImportApi({ accounts: ACCOUNTS })
+    const hook = renderHook(useFlowOf(server))
+    await act(async () => { await hook.result.current.onFile(file()) })
+    await waitFor(() => expect(hook.result.current.upload.phase).toBe('ready'))
+    hook.unmount()
+    await waitFor(() => expect(server.store.liveCount('user-1')).toBe(0))
+  })
+
   it('does not give back an upload the server has already imported', async () => {
     const { server, ctx } = commitContext(0)
     const { result } = await reviewedFlow(ctx)

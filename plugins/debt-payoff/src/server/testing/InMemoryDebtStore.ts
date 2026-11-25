@@ -1,9 +1,16 @@
 import type { AccountRow } from '../repository/AccountRow.js'
 import type { DebtRow } from '../repository/DebtRow.js'
+import type { LumpSumRow } from '../repository/LumpSumRow.js'
 import type { SettingsRow } from '../repository/SettingsRow.js'
 
 /** A debt in the fake store, with the owner that row-level security would filter on. */
 export interface StoredDebt extends DebtRow {
+  userId: string
+  createdAt: number
+}
+
+/** A lump sum in the fake store, with its owner. */
+export interface StoredLumpSum extends LumpSumRow {
   userId: string
   createdAt: number
 }
@@ -17,6 +24,7 @@ export interface StoredAccount extends AccountRow {
 export class InMemoryDebtStore {
   readonly debts: StoredDebt[] = []
   readonly accounts: StoredAccount[] = []
+  readonly lumpSums: StoredLumpSum[] = []
   readonly settings = new Map<string, SettingsRow>()
   private nextId = 1
   private clock = 0

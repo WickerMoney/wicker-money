@@ -31,8 +31,12 @@
  *   `modal-layout` (ADR 0015). Both messages are additive, not a protocol bump
  *   (unknown messages are ignored, and an older host leaves the dialog where it
  *   was).
- * - **`notify` is reserved.** The message exists and a host answers it with
- *   `not_supported` until the permission is built.
+ * - **`notify` raises a host toast.** Gated by the `notify` manifest permission; text and
+ *   level only, no callback; the host caps, rate limits and prefixes it with the plugin's name.
+ *   A plugin calls `ctx.notify?.(level, text)`.
+ * - **`download` asks the host to save a file** (txt, csv, json, png, jpg, pdf; at most 5 MiB; one per 5 seconds).
+ *   Only for a plugin bundled with the app, only from a click or key press in the frame; the host checks the type
+ *   and the bytes and starts the browser's own download. A plugin calls `connection.download({ filename, mime, data })`.
  * - **`RequestInit` is narrowed** to `signal` and `cache`. Headers and
  *   credentials are the host's to set, never the frame's.
  *
@@ -53,9 +57,11 @@ export type {
   ResizeObserverCtor,
 } from './client.js'
 export { PluginApiError } from './PluginApiError.js'
-export { ISOLATED_PROTOCOL_VERSION, PLUGIN_ERROR_CODES } from './protocol.js'
+export { DOWNLOAD_TYPES, ISOLATED_PROTOCOL_VERSION, MAX_DOWNLOAD_BYTES, PLUGIN_ERROR_CODES } from './protocol.js'
 export type {
   CancelMessage,
+  DownloadMessage,
+  ClosingMessage,
   FocusDirection,
   FocusInMessage,
   FocusOutMessage,

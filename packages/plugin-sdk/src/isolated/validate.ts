@@ -23,10 +23,24 @@ export const MAX_REPORTED_HEIGHT = 100_000
 export const MAX_THEME_TOKENS = 512
 /** Largest offset or width a modal layout may carry, in CSS pixels. */
 export const MAX_MODAL_LAYOUT = 100_000
+/** Longest suggested file name accepted, in characters. */
+const MAX_DOWNLOAD_FILENAME = 255
 /** Longest notification text accepted, in characters. */
 export const MAX_NOTIFY_LENGTH = 500
 
 type Obj = Record<string, unknown>
+
+const arrayBufferByteLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, 'byteLength')?.get
+
+/**
+ * Whether `value` is a real `ArrayBuffer`, whichever realm made it. A brand check through the `byteLength` getter,
+ * which throws for anything without the internal slot: a typed array, a `SharedArrayBuffer` and an object that only
+ * claims to be one are all refused. `instanceof` would refuse a buffer from another realm.
+ */
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  if (arrayBufferByteLength === undefined || typeof value !== 'object' || value === null) return false
+  try { arrayBufferByteLength.call(value); return true } catch { return false }
+}
 
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v)
 const isId = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
@@ -151,6 +165,12 @@ export function parsePluginMessage(data: unknown): PluginMessage | null {
       if (level !== 'info' && level !== 'success' && level !== 'warning' && level !== 'error') return null
       return { type: 'notify', id, level, message }
     }
+    case 'download': {
+      const { id, filename, mime, data: bytes } = data
+      if (!isId(id) || !isStr(filename) || filename.length === 0 || filename.length > MAX_DOWNLOAD_FILENAME) return null
+      if (!isStr(mime) || mime.length > 100 || !isArrayBuffer(bytes)) return null
+      return { type: 'download', id, filename, mime, data: bytes }
+    }
     default:
       return null
   }
@@ -226,6 +246,8 @@ export function parseHostMessage(data: unknown): HostMessage | null {
       if (typeof lifted !== 'boolean' || !inRange(x) || !inRange(y) || !inRange(width) || width < 0) return null
       return { type: 'modal-layout', lifted, x, y, width }
     }
+    case 'closing':
+      return { type: 'closing' }
     default:
       return null
   }

@@ -11,6 +11,23 @@ curated, human-readable version.
 
 ### Added
 
+- **Debt payoff: lump sums and a what-if.** Record a one-off payment (a bonus, a
+  tax refund) with a date, an amount, an optional note, and optionally part of
+  it aimed at particular debts. The plan pays it on the first payment date on or
+  after its date, after that month's interest and minimums: first the parts
+  aimed at a debt, then the debt the strategy would pay next, for snowball,
+  avalanche and Custom order alike. A lump sum dated before today is ignored by
+  the plan, because the balances already include it; the page says so and offers
+  to remove it. A "What if?" form shows the debt-free date and the interest a
+  lump sum would save against the current plan, without saving anything, and the
+  result is announced in the page's live region. The API gains `GET/POST
+  /lump-sums`, `PUT/DELETE /lump-sums/:id` and `POST /plan/what-if`; `GET /plan`
+  reports what it did with each lump sum (`lumpSums`) when there are any, and the
+  data export includes `lumpSums` (an older export without it is unaffected).
+  Plans with no lump sums are byte-for-byte what they were. **Migration 037**
+  (additive, has a `down`) adds `plugin_debt_payoff.lump_sums` and
+  `lump_sum_allocations`, both under forced row-level security. No grant, SDK or
+  protocol change.
 - **Debt payoff: Custom order.** A third strategy beside snowball and avalanche:
   the extra money goes to your debts in an order you set, skipping any that are
   paid off or left out of the plan. Choose it under "Payoff plan" and a list
@@ -21,6 +38,32 @@ curated, human-readable version.
   request) and accepts `custom` as a strategy. Snowball and avalanche plans are
   unchanged. **Migration 036** (additive, has a `down`) allows the new value in
   the strategy check; going back moves anyone on Custom order to avalanche.
+- **Plugin SDK: `contributes.themes` in the manifest.** A plugin manifest may
+  declare colour themes (`id`, `label`, `mode`, and `tokens`). Only a fixed set
+  of `--wm-` colour and length tokens is accepted, with plain colour and length
+  values: no `url()`, `calc()`, named colour, `;`, braces or unknown field, at
+  most 8 themes of at most 16 KiB together. This is the manifest field only; the
+  app does not register or apply the themes yet.
+- **Plugin protocol: a frame can ask the host to save a file.** A plugin that
+  ships with the app (Wicker Money's own, never one you add) can send a
+  `download` message with a name, a type and the bytes, and the host starts the
+  browser's download and shows "Saved <name> from <plugin>". Only after a click
+  or key press in that plugin; txt, csv, json, png, jpg or pdf, at most 5 MiB;
+  the host checks the bytes, picks a safe name with the extension that matches
+  the checked type, and allows one file per 5 seconds per plugin. Plugins that
+  are not bundled are refused (`grant_denied`). The sandbox and the frame's
+  content security policy are unchanged. SDK: `host.download(...)`,
+  `DOWNLOAD_TYPES`, `MAX_DOWNLOAD_BYTES` and five new error codes.
+- **Plugin notifications: `ctx.notify` now works.** With the `notify`
+  permission in its manifest, a plugin shows a short text toast in the host,
+  prefixed with the plugin's name (no callback, no link, no markup), at most 3
+  per 10 seconds and 2 visible per plugin. The owner is told which plugins ask
+  for it when switching one on.
+- **Import CSV: a stage upload is released when you leave.** Starting a new
+  upload now replaces your oldest unfinished one instead of refusing, and the
+  uploader sends a best-effort `closing` message the frame can answer with
+  `upload/abort`. Leaving the page still cannot be relied on to deliver it, so
+  the replace-the-oldest rule is what frees the memory.
   
 ### Changed
 

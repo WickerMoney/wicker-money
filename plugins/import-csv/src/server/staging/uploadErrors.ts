@@ -12,20 +12,6 @@ export function uploadNotFound(): ImportError {
 }
 
 /**
- * A user already holds the most live uploads allowed.
- *
- * @param limit - The per-user limit.
- * @returns A `409` (`too_many_uploads`).
- */
-export function tooManyUploads(limit: number): ImportError {
-  return new ImportError(
-    `You already have ${limit} uploads waiting. Import or wait for one to expire, then try again.`,
-    409,
-    'too_many_uploads',
-  )
-}
-
-/**
  * The process holds as much staged text as it allows.
  *
  * @param retryAfterSeconds - When to try again.

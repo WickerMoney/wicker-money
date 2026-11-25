@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { aprField } from './aprField.js'
+import { lumpSumBody } from './lumpSumBody.js'
+import { whatIfBody } from './whatIfBody.js'
 import { createDebtBody } from './createDebtBody.js'
 import { moneyField } from './moneyField.js'
 import { planQuery } from './planQuery.js'
@@ -214,5 +216,70 @@ describe('reorderDebtsBody', () => {
   it('names the position of a bad id', () => {
     const result = reorderDebtsBody.safeParse({ ids: [ID, 'nope'] })
     expect(result.error?.issues[0]?.path).toEqual(['ids', 1])
+  })
+})
+
+describe('lumpSumBody', () => {
+  const ok = { onDate: '2027-01-15', amount: '1500' }
+
+  it('accepts a date and an amount, normalising the amount', () => {
+    expect(lumpSumBody.parse(ok)).toEqual({ onDate: '2027-01-15', amount: '1500.0000' })
+  })
+
+  it('accepts a note and allocations', () => {
+    expect(lumpSumBody.parse({ ...ok, note: '  Tax refund ', allocations: [{ debtId: ID, amount: '10.5' }] })).toEqual({
+      onDate: '2027-01-15', amount: '1500.0000', note: 'Tax refund', allocations: [{ debtId: ID, amount: '10.5000' }],
+    })
+    expect(lumpSumBody.parse({ ...ok, allocations: [] }).allocations).toEqual([])
+  })
+
+  it.each([
+    ['no amount', { onDate: '2027-01-15' }],
+    ['no date', { amount: '10' }],
+    ['a JSON number amount', { ...ok, amount: 10 }],
+    ['a zero amount', { ...ok, amount: '0' }],
+    ['a zero amount with places', { ...ok, amount: '0.0000' }],
+    ['a negative amount', { ...ok, amount: '-5' }],
+    ['more than four places', { ...ok, amount: '1.00001' }],
+    ['a date that does not exist', { ...ok, onDate: '2027-02-30' }],
+    ['a date in words', { ...ok, onDate: 'next spring' }],
+    ['a date with a time', { ...ok, onDate: '2027-01-15T00:00:00Z' }],
+    ['a note over 200 characters', { ...ok, note: 'x'.repeat(201) }],
+    ['a note that is not text', { ...ok, note: 5 }],
+    ['allocations that are not a list', { ...ok, allocations: ID }],
+    ['an allocation with a bad debt id', { ...ok, allocations: [{ debtId: 'nope', amount: '5' }] }],
+    ['an allocation of zero', { ...ok, allocations: [{ debtId: ID, amount: '0' }] }],
+    ['an allocation with a number amount', { ...ok, allocations: [{ debtId: ID, amount: 5 }] }],
+    ['an allocation with an unknown field', { ...ok, allocations: [{ debtId: ID, amount: '5', extra: 1 }] }],
+    ['more than fifty allocations', { ...ok, allocations: Array.from({ length: 51 }, () => ({ debtId: ID, amount: '1' })) }],
+    ['an unknown field', { ...ok, strategy: 'avalanche' }],
+  ])('refuses %s', (_label, body) => {
+    expect(lumpSumBody.safeParse(body).success).toBe(false)
+  })
+
+  it('puts an allocation\'s problem on that allocation', () => {
+    const result = lumpSumBody.safeParse({ ...ok, allocations: [{ debtId: ID, amount: '5' }, { debtId: ID, amount: 'x' }] })
+    expect(result.error?.issues[0]?.path).toEqual(['allocations', 1, 'amount'])
+  })
+})
+
+describe('whatIfBody', () => {
+  const ok = { onDate: '2027-01-15', amount: '1500' }
+
+  it('accepts the lump sum alone, or with the plan settings', () => {
+    expect(whatIfBody.parse(ok)).toEqual({ onDate: '2027-01-15', amount: '1500.0000' })
+    expect(whatIfBody.parse({ ...ok, strategy: 'custom', extra: '25', tz: 'America/New_York' })).toEqual({
+      onDate: '2027-01-15', amount: '1500.0000', strategy: 'custom', extra: '25.0000', tz: 'America/New_York',
+    })
+  })
+
+  it.each([
+    ['a zero amount', { ...ok, amount: '0' }],
+    ['a note (it is not saved, so it is not taken)', { ...ok, note: 'x' }],
+    ['an unknown strategy', { ...ok, strategy: 'fast' }],
+    ['a negative extra', { ...ok, extra: '-1' }],
+    ['a time zone that does not exist', { ...ok, tz: 'Nowhere/Land' }],
+  ])('refuses %s', (_label, body) => {
+    expect(whatIfBody.safeParse(body).success).toBe(false)
   })
 })

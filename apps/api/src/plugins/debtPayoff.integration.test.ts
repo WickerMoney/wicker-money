@@ -510,10 +510,284 @@ describe('settings and plan', () => {
   })
 })
 
+interface LumpSumBody {
+  id: string; onDate: string; amount: string; note: string
+  allocations: Array<{ debtId: string; amount: string }>
+}
+
+async function lumpSum(u: TestUser, over: Record<string, unknown> = {}): Promise<LumpSumBody> {
+  const res = await req('POST', '/lump-sums', u, { onDate: '2099-01-15', amount: '1500', ...over })
+  if (res.statusCode !== 200) throw new Error(`lump sum failed: ${res.statusCode} ${res.body}`)
+  return res.json() as LumpSumBody
+}
+
+describe('lump sums', () => {
+  it('creates, lists, replaces and deletes a lump sum, with money as four-place strings', async () => {
+    const who = await createUser(h)
+    const created = await lumpSum(who, { onDate: '2099-03-01', amount: '2500.5', note: '  Tax refund ' })
+    expect(created).toMatchObject({ onDate: '2099-03-01', amount: '2500.5000', note: 'Tax refund', allocations: [] })
+
+    const sooner = await lumpSum(who, { onDate: '2099-02-01', amount: '10' })
+    const list = await req('GET', '/lump-sums', who)
+    expect(list.statusCode).toBe(200)
+    expect((list.json() as { lumpSums: LumpSumBody[] }).lumpSums.map((l) => l.id)).toEqual([sooner.id, created.id])
+
+    const put = await req('PUT', `/lump-sums/${created.id}`, who, { onDate: '2099-04-01', amount: '99.99' })
+    expect(put.statusCode).toBe(200)
+    expect(put.json()).toEqual({ id: created.id, onDate: '2099-04-01', amount: '99.9900', note: '', allocations: [] })
+
+    const del = await req('DELETE', `/lump-sums/${created.id}`, who)
+    expect(del.json()).toEqual({ removed: 1 })
+    expect((await req('DELETE', `/lump-sums/${created.id}`, who)).statusCode).toBe(404)
+    expect(((await req('GET', '/lump-sums', who)).json() as { lumpSums: LumpSumBody[] }).lumpSums.map((l) => l.id)).toEqual([sooner.id])
+  })
+
+  it('stores allocations aimed at the person\'s own debts and gives them back', async () => {
+    const who = await createUser(h)
+    const a = await debt(who, { name: 'A' })
+    const b = await debt(who, { name: 'B' })
+    const saved = await lumpSum(who, { amount: '1000', allocations: [{ debtId: b.id, amount: '300' }, { debtId: a.id, amount: '200.5' }] })
+    expect(saved.allocations).toHaveLength(2)
+    expect(saved.allocations).toEqual(expect.arrayContaining([{ debtId: a.id, amount: '200.5000' }, { debtId: b.id, amount: '300.0000' }]))
+    const rows = await asRole(who.id, 'SELECT user_id FROM plugin_debt_payoff.lump_sum_allocations WHERE lump_sum_id = ?::uuid', saved.id)
+    expect(rows).toEqual([{ user_id: who.id }, { user_id: who.id }])
+
+    // A replace swaps the allocations; leaving them out clears them.
+    const swapped = await req('PUT', `/lump-sums/${saved.id}`, who, { onDate: '2099-01-15', amount: '1000', allocations: [{ debtId: a.id, amount: '1000' }] })
+    expect((swapped.json() as LumpSumBody).allocations).toEqual([{ debtId: a.id, amount: '1000.0000' }])
+    const cleared = await req('PUT', `/lump-sums/${saved.id}`, who, { onDate: '2099-01-15', amount: '1000' })
+    expect((cleared.json() as LumpSumBody).allocations).toEqual([])
+  })
+
+  it('refuses invalid input with a 400 on the field, never a 500', async () => {
+    const who = await createUser(h)
+    const mine = await debt(who, { name: 'Mine' })
+    const bad: Array<[string, Record<string, unknown>, string]> = [
+      ['no amount', { onDate: '2099-01-15' }, 'amount'],
+      ['a number amount', { onDate: '2099-01-15', amount: 100 }, 'amount'],
+      ['a zero amount', { onDate: '2099-01-15', amount: '0' }, 'amount'],
+      ['a negative amount', { onDate: '2099-01-15', amount: '-1' }, 'amount'],
+      ['too many places', { onDate: '2099-01-15', amount: '1.00001' }, 'amount'],
+      ['too large', { onDate: '2099-01-15', amount: '99999999999999999' }, 'amount'],
+      ['a date that does not exist', { onDate: '2099-02-30', amount: '1' }, 'onDate'],
+      ['no date', { amount: '1' }, 'onDate'],
+      ['a long note', { onDate: '2099-01-15', amount: '1', note: 'x'.repeat(201) }, 'note'],
+      ['an unknown field', { onDate: '2099-01-15', amount: '1', color: 'red' }, ''],
+      ['a forged owner', { onDate: '2099-01-15', amount: '1', userId: who.id, user_id: who.id }, ''],
+      ['a bad allocation id', { onDate: '2099-01-15', amount: '1', allocations: [{ debtId: 'x', amount: '1' }] }, 'allocations'],
+      ['an allocation of zero', { onDate: '2099-01-15', amount: '1', allocations: [{ debtId: mine.id, amount: '0' }] }, 'allocations'],
+    ]
+    for (const [label, payload, field] of bad) {
+      const res = await req('POST', '/lump-sums', who, payload)
+      expect(res.statusCode, label).toBe(400)
+      if (field !== '') expect(res.json().issues?.[0]?.path?.[0], label).toBe(field)
+    }
+    for (const body of [null, 'text', [], 5]) {
+      const res = await h.app.inject({ method: 'POST', url: `${BASE}/lump-sums`, headers: headers(who), payload: body as never })
+      expect(res.statusCode, JSON.stringify(body)).toBeLessThan(500)
+    }
+    expect((await req('PUT', '/lump-sums/not-a-uuid', who, { onDate: '2099-01-15', amount: '1' })).statusCode).toBe(400)
+    expect((await req('DELETE', '/lump-sums/not-a-uuid', who)).statusCode).toBe(400)
+    expect(await asRole(who.id, 'SELECT id FROM plugin_debt_payoff.lump_sums')).toEqual([])
+  })
+
+  it('refuses allocations that name another person\'s debt, one twice, or add up to too much, and saves nothing', async () => {
+    const who = await createUser(h)
+    const rival = await createUser(h)
+    const mine = await debt(who, { name: 'Mine' })
+    const theirs = await debt(rival, { name: 'Theirs' })
+
+    const forged = await req('POST', '/lump-sums', who, { onDate: '2099-01-15', amount: '100', allocations: [{ debtId: theirs.id, amount: '10' }] })
+    const missing = await req('POST', '/lump-sums', who, {
+      onDate: '2099-01-15', amount: '100', allocations: [{ debtId: '00000000-0000-4000-8000-0000000000aa', amount: '10' }],
+    })
+    expect(forged.statusCode).toBe(400)
+    expect(forged.json()).toMatchObject({ code: 'unknown_debt', issues: [{ path: ['allocations', 0, 'debtId'] }] })
+    // Answered exactly as an id that does not exist is, so it teaches nothing about another person's ids.
+    expect(forged.json().message).toBe(missing.json().message)
+
+    const twice = await req('POST', '/lump-sums', who, { onDate: '2099-01-15', amount: '100', allocations: [{ debtId: mine.id, amount: '10' }, { debtId: mine.id, amount: '10' }] })
+    expect(twice.json()).toMatchObject({ code: 'duplicate_debt' })
+    const tooMuch = await req('POST', '/lump-sums', who, { onDate: '2099-01-15', amount: '100', allocations: [{ debtId: mine.id, amount: '100.0001' }] })
+    expect(tooMuch.json()).toMatchObject({ code: 'allocation_too_large', issues: [{ path: ['allocations'] }] })
+    expect(await asRole(who.id, 'SELECT id FROM plugin_debt_payoff.lump_sums')).toEqual([])
+    expect(await asRole(rival.id, 'SELECT lump_sum_id FROM plugin_debt_payoff.lump_sum_allocations')).toEqual([])
+  })
+
+  it('has the database itself refuse an allocation that names another person\'s debt or lump sum', async () => {
+    const who = await createUser(h)
+    const rival = await createUser(h)
+    const mine = await debt(who, { name: 'Mine' })
+    const theirs = await debt(rival, { name: 'Theirs' })
+    const myLump = await lumpSum(who)
+    const theirLump = await lumpSum(rival)
+    const insert = (userId: string, lumpId: string, debtId: string) => asRole(
+      userId,
+      'INSERT INTO plugin_debt_payoff.lump_sum_allocations (lump_sum_id, user_id, debt_id, amount) VALUES (?::uuid, ?::uuid, ?::uuid, 1)',
+      lumpId, userId, debtId,
+    )
+    // Bypassing the service: even with a forged row the composite keys hold.
+    await expect(insert(who.id, myLump.id, theirs.id)).rejects.toThrow(/fk_lump_sum_allocations_debt/)
+    await expect(insert(who.id, theirLump.id, mine.id)).rejects.toThrow(/fk_lump_sum_allocations_lump_sum/)
+    await expect(insert(rival.id, myLump.id, theirs.id)).rejects.toThrow(/fk_lump_sum_allocations_lump_sum/)
+    await insert(who.id, myLump.id, mine.id)
+    await expect(insert(who.id, myLump.id, mine.id)).rejects.toThrow(/pk_lump_sum_allocations/)
+    // And the database refuses a row that is not the session's own, whatever the keys say.
+    await expect(asRole(
+      who.id,
+      "INSERT INTO plugin_debt_payoff.lump_sums (user_id, on_date, amount) VALUES (?::uuid, '2099-01-01', 1)", rival.id,
+    )).rejects.toThrow(/row-level security/)
+    await expect(asRole(who.id, "INSERT INTO plugin_debt_payoff.lump_sums (user_id, on_date, amount) VALUES (?::uuid, '2099-01-01', 0)", who.id))
+      .rejects.toThrow(/ck_lump_sums_amount/)
+  })
+
+  it('keeps lump sums and allocations per person: never shown, changed or deleted by someone else', async () => {
+    const who = await createUser(h)
+    const rival = await createUser(h)
+    const mine = await debt(who, { name: 'Mine' })
+    const saved = await lumpSum(who, { note: 'private', allocations: [{ debtId: mine.id, amount: '5' }] })
+
+    expect((await req('PUT', `/lump-sums/${saved.id}`, rival, { onDate: '2099-05-05', amount: '1' })).statusCode).toBe(404)
+    expect((await req('DELETE', `/lump-sums/${saved.id}`, rival)).statusCode).toBe(404)
+    expect(((await req('GET', '/lump-sums', rival)).json() as { lumpSums: LumpSumBody[] }).lumpSums).toEqual([])
+    expect(JSON.stringify((await req('GET', '/plan?tz=UTC', rival)).json())).not.toContain('private')
+
+    // The database: the other person's session sees, changes and deletes none of the rows, in either table.
+    for (const table of ['lump_sums', 'lump_sum_allocations']) {
+      expect(await asRole(rival.id, `SELECT * FROM plugin_debt_payoff.${table}`), table).toEqual([])
+    }
+    expect(await asRole(rival.id, "UPDATE plugin_debt_payoff.lump_sums SET amount = 99 WHERE id = ?::uuid RETURNING id", saved.id)).toEqual([])
+    expect(await asRole(rival.id, 'UPDATE plugin_debt_payoff.lump_sum_allocations SET amount = 99 RETURNING lump_sum_id')).toEqual([])
+    expect(await asRole(rival.id, 'DELETE FROM plugin_debt_payoff.lump_sum_allocations RETURNING lump_sum_id')).toEqual([])
+    expect(await asRole(rival.id, 'DELETE FROM plugin_debt_payoff.lump_sums RETURNING id')).toEqual([])
+
+    const still = ((await req('GET', '/lump-sums', who)).json() as { lumpSums: LumpSumBody[] }).lumpSums
+    expect(still).toEqual([saved])
+  })
+
+  it('removes the parts aimed at a debt when the debt is deleted, and its lump sum stays', async () => {
+    const who = await createUser(h)
+    const a = await debt(who, { name: 'A' })
+    const b = await debt(who, { name: 'B' })
+    const saved = await lumpSum(who, { amount: '100', allocations: [{ debtId: a.id, amount: '10' }, { debtId: b.id, amount: '20' }] })
+    expect((await req('DELETE', `/debts/${a.id}`, who)).statusCode).toBe(200)
+    const [left] = ((await req('GET', '/lump-sums', who)).json() as { lumpSums: LumpSumBody[] }).lumpSums
+    expect(left).toMatchObject({ id: saved.id, amount: '100.0000', allocations: [{ debtId: b.id, amount: '20.0000' }] })
+    await req('DELETE', `/lump-sums/${saved.id}`, who)
+    expect(await asRole(who.id, 'SELECT * FROM plugin_debt_payoff.lump_sum_allocations')).toEqual([])
+  })
+
+  it('applies to the plan on its date, ignores a past one with a status the page can show, and is identical without any', async () => {
+    const who = await createUser(h)
+    await debt(who, { name: 'Card', balance: '5000', apr: '24', minimumPayment: '150' })
+    await debt(who, { name: 'Loan', balance: '8000', apr: '6', minimumPayment: '200' })
+    const before = (await req('GET', '/plan?strategy=avalanche&extra=300&tz=UTC', who)).body
+    expect('lumpSums' in JSON.parse(before)).toBe(false)
+
+    const bonus = await lumpSum(who, { onDate: '2099-01-15', amount: '3000' })
+    const old = await lumpSum(who, { onDate: '2000-01-01', amount: '9999' })
+    const plan = (await req('GET', '/plan?strategy=avalanche&extra=300&tz=UTC', who)).json() as {
+      lumpSums: Array<{ id: string; status: string; month: number | null; paid: string; unused: string }>
+      totalInterest: string; months: number
+    }
+    expect(plan.lumpSums.find((l) => l.id === old.id)).toMatchObject({ status: 'past', month: null, paid: '0.0000', unused: '9999.0000' })
+    // 2099 is past the plan's 50-year limit from 2026, so it is reported and ignored too.
+    expect(plan.lumpSums.find((l) => l.id === bonus.id)).toMatchObject({ status: 'beyond_limit', month: null })
+
+    // A lump sum inside the plan changes it; removing both brings back the exact bytes.
+    await req('DELETE', `/lump-sums/${bonus.id}`, who)
+    const soon = await lumpSum(who, { onDate: new Date(Date.now() + 40 * 86_400_000).toISOString().slice(0, 10), amount: '3000' })
+    const applied = (await req('GET', '/plan?strategy=avalanche&extra=300&tz=UTC', who)).json() as typeof plan
+    expect(applied.lumpSums.find((l) => l.id === soon.id)).toMatchObject({ status: 'applied', paid: '3000.0000', unused: '0.0000' })
+    expect(Number(applied.totalInterest)).toBeLessThan(Number(JSON.parse(before).totalInterest))
+    expect(applied.months).toBeLessThan(JSON.parse(before).months)
+
+    await req('DELETE', `/lump-sums/${soon.id}`, who)
+    await req('DELETE', `/lump-sums/${old.id}`, who)
+    expect((await req('GET', '/plan?strategy=avalanche&extra=300&tz=UTC', who)).body).toBe(before)
+  })
+
+  it('works under every strategy, Custom order included', async () => {
+    const who = await createUser(h)
+    await debt(who, { name: 'Card', balance: '5000', apr: '24', minimumPayment: '150' })
+    await debt(who, { name: 'Loan', balance: '8000', apr: '6', minimumPayment: '200' })
+    const on = new Date(Date.now() + 40 * 86_400_000).toISOString().slice(0, 10)
+    await lumpSum(who, { onDate: on, amount: '1000' })
+    for (const strategy of ['snowball', 'avalanche', 'custom']) {
+      const plan = (await req('GET', `/plan?strategy=${strategy}&extra=100&tz=UTC`, who)).json() as { lumpSums: Array<{ status: string }> }
+      expect(plan.lumpSums.map((l) => l.status), strategy).toEqual(['applied'])
+    }
+  })
+
+  it('previews a lump sum without saving it', async () => {
+    const who = await createUser(h)
+    await debt(who, { name: 'Card', balance: '5000', apr: '24', minimumPayment: '150' })
+    const on = new Date(Date.now() + 40 * 86_400_000).toISOString().slice(0, 10)
+    const res = await req('POST', '/plan/what-if', who, { onDate: on, amount: '2000', strategy: 'avalanche', extra: '100', tz: 'UTC' })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as {
+      current: { debtFreeDate: string; totalInterest: string }; withLumpSum: { debtFreeDate: string; totalInterest: string }
+      interestSaved: string; monthsSaved: number; lumpSum: { status: string; paid: string }
+    }
+    expect(body.lumpSum).toMatchObject({ status: 'applied', paid: '2000.0000' })
+    expect(Number(body.interestSaved)).toBeGreaterThan(0)
+    expect(body.monthsSaved).toBeGreaterThan(0)
+    expect(body.withLumpSum.debtFreeDate < body.current.debtFreeDate).toBe(true)
+    expect(await asRole(who.id, 'SELECT id FROM plugin_debt_payoff.lump_sums')).toEqual([])
+
+    // Saving it gives the plan the preview promised.
+    await lumpSum(who, { onDate: on, amount: '2000' })
+    const plan = (await req('GET', '/plan?strategy=avalanche&extra=100&tz=UTC', who)).json() as { totalInterest: string; debtFreeDate: string }
+    expect(plan.totalInterest).toBe(body.withLumpSum.totalInterest)
+    expect(plan.debtFreeDate).toBe(body.withLumpSum.debtFreeDate)
+  })
+
+  it('refuses a bad preview, an allocation to another person\'s debt, and a request with no sign-in', async () => {
+    const who = await createUser(h)
+    const rival = await createUser(h)
+    const theirs = await debt(rival, { name: 'Theirs' })
+    for (const payload of [
+      {}, { onDate: '2099-01-15' }, { onDate: '2099-01-15', amount: 5 }, { onDate: '2099-01-15', amount: '0' },
+      { onDate: '2099-01-15', amount: '5', strategy: 'chaos' }, { onDate: '2099-01-15', amount: '5', tz: 'Mars/Olympus' },
+      { onDate: '2099-01-15', amount: '5', note: 'not taken' }, { onDate: '2099-01-15', amount: '5', userId: rival.id },
+    ]) {
+      const res = await req('POST', '/plan/what-if', who, payload)
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+    }
+    const forged = await req('POST', '/plan/what-if', who, { onDate: '2099-01-15', amount: '5', allocations: [{ debtId: theirs.id, amount: '5' }] })
+    expect(forged.json()).toMatchObject({ code: 'unknown_debt' })
+    const anon = await h.app.inject({ method: 'POST', url: `${BASE}/plan/what-if`, payload: { onDate: '2099-01-15', amount: '5' } })
+    expect(anon.statusCode).toBe(401)
+  })
+
+  it('refuses a lump sum past the limit', async () => {
+    const who = await createUser(h)
+    await asPlugin(h.db, ROLE, who.id, async (trx) => {
+      await sql`
+        INSERT INTO plugin_debt_payoff.lump_sums (user_id, on_date, amount)
+        SELECT ${who.id}::uuid, '2099-01-01', 1 FROM generate_series(1, 200)
+      `.execute(trx)
+    })
+    const res = await req('POST', '/lump-sums', who, { onDate: '2099-01-15', amount: '1' })
+    expect(res.statusCode).toBe(409)
+    expect(res.json()).toMatchObject({ code: 'too_many_lump_sums' })
+  })
+
+  it('requires a sign-in for every lump sum route', async () => {
+    const id = '00000000-0000-4000-8000-000000000001'
+    for (const [method, url] of [['GET', '/lump-sums'], ['POST', '/lump-sums'], ['PUT', `/lump-sums/${id}`], ['DELETE', `/lump-sums/${id}`]] as const) {
+      const res = await h.app.inject({ method, url: `${BASE}${url}`, payload: method === 'GET' || method === 'DELETE' ? undefined : { onDate: '2099-01-15', amount: '1' } })
+      expect(res.statusCode, `${method} ${url}`).toBe(401)
+    }
+  })
+})
+
 describe('the plugin role', () => {
   it('can read the granted core.accounts and its own tables', async () => {
     await expect(asRole(user.id, 'SELECT id FROM core.accounts LIMIT 1')).resolves.toBeDefined()
     await expect(asRole(user.id, 'SELECT id FROM plugin_debt_payoff.debts LIMIT 1')).resolves.toBeDefined()
+    await expect(asRole(user.id, 'SELECT id FROM plugin_debt_payoff.lump_sums LIMIT 1')).resolves.toBeDefined()
+    await expect(asRole(user.id, 'SELECT 1 FROM plugin_debt_payoff.lump_sum_allocations LIMIT 1')).resolves.toBeDefined()
   })
 
   it('cannot read core.transactions or another plugin’s tables', async () => {

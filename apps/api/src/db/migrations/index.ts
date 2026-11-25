@@ -36,6 +36,7 @@ import * as m033 from './033_tenant_lookup_policies.js'
 import * as m034 from './034_debt_payoff_plan_controls.js'
 import * as m035 from './035_debt_payoff_timelines.js'
 import * as m036 from './036_debt_payoff_custom_order.js'
+import * as m037 from './037_debt_payoff_lump_sums.js'
 import * as m038 from './038_drop_unused_merchant_trgm_index.js'
 
 /**
@@ -91,6 +92,7 @@ export const MIGRATIONS: Record<string, Migration> = {
   '034_debt_payoff_plan_controls': m034,
   '035_debt_payoff_timelines': m035,
   '036_debt_payoff_custom_order': m036,
+  '037_debt_payoff_lump_sums': m037,
   '038_drop_unused_merchant_trgm_index': m038,
 }
 

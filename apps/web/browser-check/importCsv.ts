@@ -227,17 +227,25 @@ async function undoAll(base: string, only: RegExp = /^(known-rows|big|small|midw
   }
 }
 
-/** How many uploads the persona holds right now, found by asking for more until the server says "too many" (and giving them back). */
-async function liveUploads(base: string): Promise<number> {
+/** The upload ids a page sent chunks for, in the order they first appeared. */
+function uploadIdsOf(calls: Call[]): string[] {
+  return [...new Set(to(calls, '/upload/chunk').map((c) => c.body['uploadId']).filter((id): id is string => typeof id === 'string'))]
+}
+
+/**
+ * How many of these uploads the server still holds. Asked of the server, one id at a time: a chunk for an id the store does
+ * not hold answers 404 (`upload_not_found`), anything else (200, or 409 for a chunk that is already there) means it is held.
+ * It cannot be found by asking for more uploads until the server refuses: a `begin` over the limit now replaces the oldest.
+ * The probe sends an index that is already there or one the upload has not seen, so it never changes what a page is about to read.
+ */
+async function heldAmong(base: string, ids: readonly string[]): Promise<number> {
   const s = await login(base)
-  const ids: string[] = []
-  for (let i = 0; i < 4; i++) {
-    const r = await plugin(base, s, 'POST', '/upload/begin', { chunks: 1, bytes: 1 })
-    if (r.status !== 200) break
-    ids.push(String(r.json['uploadId']))
+  let held = 0
+  for (const uploadId of ids) {
+    const r = await plugin(base, s, 'POST', '/upload/chunk', { uploadId, index: 0, text: 'probe' })
+    if (r.status !== 404) held += 1
   }
-  for (const id of ids) await plugin(base, s, 'POST', '/upload/abort', { uploadId: id })
-  return 2 - ids.length
+  return held
 }
 
 // ---------------------------------------------------------------------------
@@ -723,8 +731,6 @@ async function midwayChecks(pw: typeof Playwright, base: string, mid: TestFile):
     try {
       const frame = await gotoPage(o, base, 'isolated')
       const calls = trackCalls(o.page)
-      // The scenario before this one left its reviewed upload staged: what is held now is the baseline.
-      const heldBefore = await liveUploads(base)
       await o.page.route(chunkUrl, (route) => {
         const body = route.request().postDataJSON() as { index?: number }
         if (body.index === 2) void route.fulfill(refusal(500, 'request_failed', 'Request failed (500)'))
@@ -742,7 +748,7 @@ async function midwayChecks(pw: typeof Playwright, base: string, mid: TestFile):
       const vh = await o.page.evaluate(() => window.innerHeight)
       check('midway: the message is brought into the window though the person had scrolled to the bottom', rect.top >= 0 && rect.bottom <= vh + 1, { ...rect, vh })
       await eventually(async () => to(calls, '/upload/abort').length, (n) => n >= 1)
-      check('midway: the half-sent upload was given back (upload/abort), so it does not count against the limit of two', to(calls, '/upload/abort').length === 1 && (await liveUploads(base)) === heldBefore, { aborts: to(calls, '/upload/abort').length, heldBefore })
+      check('midway: the half-sent upload was given back (upload/abort), so the server holds none of what the page sent', to(calls, '/upload/abort').length === 1 && (await heldAmong(base, uploadIdsOf(calls))) === 0, { aborts: to(calls, '/upload/abort').length, held: await heldAmong(base, uploadIdsOf(calls)) })
       check('midway: the failing chunk was tried 3 times (once and twice more)', to(calls, '/upload/chunk').filter((c) => c.body['index'] === 2).length === 3)
       await o.page.unroute(chunkUrl)
       await clickCheck(frame)
@@ -837,7 +843,7 @@ async function expiryChecks(pw: typeof Playwright, base: string, small: TestFile
 }
 
 async function switchChecks(pw: typeof Playwright, base: string, big: TestFile, small: TestFile, mode: Mode = 'isolated'): Promise<void> {
-  await liveUploads(base)
+  const sentIds: string[] = []
   // Another file while the first is uploading.
   {
     const o = await open(pw, base, { width: 1280, height: 900 })
@@ -856,7 +862,8 @@ async function switchChecks(pw: typeof Playwright, base: string, big: TestFile, 
       note(`switch (${mode}): requests`, { begins: begins.length, aborts: aborts.length, chunks: chunksOfFirst })
       check(`switch (${mode}): choosing another file while the first uploads sends begin for it and gives the first back (upload/abort)`, begins.length === 2 && aborts.length === 1, { begins: begins.length, aborts: aborts.length })
       check(`switch (${mode}): only the second upload was finished (one finish)`, to(calls, '/upload/finish').length === 1, { finishes: to(calls, '/upload/finish').length })
-      check(`switch (${mode}): the person holds one upload on the server, not two`, (await liveUploads(base)) === 1, await liveUploads(base))
+      check(`switch (${mode}): the person holds one upload on the server, not two`, (await heldAmong(base, uploadIdsOf(calls))) === 1, { sent: uploadIdsOf(calls).length, held: await heldAmong(base, uploadIdsOf(calls)) })
+      sentIds.push(...uploadIdsOf(calls))
       await clickCheck(frame)
       await importButton(frame)
       check(`switch (${mode}): the review is of the second file`, (await stats(frame))['New'] === small.rows)
@@ -865,13 +872,12 @@ async function switchChecks(pw: typeof Playwright, base: string, big: TestFile, 
     // The page was closed with the second upload still on the server: its pagehide cannot reach the host's broker.
     await sleep(500)
   }
-  const left = await liveUploads(base)
+  const left = await heldAmong(base, sentIds)
   note(`switch (${mode}): uploads still held after the browser was closed with one staged`, left)
   report[`closedWithUpload-${mode}`] = left
 }
 
 async function leaveChecks(pw: typeof Playwright, base: string, big: TestFile, mode: Mode): Promise<void> {
-  await liveUploads(base)
   const o = await open(pw, base, { width: 1280, height: 900 })
   try {
     const frame = await gotoPage(o, base, mode)
@@ -883,18 +889,18 @@ async function leaveChecks(pw: typeof Playwright, base: string, big: TestFile, m
     await o.page.waitForURL(/\/accounts$/)
     await sleep(1500)
     const aborts = to(calls, '/upload/abort')
-    const held = await liveUploads(base)
+    const held = await heldAmong(base, uploadIdsOf(calls))
     note(`leave (${mode}): requests after leaving`, { aborts: aborts.length, uploadsHeld: held, abortStatuses: aborts.map((a) => a.status) })
     report[`leave-${mode}`] = { aborts: aborts.length, uploadsHeld: held }
     if (mode === 'in-realm') {
       check('leave (in-realm): leaving the page mid-upload gives the upload back (upload/abort reached the server; none is held)', held === 0, { aborts: aborts.length, held })
     } else {
-      // FOUND, NOT FIXED: the host disposes the broker (and removes the frame) before the frame's React tree can unmount or fire pagehide,
-      // so the frame cannot send upload/abort on a navigation inside the app. The server frees the text 15 minutes after the last chunk.
-      check('leave (isolated): the frame cannot give the upload back when the person leaves inside the app (known gap; the 15 minute expiry frees it)', held >= 1 && aborts.length === 0, { aborts: aborts.length, held })
+      // The host sends `closing` and keeps answering request and cancel for one second before it removes the frame, so a frame that
+      // is still running can send upload/abort. Best effort: React removes the iframe in the same task, so this is not promised; when
+      // it is not delivered, the oldest-upload replacement at the next `begin` and the 15 minute expiry free the text instead.
+      check('leave (isolated): the frame gives the upload back on `closing` when the person leaves inside the app (upload/abort reached the server; none is held)', aborts.length === 1 && held === 0, { aborts: aborts.length, held })
     }
   } finally { await o.browser.close() }
-  await liveUploads(base)
 }
 
 // ---------------------------------------------------------------------------
