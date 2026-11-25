@@ -11,6 +11,23 @@ curated, human-readable version.
 
 ### Added
 
+- **Debt payoff: lump sums and a what-if.** Record a one-off payment (a bonus, a
+  tax refund) with a date, an amount, an optional note, and optionally part of
+  it aimed at particular debts. The plan pays it on the first payment date on or
+  after its date, after that month's interest and minimums: first the parts
+  aimed at a debt, then the debt the strategy would pay next, for snowball,
+  avalanche and Custom order alike. A lump sum dated before today is ignored by
+  the plan, because the balances already include it; the page says so and offers
+  to remove it. A "What if?" form shows the debt-free date and the interest a
+  lump sum would save against the current plan, without saving anything, and the
+  result is announced in the page's live region. The API gains `GET/POST
+  /lump-sums`, `PUT/DELETE /lump-sums/:id` and `POST /plan/what-if`; `GET /plan`
+  reports what it did with each lump sum (`lumpSums`) when there are any, and the
+  data export includes `lumpSums` (an older export without it is unaffected).
+  Plans with no lump sums are byte-for-byte what they were. **Migration 037**
+  (additive, has a `down`) adds `plugin_debt_payoff.lump_sums` and
+  `lump_sum_allocations`, both under forced row-level security. No grant, SDK or
+  protocol change.
 - **Debt payoff: Custom order.** A third strategy beside snowball and avalanche:
   the extra money goes to your debts in an order you set, skipping any that are
   paid off or left out of the plan. Choose it under "Payoff plan" and a list

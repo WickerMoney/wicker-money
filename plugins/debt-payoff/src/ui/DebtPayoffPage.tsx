@@ -5,6 +5,8 @@ import './styles.js'
 import { Assumptions } from './components/Assumptions.js'
 import { CustomOrderList } from './components/CustomOrderList.js'
 import { DebtDialog } from './components/DebtDialog.js'
+import { LumpSumDialog } from './components/LumpSumDialog.js'
+import { LumpSumsSection } from './components/LumpSumsSection.js'
 import { DebtsTable } from './components/DebtsTable.js'
 import { ExtraPaymentForm } from './components/ExtraPaymentForm.js'
 import { PayoffChart } from './components/PayoffChart.js'
@@ -13,16 +15,24 @@ import { PlanNotices } from './components/PlanNotices.js'
 import { PlanTotals } from './components/PlanTotals.js'
 import { StrategyToggle } from './components/StrategyToggle.js'
 import { EMPTY_DRAFT } from './helpers/EMPTY_DRAFT.js'
+import { EMPTY_LUMP_DRAFT } from './helpers/EMPTY_LUMP_DRAFT.js'
+import { draftFromLumpSum } from './helpers/draftFromLumpSum.js'
 import { draftFromDebt } from './helpers/draftFromDebt.js'
 import { durationText } from './helpers/durationText.js'
 import { excludingText } from './helpers/excludingText.js'
 import { useDebtPayoff } from './hooks/useDebtPayoff.js'
-import type { AccountSuggestion, Debt, DebtDraft } from './models/index.js'
+import type { AccountSuggestion, Debt, DebtDraft, LumpSum, LumpSumDraft } from './models/index.js'
 
 /** The dialog being shown: a blank or prefilled form, or a saved debt. */
 interface DialogState {
   readonly editing: Debt | null
   readonly initial: DebtDraft
+}
+
+/** The lump sum dialog being shown. */
+interface LumpDialogState {
+  readonly editing: LumpSum | null
+  readonly initial: LumpSumDraft
 }
 
 /**
@@ -44,6 +54,7 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
   const payoff = useDebtPayoff(ctx)
   const { debts, plan, settings, suggestions, colors } = payoff
   const [dialog, setDialog] = useState<DialogState | null>(null)
+  const [lumpDialog, setLumpDialog] = useState<LumpDialogState | null>(null)
   const addRef = useRef<HTMLSpanElement>(null)
   // Bumped when the debt a dialog was opened from is gone, so focus has somewhere to land.
   const [refocus, setRefocus] = useState(0)
@@ -67,6 +78,12 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
     editing: null,
     initial: from === undefined ? EMPTY_DRAFT : { ...EMPTY_DRAFT, name: from.name, accountId: from.id },
   })
+
+  const outcomes = useMemo(
+    () => new Map((plan?.lumpSums ?? []).map((o) => [o.id, o] as const)),
+    [plan],
+  )
+  const { removeLumpSum, saveLumpSum, previewLumpSum } = payoff
 
   const active = (debts ?? []).filter((d) => !d.archived)
   const nothingInPlan = plan !== null && plan.debts.length === 0
@@ -182,6 +199,22 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
         </Surface>
       ) : null}
 
+      {active.length > 0 ? (
+        <LumpSumsSection
+          lumpSums={payoff.lumpSums}
+          outcomes={outcomes}
+          debts={active}
+          busy={payoff.busy}
+          formatMoney={formatMoney}
+          formatDate={formatDate}
+          onAdd={() => setLumpDialog({ editing: null, initial: EMPTY_LUMP_DRAFT })}
+          onEdit={(lump) => setLumpDialog({ editing: lump, initial: draftFromLumpSum(lump) })}
+          onRemove={(lump) => { void removeLumpSum(lump) }}
+          onPreview={previewLumpSum}
+          onSaveWhatIf={(draft) => saveLumpSum(null, draft)}
+        />
+      ) : null}
+
       <Surface title="How this is worked out">
         <Assumptions plan={plan} formatDate={formatDate} />
       </Surface>
@@ -199,6 +232,17 @@ export default function DebtPayoffPage({ ctx }: PluginPageProps) {
             return removed
           }}
           onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {lumpDialog !== null ? (
+        <LumpSumDialog
+          editing={lumpDialog.editing}
+          initial={lumpDialog.initial}
+          debts={active}
+          busy={payoff.busy}
+          onSave={(draft) => saveLumpSum(lumpDialog.editing?.id ?? null, draft)}
+          onRemove={removeLumpSum}
+          onClose={() => setLumpDialog(null)}
         />
       ) : null}
     </div>

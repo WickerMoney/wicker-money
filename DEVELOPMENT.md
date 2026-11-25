@@ -984,8 +984,12 @@ It has its own tables in the `plugin_debt_payoff` schema (migration 030):
 order, archived) and `plan_settings` (the saved strategy and monthly extra).
 `debts.sort_order` is the person's own order and what Custom order follows; migration 036
 only widens the strategy check to allow `custom`.
+Migration 037 adds `lump_sums` (date, amount, note) and `lump_sum_allocations`
+(the part of a lump sum aimed at one debt), with composite `(user_id, ...)` keys
+so an allocation cannot name another person's debt or lump sum; `ERASE_PLAN`
+and the export cover both.
 Money is `numeric(19,4)` in PostgreSQL and a decimal string in TypeScript.
-Both tables are under forced row-level security, and a debt's account link is a
+The first two tables are under forced row-level security, and a debt's account link is a
 composite `(user_id, account_id)` key into `core.accounts`, so a debt cannot
 name another person's account even though foreign key checks bypass
 row-level security. Deleting an account together with its history unlinks the
@@ -1003,6 +1007,8 @@ Endpoints, under `/api/v1/p/wickermoney.debt-payoff`:
 | `GET /settings`, `PUT /settings` | Saved strategy (`snowball`, `avalanche` or `custom`; default `avalanche`) and extra (default `0`) |
 | `GET /plan?strategy&extra&tz` | The plan; values not given in the query come from the saved settings |
 | `GET /account-suggestions` | Loan and credit card accounts, with the debt already tracking each |
+| `GET /lump-sums`, `POST /lump-sums`, `PUT/DELETE /lump-sums/:id` | One-off payments: `{ onDate, amount, note?, allocations?: [{ debtId, amount }] }`. Allocations may name only the caller's own debts, each once, and add up to at most `amount` (`400` on `allocations` with `unknown_debt`, `duplicate_debt` or `allocation_too_large`); at most 200 per person (`409 too_many_lump_sums`). `PUT` replaces the whole lump sum |
+| `POST /plan/what-if` | Body `{ onDate, amount, allocations?, strategy?, extra?, tz? }`. Responds `{ current, withLumpSum, interestSaved, monthsSaved, lumpSum }`; saves nothing |
 
 **How a plan is computed** (the engine is `src/shared/strategy`, pure functions
 on the SDK's bigint `/money` maths, no floating point anywhere):
@@ -1021,6 +1027,13 @@ on the SDK's bigint `/money` maths, no floating point anywhere):
   out of the plan). The page changes the order with Move up and Move down
   buttons, not drag, so it works from a keyboard.
 - A minimum above what is owed pays only what is owed.
+- **Lump sums** are paid in the first month whose payment date is on or after
+  their date, after interest, minimums and earmarks: the parts aimed at a debt
+  first (capped at its balance), then the rest down the strategy's order. What
+  no debt can take is reported as `unused`. One dated before the day the
+  balances are as of is `past` and one after the last month `beyond_limit`;
+  both are ignored and reported in `lumpSums`. A plan given none is identical
+  to before (a test hashes a generated corpus).
 - The plan also carries a minimums-only baseline, so the response says how many
   months and how much interest the strategy saves.
 - **Limits:** a plan stops at 600 months and reports `capped: true` with a

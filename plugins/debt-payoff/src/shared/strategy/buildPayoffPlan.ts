@@ -12,6 +12,7 @@ import type { PlanMonth } from './PlanMonth.js'
 import type { PlanOptions } from './PlanOptions.js'
 import type { PlanTotals } from './PlanTotals.js'
 import { amount, parseDebts } from './parseDebts.js'
+import { lumpSumOutcomes, parseLumpSums } from './parseLumpSums.js'
 import { priorityOrder } from './priorityOrder.js'
 import { simulate, type Simulation } from './simulate.js'
 import { STRATEGIES } from './STRATEGIES.js'
@@ -68,6 +69,15 @@ import { STRATEGIES } from './STRATEGIES.js'
  *   charged. A promotion that ended before the first payment is taken as over
  *   and the balance as already including any charge. The minimums-only
  *   scenario pays minimums only and so can trigger the charge.
+ * - **Lump sums.** A one-off payment is made on the first payment date on or
+ *   after its date, after that month's minimums and earmarks and before the
+ *   pool is aimed. Parts aimed at a debt go to it (capped at what it owes);
+ *   the rest, with any part its debt could not take, goes down the strategy's
+ *   order to debts whose repayment has started. It is outside the pool and
+ *   never rolls. One dated before the start date is ignored (the balances
+ *   already include it), as is one past the plan's last month; the plan
+ *   reports each as such. With no lump sums the plan is byte-for-byte what it
+ *   was before they existed. The minimums-only comparison never includes them.
  * - **Limit.** A schedule is at most {@link MAX_PLAN_MONTHS} months. Past that,
  *   or once a balance outgrows what the database can store, the plan stops,
  *   is flagged `capped` and has no debt-free date.
@@ -112,7 +122,14 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
   const dateOf = (month: number): string => addMonths(options.startDate, month)
   const daysIn = (month: number): number => daysBetween(dateOf(month - 1), dateOf(month))
 
-  const plan = simulate({ debts: ordered, extra, rollover: true, daysIn })
+  const lumps = options.lumpSums === undefined || options.lumpSums.length === 0
+    ? null
+    : parseLumpSums(options.lumpSums, options.startDate)
+
+  const plan = simulate({
+    debts: ordered, extra, rollover: true, daysIn,
+    ...(lumps === null ? {} : { lumps: lumps.byMonth }),
+  })
   const baseline = simulate({ debts: ordered, extra: 0n, rollover: false, daysIn })
 
   const planDebts: PlanDebt[] = [
@@ -191,6 +208,7 @@ export function buildPayoffPlan(debts: readonly DebtInput[], options: PlanOption
             plan.runs.reduce((sum, run) => sum + run.interest, 0n),
         )
       : null,
+    ...(lumps === null ? {} : { lumpSums: lumpSumOutcomes(lumps, plan.lumpPaid, dateOf) }),
   }
 }
 
