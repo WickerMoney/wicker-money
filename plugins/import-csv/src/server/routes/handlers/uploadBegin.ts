@@ -11,10 +11,11 @@ import type { ImportRouteDeps } from '../helpers/ImportRouteDeps.js'
  * with `{ uploadId, chunks, bytes, expiresInSeconds }`.
  *
  * Responds `400` for numbers outside those limits (or a chunk count that
- * cannot hold the bytes at 256 KiB a chunk); `409` (`too_many_uploads`) when
- * the user already has 2 live uploads; `503` (`staging_full`, with
+ * cannot hold the bytes at 256 KiB a chunk); `503` (`staging_full`, with
  * `Retry-After`) when all users together hold 64,000,000 bytes of staged
- * files. The space is reserved here, before any data is sent. An upload
+ * files. A user who already has 2 live uploads gets the new one and loses their
+ * oldest (never another user's): a page that was left mid-upload cannot send
+ * `upload/abort`, so the limit must not lock the person out. The space is reserved here, before any data is sent. An upload
  * expires 15 minutes after its last new chunk.
  *
  * The route counts in the strict import rate bucket, one request per upload;

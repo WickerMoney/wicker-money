@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
+import { renderWithToasts } from '../../testing/renderWithToasts.js'
 import type { PluginContext, PluginManifest } from '@wickermoney/plugin-sdk'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrokerApi } from './brokerApi.js'
@@ -51,7 +52,7 @@ function expectLocked(iframe: HTMLIFrameElement): void {
 
 describe('the plugin frame\'s sandbox attribute', () => {
   it.each(['widget', 'page'] as const)('is exactly allow-scripts for a %s frame, as rendered and after a failure and retry', async (kind) => {
-    const { container } = render(
+    const { container } = renderWithToasts(
       <IsolatedPluginFrame manifest={manifest} module="./Widget" title="Spending" kind={kind} ctx={ctx} api={api} loadTimeoutMs={20} />,
     )
     expectLocked(container.querySelector('iframe')!)
@@ -64,7 +65,7 @@ describe('the plugin frame\'s sandbox attribute', () => {
 
   it('cannot be changed by the plugin\'s manifest: no field of it reaches the attribute', () => {
     const hostile = { ...manifest, sandbox: 'allow-scripts allow-same-origin', allow: 'camera *', remoteEntry: manifest.remoteEntry } as unknown as PluginManifest
-    const { container } = render(<IsolatedPluginFrame manifest={hostile} module="./Widget" title="x" kind="widget" ctx={ctx} api={api} />)
+    const { container } = renderWithToasts(<IsolatedPluginFrame manifest={hostile} module="./Widget" title="x" kind="widget" ctx={ctx} api={api} />)
     expectLocked(container.querySelector('iframe')!)
   })
 })

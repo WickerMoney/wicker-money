@@ -280,11 +280,15 @@ file (`measure`, "small file"). The pieces are in
   chunk. `400` on `finish` starts over with a message. A `commit` retry keeps its
   idempotency key, so a lost answer is replayed, not imported twice.
 - **Choosing another file** gives the first upload back (`upload/abort`). **Leaving
-  the page does not, from a frame:** the host disposes the broker and removes the
-  frame before the frame can send anything, so an upload staged and abandoned stays
-  until its 15 minutes pass, and a person who does this twice is told "You already
-  have 2 uploads waiting" until then. The check's in-page baseline (it puts the plugin's id in `IN_REALM_PLUGIN_IDS`
-for one run) does give it back.
+  the page cannot, from a frame:** the host removes the frame before the frame can
+  send anything, so an upload staged and abandoned stays until its 15 minutes pass.
+  It no longer locks the person out: a `begin` at the limit of 2 discards the user's
+  own oldest live upload and succeeds. The host also sends the frame a best-effort
+  `closing` message before it takes the frame down (see "Closing" in the plugin SDK
+  README); the page gives its upload back on it when the frame is still alive to
+  act, which is not the case when React removes the whole frame at once. The check's
+  in-page baseline (it puts the plugin's id in `IN_REALM_PLUGIN_IDS`
+for one run) gives it back directly.
 
 **What `finish` checks**, in this order: every index from 0 to `chunks - 1` has
 arrived (`409 upload_incomplete`, naming the first missing; the upload stays
@@ -299,7 +303,7 @@ upload repeats its answer.
 
 | Limit | Value | Over it |
 |---|---|---|
-| Live uploads per user | 2 | `begin`: `409 too_many_uploads` |
+| Live uploads per user | 2 | `begin` succeeds and discards that user's oldest live upload (never another user's) |
 | Size and chunks of one upload | 8,000,000 bytes, 64 chunks | `begin`: `400` |
 | One chunk | 256 KiB of UTF-8 | `413 chunk_too_large` |
 | Chunks add up to more than `begin` declared | the declared bytes | `413 upload_too_large`, upload discarded |
@@ -981,8 +985,12 @@ It has its own tables in the `plugin_debt_payoff` schema (migration 030):
 order, archived) and `plan_settings` (the saved strategy and monthly extra).
 `debts.sort_order` is the person's own order and what Custom order follows; migration 036
 only widens the strategy check to allow `custom`.
+Migration 037 adds `lump_sums` (date, amount, note) and `lump_sum_allocations`
+(the part of a lump sum aimed at one debt), with composite `(user_id, ...)` keys
+so an allocation cannot name another person's debt or lump sum; `ERASE_PLAN`
+and the export cover both.
 Money is `numeric(19,4)` in PostgreSQL and a decimal string in TypeScript.
-Both tables are under forced row-level security, and a debt's account link is a
+The first two tables are under forced row-level security, and a debt's account link is a
 composite `(user_id, account_id)` key into `core.accounts`, so a debt cannot
 name another person's account even though foreign key checks bypass
 row-level security. Deleting an account together with its history unlinks the
@@ -1000,6 +1008,8 @@ Endpoints, under `/api/v1/p/wickermoney.debt-payoff`:
 | `GET /settings`, `PUT /settings` | Saved strategy (`snowball`, `avalanche` or `custom`; default `avalanche`) and extra (default `0`) |
 | `GET /plan?strategy&extra&tz` | The plan; values not given in the query come from the saved settings |
 | `GET /account-suggestions` | Loan and credit card accounts, with the debt already tracking each |
+| `GET /lump-sums`, `POST /lump-sums`, `PUT/DELETE /lump-sums/:id` | One-off payments: `{ onDate, amount, note?, allocations?: [{ debtId, amount }] }`. Allocations may name only the caller's own debts, each once, and add up to at most `amount` (`400` on `allocations` with `unknown_debt`, `duplicate_debt` or `allocation_too_large`); at most 200 per person (`409 too_many_lump_sums`). `PUT` replaces the whole lump sum |
+| `POST /plan/what-if` | Body `{ onDate, amount, allocations?, strategy?, extra?, tz? }`. Responds `{ current, withLumpSum, interestSaved, monthsSaved, lumpSum }`; saves nothing |
 
 **How a plan is computed** (the engine is `src/shared/strategy`, pure functions
 on the SDK's bigint `/money` maths, no floating point anywhere):
@@ -1018,6 +1028,13 @@ on the SDK's bigint `/money` maths, no floating point anywhere):
   out of the plan). The page changes the order with Move up and Move down
   buttons, not drag, so it works from a keyboard.
 - A minimum above what is owed pays only what is owed.
+- **Lump sums** are paid in the first month whose payment date is on or after
+  their date, after interest, minimums and earmarks: the parts aimed at a debt
+  first (capped at its balance), then the rest down the strategy's order. What
+  no debt can take is reported as `unused`. One dated before the day the
+  balances are as of is `past` and one after the last month `beyond_limit`;
+  both are ignored and reported in `lumpSums`. A plan given none is identical
+  to before (a test hashes a generated corpus).
 - The plan also carries a minimums-only baseline, so the response says how many
   months and how much interest the strategy saves.
 - **Limits:** a plan stops at 600 months and reports `capped: true` with a
@@ -1449,6 +1466,22 @@ four parts, and CI runs them as the required check **Hostile plugin suite**.
   flood of `begin` beside chunks, and chunk-shaped messages at the broker's
   body cap and rate. It starts its own API with Import CSV registered, so it
   does not depend on which plugins `run.ts` mounts.
+  `hostile/download.ts` (phase `download`, `ONLY=download`) covers the `download`,
+  `notify` and `closing` messages: a notify and a notify flood from a plugin without
+  the permission, a `closing` sent by the frame, then the file save. The frame tries the
+  sandbox (no direct download), a real click then a valid file, a second file inside
+  one activation, no gesture, an expired gesture, every type, size and content
+  refusal, 20 files after one click, a hostile name, and 30 gesture-less requests.
+  The judge is what Chromium saved (name, size, first bytes) and what the broker
+  answered. The residual (a click on the host, then a frame that takes focus and asks)
+  is pinned as `residual` for the default gate: the frame waits for its own click (it
+  loses focus), takes focus back 3.4 s later and asks, again every 100 ms while it is
+  refused, because the browser makes the iframe the host's active element a moment after
+  the frame's own `focus` event. Saved is the pinned outcome; a refusal with nothing
+  saved is accepted as a stronger gate; anything else fails. The strict gate that closes
+  it is unit tested and not wired. The phase has its own time budget (150 s), mostly
+  waiting out the 5 second activation window; add no waits without raising it
+  on purpose.
 - **Remote-origin half** (`apps/web/browser-check/hostile/remote.ts`, Chromium,
   needs `openssl` for a throwaway certificate). A real federated build is served
   over https from a second origin and listed with a pin: a matching build loads in

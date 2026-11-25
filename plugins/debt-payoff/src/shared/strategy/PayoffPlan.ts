@@ -1,4 +1,5 @@
 import type { CapReason } from './CapReason.js'
+import type { LumpSumOutcome } from './LumpSumOutcome.js'
 import type { PlanDebt } from './PlanDebt.js'
 import type { PlanMonth } from './PlanMonth.js'
 import type { PlanTotals } from './PlanTotals.js'
@@ -59,4 +60,10 @@ export interface PayoffPlan {
   readonly monthsSaved: number | null
   /** Interest the plan saves against minimums only, or `null` under the same condition. */
   readonly interestSaved: string | null
+  /**
+   * What the plan did with each lump sum it was given, in the order given.
+   * Present only when the plan was asked for with at least one, so a plan
+   * without lump sums has exactly the fields it had before they existed.
+   */
+  readonly lumpSums?: readonly LumpSumOutcome[]
 }

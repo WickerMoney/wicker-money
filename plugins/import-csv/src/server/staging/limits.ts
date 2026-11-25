@@ -1,6 +1,9 @@
 import { MAX_CSV_BYTES } from '../routes/helpers/MAX_CSV_BYTES.js'
 
-/** Most live (receiving or complete, not yet imported) staged uploads one user may hold. */
+/**
+ * Most live (receiving or complete, not yet imported) staged uploads one user may hold. A `begin` at the limit
+ * discards the user's oldest live upload instead of failing.
+ */
 export const MAX_LIVE_UPLOADS_PER_USER = 2
 
 /** Most chunks one staged upload may be declared in. */

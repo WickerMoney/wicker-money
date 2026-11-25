@@ -20,7 +20,7 @@ const { PluginsSection } = await import('./PluginsSection.js')
 function plugin(id: string, name: string, overrides: Partial<RegisteredPlugin> = {}): RegisteredPlugin {
   return {
     id, name, description: `${name} does things.`, author: 'Wicker', version: '0.1.0',
-    bundled: true, enabled: true, status: 'enabled', failure: null, origin: null, tables: [],
+    bundled: true, enabled: true, status: 'enabled', failure: null, origin: null, tables: [], permissions: [],
     contributes: { pages: [name], widgets: [], endpoints: false },
     ...overrides,
   }
@@ -295,6 +295,20 @@ describe('PluginsSection, switching a plugin on that is not bundled', () => {
     expect(within(dialog()).getByText(/Would not load now: remoteEntry origin is not in PLUGIN_REMOTE_ORIGINS/)).toBeTruthy()
     // Both the origin and the tables are unknown, and the dialog says so for each.
     expect(within(dialog()).getAllByText(/unknown, because its manifest is refused/)).toHaveLength(2)
+  })
+
+  it('names the notify permission in the dialog when the manifest declares it', async () => {
+    fetchRegisteredPlugins.mockResolvedValue([{ ...acme, permissions: ['notify'] }])
+    mount()
+    await userEvent.click(await screen.findByRole('switch', { name: 'Enable Report' }))
+    expect(within(dialog()).getByText(/may show short text notifications in the app/)).toBeTruthy()
+  })
+
+  it('says nothing about notifications in the dialog when the manifest does not declare notify', async () => {
+    fetchRegisteredPlugins.mockResolvedValue([acme])
+    mount()
+    await userEvent.click(await screen.findByRole('switch', { name: 'Enable Report' }))
+    expect(within(dialog()).queryByText(/notifications in the app/)).toBeNull()
   })
 
   it('turns a third-party plugin off with no dialog', async () => {

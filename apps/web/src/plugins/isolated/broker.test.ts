@@ -62,7 +62,7 @@ function rig(opts: {
   })
   const send = vi.fn(opts.send ?? (async () => ({ rows: [] })))
   const api: BrokerApi = { mint, send }
-  const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onFatal: vi.fn() }
+  const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(), onFatal: vi.fn() }
   const cache = new ResponseCache({ now: () => clock.t })
   const state = { user: 'u1' as string | null }
   const broker = new PluginBroker({
@@ -192,13 +192,6 @@ describe('bad input', () => {
     await flush()
     expect(r.port.responses()[0]).toMatchObject({ id: 1, ok: false, error: { code: 'invalid_request' } })
     release({})
-  })
-
-  it('answers notify with not_supported', async () => {
-    const r = rig()
-    r.port.frame({ type: 'notify', id: 4, level: 'info', message: 'hi' })
-    await flush()
-    expect(r.port.responses()[0]).toMatchObject({ id: 4, ok: false, error: { code: 'not_supported' } })
   })
 
   it('rate limits a flood and ends the connection', async () => {
@@ -516,5 +509,307 @@ describe('re-handshake', () => {
     const r = rig({ limits: { maxHandshakes: 3 } })
     for (let i = 0; i < 4; i++) r.broker.attach(asPort(new FakePort()), init)
     expect(r.handlers.onFatal).toHaveBeenCalledOnce()
+  })
+})
+
+describe('closing', () => {
+  it('tells the frame, keeps serving request and cancel for the grace period, then ends the connection', async () => {
+    const r = rig({ limits: { closingGraceMs: 40 } })
+    r.broker.close()
+    expect(r.port.sent.at(-1)).toEqual({ type: 'closing' })
+    expect(r.port.closed).toBe(false)
+    // The frame still alive gives its upload back through the plugin's own namespace.
+    r.port.frame({ type: 'request', id: 1, method: 'POST', path: '/p/test.fixture/upload/abort', body: { uploadId: 'x' } })
+    await flush()
+    expect(r.port.responses()).toEqual([{ type: 'response', id: 1, ok: true, value: { rows: [] } }])
+    await new Promise((resolve) => { setTimeout(resolve, 80) })
+    expect(r.port.closed).toBe(true)
+    r.port.frame(get(2, '/core/transactions'))
+    await flush()
+    expect(r.port.responses()).toHaveLength(1)
+  })
+
+  it('serves nothing but request and cancel while closing', () => {
+    const r = rig({ limits: { closingGraceMs: 10_000 } })
+    r.broker.close()
+    r.port.frame({ type: 'navigate', path: '/accounts' })
+    r.port.frame({ type: 'modal', open: true })
+    r.port.frame({ type: 'resize', height: 300 })
+    r.port.frame({ type: 'focus-out', direction: 'next' })
+    r.port.frame({ type: 'notify', id: 9, level: 'info', message: 'late' })
+    expect(r.handlers.onNavigate).not.toHaveBeenCalled()
+    expect(r.handlers.onModal).not.toHaveBeenCalled()
+    expect(r.handlers.onResize).not.toHaveBeenCalled()
+    expect(r.handlers.onFocusOut).not.toHaveBeenCalled()
+    expect(r.port.responses()).toEqual([])
+    r.broker.dispose()
+  })
+
+  it('still checks grants while closing', async () => {
+    const r = rig({ limits: { closingGraceMs: 10_000 } })
+    r.broker.close()
+    r.port.frame(get(1, '/core/accounts/summary'))
+    await flush()
+    expect(r.port.responses()[0]).toMatchObject({ id: 1, ok: false, error: { code: 'grant_denied' } })
+    r.broker.dispose()
+  })
+
+  it('is disposed at once when no frame has connected, and is safe to call twice', () => {
+    const r = rig({ handshake: false })
+    r.broker.close()
+    expect(r.port.closed).toBe(true)
+    expect(r.port.sent).toEqual([])
+    r.broker.close()
+  })
+
+  it('dispose ends it immediately', () => {
+    const r = rig({ limits: { closingGraceMs: 10_000 } })
+    r.broker.close()
+    r.broker.dispose()
+    expect(r.port.closed).toBe(true)
+  })
+})
+
+describe('notify', () => {
+  const withNotify = { ...manifest, permissions: ['notify'] } as unknown as PluginManifest
+  /** A rig whose manifest declares `notify` (the default one declares nothing). */
+  function notifyRig(limits?: BrokerOptions['limits']): Rig {
+    const clock = { t: 1_000_000 }
+    const handlers = { onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(), onFatal: vi.fn() }
+    const api: BrokerApi = { mint: vi.fn(), send: vi.fn() }
+    const cache = new ResponseCache({ now: () => clock.t })
+    const broker = new PluginBroker({
+      manifest: withNotify, userId: 'u1', api, activeUserId: () => 'u1', cache, handlers, now: () => clock.t,
+      ...(limits ? { limits } : {}),
+    })
+    const port = new FakePort()
+    broker.attach(asPort(port), init)
+    port.frame({ type: 'ready', protocol: 1 })
+    return { broker, port, handlers, mint: api.mint, send: api.send, cache, clock, user: 'u1' } as unknown as Rig
+  }
+  const note = (id: number, message: string, level = 'info') => ({ type: 'notify', id, level, message })
+
+  it('shows an accepted notification once, cleaned, with its level, and answers ok', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, '  Imported\n12 rows ', 'success'))
+    expect(r.handlers.onNotify).toHaveBeenCalledOnce()
+    expect(r.handlers.onNotify).toHaveBeenCalledWith('success', 'Imported 12 rows')
+    expect(r.port.responses()).toEqual([{ type: 'response', id: 1, ok: true, value: null }])
+  })
+
+  it('refuses a plugin whose manifest does not declare notify, with grant_denied, and counts a strike', () => {
+    const r = rig()
+    r.port.frame(note(4, 'hi'))
+    expect(r.handlers.onNotify).not.toHaveBeenCalled()
+    expect(r.port.responses()[0]).toMatchObject({ id: 4, ok: false, error: { code: 'grant_denied' } })
+  })
+
+  it('a manifest that lists other permissions but not notify is still refused', () => {
+    const r = notifyRig()
+    const other = { ...manifest, permissions: ['network:outbound'] } as unknown as PluginManifest
+    const broker = new PluginBroker({ manifest: other, userId: 'u1', api: { mint: vi.fn(), send: vi.fn() }, activeUserId: () => 'u1', cache: r.cache, handlers: r.handlers as unknown as BrokerHandlers })
+    const port = new FakePort()
+    broker.attach(asPort(port), init)
+    port.frame({ type: 'ready', protocol: 1 })
+    port.frame(note(1, 'hi'))
+    expect(port.responses()[0]).toMatchObject({ ok: false, error: { code: 'grant_denied' } })
+    expect(r.handlers.onNotify).not.toHaveBeenCalled()
+  })
+
+  it('refuses text over 200 characters, and text that is empty once cleaned, with invalid_request', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, 'x'.repeat(201)))
+    r.port.frame(note(2, '\n\t \u202e'))
+    r.port.frame(note(3, 'x'.repeat(200)))
+    expect(r.port.responses().map((m) => (m.ok ? 'ok' : m.error.code))).toEqual(['invalid_request', 'invalid_request', 'ok'])
+    expect(r.handlers.onNotify).toHaveBeenCalledOnce()
+  })
+
+  it('drops a message the validator refuses (over 500, bad level) without calling the handler', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, 'x'.repeat(501)))
+    r.port.frame(note(2, 'hi', 'fatal'))
+    r.port.frame({ type: 'notify', id: 3, level: 'info', message: 5 })
+    r.port.frame({ type: 'notify', level: 'info', message: 'no id' })
+    expect(r.handlers.onNotify).not.toHaveBeenCalled()
+  })
+
+  it('allows 3 in a burst and then a notification every 3.3 s; the rest are dropped with a 429 and a strike', () => {
+    const r = notifyRig()
+    for (let i = 1; i <= 6; i += 1) r.port.frame(note(i, `message ${i}`))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(3)
+    const replies = r.port.responses()
+    expect(replies.map((m) => (m.ok ? 'ok' : `${m.error.code} ${String(m.error.status)}`))).toEqual(['ok', 'ok', 'ok', 'request_failed 429', 'request_failed 429', 'request_failed 429'])
+    r.clock.t += 3400
+    r.port.frame(note(7, 'message 7'))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(4)
+  })
+
+  it('drops the same text again inside 30 s, then allows it', () => {
+    const r = notifyRig()
+    r.port.frame(note(1, 'Saved'))
+    r.clock.t += 5000
+    r.port.frame(note(2, 'Saved'))
+    r.port.frame(note(3, 'Saved\n')) // the same text once cleaned
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(1)
+    expect(r.port.responses().map((m) => (m.ok ? 'ok' : String(m.error.status)))).toEqual(['ok', '429', '429'])
+    r.clock.t += 31_000
+    r.port.frame(note(4, 'Saved'))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(2)
+  })
+
+  it('a refused notification does not use up the burst', () => {
+    const r = notifyRig()
+    for (let i = 1; i <= 5; i += 1) r.port.frame(note(i, 'x'.repeat(300)))
+    for (let i = 6; i <= 8; i += 1) r.port.frame(note(i, `fine ${i}`))
+    expect(r.handlers.onNotify).toHaveBeenCalledTimes(3)
+  })
+
+  it('spam ends the connection by strikes, like any other abuse', () => {
+    const r = notifyRig({ maxStrikes: 10, burst: 1000 })
+    for (let i = 1; i <= 12; i += 1) r.port.frame(note(i, 'same text'))
+    expect(r.handlers.onFatal).toHaveBeenCalledOnce()
+    expect(r.handlers.onNotify).toHaveBeenCalledOnce()
+  })
+
+  it('answers a notify the general limiter drops, so the frame is not left waiting', () => {
+    const r = notifyRig({ burst: 1, perSecond: 0.001 })
+    r.port.frame(note(1, 'one'))
+    r.port.frame(note(2, 'two'))
+    expect(r.port.responses()[1]).toMatchObject({ id: 2, ok: false, error: { code: 'request_failed', status: 429 } })
+  })
+})
+
+describe('download', () => {
+  const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]
+  const buf = (bytes: readonly number[]): ArrayBuffer => new Uint8Array(bytes).buffer
+  /** Built from a plain Uint8Array: jsdom's TextEncoder hands back a buffer from another realm, which the parser rightly refuses. */
+  const text = (s: string): ArrayBuffer => new Uint8Array(Array.from(s, (ch) => ch.charCodeAt(0))).buffer
+  const dl = (id: number, over: Record<string, unknown> = {}) =>
+    ({ type: 'download', id, filename: 'share', mime: 'image/png', data: buf(PNG), ...over })
+
+  /** A rig for `download`: bundled unless said otherwise, with a gesture unless said otherwise. */
+  function dlRig(opts: { bundled?: boolean | undefined; gesture?: boolean; limits?: BrokerOptions['limits']; omitHandlers?: boolean } = {}) {
+    const clock = { t: 1_000_000 }
+    const gesture = { on: opts.gesture ?? true }
+    const handlers = {
+      onReady: vi.fn(), onResize: vi.fn(), onNavigate: vi.fn(), onFocusOut: vi.fn(), onModal: vi.fn(), onNotify: vi.fn(), onFatal: vi.fn(),
+      canDownload: vi.fn(() => gesture.on), onDownload: vi.fn(),
+    }
+    const api: BrokerApi = { mint: vi.fn(), send: vi.fn() }
+    const cache = new ResponseCache({ now: () => clock.t })
+    const given: BrokerHandlers = opts.omitHandlers === true
+      ? { onReady: handlers.onReady, onResize: handlers.onResize, onNavigate: handlers.onNavigate, onFocusOut: handlers.onFocusOut, onModal: handlers.onModal, onNotify: handlers.onNotify, onFatal: handlers.onFatal }
+      : handlers
+    const broker = new PluginBroker({
+      manifest, userId: 'u1', api, activeUserId: () => 'u1', cache, handlers: given, now: () => clock.t,
+      ...('bundled' in opts ? (opts.bundled === undefined ? {} : { bundled: opts.bundled }) : { bundled: true }),
+      ...(opts.limits ? { limits: opts.limits } : {}),
+    })
+    const port = new FakePort()
+    broker.attach(asPort(port), init)
+    port.frame({ type: 'ready', protocol: 1 })
+    return { broker, port, handlers, clock, gesture }
+  }
+  const err = (r: ReturnType<typeof dlRig>, index = 0) => (r.port.responses()[index] as { error?: { code: string } }).error?.code
+
+  it('saves a checked file once, with the host name, and answers with that name', () => {
+    const r = dlRig()
+    r.port.frame(dl(1, { filename: 'My Share.jpg' }))
+    expect(r.handlers.onDownload).toHaveBeenCalledOnce()
+    const file = r.handlers.onDownload.mock.calls[0]![0] as { filename: string; mime: string; bytes: Uint8Array }
+    expect(file).toMatchObject({ filename: 'My Share.png', mime: 'image/png' })
+    expect(Array.from(file.bytes)).toEqual(PNG)
+    expect(r.port.responses()).toEqual([{ type: 'response', id: 1, ok: true, value: { filename: 'My Share.png' } }])
+  })
+
+  it('pins the refusal of a plugin that is not bundled: grant_denied, nothing saved, a strike', () => {
+    for (const bundled of [false, undefined]) {
+      const r = dlRig({ bundled })
+      r.port.frame(dl(1))
+      expect(err(r)).toBe('grant_denied')
+      expect(r.handlers.onDownload).not.toHaveBeenCalled()
+      expect(r.handlers.canDownload).not.toHaveBeenCalled()
+    }
+  })
+
+  it('a plugin that is not bundled is cut off by repeated attempts, like any other refused message', () => {
+    const r = dlRig({ bundled: false, limits: { maxStrikes: 10, burst: 1000 } })
+    for (let i = 1; i <= 12; i += 1) r.port.frame(dl(i))
+    expect(r.handlers.onFatal).toHaveBeenCalledOnce()
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+  })
+
+  it('does not look at the gesture for a file that is refused on its own merits', () => {
+    const r = dlRig({ gesture: true })
+    r.port.frame(dl(1, { mime: 'text/html', data: text('<p>x</p>') }))
+    expect(err(r)).toBe('file_type_not_allowed')
+    expect(r.handlers.canDownload).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['file_type_not_allowed', { mime: 'image/svg+xml', data: text('<svg/>') }],
+    ['file_type_not_allowed', { mime: 'toString', data: text('x') }],
+    ['file_type_not_allowed', { mime: '__proto__', data: text('x') }],
+    ['file_invalid', { mime: 'image/png', data: buf([1, 2, 3]) }],
+    ['file_invalid', { mime: 'text/csv', data: text('<!DOCTYPE html><html></html>') }],
+    ['file_invalid', { mime: 'application/json', data: text('{nope') }],
+    ['file_invalid', { mime: 'text/plain', data: new ArrayBuffer(0) }],
+    ['file_too_large', { mime: 'text/plain', data: new ArrayBuffer(5 * 1024 * 1024 + 1) }],
+  ])('refuses with %s', (code, over) => {
+    const r = dlRig()
+    r.port.frame(dl(1, over))
+    expect(err(r)).toBe(code)
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+  })
+
+  it('refuses without a gesture, and a missing canDownload handler counts as no gesture', () => {
+    const a = dlRig({ gesture: false })
+    a.port.frame(dl(1))
+    expect(err(a)).toBe('gesture_required')
+    expect(a.handlers.onDownload).not.toHaveBeenCalled()
+    const b = dlRig({ omitHandlers: true })
+    b.port.frame(dl(1))
+    expect(err(b)).toBe('gesture_required')
+  })
+
+  it('allows one file per 5 seconds: a refused gesture does not spend the allowance, a saved file does', () => {
+    const r = dlRig({ gesture: false })
+    r.port.frame(dl(1))
+    r.port.frame(dl(2))
+    r.gesture.on = true
+    r.port.frame(dl(3))
+    expect(r.handlers.onDownload).toHaveBeenCalledOnce()
+    r.port.frame(dl(4))
+    expect(err(r, 3)).toBe('rate_limited')
+    r.clock.t += 4_000
+    r.port.frame(dl(5))
+    expect(err(r, 4)).toBe('rate_limited')
+    r.clock.t += 1_100
+    r.port.frame(dl(6))
+    expect(r.handlers.onDownload).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores a download after closing was sent, like the other non-request messages', () => {
+    const r = dlRig()
+    r.broker.close()
+    r.port.frame(dl(1))
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+    expect(r.port.responses()).toEqual([])
+  })
+
+  it('answers a download that the general limiter drops, so the frame is not left waiting', () => {
+    const r = dlRig({ limits: { burst: 1, perSecond: 0.001 } })
+    r.port.frame(dl(1))
+    r.port.frame(dl(2))
+    expect(r.port.responses()[1]).toMatchObject({ id: 2, ok: false, error: { code: 'request_failed', status: 429 } })
+  })
+
+  it('treats a malformed download as a strike, not a crash', () => {
+    const r = dlRig()
+    r.port.frame({ type: 'download', id: 1, filename: 'a', mime: 'text/plain', data: 'not a buffer' })
+    r.port.frame({ type: 'download', filename: 'a', mime: 'text/plain', data: new ArrayBuffer(1) })
+    expect(r.handlers.onDownload).not.toHaveBeenCalled()
+    expect(r.port.responses()).toEqual([])
   })
 })

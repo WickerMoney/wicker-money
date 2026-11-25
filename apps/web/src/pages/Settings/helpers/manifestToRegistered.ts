@@ -24,6 +24,7 @@ export function manifestToRegistered(manifest: PluginManifest): RegisteredPlugin
     // Only the owner listing reports these; a member's view never asks for consent.
     origin: null,
     tables: [],
+    permissions: [],
     contributes: {
       pages: manifest.contributes.pages.map((p) => p.title),
       widgets: manifest.contributes.widgets.map((w) => w.title),

@@ -1,6 +1,6 @@
 /** Limits and clock of an {@link UploadStore}; every field has the production default and exists so tests can shrink or fake it. */
 export interface UploadStoreOptions {
-  /** Live uploads per user. */
+  /** Live uploads per user; a `begin` over it discards the user's oldest live upload. */
   readonly maxLivePerUser?: number
   /** Declared bytes across every user's live uploads. */
   readonly maxTotalBytes?: number

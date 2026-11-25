@@ -16,8 +16,8 @@
  */
 export { registerDebtPayoffRoutes, DebtPayoffError } from './routes/index.js'
 export type { DebtPayoffRouteDeps } from './routes/index.js'
-export { DEBT_PAYOFF_PLUGIN_ID, DEBT_PAYOFF_API_BASE, MAX_ACTIVE_DEBTS } from './constants.js'
+export { DEBT_PAYOFF_PLUGIN_ID, DEBT_PAYOFF_API_BASE, MAX_ACTIVE_DEBTS, MAX_LUMP_SUMS } from './constants.js'
 export { exportDebtPayoffData } from './export.js'
-export type { ExportedDebt, ExportedSettings } from './export.js'
+export type { ExportedDebt, ExportedLumpSum, ExportedSettings } from './export.js'
 export { DebtPayoffService } from './service/DebtPayoffService.js'
 export type { Clock } from './service/Clock.js'

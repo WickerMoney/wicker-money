@@ -154,6 +154,9 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
   // The chosen file as the server is sent it, and the upload of it that is running or done.
   const plan = useRef<UploadPlan | null>(null)
   const staging = useRef<StagingHandle | null>(null)
+  /** The latest context, read by the leave effect, which must not restart (and give the upload back) when it changes. */
+  const ctxRef = useRef(ctx)
+  ctxRef.current = ctx
   // One pacer for the page: an upload that is being replaced and its successor still share the frame's limit.
   const pacer = useRef<RequestPacer | null>(null)
   // Counts the files chosen, and resets. An answer that belongs to an earlier one is dropped.
@@ -221,12 +224,16 @@ export function useImportFlow(ctx: PluginContext): ImportFlow {
     setUpload(IDLE)
   }, [])
 
-  // Leaving the page or the frame: give the staged file back, so the person is not held at the server's limit of two.
+  // Leaving the page or the frame: give the staged file back, so it does not sit in the server's staging space until it expires.
+  // The host also says `closing` just before it takes a frame down (best effort: a frame removed outright never gets
+  // it, and the server replaces the oldest of the person's uploads when they start another, so nothing depends on it).
   useEffect(() => {
     const leave = (): void => { staging.current?.abort() }
     window.addEventListener('pagehide', leave)
+    const stopClosing = ctxRef.current.onClosing?.(leave)
     return () => {
       window.removeEventListener('pagehide', leave)
+      stopClosing?.()
       leave()
     }
   }, [])

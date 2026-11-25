@@ -32,7 +32,7 @@ export interface PluginErasePlan {
 export const PLUGIN_ERASE_PLANS: readonly PluginErasePlan[] = [
   { pluginId: IMPORT_PLUGIN_ID, tables: ['batch_transactions', 'import_batches', 'source_mappings'] },
   { pluginId: BUDGETS_PLUGIN_ID, tables: ['account_lines', 'budget_lines'] },
-  { pluginId: DEBT_PAYOFF_PLUGIN_ID, tables: ['debts', 'plan_settings'] },
+  { pluginId: DEBT_PAYOFF_PLUGIN_ID, tables: ['lump_sum_allocations', 'lump_sums', 'debts', 'plan_settings'] },
 ]
 
 /**

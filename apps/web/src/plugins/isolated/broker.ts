@@ -10,9 +10,14 @@ import type { ResponseCache } from '../../api/responseCache.js'
 import { refusalFor, type PathRefusal } from '../pluginPaths.js'
 import type { BrokerApi } from './brokerApi.js'
 import { RateLimiter } from './RateLimiter.js'
+import { checkDownload, type CheckedFile } from './downloadFile.js'
+import { cleanPluginText, MAX_PLUGIN_NOTIFY_LENGTH, type PluginToastLevel } from './pluginNotify.js'
 
 /** The message types a frame may send. Anything else is ignored, not punished: a newer plugin may send more. */
-const KNOWN_TYPES: ReadonlySet<string> = new Set(['ready', 'request', 'cancel', 'navigate', 'resize', 'focus-out', 'modal', 'notify'])
+const KNOWN_TYPES: ReadonlySet<string> = new Set(['ready', 'request', 'cancel', 'navigate', 'resize', 'focus-out', 'modal', 'notify', 'download'])
+
+/** Seconds between two saved files from one frame. */
+const DOWNLOAD_INTERVAL_S = 5
 
 /** Tunables for {@link PluginBroker}; each has a default chosen for a dashboard widget that reads aggregates. */
 export interface BrokerLimits {
@@ -32,6 +37,14 @@ export interface BrokerLimits {
   readonly maxHandshakes: number
   /** A token is replaced this long before it expires, in milliseconds. */
   readonly refreshMarginMs: number
+  /** Most notifications a frame may raise in a burst. */
+  readonly notifyBurst: number
+  /** Notifications per second a frame may sustain after the burst (0.3 is 3 every 10 seconds). */
+  readonly notifyPerSecond: number
+  /** A notification with the same text as one raised this recently is dropped, in milliseconds. */
+  readonly notifyDuplicateMs: number
+  /** After {@link PluginBroker.close} sends `closing`, how long the frame may still finish requests, in milliseconds. */
+  readonly closingGraceMs: number
 }
 
 /** The defaults. A widget's first paint is a handful of requests; 40 in a burst is generous and 20 a second is not a flood. */
@@ -44,6 +57,10 @@ export const DEFAULT_BROKER_LIMITS: BrokerLimits = {
   strikeWindowMs: 10_000,
   maxHandshakes: 10,
   refreshMarginMs: 30_000,
+  closingGraceMs: 1000,
+  notifyBurst: 3,
+  notifyPerSecond: 0.3,
+  notifyDuplicateMs: 30_000,
 }
 
 /** What the broker asks the component that owns the frame to do. */
@@ -58,6 +75,19 @@ export interface BrokerHandlers {
   onFocusOut(direction: FocusDirection): void
   /** A modal dialog is open in the frame (`true`) or the last one closed. Opening is rate limited; closing never is. */
   onModal(open: boolean): void
+  /**
+   * The plugin raised a notification the broker accepted: the manifest declares `notify`, the text is cleaned,
+   * non-empty and within {@link MAX_PLUGIN_NOTIFY_LENGTH}, and it is inside the rate limits. The handler shows it,
+   * attributed to the plugin; it owns the "at most two visible per plugin" rule.
+   */
+  onNotify(level: PluginToastLevel, text: string): void
+  /**
+   * Whether the person's last click or key press was in this frame, as far as the host can tell. A handler that is
+   * missing answers `false`: the broker never saves a file for want of an answer.
+   */
+  canDownload?(): boolean
+  /** A file the plugin is bundled to offer, checked, within the rate limit and after a gesture; the host saves it. */
+  onDownload?(file: CheckedFile): void
   /** The connection was cut off for a reason a person should be told. The broker has already disposed itself. */
   onFatal(reason: string): void
 }
@@ -66,6 +96,11 @@ export interface BrokerHandlers {
 export interface BrokerOptions {
   /** The plugin this frame runs. Its grants are the only grants the frame has. */
   readonly manifest: PluginManifest
+  /**
+   * Whether the plugin ships with the app. Only a bundled plugin may save a file; anything else, and a caller that
+   * does not say, is refused with `grant_denied`. It comes from the registry row the API built, never from a manifest.
+   */
+  readonly bundled?: boolean
   /** The signed-in user the frame was created for. */
   readonly userId: string
   /** The network operations. */
@@ -130,6 +165,12 @@ export class PluginBroker {
   private readonly navigations: RateLimiter
   /** Opening a modal lifts the frame over the window, so a frame may not do it in a loop. Closing is never limited. */
   private readonly modals: RateLimiter
+  /** One file per 5 seconds per frame: a burst of 1, then one every 5 s. Spent only by a file that is saved. */
+  private readonly downloads: RateLimiter
+  /** Notifications raise toasts in the host's own UI: 3 in a burst, then one every 3.3 s. */
+  private readonly notifications: RateLimiter
+  /** Text of recent notifications, by when they were raised; a repeat inside the window is dropped. */
+  private readonly recentNotices = new Map<string, number>()
   private readonly pending = new Map<number, AbortController>()
   private port: MessagePort | null = null
   private makeInit: (() => InitMessage) | null = null
@@ -138,6 +179,9 @@ export class PluginBroker {
   private tokenState: TokenState | null = null
   private minting: Promise<TokenState> | null = null
   private epoch = 0
+  /** Set by {@link PluginBroker.close}: the frame has been told, and only `request` and `cancel` are still served. */
+  private closing = false
+  private closingTimer: ReturnType<typeof setTimeout> | undefined
   private strikes = 0
   private strikeWindowStart: number
   private handshakes = 0
@@ -150,6 +194,8 @@ export class PluginBroker {
     this.limiter = new RateLimiter(this.limits.burst, this.limits.perSecond, this.now)
     this.navigations = new RateLimiter(3, 1, this.now)
     this.modals = new RateLimiter(4, 2, this.now)
+    this.downloads = new RateLimiter(1, 1 / DOWNLOAD_INTERVAL_S, this.now)
+    this.notifications = new RateLimiter(this.limits.notifyBurst, this.limits.notifyPerSecond, this.now)
     this.strikeWindowStart = this.now()
     this.handshakeWindowStart = this.now()
   }
@@ -200,10 +246,30 @@ export class PluginBroker {
     try { this.port.postMessage(message) } catch { /* the frame is gone */ }
   }
 
+  /**
+   * Takes the frame down politely: tells it `closing`, keeps serving its `request` and `cancel` messages for
+   * {@link BrokerLimits.closingGraceMs} (so a frame that is still alive can give back what it holds, for example
+   * `upload/abort`), then disposes. Everything else a frame can send (`navigate`, `notify`, `download`, `modal`,
+   * `resize`, `focus-out`) is ignored from the moment `closing` is sent. A broker with no connected, ready frame is
+   * disposed at once. Safe to call twice; {@link PluginBroker.dispose} still ends everything immediately.
+   */
+  close(): void {
+    if (this.disposed || this.closing) return
+    if (this.port === null || !this.ready) {
+      this.dispose()
+      return
+    }
+    this.closing = true
+    this.send({ type: 'closing' })
+    this.closingTimer = setTimeout(() => { this.dispose() }, this.limits.closingGraceMs)
+  }
+
   /** Cancels everything in flight, forgets the token and closes the port. Safe to call twice. */
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    if (this.closingTimer !== undefined) clearTimeout(this.closingTimer)
+    this.closingTimer = undefined
     this.epoch += 1
     this.closePort()
     this.tokenState = null
@@ -260,7 +326,7 @@ export class PluginBroker {
     }
     if (!this.limiter.tryTake()) {
       this.strike()
-      if (message.type === 'request') this.reply(from, message.id, { ok: false, error: this.rateLimited() })
+      if (message.type === 'request' || message.type === 'notify' || message.type === 'download') this.reply(from, message.id, { ok: false, error: this.rateLimited() })
       return
     }
     this.dispatch(from, message)
@@ -278,6 +344,8 @@ export class PluginBroker {
 
   private dispatch(from: MessagePort, message: Exclude<PluginMessage, { type: 'ready' }>): void {
     const { handlers } = this.options
+    // A frame that has been told it is closing may only finish what it holds on the server.
+    if (this.closing && message.type !== 'request' && message.type !== 'cancel') return
     switch (message.type) {
       case 'request': this.onRequest(from, message); return
       case 'cancel': this.cancel(message.id); return
@@ -291,17 +359,73 @@ export class PluginBroker {
         if (!message.open || this.modals.tryTake()) handlers.onModal(message.open)
         else this.strike()
         return
-      case 'notify':
-        // Reserved: no host implements `notify` yet (ADR 0005, question 5).
-        this.reply(from, message.id, {
-          ok: false, error: { code: 'not_supported', message: 'This Wicker Money does not support notifications from plugins.' },
-        })
-        return
+      case 'notify': this.onNotify(from, message); return
+      case 'download': this.onDownload(from, message); return
     }
   }
 
-  private rateLimited(): PluginErrorPayload {
-    return { code: 'request_failed', status: 429, message: 'This plugin is sending requests too fast.' }
+  /**
+   * A plugin's request to save a file. Every refusal costs a strike and gets an error code. In this order: the plugin
+   * must be bundled (`grant_denied`), then the cheap checks that need nothing from the person (size, type, bytes),
+   * then the gesture, and last the rate limit, whose token only a file that will be saved spends, so a frame cannot
+   * use up the person's allowance with requests that are refused.
+   */
+  private onDownload(from: MessagePort, message: Extract<PluginMessage, { type: 'download' }>): void {
+    const refuse = (code: string, text: string): void => {
+      this.strike()
+      this.reply(from, message.id, { ok: false, error: { code, message: text } })
+    }
+    if (this.options.bundled !== true) {
+      refuse('grant_denied', 'Only a plugin that ships with the app can save a file.')
+      return
+    }
+    const checked = checkDownload(message)
+    if (!checked.ok) { refuse(checked.code, checked.message); return }
+    if (this.options.handlers.canDownload?.() !== true) {
+      refuse('gesture_required', 'Saving a file must follow a click or key press in the plugin.')
+      return
+    }
+    if (!this.downloads.tryTake()) { refuse('rate_limited', 'One file at a time: wait a few seconds.'); return }
+    this.options.handlers.onDownload?.(checked.file)
+    this.reply(from, message.id, { ok: true, value: { filename: checked.file.filename } })
+  }
+
+  /**
+   * A plugin's request for a toast. Checked in this order, each refusal costing a strike so a frame cannot use the
+   * host's own UI as a flood target: the permission, the text (a cap of 200 and not empty once cleaned), the
+   * duplicate window, then the rate limit. The limit's token is spent only by a notification that will be shown.
+   */
+  private onNotify(from: MessagePort, message: Extract<PluginMessage, { type: 'notify' }>): void {
+    const refuse = (error: PluginErrorPayload): void => {
+      this.strike()
+      this.reply(from, message.id, { ok: false, error })
+    }
+    if (!this.options.manifest.permissions.includes('notify')) {
+      refuse({ code: 'grant_denied', message: "This plugin's manifest does not declare the 'notify' permission." })
+      return
+    }
+    if (message.message.length > MAX_PLUGIN_NOTIFY_LENGTH) {
+      refuse({ code: 'invalid_request', message: `A notification may be at most ${MAX_PLUGIN_NOTIFY_LENGTH} characters.` })
+      return
+    }
+    const text = cleanPluginText(message.message)
+    if (text === '') {
+      refuse({ code: 'invalid_request', message: 'A notification needs some text.' })
+      return
+    }
+    const t = this.now()
+    for (const [seen, at] of this.recentNotices) if (t - at >= this.limits.notifyDuplicateMs) this.recentNotices.delete(seen)
+    if (this.recentNotices.has(text) || !this.notifications.tryTake()) {
+      refuse(this.rateLimited('This plugin is raising notifications too fast.'))
+      return
+    }
+    this.recentNotices.set(text, t)
+    this.options.handlers.onNotify(message.level, text)
+    this.reply(from, message.id, { ok: true, value: null })
+  }
+
+  private rateLimited(message = 'This plugin is sending requests too fast.'): PluginErrorPayload {
+    return { code: 'request_failed', status: 429, message }
   }
 
   private cancel(id: number): void {

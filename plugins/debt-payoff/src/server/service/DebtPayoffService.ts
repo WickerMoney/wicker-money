@@ -1,20 +1,26 @@
 import { unitsToMoney } from '@wickermoney/plugin-sdk/money'
-import { buildPayoffPlan, STRATEGIES, type PlanResponse, type Strategy } from '../../shared/index.js'
-import { MAX_ACTIVE_DEBTS } from '../constants.js'
+import { buildPayoffPlan, STRATEGIES, whatIfLumpSum, type PlanResponse, type Strategy, type WhatIfResult } from '../../shared/index.js'
+import { MAX_ACTIVE_DEBTS, MAX_LUMP_SUMS } from '../constants.js'
 import type { DebtRepositories } from '../repository/DebtRepositories.js'
 import type { DebtRow } from '../repository/DebtRow.js'
 import type { DebtUnitOfWork } from '../repository/DebtUnitOfWork.js'
+import type { NewLumpSum } from '../repository/NewLumpSum.js'
 import type { AccountSuggestion } from './AccountSuggestion.js'
 import type { Clock } from './Clock.js'
 import type { Debt } from './Debt.js'
+import { checkLumpSum } from './checkLumpSum.js'
 import { checkTimeline } from './checkTimeline.js'
 import { DebtPayoffError } from './DebtPayoffError.js'
 import type { DebtChanges, NewDebtInput } from './DebtFields.js'
 import { isConstraintError } from './isConstraintError.js'
+import type { LumpSum } from './LumpSum.js'
+import type { LumpSumFields } from './LumpSumFields.js'
 import type { PlanRequest } from './PlanRequest.js'
 import type { Settings, SettingsChanges } from './Settings.js'
 import { todayIn } from './todayIn.js'
 import { toDebt } from './toDebt.js'
+import { toLumpSum, toLumpSumInput } from './toLumpSum.js'
+import type { WhatIfRequest } from './WhatIfRequest.js'
 
 /** The name of the unique index that allows one active debt per account. */
 const ONE_PER_ACCOUNT = 'ux_debts_user_account_active'
@@ -22,6 +28,9 @@ const ONE_PER_ACCOUNT = 'ux_debts_user_account_active'
 /** What a person gets before they have saved a choice: the cheapest strategy and no extra. */
 const DEFAULT_STRATEGY: Strategy = 'avalanche'
 const NO_EXTRA = unitsToMoney(0n)
+
+/** The id the candidate of a what-if carries; a saved lump sum's id is a UUID, so it cannot clash. */
+const WHAT_IF_ID = 'what-if'
 
 /** Account types a debt can track. */
 const LIABILITY_TYPES: readonly string[] = ['credit_card', 'loan']
@@ -239,24 +248,95 @@ export class DebtPayoffService {
   }
 
   /**
+   * Lists the user's lump sums, soonest first.
+   *
+   * @param userId - The signed-in user.
+   * @returns The lump sums, each with its allocations. Past-dated ones are included: the person can still see and remove them.
+   */
+  listLumpSums(userId: string): Promise<LumpSum[]> {
+    return this.uow.run(userId, async ({ lumpSums }) => (await lumpSums.list()).map(toLumpSum))
+  }
+
+  /**
+   * Adds a lump sum.
+   *
+   * @param userId - The signed-in user.
+   * @param fields - The lump sum. Amounts are validated decimal strings.
+   * @returns The lump sum as saved.
+   * @throws {DebtPayoffError} `400` on `allocations` (see {@link checkLumpSum}),
+   *   `409 too_many_lump_sums` at the limit.
+   */
+  createLumpSum(userId: string, fields: LumpSumFields): Promise<LumpSum> {
+    return this.uow.run(userId, async ({ debts, lumpSums }) => {
+      if ((await lumpSums.count()) >= MAX_LUMP_SUMS) {
+        throw new DebtPayoffError(
+          `You can have up to ${MAX_LUMP_SUMS} lump sums. Remove one that has passed to make room.`,
+          409,
+          'too_many_lump_sums',
+        )
+      }
+      checkLumpSum(fields, await this.ownDebtIds(debts))
+      return toLumpSum(await lumpSums.insert(newLumpSum(fields)))
+    })
+  }
+
+  /**
+   * Replaces a lump sum's date, amount, note and allocations.
+   *
+   * @param userId - The signed-in user.
+   * @param id - The lump sum's id.
+   * @param fields - What it becomes.
+   * @returns The lump sum as saved.
+   * @throws {DebtPayoffError} `404 not_found` if the user has no such lump sum, which includes another user's; `400` as {@link createLumpSum}.
+   */
+  updateLumpSum(userId: string, id: string, fields: LumpSumFields): Promise<LumpSum> {
+    return this.uow.run(userId, async ({ debts, lumpSums }) => {
+      if ((await lumpSums.find(id)) === undefined) throw DebtPayoffError.lumpSumNotFound()
+      checkLumpSum(fields, await this.ownDebtIds(debts))
+      const saved = await lumpSums.replace(id, newLumpSum(fields))
+      if (saved === undefined) throw DebtPayoffError.lumpSumNotFound()
+      return toLumpSum(saved)
+    })
+  }
+
+  /**
+   * Deletes a lump sum and its allocations.
+   *
+   * @param userId - The signed-in user.
+   * @param id - The lump sum's id.
+   * @returns `{ removed: 1 }`.
+   * @throws {DebtPayoffError} `404 not_found` if the user has no such lump sum.
+   */
+  deleteLumpSum(userId: string, id: string): Promise<{ removed: number }> {
+    return this.uow.run(userId, async ({ lumpSums }) => {
+      const removed = await lumpSums.delete(id)
+      if (removed === 0) throw DebtPayoffError.lumpSumNotFound()
+      return { removed }
+    })
+  }
+
+  /**
    * Builds the payoff plan for the user's active debts that are in the plan.
    *
    * A debt the person switched out of the plan is not in the simulation, the
    * totals, the minimums-only comparison, the pool or the debt-free date; it
    * is listed in `excludedDebts` so the page can say what the date leaves out.
-   * Archived debts are neither in the plan nor listed.
+   * Archived debts are neither in the plan nor listed. The person's lump sums
+   * are applied on their dates; a past-dated one is ignored and reported in
+   * the plan's `lumpSums`, which is absent when the person has none.
    *
-   * Two reads at most, in one transaction, however many debts there are: the
-   * debts, and the saved settings only when the request leaves out the
-   * strategy or the extra.
+   * Three reads at most, in one transaction, however many debts and lump sums
+   * there are: the debts, the lump sums with their allocations, and the saved
+   * settings only when the request leaves out the strategy or the extra.
    *
    * @param userId - The signed-in user.
    * @param request - What the plan is asked for; anything left out comes from the saved settings.
    * @returns The plan, dated from today in the request's time zone.
    */
   getPlan(userId: string, request: PlanRequest): Promise<PlanResponse> {
-    return this.uow.run(userId, async ({ debts, settings }) => {
+    return this.uow.run(userId, async ({ debts, lumpSums, settings }) => {
       const rows = await debts.list(false)
+      const lumps = await lumpSums.list()
       const needsSettings = request.strategy === undefined || request.extraPayment === undefined
       const saved = needsSettings ? await this.currentSettings(settings) : undefined
       const plan = buildPayoffPlan(
@@ -265,12 +345,51 @@ export class DebtPayoffService {
           strategy: request.strategy ?? saved?.strategy ?? DEFAULT_STRATEGY,
           extraPayment: request.extraPayment ?? saved?.extraPayment ?? NO_EXTRA,
           startDate: todayIn(request.timezone, this.now()),
+          ...(lumps.length === 0 ? {} : { lumpSums: lumps.map(toLumpSumInput) }),
         },
       )
       return {
         ...plan,
         excludedDebts: rows.filter((row) => !row.included).map((row) => ({ id: row.id, name: row.name })),
       }
+    })
+  }
+
+  /**
+   * Works out what one more lump sum would change, without saving it.
+   *
+   * The plan is the one {@link getPlan} would build (same debts, same saved
+   * lump sums, same strategy and extra); the candidate is added to a copy and
+   * the two are compared: debt-free date, months and interest saved. Nothing is
+   * written, and the request is a `POST` only because its body is a lump sum.
+   *
+   * @param userId - The signed-in user.
+   * @param request - The candidate and, optionally, the strategy, extra and time zone to plan with.
+   * @returns The two scenarios and the difference.
+   * @throws {DebtPayoffError} `400` on `allocations` (see {@link checkLumpSum}).
+   */
+  whatIf(userId: string, request: WhatIfRequest): Promise<WhatIfResult> {
+    return this.uow.run(userId, async ({ debts, lumpSums, settings }) => {
+      const owned = await debts.list(true)
+      checkLumpSum(request.candidate, new Set(owned.map((row) => row.id)))
+      const lumps = await lumpSums.list()
+      const needsSettings = request.strategy === undefined || request.extraPayment === undefined
+      const saved = needsSettings ? await this.currentSettings(settings) : undefined
+      return whatIfLumpSum(
+        owned.filter((row) => !row.archived && row.included).map(toDebtInput),
+        {
+          strategy: request.strategy ?? saved?.strategy ?? DEFAULT_STRATEGY,
+          extraPayment: request.extraPayment ?? saved?.extraPayment ?? NO_EXTRA,
+          startDate: todayIn(request.timezone, this.now()),
+          lumpSums: lumps.map(toLumpSumInput),
+        },
+        {
+          id: WHAT_IF_ID,
+          onDate: request.candidate.onDate,
+          amount: request.candidate.amount,
+          allocations: request.candidate.allocations ?? [],
+        },
+      )
     })
   }
 
@@ -294,6 +413,11 @@ export class DebtPayoffService {
     return row === undefined
       ? { extraPayment: NO_EXTRA, strategy: DEFAULT_STRATEGY, saved: false }
       : { extraPayment: row.extra_payment, strategy: asStrategy(row.strategy), saved: true }
+  }
+
+  /** The ids of every debt the person has, archived included: an allocation may name any of them. */
+  private async ownDebtIds(debts: DebtRepositories['debts']): Promise<Set<string>> {
+    return new Set((await debts.list(true)).map((row) => row.id))
   }
 
   /** Refuses another active debt past {@link MAX_ACTIVE_DEBTS}. */
@@ -334,6 +458,16 @@ export class DebtPayoffService {
       }
       throw error
     }
+  }
+}
+
+/** The repository form of a lump sum's fields, with the defaults filled in. */
+function newLumpSum(fields: LumpSumFields): NewLumpSum {
+  return {
+    onDate: fields.onDate,
+    amount: fields.amount,
+    note: fields.note ?? '',
+    allocations: fields.allocations ?? [],
   }
 }
 

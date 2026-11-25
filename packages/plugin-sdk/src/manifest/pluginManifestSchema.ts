@@ -4,6 +4,7 @@ import { PERMISSIONS } from './PERMISSIONS.js'
 import { pageContributionSchema } from './pageContributionSchema.js'
 import { remoteEntrySchema } from './remoteEntrySchema.js'
 import { tableGrantSchema } from './tableGrantSchema.js'
+import { themesSchema } from './themeContributionSchema.js'
 import { widgetContributionSchema } from './widgetContributionSchema.js'
 
 /**
@@ -108,6 +109,17 @@ export const pluginManifestSchema = z.object({
        * feature include plugin data without core naming any plugin.
        */
       exporters: z.boolean().default(false),
+      /**
+       * Colour themes the plugin offers, each a set of design tokens (see `ThemeContribution`).
+       *
+       * Manifest only: the field is parsed and validated here, and a manifest with a malformed or unknown theme
+       * is refused. A host that registers themes and shows them in a switcher does so itself, and still
+       * validates what it applies. A theme is data: ids, a label, a mode and values from a fixed set of colour and
+       * length tokens, with no `url()`, no `var()` of anything outside that set, and no way to carry CSS.
+       *
+       * Optional with no default, so existing manifests and hand-built `PluginManifest` literals stay valid.
+       */
+      themes: themesSchema.optional(),
     })
     .default({ pages: [], widgets: [], endpoints: false, exporters: false }),
 })

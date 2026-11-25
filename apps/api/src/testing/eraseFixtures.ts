@@ -97,8 +97,12 @@ export async function seedHousehold(h: Harness, user: TestUser, label: string): 
   await call(h, user, 'PUT', `/api/v1/p/${BUDGETS}/account-line`, { month: '2031-03', accountId: checkingId, planned: '150.00' }, BUDGETS)
 
   const card = await call(h, user, 'POST', '/api/v1/accounts', { name: `${label} card`, accountType: 'credit_card', initialBalance: '0.00' })
-  await call(h, user, 'POST', `/api/v1/p/${DEBTS}/debts`, {
+  const debt = await call(h, user, 'POST', `/api/v1/p/${DEBTS}/debts`, {
     name: `${label} card`, balance: '1000.00', apr: '12', minimumPayment: '100.00', accountId: card['id'] as string,
+  }, DEBTS)
+  // A lump sum with a part aimed at the debt: a row in each of the plugin's two lump sum tables.
+  await call(h, user, 'POST', `/api/v1/p/${DEBTS}/lump-sums`, {
+    onDate: addDays(today, 30), amount: '250.00', note: `${label} refund`, allocations: [{ debtId: debt['id'] as string, amount: '100.00' }],
   }, DEBTS)
   await call(h, user, 'PUT', `/api/v1/p/${DEBTS}/settings`, { strategy: 'snowball', extraPayment: '50' }, DEBTS)
 

@@ -4,8 +4,8 @@ import { readUuid } from '../helpers/readUuid.js'
 
 /**
  * Registers `POST /upload/abort`: discards a staged upload the caller no longer
- * wants, so a person who picks another file is not held at the 2-upload limit
- * until the first one expires.
+ * wants, so a person who picks another file does not leave the first one holding
+ * staging space until it expires.
  *
  * The body is `{ uploadId }`. Responds `200` with `{}` whether or not the id
  * named a live upload of this user (unknown, expired, imported and another

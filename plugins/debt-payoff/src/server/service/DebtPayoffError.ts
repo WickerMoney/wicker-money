@@ -36,6 +36,11 @@ export class DebtPayoffError extends PluginRouteError {
     return new DebtPayoffError(`${field}: ${message}`, statusCode, code, [{ path: [field], message }])
   }
 
+  /** A `404` for a lump sum the caller does not have, which includes another user's. */
+  static lumpSumNotFound(): DebtPayoffError {
+    return new DebtPayoffError('That lump sum was not found.', 404, 'not_found')
+  }
+
   /** A `404` for a debt the caller does not have, which includes another user's. */
   static debtNotFound(): DebtPayoffError {
     return new DebtPayoffError('That debt was not found.', 404, 'not_found')

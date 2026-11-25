@@ -1,3 +1,4 @@
+import type { LumpSumInput } from './LumpSumInput.js'
 import type { Strategy } from './Strategy.js'
 
 /** What a plan is asked to do. */
@@ -13,4 +14,10 @@ export interface PlanOptions {
    * function of its input.
    */
   readonly startDate: string
+  /**
+   * One-off payments to apply on their dates (see {@link LumpSumInput}). Left
+   * out or empty, the plan is exactly what it is without the feature and has no
+   * `lumpSums` field. The minimums-only comparison never includes them.
+   */
+  readonly lumpSums?: readonly LumpSumInput[]
 }

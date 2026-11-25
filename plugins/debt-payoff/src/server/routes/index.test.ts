@@ -39,14 +39,19 @@ describe('the routes', () => {
   it('are exactly these, with no PATCH (the SDK has none)', () => {
     expect([...register().routes.keys()].sort()).toEqual([
       'DELETE /debts/:id',
+      'DELETE /lump-sums/:id',
       'GET /account-suggestions',
       'GET /debts',
       'GET /debts/:id',
+      'GET /lump-sums',
       'GET /plan',
       'GET /settings',
       'POST /debts',
+      'POST /lump-sums',
+      'POST /plan/what-if',
       'PUT /debts/:id',
       'PUT /debts/order',
+      'PUT /lump-sums/:id',
       'PUT /settings',
     ])
   })
@@ -71,6 +76,19 @@ describe('a request that is not valid', () => {
       ['GET /plan', { query: { tz: 'Nowhere/Land' } }],
       ['GET /plan', { query: { extra: '-3' } }],
       ['GET /debts', { query: { includeArchived: 'maybe' } }],
+      ['POST /lump-sums', { body: { onDate: '2027-01-15' } }],
+      ['POST /lump-sums', { body: { onDate: '2027-01-15', amount: 100 } }],
+      ['POST /lump-sums', { body: { onDate: '2027-01-15', amount: '0' } }],
+      ['POST /lump-sums', { body: { onDate: '2027-02-30', amount: '10' } }],
+      ['POST /lump-sums', { body: { onDate: '2027-01-15', amount: '10', allocations: [{ debtId: 'nope', amount: '5' }] } }],
+      ['POST /lump-sums', { body: { onDate: '2027-01-15', amount: '10', extra: 'field' } }],
+      ['PUT /lump-sums/:id', { params: { id: 'nope' }, body: { onDate: '2027-01-15', amount: '10' } }],
+      ['PUT /lump-sums/:id', { params: { id: ID }, body: {} }],
+      ['DELETE /lump-sums/:id', { params: { id: 'nope' } }],
+      ['POST /plan/what-if', { body: { onDate: '2027-01-15' } }],
+      ['POST /plan/what-if', { body: { onDate: '2027-01-15', amount: '10', tz: 'Nowhere/Land' } }],
+      ['POST /plan/what-if', { body: { onDate: '2027-01-15', amount: '10', strategy: 'fast' } }],
+      ['POST /plan/what-if', { body: null }],
     ]
     for (const [key, ctx] of bad) {
       const error = await refusal(call(key, ctx))

@@ -4,6 +4,7 @@ import { MAX_PLAN_MONTHS } from './MAX_PLAN_MONTHS.js'
 import { monthlyInterest } from './monthlyInterest.js'
 import { periodInterest } from './periodInterest.js'
 import type { ParsedDebt } from './ParsedDebt.js'
+import type { ResolvedLumpSum } from './parseLumpSums.js'
 
 /** One debt's running figures while a simulation runs. */
 export interface DebtRun {
@@ -51,6 +52,8 @@ export interface Simulation {
   readonly months: readonly RunMonth[]
   /** Why it stopped short, or `null` if everything was paid. */
   readonly capped: CapReason | null
+  /** What each lump sum paid to debts, by id, in units; a lump sum the run never reached is absent. */
+  readonly lumpPaid: ReadonlyMap<string, bigint>
 }
 
 /** What to simulate. */
@@ -69,6 +72,11 @@ export interface SimulationInput {
   readonly rollover: boolean
   /** The number of days in plan month `n` (1 is the first), which the daily compounding options need. */
   readonly daysIn: (month: number) => number
+  /**
+   * Lump sums to pay, by plan month. Only used with `rollover`. Left out, the
+   * run is exactly what it was before lump sums existed.
+   */
+  readonly lumps?: ReadonlyMap<number, readonly ResolvedLumpSum[]>
 }
 
 /**
@@ -85,6 +93,10 @@ export interface SimulationInput {
  *    debt still owes. An earmark is outside the pool: it is not part of the
  *    pooled amount and nothing replaces it once its debt is paid off, so the
  *    money stops rather than moving to another debt.
+ *    **A lump sum** dated in the month is then paid, also outside the pool: each
+ *    part aimed at a debt goes to it (never more than it owes), and the rest
+ *    goes down the priority list to debts whose repayment has started, the way
+ *    the pool does. The lump sum is not added to the pool and does not roll.
  * 4. **With `rollover`, a promotion with deferred interest is topped up** from
  *    what is left of the pool (earliest deadline first) to the even payment
  *    that clears it by the promotion's last month, as far as the pool allows.
@@ -123,6 +135,7 @@ export function simulate(input: SimulationInput): Simulation {
     : 0n
 
   const months: RunMonth[] = []
+  const lumpPaid = new Map<string, bigint>()
   let capped: CapReason | null = null
 
   for (let month = 1; ; month += 1) {
@@ -172,6 +185,27 @@ export function simulate(input: SimulationInput): Simulation {
         const earmark = line.run.debt.extra < line.run.balance ? line.run.debt.extra : line.run.balance
         line.payment += earmark
         line.run.balance -= earmark
+      }
+
+      for (const lump of input.lumps?.get(month) ?? []) {
+        let remaining = lump.total
+        for (const part of lump.allocations) {
+          const line = lines.find((l) => l.run.debt.id === part.debtId)
+          if (line === undefined) continue
+          const payment = part.units < line.run.balance ? part.units : line.run.balance
+          line.payment += payment
+          line.run.balance -= payment
+          remaining -= payment
+        }
+        for (const line of lines) {
+          if (remaining <= 0n) break
+          if (month < line.run.debt.startMonth) continue
+          const payment = remaining < line.run.balance ? remaining : line.run.balance
+          line.payment += payment
+          line.run.balance -= payment
+          remaining -= payment
+        }
+        lumpPaid.set(lump.id, lump.total - remaining)
       }
 
       let left = poolFor(month) - spent
@@ -233,5 +267,5 @@ export function simulate(input: SimulationInput): Simulation {
     })
   }
 
-  return { runs, months, capped }
+  return { runs, months, capped, lumpPaid }
 }

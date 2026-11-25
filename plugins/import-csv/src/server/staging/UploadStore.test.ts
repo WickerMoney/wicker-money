@@ -68,16 +68,60 @@ describe('UploadStore', () => {
     expect(() => s.begin(U1, 64, 8_000_000)).not.toThrow()
   })
 
-  it('allows two live uploads per user and a third only after one is gone', () => {
+  it('allows two live uploads per user; a third begin discards the oldest of that user\'s own', () => {
     const s = new UploadStore()
     const a = s.begin(U1, 1, 3)
+    const b = s.begin(U1, 1, 3)
+    const other = s.begin(U2, 1, 3)
+    const c = s.begin(U1, 1, 3)
+    expect(s.liveCount(U1)).toBe(2)
+    // The oldest is gone, the second and the new one are live.
+    expect(codeOf(() => s.addChunk(U1, a.uploadId, 0, 'abc'))).toBe('upload_not_found')
+    expect(s.addChunk(U1, b.uploadId, 0, 'abc').received).toBe(1)
+    expect(s.addChunk(U1, c.uploadId, 0, 'abc').received).toBe(1)
+    // Another user's upload is untouched by U1 beginning again and again.
     s.begin(U1, 1, 3)
-    expect(codeOf(() => s.begin(U1, 1, 3))).toBe('too_many_uploads')
-    expect(() => s.begin(U2, 1, 3)).not.toThrow()
+    s.begin(U1, 1, 3)
+    expect(s.liveCount(U2)).toBe(1)
+    expect(s.addChunk(U2, other.uploadId, 0, 'abc').received).toBe(1)
+    expect(s.liveCount(U1)).toBe(2)
+  })
+
+  it('evicts in the order uploads began, whatever their state', () => {
+    const s = new UploadStore()
+    const a = s.begin(U1, 1, 3)
+    s.addChunk(U1, a.uploadId, 0, 'abc')
+    s.finish(U1, a.uploadId) // ready
+    const b = s.begin(U1, 1, 3) // receiving
+    s.begin(U1, 1, 3)
+    expect(codeOf(() => s.lookup(U1, a.uploadId))).toBe('upload_not_found')
+    expect(codeOf(() => s.addChunk(U1, b.uploadId, 0, 'abc'))).toBe('no error')
+  })
+
+  it('does not count a receipt toward the limit and never evicts one', () => {
+    const s = new UploadStore()
+    const a = s.begin(U1, 1, 3)
     s.addChunk(U1, a.uploadId, 0, 'abc')
     s.finish(U1, a.uploadId)
-    s.markCommitted(U1, a.uploadId, undefined)
-    expect(() => s.begin(U1, 1, 3)).not.toThrow()
+    s.markCommitted(U1, a.uploadId, { idempotencyKey: 'k', failed: 0 })
+    s.begin(U1, 1, 3)
+    s.begin(U1, 1, 3)
+    s.begin(U1, 1, 3)
+    expect(s.lookup(U1, a.uploadId).state).toBe('committed')
+    expect(s.liveCount(U1)).toBe(2)
+  })
+
+  it('discards nothing when the begin that would have evicted is itself refused', () => {
+    const s = new UploadStore({ maxTotalBytes: 10 })
+    const a = s.begin(U1, 1, 4)
+    const b = s.begin(U1, 1, 4)
+    expect(codeOf(() => s.begin(U1, 1, 11))).toBe('staging_full')
+    expect(s.liveCount(U1)).toBe(2)
+    expect(codeOf(() => s.addChunk(U1, a.uploadId, 0, 'abcd'))).toBe('no error')
+    expect(codeOf(() => s.addChunk(U1, b.uploadId, 0, 'abcd'))).toBe('no error')
+    // The evicted upload's bytes count as free for the new one: 4 + 4 held, a 6 byte begin replaces a 4 byte one (4 + 6 = 10).
+    s.begin(U1, 1, 6)
+    expect(s.reservedBytes()).toBe(10)
   })
 
   it('frees a live upload at once on abort, says nothing about other ids, and leaves a receipt alone', () => {
