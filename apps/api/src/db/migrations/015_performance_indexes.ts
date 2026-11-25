@@ -16,7 +16,13 @@ import { createIndexIfMissing } from './support/index.js'
  *    and rule-application scans proportional to the uncategorized backlog
  *    rather than the whole ledger.
  *  - `(user_id, amount)` serves sorting the ledger by amount.
- *  - A trigram index on `merchant` lets `ILIKE '%text%'` search use an index.
+ *  - A trigram index on `merchant` was built here for `ILIKE '%text%'` search.
+ *    It is no longer built: no query the application role can run uses it
+ *    (`ILIKE` is not leakproof under row-level security), and migration 038
+ *    drops it. Re-running every `up` in order (`reapplyAll`, and the
+ *    idempotency tests) would otherwise rebuild it here and drop it again in
+ *    038 while holding a write-blocking lock. The `pg_trgm` extension is still
+ *    installed here, as before, so `down` of 038 can recreate the index.
  *
  * Each index is built with a plain `CREATE INDEX`, which blocks writes to
  * `core.transactions` while it builds. The migration runs without a wrapping
@@ -59,11 +65,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     'ON core.transactions (user_id, amount)',
   )
   await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`.execute(db)
-  await createIndexIfMissing(
-    db,
-    'core.ix_transactions_merchant_trgm',
-    'ON core.transactions USING gin (merchant gin_trgm_ops)',
-  )
 }
 
 /**

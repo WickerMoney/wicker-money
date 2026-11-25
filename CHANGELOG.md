@@ -65,6 +65,20 @@ curated, human-readable version.
   `upload/abort`. Leaving the page still cannot be relied on to deliver it, so
   the replace-the-oldest rule is what frees the memory.
   
+### Changed
+
+- **Database: the unused trigram index on transaction merchants is dropped.**
+  `ix_transactions_merchant_trgm` (added in migration 015 for `ILIKE '%text%'`
+  search) could never be used by the app: it runs under row-level security,
+  where `ILIKE`, `LIKE` and `lower()` are not leakproof, so the search always
+  read the person's rows by `user_id` and filtered them. The index only cost
+  space (about 46 MB per million transactions) and insert time (about 5%).
+  Search results, their order and their speed are unchanged. **Migration 038**
+  (has a `down`) drops it; `down` rebuilds it exactly as 015 did. The `pg_trgm`
+  extension stays installed. A privileged role that is not subject to
+  row-level security could use such an index, which is an option if search ever
+  runs outside it.
+
 ### Fixed
 
 - Budgets: a refusal on the window or allowance form that belongs to no one field now takes focus and is
