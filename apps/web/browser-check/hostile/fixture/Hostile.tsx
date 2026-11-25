@@ -442,7 +442,57 @@ class Hostile {
     a.click()
     return { clicked: true }
   }
-  focusSelf(): Json { window.focus(); document.body.tabIndex = -1; document.body.focus(); return { hasFocus: document.hasFocus() } }
+  /**
+   * The piggyback attack, driven by the person's own click rather than by a clock: the frame takes focus, waits until it loses it
+   * (the person clicked the host, which blurs the frame), then `delayMs` later takes focus back and asks for a file. `blurAt` is
+   * when the click was seen, so the runner can tell "the click never came" from "the gate refused".
+   */
+  blurAt: number | null = null
+  armPiggyback(specs: DlSpec[], delayMs: number): void {
+    this.downloadReplies = []
+    this.blurAt = null
+    this.focusSelf()
+    const onBlur = (): void => {
+      window.removeEventListener('blur', onBlur)
+      this.blurAt = Math.round(performance.now())
+      setTimeout(() => {
+        // Ask only once the browser has given this frame the focus (its `focus` event): the host's active element is the iframe
+        // from then on. Asking in the same task as `focus()` races the browser process and would test the race, not the gate.
+        const gained = new Promise<void>((resolve) => { window.addEventListener('focus', () => { resolve() }, { once: true }) })
+        this.focusSelf()
+        void Promise.race([gained.then(() => true), sleep(1500).then(() => false)]).then((got) => {
+          this.focusState = { ...this.focusState, focusEvent: got }
+          return this.askUntilAnswered(specs[0]!)
+        })
+      }, delayMs)
+    }
+    window.addEventListener('blur', onBlur)
+  }
+  /**
+   * Asks, and asks again every 100 ms while the answer is `gesture_required` (at most 20 times, 2 s): the browser moves the host's
+   * active element to this iframe a little after the frame's own `focus` event, which the frame cannot see, so a frame that wants
+   * the file simply retries. The last answer is what the runner reads, with the number of attempts.
+   */
+  private async askUntilAnswered(spec: DlSpec): Promise<void> {
+    this.downloadReplies = []
+    let attempts = 0
+    for (; attempts < 20;) {
+      attempts += 1
+      const reply = await this.rawDownload(spec, true, 4000)
+      const refused = ((reply as { reply?: Json }).reply?.['error'] as Json | undefined)?.['code'] === 'gesture_required'
+      if (!refused || attempts === 20) { this.downloadReplies.push(reply); break }
+      await sleep(100)
+    }
+    this.focusState = { ...this.focusState, attempts }
+  }
+  getBlurAt(): number | null { return this.blurAt }
+  focusState: Json = {}
+  getFocusState(): Json { return this.focusState }
+  focusSelf(): Json {
+    window.focus(); document.body.tabIndex = -1; document.body.focus()
+    this.focusState = { hasFocus: document.hasFocus(), bodyActive: document.activeElement === document.body, at: Math.round(performance.now()) }
+    return this.focusState
+  }
 
   // ---- the notify and closing messages ----
   /** Sends `count` valid-looking notify messages at once and returns how each was answered. */

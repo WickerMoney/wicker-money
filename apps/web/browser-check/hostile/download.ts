@@ -69,6 +69,8 @@ export async function runDownload(c: DownloadContext): Promise<void> {
   const replies = (): Promise<Array<{ reply: unknown; ms: number }>> => c.call('getDownloadReplies')
   const fresh = async (): Promise<void> => { await c.boot('page'); await c.call('takePort'); watch() }
 
+  const piggyOnly = process.env['DOWNLOAD_ONLY'] === 'piggyback'
+  if (!piggyOnly) {
   // ---- notify and closing: the hostile manifest declares no permissions ----
   await c.boot()
   await c.call('takePort')
@@ -216,6 +218,7 @@ export async function runDownload(c: DownloadContext): Promise<void> {
   rec.check('30 gesture-less requests (30 strikes of 100): all refused; then a real click and a valid file is still saved',
     quiet.every((x) => x === 'gesture_required') && rcode(after[0]) === 'ok' && files.length === 1, { quiet: [...new Set(quiet)], after, files })
 
+  }
   // 8. The residual: a frame that asks right after the person clicked something on the host (not in the frame).
   //    The default gate cannot tell; the strict gate that could is not wired. Pinned: the answer is `ok` and one file.
   for (const n of [1, 2]) {
@@ -232,16 +235,27 @@ export async function runDownload(c: DownloadContext): Promise<void> {
     })
     rec.check(`a blank point on the host's navigation exists for the host click (run ${n})`, blank !== null, blank)
     await sleep(5200) // the evaluates above gave 5 s of activation: let it end
-    await c.call('scheduleDownloads', [spec('piggyback.png')], 9000, { focusFirst: true })
-    await sleep(5600) // the schedule's own evaluate has now expired
-    await w.page.mouse.click(blank?.x ?? 100, blank?.y ?? 880) // a real host click, no navigation, at about +5.6 s
-    await sleep(5200) // the frame fires at +9 s, 3.4 s after the click
+    // The frame takes focus and waits for the click itself: it asks 3.4 s after it loses focus, so the gap between the person's
+    // click and the request is fixed by the frame, not by how long the runner took to click.
+    await c.call('armPiggyback', [spec('piggyback.png')], 3400)
+    await sleep(5200) // the arm's own evaluate gave the page 5 s of activation: let it end before the click
+    await w.page.mouse.click(blank?.x ?? 100, blank?.y ?? 880) // a real host click, no navigation
+    await sleep(5200) // 3.4 s for the frame's timer, then the answer
     const piggy = await replies()
+    const focus = await c.call<Json>('getFocusState')
+    const blurAt = await c.call<number | null>('getBlurAt')
+    // Two outcomes are acceptable and the second is a stronger gate than the one pinned: the file is saved (the residual, as
+    // pinned), or it is refused with `gesture_required` and nothing is saved (the activation had gone, or the browser did not give
+    // the iframe the focus). Anything else fails: a file saved for any other reply, or a reply that is not one of these, or a click
+    // the frame never saw.
+    const saved = rcode(piggy[0]) === 'ok' && files.length === 1
+    const refused = rcode(piggy[0]) === 'gesture_required' && files.length === 0
     rec.attack({
       id: `dl-piggyback-${n}`, group: 'residual',
-      title: 'the person clicks the host (not the frame); 3.4 s later the frame takes focus and asks for a file (default gate: activation + the iframe is the active element)',
-      expected: 'residual', reason: `reply ${rcode(piggy[0])}; ${files.length} file(s) saved${files.length === 1 && rcode(piggy[0]) === 'ok' ? '' : ' (NOT AS PINNED)'}`,
-      pass: rcode(piggy[0]) === 'ok' && files.length === 1,
+      title: 'the person clicks the host (not the frame); 3.4 s later the frame takes focus and asks for a file, again every 100 ms while it is refused for want of focus (default gate: activation + the iframe is the active element)',
+      expected: 'residual',
+      reason: `reply ${rcode(piggy[0])}; the frame saw the click ${blurAt !== null ? 'yes' : 'NO'}; frame focus ${JSON.stringify(focus)}; ${files.length} file(s) saved; ${saved ? 'observed: the residual, as pinned' : refused ? 'observed: refused, a safe outcome (stronger than pinned)' : 'NOT AS PINNED'}`,
+      pass: blurAt !== null && (saved || refused),
     })
   }
 

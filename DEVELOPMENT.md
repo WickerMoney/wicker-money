@@ -1460,8 +1460,12 @@ four parts, and CI runs them as the required check **Hostile plugin suite**.
   refusal, 20 files after one click, a hostile name, and 30 gesture-less requests.
   The judge is what Chromium saved (name, size, first bytes) and what the broker
   answered. The residual (a click on the host, then a frame that takes focus and asks)
-  is pinned as `residual` for the default gate; the strict gate that closes it is
-  unit tested and not wired. The phase has its own time budget (150 s), mostly
+  is pinned as `residual` for the default gate: the frame waits for its own click (it
+  loses focus), takes focus back 3.4 s later and asks, again every 100 ms while it is
+  refused, because the browser makes the iframe the host's active element a moment after
+  the frame's own `focus` event. Saved is the pinned outcome; a refusal with nothing
+  saved is accepted as a stronger gate; anything else fails. The strict gate that closes
+  it is unit tested and not wired. The phase has its own time budget (150 s), mostly
   waiting out the 5 second activation window; add no waits without raising it
   on purpose.
 - **Remote-origin half** (`apps/web/browser-check/hostile/remote.ts`, Chromium,
