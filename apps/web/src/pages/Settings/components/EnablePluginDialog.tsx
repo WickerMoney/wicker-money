@@ -51,6 +51,12 @@ export function EnablePluginDialog({ plugin, onConfirm, onCancel }: EnablePlugin
           {' '}It also sees your email address and user ID.
         </li>
         <li>It runs in a sandboxed frame, with no access to the app&rsquo;s cookies, storage or page.</li>
+        {plugin.permissions.includes('notify') ? (
+          <li>
+            It may show short text notifications in the app. Each starts with the plugin&rsquo;s name and
+            carries no link or button, but it is text the plugin chose.
+          </li>
+        ) : null}
         <li>It has no server-side code, no storage and no scheduled work on this server.</li>
         <li>
           The sandbox has known gaps. A plugin that is granted your transactions can send them to

@@ -193,9 +193,18 @@ async function serverHalf(ctx: StagingContext, base: string, add: Add): Promise<
   const slot1 = await mine.begin(1, 10)
   const slot2 = await mine.begin(1, 10)
   const slot3 = await mine.begin(1, 10)
-  rec.check('after the wrong-plugin calls the user still has both live upload slots (none was staged), and the third is refused', slot1.status === 200 && slot2.status === 200 && slot3.status === 409, [slot1.status, slot2.status, slot3.status])
-  await mine.abort(slot1.json['uploadId'] as string)
+  rec.check('after the wrong-plugin calls the user still has both live upload slots (none was staged); a third begin is accepted', slot1.status === 200 && slot2.status === 200 && slot3.status === 200, [slot1.status, slot2.status, slot3.status])
+  // The third begin replaced the user's own oldest upload, and nothing else: not their second, not the owner's.
+  const evictedOwn = await mine.chunk(slot1.json['uploadId'] as string, 0, 'x')
+  const keptSecond = await mine.chunk(slot2.json['uploadId'] as string, 0, 'x')
+  const ownerAfter = await ownerFile.analyze(ownerAccount, ownerUpload)
+  add({
+    id: 'st-begin-evicts-own-oldest-only', title: 'begin of a third upload (limit 2) as one user, while another user has a file staged', expected: 'contained',
+    reason: `own oldest -> ${evictedOwn.status} ${String(evictedOwn.json['code'] ?? '')}; own second -> ${keptSecond.status}; the other user's file still reads (${ownerAfter.status}, text ${ownerAfter.text.includes(marker) ? 'present' : 'GONE'})`,
+    pass: evictedOwn.status === 404 && evictedOwn.json['code'] === 'upload_not_found' && keptSecond.status === 200 && ownerAfter.status === 200 && ownerAfter.text.includes(marker),
+  })
   await mine.abort(slot2.json['uploadId'] as string)
+  await mine.abort(slot3.json['uploadId'] as string)
 
   // 2. Another user's file, by every token the victim could hold, with every route that takes an id.
   const unknown = await staging(victim.host).chunk(ZERO_UUID, 0, 'x')
@@ -249,12 +258,14 @@ async function serverHalf(ctx: StagingContext, base: string, add: Add): Promise<
   const flood = await kinds()
   const f = staging(flood.importCsv)
   const live = await f.begin(2, 6)
-  const liveId = live.json['uploadId'] as string
+  // A begin over the limit replaces the user's oldest upload, so the one that is still there is the last that was accepted.
+  let liveId = live.json['uploadId'] as string
   const codes: number[] = [live.status]
   let retryAfter = ''
   for (let i = 0; i < 44; i += 1) {
     const r = await f.begin(2, 6)
     codes.push(r.status)
+    if (r.status === 200) liveId = r.json['uploadId'] as string
     if (r.status === 429) retryAfter = r.headers.get('retry-after') ?? ''
   }
   const chunkCodes: number[] = []
@@ -265,7 +276,7 @@ async function serverHalf(ctx: StagingContext, base: string, add: Add): Promise<
   add({
     id: 'st-begin-flood', title: '45 begin calls in a row (import bucket 30 a minute), then 40 chunks and a finish on the upload that was opened', expected: 'server-refusal',
     reason: `begin ${JSON.stringify(begins)}, Retry-After ${retryAfter || 'none'}; chunks ${JSON.stringify(counts(chunkCodes))}, finish ${fin.status}`,
-    pass: codes[0] === 200 && codes[1] === 200 && codes[2] === 409 && begins['429'] === 15 && Number(retryAfter) > 0 && chunkCodes.every((c) => c === 200) && fin.status === 200,
+    pass: codes.slice(0, 30).every((c) => c === 200) && begins['200'] === 30 && begins['429'] === 15 && Number(retryAfter) > 0 && chunkCodes.every((c) => c === 200) && fin.status === 200,
     detail: { codes, chunkCodes },
   })
 }

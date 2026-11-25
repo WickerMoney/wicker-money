@@ -263,10 +263,16 @@ describe('the rule: a plugin the image did not ship loads only against a pin', (
 })
 
 describe('the permission refusal applies to a third-party manifest too', () => {
-  it.each<Permission>(['network:outbound', 'schedule:daily', 'notify'])('%s', async (permission) => {
+  it.each<Permission>(['network:outbound', 'schedule:daily'])('%s', async (permission) => {
     const { registry, listed } = await loadEnabled(service([external(raw({ permissions: [permission] }))]))
     expect(registry.plugins).toEqual([])
     expect(listed?.failure).toContain(permission)
+  })
+
+  it('notify is implemented by the broker, so a third-party manifest that declares it loads, and the listing says so', async () => {
+    const { registry, listed } = await loadEnabled(service([external(raw({ permissions: ['notify'] }))]))
+    expect(registry.plugins.map((p) => p.manifest.id)).toEqual(['acme.report'])
+    expect(listed?.permissions).toEqual(['notify'])
   })
 })
 

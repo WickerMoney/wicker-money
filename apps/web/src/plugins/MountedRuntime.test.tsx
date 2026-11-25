@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import { renderWithToasts } from '../testing/renderWithToasts.js'
 import type { PluginContext, PluginManifest } from '@wickermoney/plugin-sdk'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
@@ -35,7 +36,7 @@ const withRegistry = (state: Partial<PluginRegistryState> | null, ui: React.Reac
 
 describe('choosing where a plugin runs', () => {
   it('mounts an in-realm widget in the page', async () => {
-    const { container } = render(withRegistry(
+    const { container } = renderWithToasts(withRegistry(
       { runtimes: { 'test.fixture': 'in-realm' } },
       <MountedWidget manifest={manifest} contribution={contribution} ctx={ctx} />,
     ))
@@ -44,7 +45,7 @@ describe('choosing where a plugin runs', () => {
   })
 
   it('mounts an isolated widget in a sandboxed frame inside the same card', () => {
-    const { container } = render(withRegistry(
+    const { container } = renderWithToasts(withRegistry(
       { runtimes: { 'test.fixture': 'isolated' } },
       <MountedWidget manifest={manifest} contribution={contribution} ctx={ctx} />,
     ))
@@ -53,23 +54,23 @@ describe('choosing where a plugin runs', () => {
   })
 
   it('mounts an isolated page in a frame', () => {
-    const { container } = render(withRegistry({ runtimes: { 'test.fixture': 'isolated' } }, pageAt(BASE)))
+    const { container } = renderWithToasts(withRegistry({ runtimes: { 'test.fixture': 'isolated' } }, pageAt(BASE)))
     expect(container.querySelector('iframe')?.title).toBe('Fixture · Report')
   })
 
   it('mounts an isolated page for any address under it, as one page', () => {
-    const { container } = render(withRegistry({ runtimes: { 'test.fixture': 'isolated' } }, pageAt(`${BASE}/2026/10?tab=2`)))
+    const { container } = renderWithToasts(withRegistry({ runtimes: { 'test.fixture': 'isolated' } }, pageAt(`${BASE}/2026/10?tab=2`)))
     expect(container.querySelectorAll('iframe')).toHaveLength(1)
   })
 
   it('answers "not found" to an address under an in-realm page, which has no use for one', () => {
-    const { container } = render(withRegistry({ runtimes: { 'test.fixture': 'in-realm' } }, pageAt(`${BASE}/2026/10`)))
+    const { container } = renderWithToasts(withRegistry({ runtimes: { 'test.fixture': 'in-realm' } }, pageAt(`${BASE}/2026/10`)))
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy()
     expect(container.querySelector('iframe')).toBeNull()
   })
 
   it('puts a plugin the loaded registry does not mention in the sandbox', () => {
-    const { container } = render(withRegistry(
+    const { container } = renderWithToasts(withRegistry(
       { runtimes: {} },
       <MountedWidget manifest={manifest} contribution={contribution} ctx={ctx} />,
     ))
@@ -77,9 +78,9 @@ describe('choosing where a plugin runs', () => {
   })
 
   it('keeps the legacy in-page path without a registry or runtime map', async () => {
-    render(withRegistry(null, <MountedWidget manifest={manifest} contribution={contribution} ctx={ctx} />))
+    renderWithToasts(withRegistry(null, <MountedWidget manifest={manifest} contribution={contribution} ctx={ctx} />))
     expect(await screen.findByText('in the page')).toBeTruthy()
-    render(withRegistry({}, pageAt(BASE)))
+    renderWithToasts(withRegistry({}, pageAt(BASE)))
     await waitFor(() => { expect(screen.getAllByText('in the page')).toHaveLength(2) })
   })
 })

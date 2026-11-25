@@ -23,7 +23,7 @@ export interface StagingHandle {
   /** Resolves with the upload id once the server has every chunk and has accepted `finish`. Rejects with a {@link StagingFailure}. */
   readonly ready: Promise<string>
   readonly state: () => 'pending' | 'ready' | 'failed'
-  /** Stops sending and tells the server to discard what it holds, so the person is not kept at the 2-upload limit. Safe to call at any time, more than once. */
+  /** Stops sending and tells the server to discard what it holds, so it does not sit there (and take staging space) until it expires. Safe to call at any time, more than once. */
   readonly abort: () => void
 }
 
@@ -57,15 +57,15 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
  *
  * - a request that fails on the connection, or with a server error or `429`, is
  *   sent again twice (a chunk sent twice is harmless to the server);
- * - `503 staging_full` and `409 too_many_uploads` on `begin` end it with the
- *   server's own words (the first says how long to wait);
+ * - `503 staging_full` on `begin` ends it with the server's own words (they say
+ *   how long to wait);
  * - `404 upload_not_found` while sending (the upload expired, or the server
  *   restarted) starts over once with a new upload, then ends it;
  * - `409 upload_incomplete` on `finish` sends the chunks again, once or twice,
  *   then `finish` again;
  * - `400` on `finish` (the server discarded the upload) ends it with a message
  *   to choose the file again;
- * - any other failure discards what the server holds (so the 2-upload limit is
+ * - any other failure discards what the server holds (so its staging space is
  *   not used up) and ends it.
  *
  * @param api - The plugin's API client.
@@ -142,7 +142,6 @@ export function stageUpload(api: StagingApi, plan: UploadPlan, options: StagingO
     } catch (e) {
       if (e instanceof StagingFailure) throw e
       if (statusOf(e) === 503 && codeOf(e) === 'staging_full') throw new StagingFailure('busy', messageOf(e))
-      if (statusOf(e) === 409 && codeOf(e) === 'too_many_uploads') throw new StagingFailure('too_many', messageOf(e))
       if (statusOf(e) === 400) throw new StagingFailure('too_big', messageOf(e) || 'The server did not accept that file.')
       throw e
     }
